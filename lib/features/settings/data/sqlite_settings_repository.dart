@@ -106,6 +106,18 @@ class SqliteSettingsRepository implements SettingsRepository {
       recordSearchHistory: boolean('recordSearchHistory', true),
       checkPrereleaseUpdates: boolean('checkPrereleaseUpdates', false),
       wheelDampingRatio: number('wheelDampingRatio', 1.3),
+      wheelScrollAnimation:
+          WheelScrollAnimation.values
+              .where((item) => item.name == decoded['wheelScrollAnimation'])
+              .firstOrNull ??
+          WheelScrollAnimation.chromium,
+      chromiumScrollCurve:
+          ChromiumScrollCurve.values
+              .where((item) => item.name == decoded['chromiumScrollCurve'])
+              .firstOrNull ??
+          ChromiumScrollCurve.easeInOut,
+      wheelScrollDistanceMultiplier: number('wheelScrollDistanceMultiplier', 1),
+      wheelScrollDurationMultiplier: number('wheelScrollDurationMultiplier', 1),
       systemFontFamily: decoded['systemFontFamily'] is String
           ? decoded['systemFontFamily'] as String
           : '',
@@ -290,7 +302,7 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 50,
+        'schemaVersion': 52,
         'appIcon': value.appIcon.name,
         'recommendations': value.recommendations.toJson(),
         'navigationBarMode': value.navigationBarMode.name,
@@ -319,6 +331,10 @@ class SqliteSettingsRepository implements SettingsRepository {
         'recordSearchHistory': value.recordSearchHistory,
         'checkPrereleaseUpdates': value.checkPrereleaseUpdates,
         'wheelDampingRatio': value.wheelDampingRatio,
+        'wheelScrollAnimation': value.wheelScrollAnimation.name,
+        'chromiumScrollCurve': value.chromiumScrollCurve.name,
+        'wheelScrollDistanceMultiplier': value.wheelScrollDistanceMultiplier,
+        'wheelScrollDurationMultiplier': value.wheelScrollDurationMultiplier,
         'shortcuts': value.shortcuts.toJson(),
         'theme': value.theme.name,
         'font': value.font.name,

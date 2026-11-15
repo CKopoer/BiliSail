@@ -638,3 +638,7 @@ media_kit 常规 seek 保留原生播放意图和缓存；只有取消已阻塞�
 - 日期：2026-11-15。
 - 决策：按用户要求对照 PiliPlus 的 App 密码／短信协议，接入 RSA、人机验证和安全中心手机验证；继续由唯一 SessionRepository 校验 UID、串行保存 Cookie／App token 和隔离取消／迟到响应。推荐设置不再显示来源说明和 App 身份摘要。
 - 边界：保留明确的官网登录和旧 Web-only 会话；不自动兑换、退出或迁移凭据。App POST 单次提交，不自动重放发送短信或登录；协议参考不等于真实账号验收。实施与验证见[专项记录](validation/password-sms-app-login-2026-11-15.md)。
+
+## D93：滚轮动画支持弹簧、Chromium 和多平台平滑及独立倍率
+
+**决定（2026-11-15，同日扩展）**：按用户要求新增精确依赖 `scroll_animator 0.3.0`，默认 Chromium／EaseInOut，可选 Impulse 并调整距离／时长倍率；保留原有 Flutter 弹簧和已保存阻尼。另将 `smooth_scroll_multiplatform 1.0.8` 作为来源明确的仓库内兼容副本，公开原 `animateTo` 插值供第三种模式使用。共享层继续持有输入仲裁、统一帧时钟、嵌套头部协调和标签生命周期，不以依赖的独立控制器替换已保留的位置。模式／有效参数变化取消旧动量，设置失败回退，JSON 快照从 51 升至 52 而不改表。按用户要求仅做自动检查，不构建；来源、测试与未验收项见[滚轮动画与参数](validation/scroll-animation-switch-2026-11-15.md)。

@@ -12,6 +12,84 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   late AppDatabase database;
   late SqliteSettingsRepository repository;
+  test('wheel parameter legacy defaults, invalid values and every mode round trip', () async {
+    for (final invalid in ['null', '"invalid"', 'true', '1e999']) {
+      await database.writeSetting(
+        'preferences.v1',
+        '{"schemaVersion":51,"wheelScrollAnimation":"spring","wheelDampingRatio":0.75,"chromiumScrollCurve":$invalid,"wheelScrollDistanceMultiplier":$invalid,"wheelScrollDurationMultiplier":$invalid}',
+      );
+      final settings = await repository.load();
+      expect(settings.chromiumScrollCurve, ChromiumScrollCurve.easeInOut);
+      expect(settings.wheelScrollDistanceMultiplier, 1);
+      expect(settings.wheelScrollDurationMultiplier, 1);
+      expect(settings.wheelScrollAnimation, WheelScrollAnimation.spring);
+      expect(settings.wheelDampingRatio, .75);
+    }
+    await database.writeSetting(
+      'preferences.v1',
+      '{"schemaVersion":51,"wheelScrollAnimation":"spring","wheelDampingRatio":0.75}',
+    );
+    final legacy = await repository.load();
+    expect(legacy.wheelScrollDistanceMultiplier, 1);
+    expect(legacy.wheelScrollDurationMultiplier, 1);
+    for (final mode in WheelScrollAnimation.values) {
+      for (final curve in ChromiumScrollCurve.values) {
+        await repository.save(
+          legacy.copyWith(
+            wheelScrollAnimation: mode,
+            chromiumScrollCurve: curve,
+            wheelScrollDistanceMultiplier: 1.75,
+            wheelScrollDurationMultiplier: 2.5,
+          ),
+        );
+        final settings = await SqliteSettingsRepository(database).load();
+        expect(settings.wheelScrollAnimation, mode);
+        expect(settings.chromiumScrollCurve, curve);
+        expect(settings.wheelScrollDistanceMultiplier, 1.75);
+        expect(settings.wheelScrollDurationMultiplier, 2.5);
+        expect(settings.wheelDampingRatio, .75);
+      }
+    }
+    expect(database.schemaVersion, 3);
+  });
+  test(
+    'wheel animation migrates and persists without changing spring damping',
+    () async {
+      for (final value in [null, 'invalid', true, 123]) {
+        await database.writeSetting(
+          'preferences.v1',
+          jsonEncode({
+            'schemaVersion': 50,
+            'wheelScrollAnimation': value,
+            'wheelDampingRatio': .75,
+            'theme': 'dark',
+          }),
+        );
+        final legacy = await repository.load();
+        expect(legacy.wheelScrollAnimation, WheelScrollAnimation.chromium);
+        expect(legacy.wheelDampingRatio, .75);
+        expect(legacy.theme, AppThemePreference.dark);
+      }
+      await database.writeSetting(
+        'preferences.v1',
+        '{"schemaVersion":50,"wheelDampingRatio":0.75}',
+      );
+      final legacy = await repository.load();
+      expect(legacy.wheelScrollAnimation, WheelScrollAnimation.chromium);
+      for (final mode in WheelScrollAnimation.values) {
+        await repository.save(legacy.copyWith(wheelScrollAnimation: mode));
+        final loaded = await SqliteSettingsRepository(database).load();
+        expect(loaded.wheelScrollAnimation, mode);
+        expect(loaded.wheelDampingRatio, .75);
+        final snapshot = jsonDecode(
+          (await database.readSetting('preferences.v1'))!,
+        ) as Map<String, Object?>;
+        expect(snapshot['schemaVersion'], 52);
+        expect(snapshot['wheelScrollAnimation'], mode.name);
+      }
+      expect(database.schemaVersion, 3);
+    },
+  );
   test('tab close mouse options migrate with safe defaults', () async {
     for (final legacy in [
       <String, Object?>{},

@@ -147,6 +147,23 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
       update((current) => current.copyWith(checkPrereleaseUpdates: value));
   Future<void> setWheelDampingRatio(double value) =>
       update((current) => current.copyWith(wheelDampingRatio: value));
+  Future<void> setWheelScrollAnimation(WheelScrollAnimation value) =>
+      update((current) => current.copyWith(wheelScrollAnimation: value));
+  Future<void> setChromiumScrollCurve(ChromiumScrollCurve value) =>
+      update((current) => current.copyWith(chromiumScrollCurve: value));
+  Future<void> setWheelScrollDistanceMultiplier(double value) => update(
+    (current) => current.copyWith(wheelScrollDistanceMultiplier: value),
+  );
+  Future<void> setWheelScrollDurationMultiplier(double value) => update(
+    (current) => current.copyWith(wheelScrollDurationMultiplier: value),
+  );
+  Future<void> resetWheelScrollParameters() => update(
+    (current) => current.copyWith(
+      chromiumScrollCurve: ChromiumScrollCurve.easeInOut,
+      wheelScrollDistanceMultiplier: 1,
+      wheelScrollDurationMultiplier: 1,
+    ),
+  );
   Future<void> setDanmakuEnabled(bool value) =>
       update((current) => current.copyWith(danmakuEnabled: value));
   Future<void> setShowCollapsedProgress(bool value) =>

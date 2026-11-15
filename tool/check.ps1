@@ -96,7 +96,7 @@ try {
     Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_windows_media_assets.py')
     Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_apple_texture_handoff.py')
     Invoke-Check python @('-m', 'unittest', 'discover', '-s', 'tool', '-p', 'test_apple_media_libs.py')
-    Invoke-Check dart @('format', '--output=none', '--set-exit-if-changed', 'lib', 'test', 'integration_test')
+    Invoke-Check dart @('format', '--output=none', '--set-exit-if-changed', 'lib', 'test', 'integration_test', 'third_party/smooth_scroll_multiplatform/lib')
     foreach ($package in $packages) {
       Push-Location (Join-Path $repoRoot "packages/$package")
       try {

@@ -2,6 +2,50 @@ import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('wheel parameters default, normalize and copy independently', () {
+    for (final settings in [AppSettings(), const AppSettings.defaults()]) {
+      expect(settings.chromiumScrollCurve, ChromiumScrollCurve.easeInOut);
+      expect(settings.wheelScrollDistanceMultiplier, 1);
+      expect(settings.wheelScrollDurationMultiplier, 1);
+    }
+    for (final (input, distance, duration) in [
+      (-1.0, .25, .25),
+      (.25, .25, .25),
+      (1.0, 1.0, 1.0),
+      (2.5, 2.5, 2.5),
+      (10.0, 4.0, 3.0),
+      (double.nan, 1.0, 1.0),
+      (double.infinity, 1.0, 1.0),
+    ]) {
+      final settings = AppSettings(
+        wheelScrollAnimation: WheelScrollAnimation.multiplatform,
+        chromiumScrollCurve: ChromiumScrollCurve.impulse,
+        wheelDampingRatio: .75,
+        wheelScrollDistanceMultiplier: input,
+        wheelScrollDurationMultiplier: input,
+      ).normalized().copyWith(theme: AppThemePreference.dark);
+      expect(settings.wheelScrollDistanceMultiplier, distance);
+      expect(settings.wheelScrollDurationMultiplier, duration);
+      expect(settings.chromiumScrollCurve, ChromiumScrollCurve.impulse);
+      expect(settings.wheelScrollAnimation, WheelScrollAnimation.multiplatform);
+      expect(settings.wheelDampingRatio, .75);
+    }
+  });
+  test('wheel animation defaults to Chromium and preserves explicit modes', () {
+    expect(AppSettings().wheelScrollAnimation, WheelScrollAnimation.chromium);
+    expect(
+      const AppSettings.defaults().wheelScrollAnimation,
+      WheelScrollAnimation.chromium,
+    );
+    for (final mode in WheelScrollAnimation.values) {
+      final settings = AppSettings(
+        wheelScrollAnimation: mode,
+        wheelDampingRatio: .75,
+      ).normalized().copyWith(theme: AppThemePreference.dark);
+      expect(settings.wheelScrollAnimation, mode);
+      expect(settings.wheelDampingRatio, .75);
+    }
+  });
   test(
     'send style defaults, copies and validates each field independently',
     () {

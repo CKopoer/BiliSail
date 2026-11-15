@@ -10,6 +10,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [桌面滚轮动画与参数](validation/scroll-animation-switch-2026-11-15.md) | 弹簧／Chromium／多平台平滑、曲线与倍率、设置持久化、嵌套与标签状态及未构建边界 |
 | [密码／短信 App 登录](validation/password-sms-app-login-2026-11-15.md) | App 双凭据、真实 -105／fullpage 验证、注册刷新与取消、推荐设置提示移除 |
 | [Windows 有声停帧](validation/windows-video-freeze-2026-11-15.md) | 硬解 warning、音频进度掩盖视频故障、整对有界恢复及原生故障注入边界 |
 | [Android 缓冲与重加载排查](validation/android-rebuffer-reload-2026-11-15.md) | 小米 Android 16 日志、真实缓存暂停与充足缓存时重开、静默探测／回退缓存边界及归因限制 |

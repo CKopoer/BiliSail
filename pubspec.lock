@@ -769,6 +769,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.19.5"
+  nested:
+    dependency: transitive
+    description:
+      name: nested
+      sha256: "03bac4c528c64c95c722ec99280375a6f2fc708eec17c7b3f07253b626cd2a20"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.0"
   objective_c:
     dependency: transitive
     description:
@@ -905,6 +913,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.0.6"
+  provider:
+    dependency: transitive
+    description:
+      name: provider
+      sha256: "4e82183fa20e5ca25703ead7e05de9e4cceed1fbd1eadc1ac3cb6f565a09f272"
+      url: "https://pub.dev"
+    source: hosted
+    version: "6.1.5+1"
   pub_semver:
     dependency: transitive
     description:
@@ -1001,11 +1017,26 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.2.2"
+  scroll_animator:
+    dependency: "direct main"
+    description:
+      name: scroll_animator
+      sha256: "6b8b0f03b7eb47cd014a8aecf69e1504257da3af2f4b408fe3cbba4513814e5c"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.0"
   sky_engine:
     dependency: transitive
     description: flutter
     source: sdk
     version: "0.0.0"
+  smooth_scroll_multiplatform:
+    dependency: "direct main"
+    description:
+      path: "third_party/smooth_scroll_multiplatform"
+      relative: true
+    source: path
+    version: "1.0.8+bilisail.1"
   source_span:
     dependency: transitive
     description:

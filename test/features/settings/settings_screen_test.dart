@@ -707,6 +707,62 @@ void main() {
     },
   );
 
+  for (final fail in [false, true]) {
+    testWidgets(
+      'appearance switches wheel animation and rolls back failures: $fail',
+      (tester) async {
+        final repository = _SettingsRepository()
+          ..settings = AppSettings(wheelDampingRatio: .75)
+          ..failSave = fail;
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              settingsRepositoryProvider.overrideWithValue(repository),
+            ],
+            child: MaterialApp(
+              builder: AppNoticeHost.builder,
+              home: const Scaffold(body: SettingsScreen()),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final spring = find.widgetWithText(ChoiceChip, '原有弹簧');
+        final chromium = find.widgetWithText(ChoiceChip, 'Chromium 平滑');
+        await tester.ensureVisible(spring);
+        await tester.pumpAndSettle();
+        expect(tester.widget<ChoiceChip>(chromium).selected, isTrue);
+        await tester.tap(spring);
+        await tester.pumpAndSettle();
+        expect(
+          repository.settings.wheelScrollAnimation,
+          fail ? WheelScrollAnimation.chromium : WheelScrollAnimation.spring,
+        );
+        expect(tester.widget<ChoiceChip>(spring).selected, !fail);
+        expect(repository.settings.wheelDampingRatio, .75);
+        if (fail) {
+          expect(find.text('设置保存失败，请重试'), findsOneWidget);
+        } else {
+          expect(find.text('滚轮阻尼比 · 0.75'), findsOneWidget);
+          final container = ProviderScope.containerOf(tester.element(spring));
+          container.invalidate(settingsControllerProvider);
+          await tester.pumpAndSettle();
+          expect(tester.widget<ChoiceChip>(spring).selected, isTrue);
+          await tester.ensureVisible(chromium);
+          await tester.pumpAndSettle();
+          await tester.tap(chromium);
+          await tester.pumpAndSettle();
+          expect(
+            repository.settings.wheelScrollAnimation,
+            WheelScrollAnimation.chromium,
+          );
+          expect(repository.settings.wheelDampingRatio, .75);
+          expect(find.text('滚轮阻尼比 · 0.75'), findsNothing);
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   testWidgets(
     'appearance wheel damping saves, reloads and restores the default',
     (tester) async {
@@ -717,6 +773,11 @@ void main() {
           child: const MaterialApp(home: Scaffold(body: SettingsScreen())),
         ),
       );
+      await tester.pumpAndSettle();
+      final springChoice = find.text('原有弹簧');
+      await tester.ensureVisible(springChoice);
+      await tester.pumpAndSettle();
+      await tester.tap(springChoice);
       await tester.pumpAndSettle();
       final slider = find.byWidgetPredicate(
         (widget) => widget is Slider && widget.min == .5 && widget.max == 2,
@@ -747,6 +808,102 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  for (final fail in [false, true]) {
+    testWidgets(
+      'wheel parameter controls persist, reload and handle failure=$fail',
+      (tester) async {
+        final repository = _SettingsRepository()
+          ..settings = AppSettings(wheelDampingRatio: .75)
+          ..failSave = fail;
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              settingsRepositoryProvider.overrideWithValue(repository),
+            ],
+            child: MaterialApp(
+              builder: AppNoticeHost.builder,
+              home: const Scaffold(body: SettingsScreen()),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final impulse = find.widgetWithText(ChoiceChip, 'Impulse');
+        await tester.ensureVisible(impulse);
+        await tester.pumpAndSettle();
+        await tester.tap(impulse);
+        await tester.pumpAndSettle();
+        expect(
+          repository.settings.chromiumScrollCurve,
+          fail ? ChromiumScrollCurve.easeInOut : ChromiumScrollCurve.impulse,
+        );
+        final distance = find.byWidgetPredicate(
+          (widget) => widget is Slider && widget.min == .25 && widget.max == 4,
+        );
+        await tester.ensureVisible(distance);
+        await tester.pumpAndSettle();
+        expect(tester.widget<Slider>(distance).divisions, 75);
+        tester.widget<Slider>(distance).onChanged?.call(1.75);
+        await tester.pump();
+        expect(repository.settings.wheelScrollDistanceMultiplier, 1);
+        tester.widget<Slider>(distance).onChangeEnd?.call(1.75);
+        await tester.pumpAndSettle();
+        expect(
+          repository.settings.wheelScrollDistanceMultiplier,
+          fail ? 1 : 1.75,
+        );
+        final duration = find.byWidgetPredicate(
+          (widget) => widget is Slider && widget.min == .25 && widget.max == 3,
+        );
+        await tester.ensureVisible(duration);
+        await tester.pumpAndSettle();
+        tester.widget<Slider>(duration).onChangeEnd?.call(2.5);
+        await tester.pumpAndSettle();
+        expect(
+          repository.settings.wheelScrollDurationMultiplier,
+          fail ? 1 : 2.5,
+        );
+        if (fail) {
+          expect(find.text('设置保存失败，请重试'), findsOneWidget);
+        } else {
+          final container = ProviderScope.containerOf(tester.element(duration));
+          container.invalidate(settingsControllerProvider);
+          await tester.pumpAndSettle();
+          expect(tester.widget<Slider>(distance).value, 1.75);
+          expect(tester.widget<Slider>(duration).value, 2.5);
+          final multi = find.widgetWithText(ChoiceChip, '多平台平滑');
+          await tester.ensureVisible(multi);
+          await tester.pumpAndSettle();
+          await tester.tap(multi);
+          await tester.pumpAndSettle();
+          expect(
+            repository.settings.wheelScrollAnimation,
+            WheelScrollAnimation.multiplatform,
+          );
+          expect(find.text('Impulse'), findsNothing);
+          final reset = find.byKey(
+            const ValueKey('reset-wheel-scroll-parameters'),
+          );
+          await tester.ensureVisible(reset);
+          await tester.pumpAndSettle();
+          await tester.tap(reset);
+          await tester.pumpAndSettle();
+          expect(
+            repository.settings.chromiumScrollCurve,
+            ChromiumScrollCurve.easeInOut,
+          );
+          expect(repository.settings.wheelScrollDistanceMultiplier, 1);
+          expect(repository.settings.wheelScrollDurationMultiplier, 1);
+          expect(
+            repository.settings.wheelScrollAnimation,
+            WheelScrollAnimation.multiplatform,
+          );
+          expect(repository.settings.wheelDampingRatio, .75);
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   for (final inPlayer in [false, true]) {
     testWidgets('subtitle bottom distance saves 240 px (player: $inPlayer)', (

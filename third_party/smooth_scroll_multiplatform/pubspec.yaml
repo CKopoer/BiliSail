@@ -1,0 +1,19 @@
+name: smooth_scroll_multiplatform
+description: A wrapper for scrollable widgets that enables smooth scrolling with a mouse on all platforms.
+version: 1.0.8+bilisail.1
+publish_to: none
+repository: https://github.com/alesimula/dyn_mouse_scroll
+
+environment:
+  sdk: ">=3.13.0 <4.0.0"
+  flutter: ">=3.47.6"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  provider: 6.1.5+1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0

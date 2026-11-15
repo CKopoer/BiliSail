@@ -13,6 +13,8 @@ import '../../../domain/playback_mode.dart';
 import 'shortcut_settings.dart';
 import '../../../domain/recommendation_settings.dart';
 import '../../../domain/responsive_layout_settings.dart';
+import '../../../domain/wheel_scroll_animation.dart';
+export '../../../domain/wheel_scroll_animation.dart';
 
 export '../../../domain/video_codec.dart';
 export '../../../domain/video_quality.dart';
@@ -86,6 +88,10 @@ final class AppSettings {
     this.recordSearchHistory = true,
     this.checkPrereleaseUpdates = false,
     this.wheelDampingRatio = 1.3,
+    this.wheelScrollAnimation = WheelScrollAnimation.chromium,
+    this.chromiumScrollCurve = ChromiumScrollCurve.easeInOut,
+    this.wheelScrollDistanceMultiplier = 1,
+    this.wheelScrollDurationMultiplier = 1,
     this.danmakuEnabled = true,
     this.danmakuShowVip = true,
     this.danmakuOpacity = 0.8,
@@ -189,6 +195,10 @@ final class AppSettings {
        recordSearchHistory = true,
        checkPrereleaseUpdates = false,
        wheelDampingRatio = 1.3,
+       wheelScrollAnimation = WheelScrollAnimation.chromium,
+       chromiumScrollCurve = ChromiumScrollCurve.easeInOut,
+       wheelScrollDistanceMultiplier = 1,
+       wheelScrollDurationMultiplier = 1,
        danmakuEnabled = true,
        danmakuShowVip = true,
        danmakuOpacity = 0.8,
@@ -268,6 +278,10 @@ final class AppSettings {
 
   /// Mouse-wheel spring damping ratio; 1 is critically damped.
   final double wheelDampingRatio;
+  final WheelScrollAnimation wheelScrollAnimation;
+  final ChromiumScrollCurve chromiumScrollCurve;
+  final double wheelScrollDistanceMultiplier;
+  final double wheelScrollDurationMultiplier;
   final bool danmakuEnabled;
   final bool danmakuShowVip;
   final double danmakuOpacity;
@@ -366,6 +380,10 @@ final class AppSettings {
     bool? recordSearchHistory,
     bool? checkPrereleaseUpdates,
     double? wheelDampingRatio,
+    WheelScrollAnimation? wheelScrollAnimation,
+    ChromiumScrollCurve? chromiumScrollCurve,
+    double? wheelScrollDistanceMultiplier,
+    double? wheelScrollDurationMultiplier,
     bool? danmakuEnabled,
     bool? danmakuShowVip,
     double? danmakuOpacity,
@@ -450,6 +468,12 @@ final class AppSettings {
     checkPrereleaseUpdates:
         checkPrereleaseUpdates ?? this.checkPrereleaseUpdates,
     wheelDampingRatio: wheelDampingRatio ?? this.wheelDampingRatio,
+    wheelScrollAnimation: wheelScrollAnimation ?? this.wheelScrollAnimation,
+    chromiumScrollCurve: chromiumScrollCurve ?? this.chromiumScrollCurve,
+    wheelScrollDistanceMultiplier:
+        wheelScrollDistanceMultiplier ?? this.wheelScrollDistanceMultiplier,
+    wheelScrollDurationMultiplier:
+        wheelScrollDurationMultiplier ?? this.wheelScrollDurationMultiplier,
     danmakuEnabled: danmakuEnabled ?? this.danmakuEnabled,
     danmakuShowVip: danmakuShowVip ?? this.danmakuShowVip,
     danmakuOpacity: danmakuOpacity ?? this.danmakuOpacity,
@@ -576,6 +600,18 @@ final class AppSettings {
         value.isFinite ? value.clamp(min, max) : fallback;
     return copyWith(
       wheelDampingRatio: bounded(wheelDampingRatio, .5, 2, 1.3),
+      wheelScrollDistanceMultiplier: bounded(
+        wheelScrollDistanceMultiplier,
+        .25,
+        4,
+        1,
+      ),
+      wheelScrollDurationMultiplier: bounded(
+        wheelScrollDurationMultiplier,
+        .25,
+        3,
+        1,
+      ),
       systemFontFamily: family(systemFontFamily),
       danmakuSystemFontFamily: family(danmakuSystemFontFamily),
       preferredQuality: supportedQualities.contains(preferredQuality)
