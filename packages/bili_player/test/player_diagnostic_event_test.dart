@@ -232,4 +232,49 @@ void main() {
       expect(summary.httpStatus, isNull);
     }
   });
+
+  test('truncated containers and segment failures are media read errors', () {
+    for (final (message, detail) in [
+      (
+        'stream 0, offset 0x1234: partial file',
+        NativeErrorDetail.prematureRead,
+      ),
+      (
+        'root atom offset 0x1234: partial file '
+            'https://private.test/?pts=10&token=SECRET',
+        NativeErrorDetail.prematureRead,
+      ),
+      ('Failed to open segment 3 of playlist 0', NativeErrorDetail.segmentRead),
+      ('Failed to reload playlist 0', NativeErrorDetail.segmentRead),
+    ]) {
+      for (final prefix in ['ffmpeg/demuxer', 'ffmpeg', 'other']) {
+        final summary = NativeErrorSummary.classify(message, prefix: prefix);
+        expect(summary.cause, NativeErrorCause.inputOutput, reason: message);
+        expect(summary.detail, detail, reason: message);
+        final json = jsonEncode(
+          PlayerDiagnosticEvent(
+            kind: PlayerDiagnosticKind.nativeLog,
+            snapshot: const PlaybackSnapshot(
+              generation: 1,
+              phase: PlaybackPhase.playing,
+            ),
+            nativeError: summary,
+          ).toJson(),
+        );
+        expect(json, isNot(contains('SECRET')));
+        expect(json, isNot(contains('private.test')));
+      }
+    }
+  });
+
+  test('decoder components retain their dedicated failure routes', () {
+    for (final prefix in ['ffmpeg/audio', 'ffmpeg/video']) {
+      final summary = NativeErrorSummary.classify(
+        'Input/output error',
+        prefix: prefix,
+      );
+      expect(summary.cause, NativeErrorCause.decoder);
+      expect(summary.component, prefix);
+    }
+  });
 }

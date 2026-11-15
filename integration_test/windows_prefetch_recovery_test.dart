@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:bili_player/bili_player.dart';
+import 'package:bili_player/src/native_player_properties.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
@@ -9,6 +11,11 @@ import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+// Native regressions inspect and inject the pinned SDK's existing error route.
+// ignore: depend_on_referenced_packages
+import 'package:media_kit_video/media_kit_video.dart' as mkv;
+// ignore: depend_on_referenced_packages
+import 'package:media_kit/media_kit.dart' as mk;
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
@@ -225,6 +232,192 @@ void main() {
         }
       },
     );
+  }
+
+  for (final tlsError in [false, true]) {
+    testWidgets(
+      'media read failure restores DASH before cache drains; tls=$tlsError',
+      (tester) => _runReadFailure(tester, tlsError: tlsError),
+    );
+  }
+}
+
+Future<void> _runReadFailure(
+  WidgetTester tester, {
+  required bool tlsError,
+}) async {
+  initializePlayerBackend();
+  final directory = Platform.environment['BILI_TEST_BUFFER_DIR'];
+  expect(directory, isNotNull, reason: 'Use tool/test-windows-buffer.ps1');
+  final media = {
+    '/video.mp4': await File('$directory/video.mp4').readAsBytes(),
+    '/audio.m4a': await File('$directory/audio.m4a').readAsBytes(),
+  };
+  final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+  final serving = server.listen((request) async {
+    final bytes = media[request.uri.path];
+    if (bytes == null) {
+      request.response.statusCode = 404;
+      await request.response.close();
+      return;
+    }
+    final match = RegExp(r'^bytes=(\d+)-(\d*)$')
+        .firstMatch(request.headers.value(HttpHeaders.rangeHeader) ?? '');
+    final start = int.tryParse(match?[1] ?? '') ?? 0;
+    final response = request.response;
+    if (start >= bytes.length) {
+      response.statusCode = 416;
+      response.headers.set(
+        HttpHeaders.contentRangeHeader,
+        'bytes */${bytes.length}',
+      );
+      await response.close();
+      return;
+    }
+    final end = (int.tryParse(match?[2] ?? '') ?? bytes.length - 1).clamp(
+      start,
+      bytes.length - 1,
+    );
+    response.headers.set(HttpHeaders.acceptRangesHeader, 'bytes');
+    response.contentLength = end - start + 1;
+    if (match != null) {
+      response.statusCode = 206;
+      response.headers.set(
+        HttpHeaders.contentRangeHeader,
+        'bytes $start-$end/${bytes.length}',
+      );
+    }
+    try {
+      response.add(bytes.sublist(start, end + 1));
+      await response.close();
+    } on IOException {
+      // Recovery cancels the retired source's outstanding requests.
+    }
+  });
+  MediaTrack track(String path) => MediaTrack(
+    uri: Uri.parse('http://127.0.0.1:${server.port}$path'),
+    requestPolicy: MediaRequestPolicy(),
+  );
+  final source = DashPairSource(
+    video: track('/video.mp4'),
+    audio: track('/audio.m4a'),
+  );
+  final events = <PlayerDiagnosticEvent>[];
+  final failures = <Duration>[];
+  final engine = MediaKitEngine(onDiagnostic: events.add);
+  final subscription = engine.failures.listen((_) {
+    failures.add(
+      engine.currentSnapshot.buffered - engine.currentSnapshot.position,
+    );
+  });
+  final session = PlaybackSession(
+    engine: engine,
+    repository: _Repository(source),
+    progress: _Progress(),
+    accountScope: () => 'guest',
+  )..configureSettings(AppSettings(autoPlay: true, resumePlayback: false));
+  try {
+    await tester.pumpWidget(MaterialApp(home: VideoSurface(engine: engine)));
+    await _frames(tester, session.open(_detail, _part, volume: 0));
+    await _until(
+      tester,
+      () =>
+          engine.currentSnapshot.position > const Duration(milliseconds: 300) &&
+          engine.currentSnapshot.buffered - engine.currentSnapshot.position >
+              const Duration(seconds: 10),
+    );
+    expect(failures, isEmpty);
+    final generation = engine.currentSnapshot.generation;
+    final before = engine.currentSnapshot.position;
+    final player = tester
+        .widget<mkv.Video>(find.byType(mkv.Video))
+        .controller
+        .player;
+    final oldEnd = engine.currentSnapshot.buffered;
+    await _frames(tester, engine.setRate(2));
+    if (tlsError) {
+      // Exercise the SDK error stream separately from its log stream.
+      // ignore: invalid_use_of_protected_member
+      player.native.errorController.add(
+        'TLS certificate verification failed '
+        'https://private.test/?token=synthetic-secret',
+      );
+    } else {
+      // Reproduce the early error signal from the incident through the pinned
+      // SDK route, after real HTTP DASH decoding/cache readiness. This does not
+      // claim that every truncated input emits an early native error.
+      // ignore: invalid_use_of_protected_member
+      player.native.logController.add(
+        mk.PlayerLog(
+          prefix: 'ffmpeg/demuxer',
+          level: 'error',
+          text:
+              'stream 0, offset 0x1234: partial file '
+              'https://private.test/?pts=10&token=synthetic-secret',
+        ),
+      );
+    }
+    await _until(
+      tester,
+      () =>
+          failures.isNotEmpty &&
+          engine.currentSnapshot.generation > generation &&
+          engine.currentSnapshot.phase == PlaybackPhase.playing &&
+          !session.isRecovering &&
+          engine.currentSnapshot.position >
+              before + const Duration(milliseconds: 300) &&
+          engine.currentSnapshot.buffered >
+              oldEnd + const Duration(seconds: 10),
+    );
+    expect(failures, hasLength(1));
+    expect(failures.single, greaterThan(const Duration(seconds: 10)));
+    expect(
+      events.where(
+        (e) => e.stallReason == PlaybackStallReason.prefetchReadError,
+      ),
+      hasLength(1),
+    );
+    expect(
+      events.any(
+        (e) => tlsError
+            ? e.nativeError?.cause == NativeErrorCause.tls
+            : e.nativeError?.detail == NativeErrorDetail.prematureRead &&
+                  e.nativeError?.cause == NativeErrorCause.inputOutput,
+      ),
+      true,
+    );
+    expect(
+      events.any((e) => e.stallReason == PlaybackStallReason.audioDecodeError),
+      false,
+    );
+    expect(
+      jsonEncode(events.map((e) => e.toJson()).toList()),
+      isNot(contains('synthetic-secret')),
+    );
+    expect(engine.currentSnapshot.desiredPlaying, true);
+    expect(engine.inspectDiagnostics().hasDecodedAudio, true);
+    expect(engine.inspectDiagnostics().hasDecodedVideo, true);
+    expect(session.error, isNull);
+    expect(tester.takeException(), isNull);
+    debugPrint(
+      'READ_FAILURE_RECOVERY tls=$tlsError '
+      'remainingMs=${failures.single.inMilliseconds} '
+      'positionMs=${engine.currentSnapshot.position.inMilliseconds} '
+      'bufferedMs=${engine.currentSnapshot.buffered.inMilliseconds}',
+    );
+  } finally {
+    debugPrint(
+      'READ_FAILURE_FINAL tls=$tlsError '
+      'positionMs=${engine.currentSnapshot.position.inMilliseconds} '
+      'bufferedMs=${engine.currentSnapshot.buffered.inMilliseconds} '
+      'phase=${engine.currentSnapshot.phase} failures=${failures.length} '
+      'error=${session.error != null}',
+    );
+    await subscription.cancel();
+    await _frames(tester, session.close());
+    await tester.pumpWidget(const SizedBox.shrink());
+    await serving.cancel();
+    await server.close(force: true);
   }
 }
 

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'player_contract.dart';
+import 'player_diagnostics.dart';
 
 enum NativeBufferRecoveryReason { readError, stalledRead }
 
@@ -65,6 +66,26 @@ final class NativeBufferRecovery {
       (snapshot().phase == PlaybackPhase.playing ||
           snapshot().buffered - snapshot().position >
               const Duration(seconds: 1));
+
+  void reportError(NativeErrorSummary error) {
+    // Both SDK log/error streams use this policy. A new cause must explicitly
+    // choose whether it proves a media read failure, even while cache plays.
+    final readFailure = switch (error.cause) {
+      NativeErrorCause.http ||
+      NativeErrorCause.timeout ||
+      NativeErrorCause.connection ||
+      NativeErrorCause.tls ||
+      NativeErrorCause.inputOutput => true,
+      NativeErrorCause.hardwareDecoder ||
+      NativeErrorCause.videoOutput ||
+      NativeErrorCause.decoder ||
+      NativeErrorCause.missingFile ||
+      NativeErrorCause.openFailed ||
+      NativeErrorCause.unsupportedProperty ||
+      NativeErrorCause.unknown => false,
+    };
+    if (readFailure) reportNetworkError(immediate: true);
+  }
 
   void reportNetworkError({bool immediate = false}) {
     if (immediate) {

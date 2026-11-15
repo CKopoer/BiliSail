@@ -1161,32 +1161,15 @@ final class MediaKitBackend
               summary.detail == NativeErrorDetail.avDesync) {
             _bufferDiagnostics?.capture();
           }
-          if (const {
-            NativeErrorCause.http,
-            NativeErrorCause.timeout,
-            NativeErrorCause.connection,
-            NativeErrorCause.inputOutput,
-          }.contains(summary.cause)) {
-            _bufferRecovery?.reportNetworkError(immediate: true);
-          }
+          _bufferRecovery?.reportError(summary);
         }
       }),
       player.stream.error.listen((message) {
         if (!active()) return;
-        _diagnose(
-          PlayerDiagnosticKind.nativeError,
-          nativeError: NativeErrorSummary.classify(message),
-        );
+        final summary = NativeErrorSummary.classify(message);
+        _diagnose(PlayerDiagnosticKind.nativeError, nativeError: summary);
         event(const BackendEvent(BackendEventKind.warning));
-        final cause = NativeErrorSummary.classify(message).cause;
-        if (const {
-          NativeErrorCause.http,
-          NativeErrorCause.timeout,
-          NativeErrorCause.connection,
-          NativeErrorCause.inputOutput,
-        }.contains(cause)) {
-          _bufferRecovery?.reportNetworkError(immediate: true);
-        }
+        _bufferRecovery?.reportError(summary);
       }),
     ]);
   }
