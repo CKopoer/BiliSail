@@ -175,12 +175,6 @@ final class NativeErrorSummary {
               value.contains('corrupt input packet') =>
         NativeErrorDetail.corruptPacket,
       _
-          when value.contains('timestamp') ||
-              value.contains('pts') ||
-              value.contains('non-monoton') ||
-              value.contains('dts') =>
-        NativeErrorDetail.timestamp,
-      _
           when value.contains('stream ends prematurely') ||
               value.contains('partial file') =>
         NativeErrorDetail.prematureRead,
@@ -188,6 +182,12 @@ final class NativeErrorSummary {
           when value.contains('failed to open segment') ||
               value.contains('failed to reload playlist') =>
         NativeErrorDetail.segmentRead,
+      _
+          when value.contains('timestamp') ||
+              value.contains('pts') ||
+              value.contains('non-monoton') ||
+              value.contains('dts') =>
+        NativeErrorDetail.timestamp,
       _
           when value.contains('error decoding') ||
               value.contains('error while decoding') ||
@@ -233,15 +233,16 @@ final class NativeErrorSummary {
         NativeErrorCause.decoder,
       _ when value.contains('property not found') =>
         NativeErrorCause.unsupportedProperty,
+      _
+          when detail == NativeErrorDetail.prematureRead ||
+              detail == NativeErrorDetail.segmentRead ||
+              value.contains('input/output') ||
+              value.contains('i/o error') ||
+              value.contains('error in the pull function') =>
+        NativeErrorCause.inputOutput,
       _ when value.contains('failed to open') => NativeErrorCause.openFailed,
       _ when value.contains('not found') || value.contains('no such file') =>
         NativeErrorCause.missingFile,
-      _
-          when value.contains('input/output') ||
-              value.contains('i/o error') ||
-              value.contains('stream ends prematurely') ||
-              value.contains('error in the pull function') =>
-        NativeErrorCause.inputOutput,
       _ => NativeErrorCause.unknown,
     };
     return NativeErrorSummary(

@@ -39,6 +39,64 @@ void main() {
   });
   tearDown(() => recovery.dispose());
 
+  for (final message in [
+    'stream 0, offset 0x1234: partial file',
+    'root atom offset 0x1234: partial file',
+    'Stream ends prematurely at 100, should be 200',
+    'Failed to open segment 3 of playlist 0',
+    'Failed to reload playlist 0',
+    'TLS certificate verification failed',
+    'HTTP error 403 Forbidden',
+    'Connection reset by peer',
+    'Connection timed out',
+    'Input/output error',
+    'Error in the pull function',
+  ]) {
+    test(
+      'media read error recovers while cached playback advances: $message',
+      () {
+        recovery.readingChanged(false, endOfInput: true);
+        snapshot = snapshot.copyWith(position: const Duration(seconds: 15));
+        recovery.update();
+        final error = NativeErrorSummary.classify(
+          message,
+          prefix: 'ffmpeg/demuxer',
+        );
+        recovery.reportError(error);
+        expect(recoveries, 1);
+        expect(reasons, [NativeBufferRecoveryReason.readError]);
+        expect(probes, 0);
+        expect(snapshot.position, lessThan(snapshot.buffered));
+        recovery.reportError(error);
+        expect(
+          recoveries,
+          1,
+          reason: 'Duplicate SDK events share one recovery',
+        );
+      },
+    );
+  }
+
+  for (final message in [
+    'Packet corrupt (stream = 0)',
+    'Non-monotonous DTS in output stream',
+    'Consider trying --profile=fast and/or --hwdec=auto',
+    'Property not found',
+    'No such file',
+    'Failed to open audio device',
+    'Unrecognized diagnostic message',
+  ]) {
+    test(
+      'unrelated diagnostics do not become media read failures: $message',
+      () {
+        recovery.readingChanged(false);
+        recovery.reportError(NativeErrorSummary.classify(message));
+        expect(recoveries, 0);
+        expect(probes, 0);
+      },
+    );
+  }
+
   for (final buffering in [false, true]) {
     test('confirmed prefetch error retries before cache drain: $buffering', () {
       snapshot = snapshot.copyWith(
