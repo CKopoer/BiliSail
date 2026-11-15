@@ -2,6 +2,8 @@
 
 日期：2026-10-28。取代 App 推荐的独立扫码授权，由既有 SessionRepository 统一拥有 Cookie、App token 和登录提交。
 
+2026-11-15：按用户后续要求，密码／短信入口已改为 App Passport 流程，与扫码一样取得并校验双凭据，包含极验和绑定手机号验证。明确的“官网登录”入口仍支持仅 Cookie 会话；不自动转换已有会话。推荐设置的来源说明和身份摘要已移除。当前实现及验证见[密码／短信 App 登录](validation/password-sms-app-login-2026-11-15.md)。以下 2026-10-28 的“密码／短信继续使用官网”等内容保留当时事实。
+
 ## 协议与职责
 
 - 只读参考 PiliPlus `936072449e82e3d90c28c728c0087bf5136fa441` 的 `http/login.dart`、`pages/login/controller.dart` 和账号拦截器，独立实现。HD 扫码成功结果是顶层 token 字段与 `cookie_info.cookies`，兼容有明确 token_info 的响应；不能仅使用之前测试虚构的嵌套结构。
@@ -20,7 +22,7 @@
 - [扫码客户端](../packages/bili_api/lib/src/clients/app_passport_client.dart)同时解析顶层/嵌套 token，返回有界且校验过的 Cookie 模型；只保留用户扫码所需的生成和轮询接口，移除 `exchangeWebSession` 及 API 客户端的 `confirmAppLogin`。
 - [统一会话仓储](../lib/features/auth/data/session_repository.dart)继续拥有唯一登录 generation、Cookie jar、凭据队列和账号提交。两种登录在 nav 验证、安全快照保存及旧账号任务清理后才进入 signedIn；仅扫码回传 token 时校验 UID 一致性和 token 有效期。App token/refresh token、过期时间、buvid 和失效标记只进入系统安全存储。
 - [纯 Dart 凭据端口](../lib/features/auth/domain/app_session_credentials.dart)只供数据层使用。[推荐身份仓储](../lib/features/feed/data/app_recommendation_identity_store.dart)继续保存设备标识并按当前账号隔离旧槽；冷启动期间读到的旧 token 在 Web 账号恢复确认前不可用，避免丢失有效旧授权，也不跨账号暴露。统一 token 优先，过期/失效时不回退旧槽或游客。
-- [推荐设置](../lib/features/settings/presentation/app_recommendation_identity_settings.dart)显示“当前使用游客推荐。”或“当前使用账号推荐。”；App 凭据失效时提示重新扫码登录，读取失败提供重试。2026-10-28 按用户要求移除设备标识显示、手工编辑和随机生成入口；内部继续自动生成并持久化设备标识，保留已有值。独立授权控制器、attempt 端口和扫码模态已删除；不存在“更新登录”入口。
+- [推荐设置](../lib/features/settings/presentation/recommendation_settings_section.dart)显示“当前使用游客推荐。”或“当前使用账号推荐。”；App 凭据失效时提示重新扫码登录，读取失败提供重试。2026-10-28 按用户要求移除设备标识显示、手工编辑和随机生成入口；内部继续自动生成并持久化设备标识，保留已有值。独立授权控制器、attempt 端口和扫码模态已删除；不存在“更新登录”入口。
 - [API 回归](../packages/bili_api/test/unified_login_test.dart)保留扫码的 token/Cookie 解析与边界测试，删除兑换相关用例；[统一登录回归](../test/features/auth/unified_login_test.dart)覆盖扫码与仅 Web 登录、持久化恢复及 Web 登录后的游客 App 推荐，[旧槽与设备测试](../test/features/feed/app_recommendation_identity_test.dart)覆盖冷启动恢复、账号隔离、统一凭据优先、设备变更及旧槽删除失败。设置 Widget 验证游客/账号/失效三种提示以及设备入口不外显。
 
 真实账号 HD 扫码、官网密码/短信提交和设备构建/运行验收仍未完成。公开源码和 fixture 证明实现与离线契约；真实旧版 Cookie 交换失败记录见下文，相关实现已删除。

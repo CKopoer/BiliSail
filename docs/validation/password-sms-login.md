@@ -2,6 +2,8 @@
 
 日期：2026-10-06。Flutter 3.47.6 / Dart 3.13.5，Windows x64 开发主机。真实账号与设备运行需要独立验收。
 
+2026-11-15：密码／短信按钮改为 App Passport 表单，取得 Cookie 和 App token，支持极验和绑定手机号验证；原内嵌登录以“官网登录”保留。当前实现见[密码／短信 App 登录](password-sms-app-login-2026-11-15.md)，下文为历史记录。
+
 2026-11-14：现已统一迁移到 `webview_all 1.5.0`，补齐 Linux 官网登录，Apple Cookie 原生适配和旧 Windows profile 管理已移除。当前实现与验证见[全平台 WebView 迁移](webview-all-linux-2026-11-14.md)，下文保留各日期的历史实现与验收记录。
 
 ## 2026-10-28 统一凭据调整

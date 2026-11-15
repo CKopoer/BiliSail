@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import '../../../domain/recommendation_settings.dart';
 import '../../../shared/ui/app_dialog.dart';
 import '../../../shared/ui/app_notice.dart';
-import 'app_recommendation_identity_settings.dart';
 
 final class RecommendationSettingsSection extends StatefulWidget {
   const RecommendationSettingsSection({
@@ -142,12 +141,6 @@ final class _RecommendationSettingsSectionState
               ),
           ],
         ),
-        const Text(
-          'Web 和桌面端推荐使用当前网页登录；桌面端采用官方 Windows 客户端的推荐参数。'
-          'App 推荐可游客浏览，正常登录后自动使用账号推荐。',
-          style: TextStyle(fontSize: 12),
-        ),
-        const AppRecommendationIdentitySettings(),
         _toggle(
           '保留首页推荐刷新',
           '刷新后新内容在前，保留最多 200 条上次内容。',

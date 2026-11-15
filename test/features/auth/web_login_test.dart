@@ -324,7 +324,7 @@ void main() {
         supportsWebLogin: false,
       ),
     );
-    expect(find.text('密码 / 短信登录'), findsNothing);
+    expect(find.text('官网登录'), findsNothing);
     expect(find.text('获取登录二维码'), findsOneWidget);
   });
 
@@ -336,7 +336,7 @@ void main() {
     await tester.pumpWidget(
       _app(repository, (_) async => _withCsrf([_cookie()])),
     );
-    await tester.tap(find.text('密码 / 短信登录'));
+    await tester.tap(find.text('官网登录'));
     await tester.pumpAndSettle();
     expect(find.byType(TextField), findsNothing);
     expect(repository.current.isSignedIn, isTrue);
@@ -350,7 +350,7 @@ void main() {
     final repository = _repository(_Transport(), credentials, tester: tester);
     final result = Completer<List<LoginCookie>?>();
     await tester.pumpWidget(_app(repository, (_) => result.future));
-    await tester.tap(find.text('密码 / 短信登录'));
+    await tester.tap(find.text('官网登录'));
     await tester.pump();
     await tester.pumpWidget(const MaterialApp(home: Scaffold()));
     result.complete(_withCsrf([_cookie()]));
@@ -370,11 +370,11 @@ void main() {
       await tester.pumpWidget(
         _app(repository, (_) async => [_cookie(domain: 'example.com')]),
       );
-      await tester.tap(find.text('密码 / 短信登录'));
+      await tester.tap(find.text('官网登录'));
       await tester.pumpAndSettle();
       expect(repository.current.status, AuthStatus.failed);
       expect(find.text('未取得有效的网页登录会话，请重试或使用扫码登录'), findsOneWidget);
-      expect(find.text('密码 / 短信登录'), findsOneWidget);
+      expect(find.text('官网登录'), findsOneWidget);
     },
   );
 
@@ -388,7 +388,7 @@ void main() {
     );
     final result = Completer<List<LoginCookie>?>();
     await tester.pumpWidget(_app(repository, (_) => result.future));
-    await tester.tap(find.text('密码 / 短信登录'));
+    await tester.tap(find.text('官网登录'));
     await tester.pump();
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
     expect(repository.current.status, AuthStatus.waitingWeb);
@@ -411,7 +411,7 @@ void main() {
     await tester.pumpWidget(
       _app(repository, (_) async => _withCsrf([_cookie()])),
     );
-    await tester.tap(find.text('密码 / 短信登录'));
+    await tester.tap(find.text('官网登录'));
     await tester.pump();
     expect(repository.current.status, AuthStatus.authenticating);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
@@ -420,7 +420,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(repository.current.status, AuthStatus.guest);
     expect(credentials.value, isNull);
-    expect(find.text('密码 / 短信登录'), findsOneWidget);
+    expect(find.text('官网登录'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsNothing);
   });
 
@@ -448,8 +448,8 @@ void main() {
           );
           await tester.pumpAndSettle();
           expect(tester.takeException(), isNull);
-          await tester.ensureVisible(find.text('密码 / 短信登录'));
-          await tester.tap(find.text('密码 / 短信登录'));
+          await tester.ensureVisible(find.text('官网登录'));
+          await tester.tap(find.text('官网登录'));
           await tester.pumpAndSettle();
           expect(repository.current.status, AuthStatus.guest);
           expect(tester.takeException(), isNull);

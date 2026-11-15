@@ -237,6 +237,10 @@
 
 继续只读参考 PiliPlus `936072449e82e3d90c28c728c0087bf5136fa441` 的 `lib/http/login.dart`、`lib/pages/login/controller.dart`、`lib/utils/accounts/account.dart`；核对 HD 扫码的顶层 token 和 Cookie 列表。Cookie 登录补齐 token 曾核对 bili-kernel `e26f6dbd071e20d4220806fcff7bd675f3c29fc5` 的 `Authorizers/Authorizers.Tv/Core/TvAuthorizeClient.cs` 中 SignInWithCookiesAsync；该路径在真实旧会话探测失败后已按用户要求删除，密码/短信仅保存 Web 会话。独立编写 Dart，未复制参考应用源码/资源或新增依赖。数据/许可及未验证项见[统一登录](unified-login-design.md)。
 
+### 密码／短信 App 登录（2026-11-15）
+
+按用户要求只读对照 PiliPlus `217fb54f51f6764176319bbdedab2a7522d75401`（2.2.1）的 `lib/http/login.dart`、`lib/pages/login/controller.dart`、`lib/common/constants.dart` 和 `lib/utils/login_utils.dart`，独立实现 App 密码／短信、极验、绑定手机号验证及授权码换取双凭据。未复制 GPLv3 应用代码／资源或修改参考仓库。bili_api 直接使用项目已有版本的 MIT `pointycastle 4.0.0`；验证码脚本来自极验官方 HTTPS 服务。来源、端点、许可与验证边界见[专项记录](validation/password-sms-app-login-2026-11-15.md)。
+
 ## 6. 尚待实测或决定的事项
 
 2026-10-27 推荐流设置只读参考本机 PiliPlus `936072449e82e3d90c28c728c0087bf5136fa441` 的推荐设置、过滤工具、推荐控制器与 HTTP 映射；App 接入进一步核对 `lib/utils/app_sign.dart`、`lib/common/constants.dart`、`lib/utils/accounts/account_manager/account_mgr.dart`、`lib/http/login.dart`、`lib/models/home/rcmd/result.dart` 和 `lib/utils/id_utils.dart`。独立实现十一项对应能力及 App 扫码授权，未复制 GPLv3 应用源码/资源、修改相邻仓库或导入其依赖。设备 buvid 与 App token 分开存储，token 只进系统安全存储。参考 lock 实际解析 crypto 3.0.7、dio 5.11.1；media-kit overrides 及锁定 fork 不随本轮采用，本项目继续使用现有依赖。对应范围与未测项见[推荐流设置](recommendation-settings-design.md)、[App 推荐设计](app-recommendation-design.md)。

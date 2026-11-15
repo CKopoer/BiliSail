@@ -632,3 +632,9 @@ media_kit 常规 seek 保留原生播放意图和缓存；只有取消已阻塞�
 ## D91：统一 WebView 依赖并补齐 Linux 官网登录
 
 **决定（2026-11-14，替代 D29 的 WebView 插件选择）**：全平台采用精确版本 `webview_all 1.5.0`，Linux 使用 WebKitGTK 4.1，删除旧占位插件与 Apple Cookie 原生桥。账号层继续持有验证、epoch 和安全保存；平台层只读取当前会话的完整 Cookie 元数据。Windows／Apple／Linux 请求独立私有存储；Android 在其共享 WebView 存储限制下清理前后数据并独占到释放完成。Linux 分发同时携带 WebKit 辅助进程与注入库，验证子进程依赖并记录可重建的路径变换，不关闭沙盒。实现、来源、自动回归和设备／安装包未验收项见[全平台 WebView 记录](validation/webview-all-linux-2026-11-14.md)。
+
+## D92：密码／短信采用 App Passport 双凭据流程
+
+- 日期：2026-11-15。
+- 决策：按用户要求对照 PiliPlus 的 App 密码／短信协议，接入 RSA、人机验证和安全中心手机验证；继续由唯一 SessionRepository 校验 UID、串行保存 Cookie／App token 和隔离取消／迟到响应。推荐设置不再显示来源说明和 App 身份摘要。
+- 边界：保留明确的官网登录和旧 Web-only 会话；不自动兑换、退出或迁移凭据。App POST 单次提交，不自动重放发送短信或登录；协议参考不等于真实账号验收。实施与验证见[专项记录](validation/password-sms-app-login-2026-11-15.md)。

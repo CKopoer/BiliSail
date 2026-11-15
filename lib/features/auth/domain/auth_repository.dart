@@ -3,6 +3,7 @@ enum AuthStatus {
   restoring,
   creatingQr,
   waitingWeb,
+  waitingPasswordSms,
   authenticating,
   waitingScan,
   waitingConfirm,

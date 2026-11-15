@@ -346,6 +346,114 @@ final class BiliApiClient {
     return value == null ? const {} : _map(value, endpoint);
   }
 
+  /// Passport login responses retain explicit captcha and verification states.
+  /// Every form submission is a single attempt, isolated from Web credentials.
+  Future<Map<String, Object?>> requestPasswordSmsJson(
+    String path,
+    Map<String, String> parameters, {
+    required String buvid,
+    required String endpoint,
+    bool post = true,
+    String? referer,
+    ApiRequestContext? context,
+  }) async {
+    const reads = {'/x/passport-login/web/key', '/x/safecenter/user/info'};
+    const writes = {
+      '/x/passport-login/oauth2/login',
+      '/x/passport-login/sms/send',
+      '/x/passport-login/login/sms',
+      '/x/safecenter/captcha/pre',
+      '/x/safecenter/common/sms/send',
+      '/x/safecenter/login/tel/verify',
+      '/x/passport-login/oauth2/access_token',
+    };
+    if (!(post ? writes : reads).contains(path) ||
+        !RegExp(r'^[A-Za-z0-9_-]{16,128}$').hasMatch(buvid)) {
+      throw ArgumentError('Unsupported Passport request');
+    }
+    final active = boundedReadContext(context);
+    final epoch = _sessionProvider?.sessionEpoch;
+    void check() => _checkDecodeContext(
+      active,
+      epoch,
+      active.deadline!,
+      endpoint: endpoint,
+    );
+    check();
+    final uri = Uri.https('passport.bilibili.com', path);
+    final isCaptchaRegistration = path == '/x/safecenter/captcha/pre';
+    final headers = {
+      'Accept': 'application/json',
+      'User-Agent': isCaptchaRegistration ? webUserAgent : AppProfile.userAgent,
+      // This Web registration endpoint chooses Geetest 4 when given App buvid
+      // headers. Like the reference flow, request its Web/fullpage registration
+      // separately, then use that registration's token for the signed SMS form.
+      if (!isCaptchaRegistration) ...{
+        'buvid': buvid,
+        'env': 'prod',
+        'app-key': 'android_hd',
+        'x-bili-trace-id':
+            '11111111111111111111111111111111:1111111111111111:0:0',
+        'x-bili-aurora-eid': '',
+        'x-bili-aurora-zone': '',
+        'bili-http-engine': 'cronet',
+      },
+      'Referer': ?referer,
+    };
+    final budget = active.deadline!.difference(_clock());
+    ApiHttpResponse response;
+    try {
+      if (post) {
+        final transport = _transport;
+        if (transport is! ApiFormTransport) {
+          throw ApiFailure(ApiFailureCategory.unavailable, endpoint);
+        }
+        response = await (transport as ApiFormTransport)
+            .postForm(
+              uri,
+              fields: isCaptchaRegistration
+                  ? parameters
+                  : AppProfile.sign(parameters, _clock()),
+              headers: headers,
+              timeout: budget,
+              cancellation: active.cancellation,
+            )
+            .timeout(budget);
+      } else {
+        response = await _sendWithRetry(
+          uri.replace(queryParameters: parameters),
+          endpoint,
+          headers,
+          active,
+          epoch,
+          maxAttempts: 3,
+          maxBytes: 256 * 1024,
+        );
+      }
+    } on TimeoutException {
+      throw ApiFailure(ApiFailureCategory.timeout, endpoint);
+    }
+    check();
+    // Captcha registration is handled by this login flow, not feed cooldowns.
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiFailure(
+        ApiFailureCategory.http,
+        endpoint,
+        httpStatus: response.statusCode,
+      );
+    }
+    if (response.body.length > 256 * 1024) {
+      throw ApiFailure(ApiFailureCategory.protocol, endpoint);
+    }
+    try {
+      final Object? root = jsonDecode(utf8.decode(response.body));
+      if (root is Map<String, Object?> && root['code'] is int) return root;
+    } on FormatException {
+      throw ApiFailure(ApiFailureCategory.protocol, endpoint);
+    }
+    throw ApiFailure(ApiFailureCategory.protocol, endpoint);
+  }
+
   /// Fixed TV projection endpoint. App credentials never share Web cookies.
   Future<Map<String, Object?>> requestCastJson(
     Map<String, String> parameters, {

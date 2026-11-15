@@ -9,9 +9,13 @@ import '../../../core/storage/credential_store.dart';
 import '../../../domain/app_failure.dart';
 import '../domain/auth_repository.dart';
 import '../domain/app_session_credentials.dart';
+import '../domain/password_sms_auth_repository.dart';
 
 class SessionRepository
-    implements WebAuthRepository, AppSessionCredentialsPort {
+    implements
+        WebAuthRepository,
+        AppSessionCredentialsPort,
+        PasswordSmsAuthRepository {
   SessionRepository({
     required this.api,
     required this.requests,
@@ -51,6 +55,309 @@ class SessionRepository
   Future<void> _credentialQueue = Future.value();
   bool _disposed = false;
   WebLoginAttempt? _webAttempt;
+  _PasswordSmsContext? _passwordSms;
+
+  @override
+  PasswordSmsLoginAttempt? beginPasswordSmsLogin() {
+    if (_disposed || _current.isSignedIn || _current.isBusy) return null;
+    cancelSignIn();
+    final attempt = PasswordSmsLoginAttempt();
+    final client = _loginClientFactory();
+    final cancellation = ApiCancellation();
+    _loginCancellation = cancellation;
+    _passwordSms = _PasswordSmsContext(
+      attempt,
+      _generation,
+      client,
+      PasswordSmsLoginClient(client, clock: _clock),
+      cancellation,
+      _clock().add(const Duration(minutes: 10)),
+    );
+    _emit(const AuthState(status: AuthStatus.waitingPasswordSms));
+    return attempt;
+  }
+
+  Future<PasswordSmsLoginStep> _passwordSmsOperation(
+    PasswordSmsLoginAttempt attempt,
+    Future<ApiAppLoginResult> Function(
+      _PasswordSmsContext flow,
+      ApiRequestContext context,
+      String device,
+    )
+    action,
+  ) async {
+    const cancelled = AppFailure(AppFailureKind.cancelled, '登录已取消');
+    final flow = _passwordSms;
+    if (flow == null ||
+        !identical(flow.attempt, attempt) ||
+        flow.generation != _generation ||
+        flow.busy) {
+      throw cancelled;
+    }
+    if (!_clock().isBefore(flow.deadline)) {
+      cancelSignIn();
+      throw const AppFailure(AppFailureKind.timeout, '登录已超时，请重新打开');
+    }
+    flow.busy = true;
+    _emit(const AuthState(status: AuthStatus.authenticating));
+    final commandDeadline = _clock().add(const Duration(seconds: 25));
+    final context = ApiRequestContext(
+      cancellation: flow.cancellation,
+      deadline: commandDeadline.isBefore(flow.deadline)
+          ? commandDeadline
+          : flow.deadline,
+    );
+    try {
+      flow.device ??= await loadAppDevice?.call() ?? _fallbackDevice;
+      if (flow.generation != _generation) throw cancelled;
+      final device = flow.device!;
+      final result = await action(flow, context, device);
+      if (flow.generation != _generation) throw cancelled;
+      switch (result) {
+        case ApiAppLoginCaptcha(:final captcha):
+          flow.captcha = captcha;
+          return PasswordSmsLoginStep(
+            PasswordSmsLoginStage.captcha,
+            gt: captcha.gt,
+            challenge: captcha.challenge,
+            canRefreshCaptcha:
+                flow.captchaRefreshable && flow.captchaRefreshes == 0,
+          );
+        case ApiAppLoginVerification(:final url):
+          final phone = await flow.protocol.verificationPhone(
+            url: url,
+            buvid: device,
+            context: context,
+          );
+          if (flow.generation != _generation) throw cancelled;
+          flow.verification = url;
+          flow.maskedPhone = phone;
+          flow.smsKey = null;
+          flow.captcha = null;
+          return PasswordSmsLoginStep(
+            PasswordSmsLoginStage.verifyPhone,
+            maskedPhone: phone,
+          );
+        case ApiAppLoginSmsSent(:final captchaKey):
+          flow.smsKey = captchaKey;
+          flow.captcha = null;
+          return PasswordSmsLoginStep(
+            PasswordSmsLoginStage.smsSent,
+            maskedPhone: flow.maskedPhone,
+          );
+        case ApiAppLoginSuccess(:final credentials, :final cookies):
+          flow.client.cookieJar.restoreFromSecureStorage({
+            'version': 1,
+            'cookies': [
+              for (final cookie in cookies)
+                {
+                  'name': cookie.name,
+                  'value': cookie.value,
+                  'domain': cookie.domain,
+                  'path': cookie.path,
+                  'hostOnly': false,
+                  'secure': cookie.secure,
+                  'expiresUtc': cookie.expires?.toUtc().toIso8601String(),
+                },
+            ],
+          });
+          await _completeLogin(
+            flow.client,
+            context,
+            flow.generation,
+            app: credentials,
+            device: device,
+          );
+          if (flow.generation != _generation) throw cancelled;
+          flow.close();
+          _passwordSms = null;
+          _loginCancellation = null;
+          return const PasswordSmsLoginStep(PasswordSmsLoginStage.completed);
+      }
+    } on ApiFailure catch (error) {
+      if (flow.generation != _generation ||
+          error.category == ApiFailureCategory.cancelled) {
+        throw cancelled;
+      }
+      if (error.endpointId == 'app_login_captcha') {
+        throw const AppFailure(
+          AppFailureKind.protocol,
+          '登录验证码暂时不可用，请重新发起登录或使用扫码登录',
+        );
+      }
+      if (error.endpointId == 'app_login_captcha_type') {
+        throw const AppFailure(
+          AppFailureKind.protocol,
+          '当前人机验证类型暂不可用，请使用扫码登录或官网登录',
+        );
+      }
+      if (error.category == ApiFailureCategory.authentication) {
+        throw AppFailure(
+          AppFailureKind.authentication,
+          switch (error.businessCode) {
+            -629 => '账号或密码错误，请重新输入',
+            -626 => '账号不存在，请检查输入',
+            1006 => '短信验证码错误，请重新输入',
+            _ => '登录未完成，请检查输入后重试（${error.businessCode ?? 0}）',
+          },
+        );
+      }
+      throw mapApiFailure(error);
+    } on ArgumentError {
+      throw const AppFailure(AppFailureKind.protocol, '请检查账号、密码或验证码格式');
+    } on AppFailure {
+      rethrow;
+    } catch (_) {
+      throw const AppFailure(AppFailureKind.protocol, '登录未完成，或无法安全保存登录信息，请重试');
+    } finally {
+      flow.busy = false;
+      if (flow.generation == _generation && !_current.isSignedIn) {
+        _emit(const AuthState(status: AuthStatus.waitingPasswordSms));
+      }
+    }
+  }
+
+  ApiLoginCaptchaProof? _captchaProof(LoginCaptchaProof? proof) => proof == null
+      ? null
+      : ApiLoginCaptchaProof(proof.challenge, proof.validate, proof.seccode);
+
+  @override
+  Future<PasswordSmsLoginStep> loginWithPassword(
+    PasswordSmsLoginAttempt attempt,
+    String username,
+    String password, {
+    LoginCaptchaProof? proof,
+  }) => _passwordSmsOperation(attempt, (flow, context, device) {
+    flow.captchaRefreshable = false;
+    flow.verification = null;
+    flow.maskedPhone = null;
+    flow.smsKey = null;
+    return flow.protocol.password(
+      username: username,
+      password: password,
+      buvid: device,
+      captcha: flow.captcha,
+      proof: _captchaProof(proof),
+      context: context,
+    );
+  });
+
+  @override
+  Future<PasswordSmsLoginStep> sendLoginSms(
+    PasswordSmsLoginAttempt attempt,
+    String countryCode,
+    String phone, {
+    LoginCaptchaProof? proof,
+  }) => _passwordSmsOperation(attempt, (flow, context, device) {
+    flow.captchaRefreshable = true;
+    if (proof == null) flow.captchaRefreshes = 0;
+    if (flow.phone != phone || flow.countryCode != countryCode) {
+      flow.captcha = null;
+    }
+    flow.phone = phone;
+    flow.countryCode = countryCode;
+    flow.smsKey = null;
+    return flow.protocol.sendSms(
+      countryCode: countryCode,
+      phone: phone,
+      buvid: device,
+      captcha: flow.captcha,
+      proof: _captchaProof(proof),
+      context: context,
+    );
+  });
+
+  @override
+  Future<PasswordSmsLoginStep> loginWithSms(
+    PasswordSmsLoginAttempt attempt,
+    String code, {
+    LoginCaptchaProof? proof,
+  }) => _passwordSmsOperation(attempt, (flow, context, device) {
+    flow.captchaRefreshable = false;
+    final phone = flow.phone,
+        countryCode = flow.countryCode,
+        captchaKey = flow.smsKey;
+    if (phone == null || countryCode == null || captchaKey == null) {
+      throw const AppFailure(AppFailureKind.protocol, '请先获取短信验证码');
+    }
+    return flow.protocol.sms(
+      countryCode: countryCode,
+      phone: phone,
+      code: code,
+      captchaKey: captchaKey,
+      buvid: device,
+      captcha: flow.captcha,
+      proof: _captchaProof(proof),
+      context: context,
+    );
+  });
+
+  @override
+  Future<PasswordSmsLoginStep> refreshLoginCaptcha(
+    PasswordSmsLoginAttempt attempt,
+  ) => _passwordSmsOperation(attempt, (flow, context, device) async {
+    if (!flow.captchaRefreshable ||
+        flow.captcha == null ||
+        flow.captchaRefreshes >= 1) {
+      throw const AppFailure(
+        AppFailureKind.protocol,
+        '验证码配置已失效，请重新发起登录或使用扫码登录',
+      );
+    }
+    flow.captchaRefreshes++;
+    flow.captcha = null;
+    return ApiAppLoginCaptcha(
+      await flow.protocol.prepareCaptcha(buvid: device, context: context),
+    );
+  });
+
+  @override
+  Future<PasswordSmsLoginStep> sendVerificationSms(
+    PasswordSmsLoginAttempt attempt, {
+    LoginCaptchaProof? proof,
+  }) => _passwordSmsOperation(attempt, (flow, context, device) async {
+    flow.captchaRefreshable = true;
+    if (proof == null) flow.captchaRefreshes = 0;
+    final url = flow.verification;
+    if (url == null) {
+      throw const AppFailure(AppFailureKind.protocol, '请重新发起登录');
+    }
+    flow.smsKey = null;
+    if (proof == null) {
+      return ApiAppLoginCaptcha(
+        await flow.protocol.prepareCaptcha(buvid: device, context: context),
+      );
+    }
+    final captcha = flow.captcha;
+    if (captcha == null) {
+      throw const AppFailure(AppFailureKind.protocol, '请重新完成人机验证');
+    }
+    return flow.protocol.sendVerificationSms(
+      url: url,
+      buvid: device,
+      captcha: captcha,
+      proof: _captchaProof(proof)!,
+      context: context,
+    );
+  });
+
+  @override
+  Future<PasswordSmsLoginStep> verifyLoginPhone(
+    PasswordSmsLoginAttempt attempt,
+    String code,
+  ) => _passwordSmsOperation(attempt, (flow, context, device) {
+    final url = flow.verification, key = flow.smsKey;
+    if (url == null || key == null) {
+      throw const AppFailure(AppFailureKind.protocol, '请先获取短信验证码');
+    }
+    return flow.protocol.verifyPhone(
+      url: url,
+      captchaKey: key,
+      code: code,
+      buvid: device,
+      context: context,
+    );
+  });
 
   String get accountScope => _scope;
   @override
@@ -553,6 +860,8 @@ class SessionRepository
     _loginCancellation?.cancel();
     _loginCancellation = null;
     _webAttempt = null;
+    _passwordSms?.close();
+    _passwordSms = null;
     if (!_current.isSignedIn) _emit(const AuthState());
   }
 
@@ -586,5 +895,32 @@ class SessionRepository
     cancelSignIn();
     await _credentialQueue;
     await _changes.close();
+  }
+}
+
+final class _PasswordSmsContext {
+  _PasswordSmsContext(
+    this.attempt,
+    this.generation,
+    this.client,
+    this.protocol,
+    this.cancellation,
+    this.deadline,
+  );
+  final PasswordSmsLoginAttempt attempt;
+  final int generation;
+  final BiliApiClient client;
+  final PasswordSmsLoginClient protocol;
+  final ApiCancellation cancellation;
+  final DateTime deadline;
+  bool busy = false, captchaRefreshable = false;
+  int captchaRefreshes = 0;
+  String? device, phone, countryCode, smsKey, maskedPhone;
+  Uri? verification;
+  ApiLoginCaptcha? captcha;
+  void close() {
+    cancellation.cancel();
+    client.cookieJar.clear();
+    client.close();
   }
 }

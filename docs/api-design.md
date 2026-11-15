@@ -1,5 +1,9 @@
 # API、鉴权与数据边界
 
+2026-11-15 密码／短信登录接入 App Passport：RSA 密码、App 短信、极验与安全中心手机号验证，成功后由 SessionRepository 校验并原子保存 Cookie／App token。具体 method、签名、端点和重试边界见[密码／短信 App 登录](validation/password-sms-app-login-2026-11-15.md)。明确的官网登录仍可保存 Web-only 会话，已有会话不自动转换。
+
+同日安全中心 captcha/pre 单独使用无 Cookie／签名及 App buvid 的 Web 注册上下文，并校验 recaptcha_type；实测携带 App buvid 返回第四代注册，不能交给第三代 fullpage。安全中心短信及授权码交换仍使用 App 签名；来源、在线对照及验证见上述记录。
+
 2026-11-12 番剧、国创与放映厅接入 Web Cookie GET `/pgc/view/web/season/user/status` 及 CSRF 单次 POST `/pgc/web/follow/add`、`/del`。状态按季编号共享，账号／epoch／取消隔离，写入结果不明须读取核对，来源与验证见[PGC 追番](validation/pgc-follow.md)。
 
 2026-11-11 共享请求管线补齐 Web 设备上下文、安全持久化、风控／验证码识别与端点冷却；热门精选增加 WBI 和页面上下文。业务拒绝不自动重试，账户写入继续单次提交；协议、PiliPlus 来源、离线回归与线上未验收边界见[请求风控](validation/api-risk-control-2026-11-11.md)。
