@@ -30,11 +30,11 @@ class WorkspacePlaybackWindow extends StatefulWidget {
     this.onHome,
     required this.theme,
     this.responsiveLayout = const ResponsiveLayoutSettings.defaults(),
-    this.wheelScrollAnimation = WheelScrollAnimation.chromium,
+    this.wheelScrollAnimation = defaultWheelScrollAnimation,
     this.wheelDampingRatio = 1.3,
     this.chromiumScrollCurve = ChromiumScrollCurve.easeInOut,
     this.wheelScrollDistanceMultiplier = 1,
-    this.wheelScrollDurationMultiplier = 1,
+    this.wheelScrollDurationMultiplier = defaultWheelScrollDurationMultiplier,
   });
 
   final Widget child;

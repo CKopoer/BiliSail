@@ -506,7 +506,7 @@ final class _SettingsCategoryPageState
                               '×',
                             ),
                             const Text(
-                              '倍率 1.00 为默认节奏；数值越大，过渡越舒缓。只影响鼠标滚轮。',
+                              '默认倍率 1.30；1.00 为原始动画时长。数值越大，过渡越舒缓。只影响鼠标滚轮。',
                               style: TextStyle(fontSize: 12),
                             ),
                           ],
@@ -518,7 +518,8 @@ final class _SettingsCategoryPageState
                                 s.chromiumScrollCurve ==
                                         ChromiumScrollCurve.easeInOut &&
                                     s.wheelScrollDistanceMultiplier == 1 &&
-                                    s.wheelScrollDurationMultiplier == 1
+                                    s.wheelScrollDurationMultiplier ==
+                                        defaultWheelScrollDurationMultiplier
                                 ? null
                                 : () => _save(
                                     controller.resetWheelScrollParameters,

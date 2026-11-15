@@ -1,4 +1,5 @@
 import 'package:bilisail/shared/ui/scroll_boundary_handoff.dart';
+import 'package:bilisail/domain/wheel_scroll_animation.dart';
 import 'package:bilisail/shared/ui/smooth_scroll_behavior.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -88,6 +89,11 @@ Widget _app(
 ) => MaterialApp(
   theme: ThemeData(platform: platform),
   scrollBehavior: const SmoothScrollBehavior(),
+  builder: (_, child) => SmoothScrollScope(
+    animation: WheelScrollAnimation.chromium,
+    dampingRatio: 1.3,
+    child: child!,
+  ),
   home: Scaffold(
     body: SingleChildScrollView(
       controller: outer,

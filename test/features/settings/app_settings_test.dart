@@ -6,7 +6,7 @@ void main() {
     for (final settings in [AppSettings(), const AppSettings.defaults()]) {
       expect(settings.chromiumScrollCurve, ChromiumScrollCurve.easeInOut);
       expect(settings.wheelScrollDistanceMultiplier, 1);
-      expect(settings.wheelScrollDurationMultiplier, 1);
+      expect(settings.wheelScrollDurationMultiplier, 1.3);
     }
     for (final (input, distance, duration) in [
       (-1.0, .25, .25),
@@ -14,8 +14,8 @@ void main() {
       (1.0, 1.0, 1.0),
       (2.5, 2.5, 2.5),
       (10.0, 4.0, 3.0),
-      (double.nan, 1.0, 1.0),
-      (double.infinity, 1.0, 1.0),
+      (double.nan, 1.0, 1.3),
+      (double.infinity, 1.0, 1.3),
     ]) {
       final settings = AppSettings(
         wheelScrollAnimation: WheelScrollAnimation.multiplatform,
@@ -31,21 +31,27 @@ void main() {
       expect(settings.wheelDampingRatio, .75);
     }
   });
-  test('wheel animation defaults to Chromium and preserves explicit modes', () {
-    expect(AppSettings().wheelScrollAnimation, WheelScrollAnimation.chromium);
-    expect(
-      const AppSettings.defaults().wheelScrollAnimation,
-      WheelScrollAnimation.chromium,
-    );
-    for (final mode in WheelScrollAnimation.values) {
-      final settings = AppSettings(
-        wheelScrollAnimation: mode,
-        wheelDampingRatio: .75,
-      ).normalized().copyWith(theme: AppThemePreference.dark);
-      expect(settings.wheelScrollAnimation, mode);
-      expect(settings.wheelDampingRatio, .75);
-    }
-  });
+  test(
+    'wheel animation defaults to multiplatform and preserves explicit modes',
+    () {
+      expect(
+        AppSettings().wheelScrollAnimation,
+        WheelScrollAnimation.multiplatform,
+      );
+      expect(
+        const AppSettings.defaults().wheelScrollAnimation,
+        WheelScrollAnimation.multiplatform,
+      );
+      for (final mode in WheelScrollAnimation.values) {
+        final settings = AppSettings(
+          wheelScrollAnimation: mode,
+          wheelDampingRatio: .75,
+        ).normalized().copyWith(theme: AppThemePreference.dark);
+        expect(settings.wheelScrollAnimation, mode);
+        expect(settings.wheelDampingRatio, .75);
+      }
+    },
+  );
   test(
     'send style defaults, copies and validates each field independently',
     () {

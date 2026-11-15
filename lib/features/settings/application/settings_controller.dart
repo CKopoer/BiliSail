@@ -161,7 +161,7 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
     (current) => current.copyWith(
       chromiumScrollCurve: ChromiumScrollCurve.easeInOut,
       wheelScrollDistanceMultiplier: 1,
-      wheelScrollDurationMultiplier: 1,
+      wheelScrollDurationMultiplier: defaultWheelScrollDurationMultiplier,
     ),
   );
   Future<void> setDanmakuEnabled(bool value) =>

@@ -18,10 +18,10 @@ final class SmoothScrollScope extends InheritedWidget {
   const SmoothScrollScope({
     super.key,
     required this.dampingRatio,
-    this.animation = WheelScrollAnimation.chromium,
+    this.animation = defaultWheelScrollAnimation,
     this.chromiumCurve = ChromiumScrollCurve.easeInOut,
     this.distanceMultiplier = 1,
-    this.durationMultiplier = 1,
+    this.durationMultiplier = defaultWheelScrollDurationMultiplier,
     required super.child,
   }) : assert(dampingRatio > 0 && dampingRatio < double.infinity),
        assert(distanceMultiplier > 0 && distanceMultiplier < double.infinity),
@@ -40,7 +40,7 @@ final class SmoothScrollScope extends InheritedWidget {
       context
           .dependOnInheritedWidgetOfExactType<SmoothScrollScope>()
           ?.animation ??
-      WheelScrollAnimation.chromium;
+      defaultWheelScrollAnimation;
 
   static double dampingRatioOf(BuildContext context) =>
       context
@@ -176,10 +176,10 @@ final class _SmoothWheelScrollState extends State<_SmoothWheelScroll> {
   bool _enabled = true;
   bool _active = true;
   double _dampingRatio = 1.3;
-  WheelScrollAnimation _animation = WheelScrollAnimation.chromium;
+  WheelScrollAnimation _animation = defaultWheelScrollAnimation;
   ChromiumScrollCurve _chromiumCurve = ChromiumScrollCurve.easeInOut;
   double _distanceMultiplier = 1;
-  double _durationMultiplier = 1;
+  double _durationMultiplier = defaultWheelScrollDurationMultiplier;
 
   @override
   void didChangeDependencies() {
@@ -189,7 +189,8 @@ final class _SmoothWheelScrollState extends State<_SmoothWheelScroll> {
     final scope = SmoothScrollScope.maybeOf(context);
     final chromiumCurve = scope?.chromiumCurve ?? ChromiumScrollCurve.easeInOut;
     final distanceMultiplier = scope?.distanceMultiplier ?? 1;
-    final durationMultiplier = scope?.durationMultiplier ?? 1;
+    final durationMultiplier =
+        scope?.durationMultiplier ?? defaultWheelScrollDurationMultiplier;
     if (animation != _animation ||
         distanceMultiplier != _distanceMultiplier ||
         (animation != WheelScrollAnimation.spring &&

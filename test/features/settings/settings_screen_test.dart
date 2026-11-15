@@ -730,12 +730,19 @@ void main() {
         final chromium = find.widgetWithText(ChoiceChip, 'Chromium 平滑');
         await tester.ensureVisible(spring);
         await tester.pumpAndSettle();
-        expect(tester.widget<ChoiceChip>(chromium).selected, isTrue);
+        expect(
+          tester
+              .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '多平台平滑'))
+              .selected,
+          isTrue,
+        );
         await tester.tap(spring);
         await tester.pumpAndSettle();
         expect(
           repository.settings.wheelScrollAnimation,
-          fail ? WheelScrollAnimation.chromium : WheelScrollAnimation.spring,
+          fail
+              ? WheelScrollAnimation.multiplatform
+              : WheelScrollAnimation.spring,
         );
         expect(tester.widget<ChoiceChip>(spring).selected, !fail);
         expect(repository.settings.wheelDampingRatio, .75);
@@ -814,7 +821,10 @@ void main() {
       'wheel parameter controls persist, reload and handle failure=$fail',
       (tester) async {
         final repository = _SettingsRepository()
-          ..settings = AppSettings(wheelDampingRatio: .75)
+          ..settings = AppSettings(
+            wheelScrollAnimation: WheelScrollAnimation.chromium,
+            wheelDampingRatio: .75,
+          )
           ..failSave = fail;
         await tester.pumpWidget(
           ProviderScope(
@@ -861,7 +871,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(
           repository.settings.wheelScrollDurationMultiplier,
-          fail ? 1 : 2.5,
+          fail ? 1.3 : 2.5,
         );
         if (fail) {
           expect(find.text('设置保存失败，请重试'), findsOneWidget);
@@ -893,7 +903,7 @@ void main() {
             ChromiumScrollCurve.easeInOut,
           );
           expect(repository.settings.wheelScrollDistanceMultiplier, 1);
-          expect(repository.settings.wheelScrollDurationMultiplier, 1);
+          expect(repository.settings.wheelScrollDurationMultiplier, 1.3);
           expect(
             repository.settings.wheelScrollAnimation,
             WheelScrollAnimation.multiplatform,
