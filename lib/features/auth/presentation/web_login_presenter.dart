@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -7,9 +6,8 @@ import '../domain/auth_repository.dart';
 
 typedef WebLoginPresenter = Future<List<LoginCookie>?> Function(BuildContext);
 
-final webLoginSupportedProvider = Provider<bool>(
-  (ref) => passportWebLoginSupportedForPlatform(defaultTargetPlatform),
-);
+// 暂时隐藏官网登录入口，保留 WebView、会话交接及平台能力实现。
+final webLoginSupportedProvider = Provider<bool>((ref) => false);
 
 final webLoginPresenterProvider = Provider<WebLoginPresenter>(
   (ref) => (context) async {

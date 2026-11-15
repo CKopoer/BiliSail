@@ -309,7 +309,7 @@ void main() {
     expect(passportWebLoginSupportedForPlatform(TargetPlatform.iOS), isTrue);
   });
 
-  testWidgets('unsupported web login retains the QR login entry', (
+  testWidgets('web login entry is hidden by default and retains QR login', (
     tester,
   ) async {
     final repository = _repository(
@@ -318,10 +318,9 @@ void main() {
       tester: tester,
     );
     await tester.pumpWidget(
-      _app(
-        repository,
-        (_) async => throw StateError('Web login unavailable'),
-        supportsWebLogin: false,
+      ProviderScope(
+        overrides: [authRepositoryProvider.overrideWithValue(repository)],
+        child: const MaterialApp(home: Scaffold(body: AccountDialog())),
       ),
     );
     expect(find.text('官网登录'), findsNothing);
@@ -464,12 +463,12 @@ Widget _app(
   WebLoginPresenter presenter, {
   double keyboard = 0,
   double textScale = 1,
-  bool supportsWebLogin = true,
 }) => ProviderScope(
   overrides: [
     authRepositoryProvider.overrideWithValue(repository),
     webLoginPresenterProvider.overrideWithValue(presenter),
-    webLoginSupportedProvider.overrideWithValue(supportsWebLogin),
+    // 显式启用隐藏入口，继续验证保留的网页登录流程。
+    webLoginSupportedProvider.overrideWithValue(true),
   ],
   child: MaterialApp(
     builder: (context, child) => MediaQuery(
