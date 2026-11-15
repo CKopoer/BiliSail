@@ -138,7 +138,7 @@ class _BiliAppState extends ConsumerState<BiliApp> {
                       wheelScrollDurationMultiplier:
                           SmoothScrollScope.maybeOf(context)
                               ?.durationMultiplier ??
-                          1,
+                          defaultWheelScrollDurationMultiplier,
                       responsiveLayout:
                           (ref.read(settingsControllerProvider).value ??
                                   ref.read<AppSettings>(

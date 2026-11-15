@@ -1,4 +1,5 @@
 import 'package:bilisail/core/presentation/workspace_activity.dart';
+import 'package:bilisail/domain/wheel_scroll_animation.dart';
 import 'package:bilisail/shared/ui/paged_scroll_viewport.dart';
 import 'package:bilisail/shared/ui/scroll_collapsing_header.dart';
 import 'package:bilisail/shared/ui/smooth_scroll_behavior.dart';
@@ -29,6 +30,11 @@ void main() {
       MaterialApp(
         theme: ThemeData(platform: platform),
         scrollBehavior: const SmoothScrollBehavior(),
+        builder: (_, child) => SmoothScrollScope(
+          animation: WheelScrollAnimation.chromium,
+          dampingRatio: 1.3,
+          child: child!,
+        ),
         home: MediaQuery(
           data: MediaQueryData(disableAnimations: reduceMotion),
           child: Scaffold(
@@ -363,7 +369,7 @@ void main() {
         expect(tester.getTopLeft(find.byKey(_tabs)).dy, 0);
         await wheel(-180);
         await tester.pumpAndSettle();
-        expect(tester.getTopLeft(find.byKey(_tabs)).dy, 80);
+        expect(tester.getTopLeft(find.byKey(_tabs)).dy, closeTo(80, .000001));
         await wheel(600);
         await tester.pump();
         await mount(tester, active: false, reduceMotion: reduced);

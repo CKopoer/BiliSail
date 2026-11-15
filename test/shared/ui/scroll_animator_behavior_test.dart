@@ -7,18 +7,21 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scroll_animator/scroll_animator.dart';
+import 'package:smooth_scroll_multiplatform/smooth_scroll_multiplatform.dart';
 
 void main() {
-  testWidgets('default wheel motion uses the scroll_animator Chromium curve', (
-    tester,
-  ) async {
+  testWidgets('Chromium mode uses the scroll_animator curve', (tester) async {
     final controller = ScrollController(initialScrollOffset: 300);
     addTearDown(controller.dispose);
     await tester.pumpWidget(
       _app(
-        ListView(
-          controller: controller,
-          children: const [SizedBox(height: 4000)],
+        SmoothScrollScope(
+          animation: WheelScrollAnimation.chromium,
+          dampingRatio: 1.3,
+          child: ListView(
+            controller: controller,
+            children: const [SizedBox(height: 4000)],
+          ),
         ),
       ),
     );
@@ -31,7 +34,7 @@ void main() {
     await tester.pump();
     for (var frame = 1; frame <= 30; frame++) {
       await tester.pump(const Duration(milliseconds: 8));
-      final time = Duration(milliseconds: frame * 8);
+      final time = Duration(microseconds: (frame * 8000 / 1.3).round());
       final done = time >= animation.duration;
       expect(
         controller.offset,
@@ -39,11 +42,41 @@ void main() {
       );
       expect(
         controller.position.activity?.velocity ?? 0,
-        closeTo(done ? 0 : animation.getVelocity(time).dy, .000001),
+        closeTo(done ? 0 : animation.getVelocity(time).dy / 1.3, .000001),
       );
     }
     await tester.pumpAndSettle();
     expect(controller.offset, closeTo(420, .000001));
+    expect(controller.position.isScrollingNotifier.value, isFalse);
+  });
+
+  testWidgets('default motion uses multiplatform at 1.3x duration', (
+    tester,
+  ) async {
+    final controller = ScrollController(initialScrollOffset: 300);
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      _app(
+        ListView(
+          controller: controller,
+          children: const [SizedBox(height: 4000)],
+        ),
+      ),
+    );
+    final simulation = SmoothScrollSimulation(start: 300, end: 540);
+    await _wheel(tester, find.byType(ListView), 120);
+    await tester.pump();
+    for (var frame = 1; frame <= 30; frame++) {
+      await tester.pump(const Duration(milliseconds: 8));
+      final time = (frame * 8000 / 1.3).round() / 1000000;
+      expect(controller.offset, closeTo(simulation.x(time), .000001));
+      expect(
+        controller.position.activity?.velocity ?? 0,
+        closeTo(simulation.dx(time) / 1.3, .000001),
+      );
+    }
+    await tester.pumpAndSettle();
+    expect(controller.offset, closeTo(540, .000001));
     expect(controller.position.isScrollingNotifier.value, isFalse);
   });
 

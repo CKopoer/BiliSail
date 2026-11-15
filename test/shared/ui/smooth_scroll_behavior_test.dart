@@ -1039,10 +1039,14 @@ Widget _list(ScrollController controller, {Key? key}) => ListView(
 
 Widget _hostedApp(Widget child) => InputTestApp(
   theme: ThemeData(platform: TargetPlatform.windows),
-  home: Scaffold(
-    body: ScrollConfiguration(
-      behavior: const SmoothScrollBehavior(),
-      child: child,
+  home: SmoothScrollScope(
+    animation: WheelScrollAnimation.chromium,
+    dampingRatio: 1.3,
+    child: Scaffold(
+      body: ScrollConfiguration(
+        behavior: const SmoothScrollBehavior(),
+        child: child,
+      ),
     ),
   ),
 );

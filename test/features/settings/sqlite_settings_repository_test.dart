@@ -21,7 +21,7 @@ void main() {
       final settings = await repository.load();
       expect(settings.chromiumScrollCurve, ChromiumScrollCurve.easeInOut);
       expect(settings.wheelScrollDistanceMultiplier, 1);
-      expect(settings.wheelScrollDurationMultiplier, 1);
+      expect(settings.wheelScrollDurationMultiplier, 1.3);
       expect(settings.wheelScrollAnimation, WheelScrollAnimation.spring);
       expect(settings.wheelDampingRatio, .75);
     }
@@ -31,7 +31,16 @@ void main() {
     );
     final legacy = await repository.load();
     expect(legacy.wheelScrollDistanceMultiplier, 1);
-    expect(legacy.wheelScrollDurationMultiplier, 1);
+    expect(legacy.wheelScrollDurationMultiplier, 1.3);
+    await database.writeSetting(
+      'preferences.v1',
+      '{"schemaVersion":52,"wheelScrollAnimation":"chromium","wheelScrollDurationMultiplier":1.0}',
+    );
+    expect((await repository.load()).wheelScrollDurationMultiplier, 1.0);
+    expect(
+      (await repository.load()).wheelScrollAnimation,
+      WheelScrollAnimation.chromium,
+    );
     for (final mode in WheelScrollAnimation.values) {
       for (final curve in ChromiumScrollCurve.values) {
         await repository.save(
@@ -66,7 +75,7 @@ void main() {
           }),
         );
         final legacy = await repository.load();
-        expect(legacy.wheelScrollAnimation, WheelScrollAnimation.chromium);
+        expect(legacy.wheelScrollAnimation, WheelScrollAnimation.multiplatform);
         expect(legacy.wheelDampingRatio, .75);
         expect(legacy.theme, AppThemePreference.dark);
       }
@@ -75,7 +84,7 @@ void main() {
         '{"schemaVersion":50,"wheelDampingRatio":0.75}',
       );
       final legacy = await repository.load();
-      expect(legacy.wheelScrollAnimation, WheelScrollAnimation.chromium);
+      expect(legacy.wheelScrollAnimation, WheelScrollAnimation.multiplatform);
       for (final mode in WheelScrollAnimation.values) {
         await repository.save(legacy.copyWith(wheelScrollAnimation: mode));
         final loaded = await SqliteSettingsRepository(database).load();

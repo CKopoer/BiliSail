@@ -18,6 +18,7 @@ void main() {
             await tester.pumpWidget(
               _app(
                 SmoothScrollScope(
+                  animation: WheelScrollAnimation.chromium,
                   dampingRatio: 1.3,
                   chromiumCurve: curve,
                   distanceMultiplier: distance,

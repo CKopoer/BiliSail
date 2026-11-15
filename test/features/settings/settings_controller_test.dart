@@ -368,7 +368,7 @@ void main() {
       settings = repository.stored;
       expect(settings.chromiumScrollCurve, ChromiumScrollCurve.easeInOut);
       expect(settings.wheelScrollDistanceMultiplier, 1);
-      expect(settings.wheelScrollDurationMultiplier, 1);
+      expect(settings.wheelScrollDurationMultiplier, 1.3);
       expect(settings.wheelScrollAnimation, WheelScrollAnimation.multiplatform);
       expect(settings.wheelDampingRatio, .75);
     },

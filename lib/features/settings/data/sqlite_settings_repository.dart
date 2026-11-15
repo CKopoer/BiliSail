@@ -110,14 +110,17 @@ class SqliteSettingsRepository implements SettingsRepository {
           WheelScrollAnimation.values
               .where((item) => item.name == decoded['wheelScrollAnimation'])
               .firstOrNull ??
-          WheelScrollAnimation.chromium,
+          defaultWheelScrollAnimation,
       chromiumScrollCurve:
           ChromiumScrollCurve.values
               .where((item) => item.name == decoded['chromiumScrollCurve'])
               .firstOrNull ??
           ChromiumScrollCurve.easeInOut,
       wheelScrollDistanceMultiplier: number('wheelScrollDistanceMultiplier', 1),
-      wheelScrollDurationMultiplier: number('wheelScrollDurationMultiplier', 1),
+      wheelScrollDurationMultiplier: number(
+        'wheelScrollDurationMultiplier',
+        defaultWheelScrollDurationMultiplier,
+      ),
       systemFontFamily: decoded['systemFontFamily'] is String
           ? decoded['systemFontFamily'] as String
           : '',
