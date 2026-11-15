@@ -7,7 +7,6 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scroll_animator/scroll_animator.dart';
-import 'package:smooth_scroll_multiplatform/smooth_scroll_multiplatform.dart';
 
 void main() {
   testWidgets('Chromium mode uses the scroll_animator curve', (tester) async {
@@ -50,7 +49,7 @@ void main() {
     expect(controller.position.isScrollingNotifier.value, isFalse);
   });
 
-  testWidgets('default motion uses multiplatform at 1.3x duration', (
+  testWidgets('default motion uses the original spring and physical clock', (
     tester,
   ) async {
     final controller = ScrollController(initialScrollOffset: 300);
@@ -63,20 +62,30 @@ void main() {
         ),
       ),
     );
-    final simulation = SmoothScrollSimulation(start: 300, end: 540);
+    final position = controller.position;
+    final simulation = ScrollSpringSimulation(
+      SpringDescription.withDampingRatio(mass: 1, stiffness: 1600, ratio: 1.3),
+      0,
+      120,
+      0,
+      tolerance: Tolerance(
+        distance: .5 / position.devicePixelRatio,
+        velocity: position.physics.toleranceFor(position).velocity,
+      ),
+    );
     await _wheel(tester, find.byType(ListView), 120);
     await tester.pump();
     for (var frame = 1; frame <= 30; frame++) {
       await tester.pump(const Duration(milliseconds: 8));
-      final time = (frame * 8000 / 1.3).round() / 1000000;
-      expect(controller.offset, closeTo(simulation.x(time), .000001));
+      final time = frame * .008;
+      expect(controller.offset, closeTo(300 + simulation.x(time), .000001));
       expect(
         controller.position.activity?.velocity ?? 0,
-        closeTo(simulation.dx(time) / 1.3, .000001),
+        closeTo(simulation.isDone(time) ? 0 : simulation.dx(time), .000001),
       );
     }
     await tester.pumpAndSettle();
-    expect(controller.offset, closeTo(540, .000001));
+    expect(controller.offset, closeTo(420, .000001));
     expect(controller.position.isScrollingNotifier.value, isFalse);
   });
 

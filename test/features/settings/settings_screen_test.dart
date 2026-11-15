@@ -730,40 +730,33 @@ void main() {
         final chromium = find.widgetWithText(ChoiceChip, 'Chromium 平滑');
         await tester.ensureVisible(spring);
         await tester.pumpAndSettle();
-        expect(
-          tester
-              .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '多平台平滑'))
-              .selected,
-          isTrue,
-        );
-        await tester.tap(spring);
+        expect(tester.widget<ChoiceChip>(spring).selected, isTrue);
+        await tester.tap(chromium);
         await tester.pumpAndSettle();
         expect(
           repository.settings.wheelScrollAnimation,
-          fail
-              ? WheelScrollAnimation.multiplatform
-              : WheelScrollAnimation.spring,
+          fail ? WheelScrollAnimation.spring : WheelScrollAnimation.chromium,
         );
-        expect(tester.widget<ChoiceChip>(spring).selected, !fail);
+        expect(tester.widget<ChoiceChip>(chromium).selected, !fail);
         expect(repository.settings.wheelDampingRatio, .75);
         if (fail) {
           expect(find.text('设置保存失败，请重试'), findsOneWidget);
         } else {
-          expect(find.text('滚轮阻尼比 · 0.75'), findsOneWidget);
+          expect(find.text('滚轮阻尼比 · 0.75'), findsNothing);
           final container = ProviderScope.containerOf(tester.element(spring));
           container.invalidate(settingsControllerProvider);
           await tester.pumpAndSettle();
-          expect(tester.widget<ChoiceChip>(spring).selected, isTrue);
-          await tester.ensureVisible(chromium);
+          expect(tester.widget<ChoiceChip>(chromium).selected, isTrue);
+          await tester.ensureVisible(spring);
           await tester.pumpAndSettle();
-          await tester.tap(chromium);
+          await tester.tap(spring);
           await tester.pumpAndSettle();
           expect(
             repository.settings.wheelScrollAnimation,
-            WheelScrollAnimation.chromium,
+            WheelScrollAnimation.spring,
           );
           expect(repository.settings.wheelDampingRatio, .75);
-          expect(find.text('滚轮阻尼比 · 0.75'), findsNothing);
+          expect(find.text('滚轮阻尼比 · 0.75'), findsOneWidget);
         }
         expect(tester.takeException(), isNull);
       },

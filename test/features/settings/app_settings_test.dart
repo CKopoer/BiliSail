@@ -31,27 +31,21 @@ void main() {
       expect(settings.wheelDampingRatio, .75);
     }
   });
-  test(
-    'wheel animation defaults to multiplatform and preserves explicit modes',
-    () {
-      expect(
-        AppSettings().wheelScrollAnimation,
-        WheelScrollAnimation.multiplatform,
-      );
-      expect(
-        const AppSettings.defaults().wheelScrollAnimation,
-        WheelScrollAnimation.multiplatform,
-      );
-      for (final mode in WheelScrollAnimation.values) {
-        final settings = AppSettings(
-          wheelScrollAnimation: mode,
-          wheelDampingRatio: .75,
-        ).normalized().copyWith(theme: AppThemePreference.dark);
-        expect(settings.wheelScrollAnimation, mode);
-        expect(settings.wheelDampingRatio, .75);
-      }
-    },
-  );
+  test('wheel animation defaults to spring and preserves explicit modes', () {
+    expect(AppSettings().wheelScrollAnimation, WheelScrollAnimation.spring);
+    expect(
+      const AppSettings.defaults().wheelScrollAnimation,
+      WheelScrollAnimation.spring,
+    );
+    for (final mode in WheelScrollAnimation.values) {
+      final settings = AppSettings(
+        wheelScrollAnimation: mode,
+        wheelDampingRatio: .75,
+      ).normalized().copyWith(theme: AppThemePreference.dark);
+      expect(settings.wheelScrollAnimation, mode);
+      expect(settings.wheelDampingRatio, .75);
+    }
+  });
   test(
     'send style defaults, copies and validates each field independently',
     () {

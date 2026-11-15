@@ -75,7 +75,7 @@ void main() {
           }),
         );
         final legacy = await repository.load();
-        expect(legacy.wheelScrollAnimation, WheelScrollAnimation.multiplatform);
+        expect(legacy.wheelScrollAnimation, WheelScrollAnimation.spring);
         expect(legacy.wheelDampingRatio, .75);
         expect(legacy.theme, AppThemePreference.dark);
       }
@@ -84,7 +84,7 @@ void main() {
         '{"schemaVersion":50,"wheelDampingRatio":0.75}',
       );
       final legacy = await repository.load();
-      expect(legacy.wheelScrollAnimation, WheelScrollAnimation.multiplatform);
+      expect(legacy.wheelScrollAnimation, WheelScrollAnimation.spring);
       for (final mode in WheelScrollAnimation.values) {
         await repository.save(legacy.copyWith(wheelScrollAnimation: mode));
         final loaded = await SqliteSettingsRepository(database).load();
