@@ -278,7 +278,11 @@ void main() {
     'audio failure pauses the pair before video can mask the error',
     () async {
       final backend = _Backend();
-      final engine = SharedPlayerEngine(createBackend: () => backend);
+      final diagnostics = <PlayerDiagnosticEvent>[];
+      final engine = SharedPlayerEngine(
+        createBackend: () => backend,
+        onDiagnostic: diagnostics.add,
+      );
       addTearDown(engine.dispose);
       final failures = <PlayerFailure>[];
       engine.failures.listen(failures.add);
@@ -294,8 +298,12 @@ void main() {
       );
       final monitor = NativeAudioErrorMonitor(
         snapshot: () => engine.currentSnapshot,
-        onFailure: () =>
-            backend.signals.add(const BackendEvent(BackendEventKind.failure)),
+        onFailure: () => backend.signals.add(
+          const BackendEvent(
+            BackendEventKind.failure,
+            stallReason: PlaybackStallReason.audioDecodeError,
+          ),
+        ),
       );
       addTearDown(monitor.dispose);
       monitor.report(
@@ -311,6 +319,11 @@ void main() {
       );
       await tick();
       expect(failures.single.kind, PlayerFailureKind.nativePlayback);
+      final cause = diagnostics.singleWhere(
+        (event) => event.kind == PlayerDiagnosticKind.playbackStalled,
+      );
+      expect(cause.toJson()['stallReason'], 'audioDecodeError');
+      expect(cause.snapshot.desiredPlaying, true);
       expect(backend.playing, false);
       expect(backend.writes.last, 'pause');
       expect(engine.currentSnapshot.phase, PlaybackPhase.failed);

@@ -15,6 +15,7 @@ import 'native_media_options.dart';
 import 'native_player_properties.dart';
 import 'native_error_monitor.dart';
 import 'native_audio_error_monitor.dart';
+import 'native_video_error_monitor.dart';
 import 'native_buffering_diagnostics.dart';
 import 'native_buffer_recovery.dart';
 import 'native_rebuffer_monitor.dart';
@@ -80,6 +81,7 @@ final class MediaKitBackend
   NativeBufferRecovery? _bufferRecovery;
   NativeRebufferMonitor? _rebuffers;
   NativeAudioErrorMonitor? _audioErrors;
+  NativeVideoErrorMonitor? _videoErrors;
   NativeBufferingDiagnostics? _bufferDiagnostics;
   DiagnosticSourceKind? diagnosticSourceKind;
   NativeReadinessStage? get readinessStage => _readinessStage;
@@ -504,6 +506,8 @@ final class MediaKitBackend
     _bufferDiagnostics = null;
     _audioErrors?.dispose();
     _audioErrors = null;
+    _videoErrors?.dispose();
+    _videoErrors = null;
     _bufferRecovery?.dispose();
     _bufferRecovery = null;
     _rebuffers?.dispose();
@@ -542,6 +546,21 @@ final class MediaKitBackend
       _creating = null;
     }
     final player = _player!;
+    _videoErrors = NativeVideoErrorMonitor(
+      snapshot: snapshot,
+      onFailure: () {
+        if (!_disposed &&
+            generation == _generation &&
+            identical(_player, player)) {
+          _emit(
+            const BackendEvent(
+              BackendEventKind.failure,
+              stallReason: PlaybackStallReason.videoDecodeError,
+            ),
+          );
+        }
+      },
+    );
     if (!plan.silent) {
       _audioErrors = NativeAudioErrorMonitor(
         snapshot: snapshot,
@@ -549,7 +568,12 @@ final class MediaKitBackend
           if (!_disposed &&
               generation == _generation &&
               identical(_player, player)) {
-            _emit(const BackendEvent(BackendEventKind.failure));
+            _emit(
+              const BackendEvent(
+                BackendEventKind.failure,
+                stallReason: PlaybackStallReason.audioDecodeError,
+              ),
+            );
           }
         },
       );
@@ -579,11 +603,21 @@ final class MediaKitBackend
         snapshot: () => _snapshot,
         probe: probe.check,
         cancelProbe: probe.cancel,
-        onRecoveryRequired: () {
+        onRecoveryRequired: (reason) {
           if (!_disposed &&
               generation == _generation &&
               identical(_player, player)) {
-            _emit(const BackendEvent(BackendEventKind.failure));
+            _emit(
+              BackendEvent(
+                BackendEventKind.failure,
+                stallReason: switch (reason) {
+                  NativeBufferRecoveryReason.readError =>
+                    PlaybackStallReason.prefetchReadError,
+                  NativeBufferRecoveryReason.stalledRead =>
+                    PlaybackStallReason.prefetchReadStall,
+                },
+              ),
+            );
           }
         },
       );
@@ -930,6 +964,7 @@ final class MediaKitBackend
     operation.check();
     _seek = operation;
     _audioErrors?.reset();
+    _videoErrors?.reset();
     final player = _player!;
     final generation = _generation;
     final revision = ++_seekRevision;
@@ -1021,6 +1056,7 @@ final class MediaKitBackend
         _bufferRecovery?.update();
         _rebuffers?.update();
         _audioErrors?.update();
+        _videoErrors?.update();
       }
     }
 
@@ -1108,6 +1144,7 @@ final class MediaKitBackend
             nativeError: summary,
           );
           _audioErrors?.report(summary, severity);
+          _videoErrors?.report(summary, severity);
           if (summary.isVideoDecodeError &&
               severity != NativeLogSeverity.warning) {
             // FFmpeg video errors are absent from media_kit's error stream.
@@ -1119,7 +1156,8 @@ final class MediaKitBackend
               ),
             );
           }
-          if (severity != NativeLogSeverity.warning ||
+          if (summary.isVideoDecodeError ||
+              severity != NativeLogSeverity.warning ||
               summary.detail == NativeErrorDetail.avDesync) {
             _bufferDiagnostics?.capture();
           }
@@ -1157,6 +1195,7 @@ final class MediaKitBackend
   Future<void> play() async {
     await _player!.play();
     _audioErrors?.update();
+    _videoErrors?.update();
     _rebuffers?.update();
   }
 
@@ -1165,6 +1204,7 @@ final class MediaKitBackend
   @override
   Future<bool> pauseAndWait() async {
     _audioErrors?.update();
+    _videoErrors?.update();
     _bufferRecovery?.cancel();
     _rebuffers?.reset();
     await _player?.pause();
@@ -1184,6 +1224,8 @@ final class MediaKitBackend
   void interrupt() {
     _audioErrors?.dispose();
     _audioErrors = null;
+    _videoErrors?.dispose();
+    _videoErrors = null;
     _bufferRecovery?.dispose();
     _bufferRecovery = null;
     _rebuffers?.dispose();
@@ -1220,6 +1262,8 @@ final class MediaKitBackend
     _bufferDiagnostics = null;
     _audioErrors?.dispose();
     _audioErrors = null;
+    _videoErrors?.dispose();
+    _videoErrors = null;
     _bufferRecovery?.dispose();
     _bufferRecovery = null;
     _rebuffers?.dispose();

@@ -4,6 +4,32 @@ import 'package:bili_player/bili_player.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'hardware frame warnings and nested output failures keep safe categories',
+    () {
+      final decoder = NativeErrorSummary.classify(
+        'Error while decoding frame (hardware decoding)!',
+        prefix: 'vd',
+      );
+      expect(decoder.cause, NativeErrorCause.hardwareDecoder);
+      expect(decoder.detail, NativeErrorDetail.decoderFailure);
+      final output = NativeErrorSummary.classify(
+        'Failed to map video frame https://private/?token=SECRET',
+        prefix: 'vo/libmpv/token=SECRET',
+      );
+      expect(output.cause, NativeErrorCause.videoOutput);
+      expect(output.component, 'vo');
+      final event = PlayerDiagnosticEvent(
+        kind: PlayerDiagnosticKind.nativeLog,
+        snapshot: const PlaybackSnapshot(
+          phase: PlaybackPhase.playing,
+          generation: 1,
+        ),
+        nativeError: output,
+      );
+      expect(jsonEncode(event.toJson()), isNot(contains('SECRET')));
+    },
+  );
   test('video bitstream errors enter stall checking and keep only fixed subcategories', () {
     for (final (message, detail) in [
       (

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -18,6 +19,9 @@ import 'package:integration_test/integration_test.dart';
 // Native fault injection inspects the player's pinned transitive renderer.
 // ignore: depend_on_referenced_packages
 import 'package:media_kit_video/media_kit_video.dart' as mkv;
+// Native fault injection uses the pinned SDK's existing event stream.
+// ignore: depend_on_referenced_packages
+import 'package:media_kit/media_kit.dart' as mk;
 
 import '../test/support/window_service_fake.dart';
 
@@ -137,10 +141,139 @@ void main() {
   }
 
   for (final automatic in [false, true]) {
+    for (final outputFailure in [false, true]) {
+      testWidgets(
+        'video pipeline failure while audio advances; automatic=$automatic output=$outputFailure',
+        (tester) => _runVideoFailure(
+          tester,
+          automatic: automatic,
+          outputFailure: outputFailure,
+        ),
+      );
+    }
     testWidgets(
       'silent buffered clock freeze; automatic=$automatic',
       (tester) => _runSilentStall(tester, automatic: automatic),
     );
+  }
+}
+
+Future<void> _runVideoFailure(
+  WidgetTester tester, {
+  required bool automatic,
+  required bool outputFailure,
+}) async {
+  initializePlayerBackend();
+  final fixtures = Platform.environment['BILI_TEST_MEDIA_DIR'];
+  expect(fixtures, isNotNull);
+  final source = DashPairSource(
+    video: MediaTrack(
+      uri: File('$fixtures/video.mp4').uri,
+      requestPolicy: MediaRequestPolicy(),
+    ),
+    audio: MediaTrack(
+      uri: File('$fixtures/audio.m4a').uri,
+      requestPolicy: MediaRequestPolicy(),
+    ),
+  );
+  final events = <PlayerDiagnosticEvent>[];
+  final failures = <PlayerFailure>[];
+  final engine = MediaKitEngine(onDiagnostic: events.add);
+  final subscription = engine.failures.listen(failures.add);
+  final session = automatic
+      ? PlaybackSession(
+          engine: engine,
+          repository: _FixtureRepository(source),
+          progress: _MemoryProgress(),
+          accountScope: () => 'guest',
+        )
+      : null;
+  session?.configureSettings(
+    AppSettings(autoPlay: true, resumePlayback: false),
+  );
+  try {
+    await tester.pumpWidget(MaterialApp(home: VideoSurface(engine: engine)));
+    await _withFrames(
+      tester,
+      session == null
+          ? engine.open(
+              source,
+              const OpenOptions(play: true, rate: 2, volume: 0),
+            )
+          : session.open(_detail, _part, volume: 0),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    final generation = engine.currentSnapshot.generation;
+    final player = tester
+        .widget<mkv.Video>(find.byType(mkv.Video))
+        .controller
+        .player;
+    // Model the missing track independently of the engine. This does not
+    // reproduce a driver failure: inject its SDK log only after proving audio
+    // alone can keep the reported position advancing without buffering.
+    await player.setPropertyAsync('vid', 'no');
+    final before = engine.currentSnapshot.position;
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(engine.currentSnapshot.position, greaterThan(before));
+    expect(engine.currentSnapshot.isBuffering, false);
+    expect(engine.inspectDiagnostics().hasDecodedAudio, true);
+    final failedAt = engine.currentSnapshot.position;
+    // Deliberately inject the locked SDK's log event in this native regression.
+    // ignore: invalid_use_of_protected_member
+    player.native.logController.add(
+      mk.PlayerLog(
+        prefix: outputFailure ? 'vo/libmpv/d3d11va' : 'vd',
+        level: outputFailure ? 'error' : 'warn',
+        text: outputFailure
+            ? 'Failed to map video frame https://private/?token=synthetic-secret'
+            : 'Error while decoding frame (hardware decoding)!',
+      ),
+    );
+    final watch = Stopwatch()..start();
+    while ((failures.isEmpty ||
+            automatic &&
+                (engine.currentSnapshot.generation == generation ||
+                    engine.currentSnapshot.position <
+                        failedAt + const Duration(milliseconds: 500))) &&
+        watch.elapsed < const Duration(seconds: 8)) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(failures, hasLength(1));
+    expect(
+      events.where(
+        (e) => e.stallReason == PlaybackStallReason.videoDecodeError,
+      ),
+      hasLength(1),
+    );
+    expect(
+      jsonEncode(events.map((e) => e.toJson()).toList()),
+      isNot(contains('synthetic-secret')),
+    );
+    if (automatic) {
+      expect(engine.currentSnapshot.generation, greaterThan(generation));
+      expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+      expect(engine.inspectDiagnostics().hasDecodedVideo, true);
+      expect(engine.inspectDiagnostics().hasDecodedAudio, true);
+    } else {
+      expect(engine.currentSnapshot.phase, PlaybackPhase.failed);
+      final stopped = engine.inspectDiagnostics().position;
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(
+        (engine.inspectDiagnostics().position - stopped).abs(),
+        lessThan(const Duration(milliseconds: 100)),
+      );
+    }
+    debugPrint(
+      'VIDEO_PIPELINE_FAILURE automatic=$automatic output=$outputFailure failures=${failures.length} reopened=${engine.currentSnapshot.generation > generation}',
+    );
+    expect(tester.takeException(), isNull);
+  } finally {
+    await subscription.cancel();
+    await _withFrames(
+      tester,
+      session == null ? engine.dispose() : session.close(),
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
   }
 }
 
@@ -577,13 +710,25 @@ Future<void> _runStall(
       'failures=${failures.length}',
     );
     expect(failures, hasLength(1));
+    final hardwareFailure = events.any(
+      (event) => event.stallReason == PlaybackStallReason.videoDecodeError,
+    );
     expect(
       failures.single.kind,
-      audioFault
+      audioFault || hardwareFailure
           ? PlayerFailureKind.nativePlayback
           : PlayerFailureKind.videoInterrupted,
     );
-    if (!audioFault) {
+    if (hardwareFailure) {
+      expect(
+        events.any(
+          (event) =>
+              event.nativeError?.cause == NativeErrorCause.hardwareDecoder,
+        ),
+        true,
+        reason: 'A truncated packet may fail hardware decoding before EOF.',
+      );
+    } else if (!audioFault) {
       expect(
         events.any((e) => e.kind == PlayerDiagnosticKind.videoInterrupted),
         true,

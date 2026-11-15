@@ -10,6 +10,8 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [Windows 有声停帧](validation/windows-video-freeze-2026-11-15.md) | 硬解 warning、音频进度掩盖视频故障、整对有界恢复及原生故障注入边界 |
+| [Android 缓冲与重加载排查](validation/android-rebuffer-reload-2026-11-15.md) | 小米 Android 16 日志、真实缓存暂停与充足缓存时重开、静默探测／回退缓存边界及归因限制 |
 | [全平台 WebView 与 Linux 登录](validation/webview-all-linux-2026-11-14.md) | webview_all 迁移、私有 Cookie、Linux 原生与 helper 打包验证 |
 | [Windows Release 正常预读 EOF](validation/windows-release-dash-eof-2026-11-14.md) | 分轨尾部差异导致误中断、PiliPlus 职责对照、删除 EOF 差值判错及原生复现／修复验证 |
 | [消息内容与评论定位](validation/message-content-navigation-2026-11-14.md) | 回复／点赞／@ 通知定位、视频时间／分 P、共享评论详情及验证边界 |
