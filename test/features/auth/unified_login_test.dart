@@ -10,6 +10,8 @@ import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/features/auth/data/session_repository.dart';
 import 'package:bilisail/features/auth/domain/auth_repository.dart';
+import 'package:bilisail/features/auth/domain/password_sms_auth_repository.dart';
+import 'package:pointycastle/asn1.dart';
 import 'package:bilisail/features/feed/data/app_recommendation_identity_store.dart';
 import 'package:bilisail/features/feed/data/api_feed_repository.dart';
 import 'package:drift/native.dart';
@@ -71,6 +73,296 @@ void main() {
     await session.restore();
   }
 
+  test(
+    'password captcha cannot refresh into an unrelated SMS registration',
+    () async {
+      transport.passwordCaptcha = true;
+      final attempt = session.beginPasswordSmsLogin()!;
+      final step = await session.loginWithPassword(
+        attempt,
+        'fixture',
+        'fixture',
+      );
+      expect(step.stage, PasswordSmsLoginStage.captcha);
+      expect(step.canRefreshCaptcha, isFalse);
+      await expectLater(
+        session.refreshLoginCaptcha(attempt),
+        throwsA(isA<AppFailure>()),
+      );
+      expect(transport.preCaptchas, 0);
+    },
+  );
+
+  test(
+    'SMS captcha refresh is bounded and replaces the entire registration',
+    () async {
+      transport.smsCaptcha = true;
+      final attempt = session.beginPasswordSmsLogin()!;
+      final first = await session.sendLoginSms(attempt, '86', '13800000000');
+      expect(first.canRefreshCaptcha, isTrue);
+      final fresh = await session.refreshLoginCaptcha(attempt);
+      expect(fresh.gt, 'refreshed-gt');
+      expect(fresh.challenge, 'refreshed-challenge');
+      expect(fresh.canRefreshCaptcha, isFalse);
+      await expectLater(
+        session.refreshLoginCaptcha(attempt),
+        throwsA(isA<AppFailure>()),
+      );
+      expect(transport.preCaptchas, 1);
+      transport.smsCaptcha = false;
+      await session.sendLoginSms(
+        attempt,
+        '86',
+        '13800000000',
+        proof: const LoginCaptchaProof(
+          'returned-challenge',
+          'passed',
+          'passed|jordan',
+        ),
+      );
+      expect(transport.lastRecaptchaToken, 'refreshed-token');
+    },
+  );
+
+  test('cancelled captcha refresh cannot issue a new registration', () async {
+    transport.smsCaptcha = true;
+    final attempt = session.beginPasswordSmsLogin()!;
+    await session.sendLoginSms(attempt, '86', '13800000000');
+    session.cancelSignIn();
+    await expectLater(
+      session.refreshLoginCaptcha(attempt),
+      throwsA(isA<AppFailure>()),
+    );
+    expect(transport.preCaptchas, 0);
+  });
+
+  for (final refresh in [false, true]) {
+    test(
+      'password risk SMS keeps its own registration and commits App credentials: refresh=$refresh',
+      () async {
+        transport.passwordCaptcha = true;
+        transport.passwordVerification = true;
+        final attempt = session.beginPasswordSmsLogin()!;
+        final first = await session.loginWithPassword(
+          attempt,
+          'fixture',
+          'fixture',
+        );
+        expect(first.stage, PasswordSmsLoginStage.captcha);
+        transport.passwordCaptcha = false;
+        final phone = await session.loginWithPassword(
+          attempt,
+          'fixture',
+          'fixture',
+          proof: const LoginCaptchaProof(
+            'password-proof',
+            'passed',
+            'passed|jordan',
+          ),
+        );
+        expect(phone.stage, PasswordSmsLoginStage.verifyPhone);
+        expect(phone.maskedPhone, '138****0000');
+        expect(transport.preCaptchas, 0);
+        final registration = await session.sendVerificationSms(attempt);
+        expect(registration.stage, PasswordSmsLoginStage.captcha);
+        expect(registration.canRefreshCaptcha, isTrue);
+        expect(
+          transport.paths,
+          isNot(contains('/x/safecenter/common/sms/send')),
+        );
+        if (refresh) {
+          final fresh = await session.refreshLoginCaptcha(attempt);
+          expect(fresh.canRefreshCaptcha, isFalse);
+        }
+        expect(transport.preCaptchas, refresh ? 2 : 1);
+        final sent = await session.sendVerificationSms(
+          attempt,
+          proof: const LoginCaptchaProof(
+            'sms-proof',
+            'passed',
+            'passed|jordan',
+          ),
+        );
+        expect(sent.stage, PasswordSmsLoginStage.smsSent);
+        expect(transport.lastRecaptchaToken, 'refreshed-token');
+        expect(transport.verificationSmsForm!['gee_challenge'], 'sms-proof');
+        expect(transport.verificationSmsForm!['tmp_code'], 'fixture-temp');
+        expect(transport.verificationSmsForm!['sms_type'], 'loginTelCheck');
+        expect(transport.verificationSmsHeaders!['app-key'], 'android_hd');
+        expect(transport.verificationSmsHeaders!['buvid'], _device);
+        expect(transport.verificationSmsHeaders!['Referer'], _verificationUrl);
+        final complete = await session.verifyLoginPhone(attempt, '123456');
+        expect(complete.stage, PasswordSmsLoginStage.completed);
+        expect(session.current.isSignedIn, isTrue);
+        expect(session.appCredentials?.accessToken, 'fixture-app');
+        expect(
+          transport.paths.where((p) => p == '/x/safecenter/common/sms/send'),
+          hasLength(1),
+        );
+        expect(
+          transport.paths,
+          contains('/x/passport-login/oauth2/access_token'),
+        );
+      },
+    );
+  }
+
+  test(
+    'unsupported risk captcha reports its type without sending SMS',
+    () async {
+      transport.passwordVerification = true;
+      transport.preCaptchaType = 'geetest4';
+      final attempt = session.beginPasswordSmsLogin()!;
+      await session.loginWithPassword(attempt, 'fixture', 'fixture');
+      await expectLater(
+        session.sendVerificationSms(attempt),
+        throwsA(
+          isA<AppFailure>().having(
+            (e) => e.message,
+            'message',
+            '当前人机验证类型暂不可用，请使用扫码登录或官网登录',
+          ),
+        ),
+      );
+      expect(transport.preCaptchas, 1);
+      expect(transport.paths, isNot(contains('/x/safecenter/common/sms/send')));
+    },
+  );
+
+  for (final sms in [false, true]) {
+    test(
+      'App ${sms ? 'SMS' : 'password'} commits both identities and restores them',
+      () async {
+        final attempt = session.beginPasswordSmsLogin()!;
+        if (sms) {
+          expect(
+            (await session.sendLoginSms(attempt, '86', '13800000000')).stage,
+            PasswordSmsLoginStage.smsSent,
+          );
+          await session.loginWithSms(attempt, '123456');
+        } else {
+          await session.loginWithPassword(
+            attempt,
+            'fixture',
+            'fixture-password',
+          );
+        }
+        expect(session.current.isSignedIn, isTrue);
+        expect(session.current.appSessionAvailable, isTrue);
+        expect((await identity.requestIdentity()).accessToken, 'fixture-app');
+        expect(
+          jsonDecode(secure.value!)['app']['refreshToken'],
+          'fixture-refresh',
+        );
+        expect(secure.value, isNot(contains('fixture-password')));
+        final snapshot = secure.value;
+        await session.restore();
+        expect(session.current.appSessionAvailable, isTrue);
+        expect(secure.value, snapshot);
+        transport.feedAccessToken = 'fixture-app';
+        transport.feedAccountMid = '42';
+        await ApiFeedRepository(
+          session.api,
+          session.requests,
+          appIdentity: identity,
+        ).loadAppRecommendations(page: 1, cancellation: RequestCancellation());
+      },
+    );
+  }
+
+  test('App login rejects mismatched token and Cookie identities', () async {
+    transport.tokenMid = 7;
+    final attempt = session.beginPasswordSmsLogin()!;
+    await expectLater(
+      session.loginWithPassword(attempt, 'fixture', 'fixture'),
+      throwsA(isA<AppFailure>()),
+    );
+    expect(session.current.isSignedIn, isFalse);
+    expect(secure.value, isNull);
+    expect(session.appCredentials, isNull);
+  });
+
+  test(
+    'cancelled or forged App attempts cannot submit or promote credentials',
+    () async {
+      final attempt = session.beginPasswordSmsLogin()!;
+      session.cancelSignIn();
+      for (final old in [attempt, PasswordSmsLoginAttempt()]) {
+        await expectLater(
+          session.loginWithPassword(old, 'fixture', 'fixture'),
+          throwsA(
+            isA<AppFailure>().having(
+              (e) => e.kind,
+              'kind',
+              AppFailureKind.cancelled,
+            ),
+          ),
+        );
+      }
+      expect(transport.paths, isEmpty);
+      expect(secure.value, isNull);
+    },
+  );
+
+  test(
+    'App login cancellation during secure write rolls back both identities',
+    () async {
+      secure.gate = Completer<void>();
+      final attempt = session.beginPasswordSmsLogin()!;
+      final checked = expectLater(
+        session.loginWithPassword(attempt, 'fixture', 'fixture'),
+        throwsA(isA<AppFailure>()),
+      );
+      await secure.started.future;
+      session.cancelSignIn();
+      secure.gate!.complete();
+      await checked;
+      expect(secure.value, isNull);
+      expect(session.appCredentials, isNull);
+      expect(session.current.isSignedIn, isFalse);
+    },
+  );
+
+  test(
+    'App login secure write failure cannot leave a Cookie-only login',
+    () async {
+      secure.failWrite = true;
+      final attempt = session.beginPasswordSmsLogin()!;
+      await expectLater(
+        session.loginWithPassword(attempt, 'fixture', 'fixture'),
+        throwsA(isA<AppFailure>()),
+      );
+      expect(secure.value, isNull);
+      expect(session.appCredentials, isNull);
+      expect(session.current.isSignedIn, isFalse);
+    },
+  );
+
+  test(
+    'App SMS requires an issued key and duplicate submissions are blocked',
+    () async {
+      final attempt = session.beginPasswordSmsLogin()!;
+      await expectLater(
+        session.loginWithSms(attempt, '123456'),
+        throwsA(isA<AppFailure>()),
+      );
+      secure.gate = Completer<void>();
+      final operation = session.loginWithPassword(
+        attempt,
+        'fixture',
+        'fixture',
+      );
+      await secure.started.future;
+      await expectLater(
+        session.loginWithPassword(attempt, 'fixture', 'fixture'),
+        throwsA(isA<AppFailure>()),
+      );
+      secure.gate!.complete();
+      await operation;
+      expect(secure.writes, 1);
+    },
+  );
+
   test('one HD scan commits Cookie and token together and immediately enables App recommendation', () async {
     await session.signIn();
     expect(session.current.isSignedIn, isTrue);
@@ -127,7 +419,7 @@ void main() {
     },
   );
   test(
-    'password or SMS Web login commits without App authorization requests',
+    'explicit official Web login commits without App authorization requests',
     () async {
       await session.completeWebLogin(session.beginWebLogin()!, const [
         LoginCookie(
@@ -261,16 +553,28 @@ final class _Secure implements CredentialStore {
   }
 }
 
+const _verificationUrl =
+    'https://passport.bilibili.com/h5-app/passport/risk/verify?tmp_token=fixture-temp&request_id=fixture-request&source=risk';
+
 final class _Transport implements ApiTransport, ApiFormTransport {
   final paths = <String>[];
   int navMid = 42, tokenMid = 42;
   bool includeCookies = true;
+  bool passwordCaptcha = false, smsCaptcha = false;
+  bool passwordVerification = false;
+  String? preCaptchaType;
+  Map<String, String>? verificationSmsForm, verificationSmsHeaders;
+  int preCaptchas = 0;
+  String? lastRecaptchaToken;
   String? feedAccessToken, feedAccountMid;
-  ApiHttpResponse response(Object data, {int status = 200}) => ApiHttpResponse(
-    status,
-    Uint8List.fromList(utf8.encode(jsonEncode({'code': 0, 'data': data}))),
-    const {},
-  );
+  ApiHttpResponse response(Object data, {int status = 200, int code = 0}) =>
+      ApiHttpResponse(
+        status,
+        Uint8List.fromList(
+          utf8.encode(jsonEncode({'code': code, 'data': data})),
+        ),
+        const {},
+      );
   @override
   Future<ApiHttpResponse> get(
     Uri uri, {
@@ -279,6 +583,25 @@ final class _Transport implements ApiTransport, ApiFormTransport {
     ApiCancellation? cancellation,
   }) async {
     paths.add(uri.path);
+    if (uri.path == '/x/passport-login/web/key') {
+      final key = ASN1Sequence(
+        elements: [
+          ASN1Integer((BigInt.one << 1024) - BigInt.from(109)),
+          ASN1Integer(BigInt.from(65537)),
+        ],
+      ).encode();
+      return response({
+        'hash': 'fixture-hash',
+        'key':
+            '-----BEGIN RSA PUBLIC KEY-----\n${base64Encode(key)}\n-----END RSA PUBLIC KEY-----',
+      });
+    }
+    if (uri.path == '/x/safecenter/user/info') {
+      expect(uri.queryParameters['tmp_code'], 'fixture-temp');
+      return response({
+        'account_info': {'tel_verify': true, 'hide_tel': '138****0000'},
+      });
+    }
     if (uri.path == '/x/v2/feed/index') {
       expect(uri.host, 'app.bilibili.com');
       expect(headers.containsKey('Cookie'), isFalse);
@@ -316,10 +639,61 @@ final class _Transport implements ApiTransport, ApiFormTransport {
       isIn([
         '/x/passport-tv-login/qrcode/auth_code',
         '/x/passport-tv-login/qrcode/poll',
+        '/x/passport-login/oauth2/login',
+        '/x/passport-login/sms/send',
+        '/x/passport-login/login/sms',
+        '/x/safecenter/captcha/pre',
+        '/x/safecenter/common/sms/send',
+        '/x/safecenter/login/tel/verify',
+        '/x/passport-login/oauth2/access_token',
       ]),
     );
     expect(headers.containsKey('Cookie'), isFalse);
+    if (uri.path == '/x/safecenter/captcha/pre') {
+      expect(headers, isNot(contains('buvid')));
+      expect(headers, isNot(contains('app-key')));
+      expect(fields, isEmpty);
+      preCaptchas++;
+      return response({
+        'recaptcha_type': preCaptchaType ?? 'geetest',
+        'gee_gt': 'refreshed-gt',
+        'gee_challenge': 'refreshed-challenge',
+        'recaptcha_token': 'refreshed-token',
+      });
+    }
     expect(fields['sign'], isNotEmpty);
+    lastRecaptchaToken = fields['recaptcha_token'];
+    const captchaUrl =
+        'https://www.bilibili.com/h5/project-msg-auth/verify?recaptcha_token=old-token&gee_gt=old-gt&gee_challenge=old-challenge';
+    if (uri.path == '/x/passport-login/oauth2/login' && passwordCaptcha) {
+      return response({'url': captchaUrl, 'status': 1}, code: -105);
+    }
+    if (uri.path == '/x/passport-login/oauth2/login' && passwordVerification) {
+      return response({'status': 2, 'url': _verificationUrl});
+    }
+    if (uri.path == '/x/safecenter/common/sms/send') {
+      verificationSmsForm = Map.of(fields);
+      verificationSmsHeaders = Map.of(headers);
+      return response({'captcha_key': 'fixture-risk-sms'});
+    }
+    if (uri.path == '/x/safecenter/login/tel/verify') {
+      expect(headers['Referer'], _verificationUrl);
+      expect(fields['captcha_key'], 'fixture-risk-sms');
+      expect(fields['request_id'], 'fixture-request');
+      expect(fields['source'], 'risk');
+      expect(fields['code'], '123456');
+      return response({'code': 'fixture-oauth'});
+    }
+    if (uri.path == '/x/passport-login/oauth2/access_token') {
+      expect(fields['grant_type'], 'authorization_code');
+      expect(fields['code'], 'fixture-oauth');
+    }
+    if (uri.path == '/x/passport-login/sms/send') {
+      if (smsCaptcha) {
+        return response({'recaptcha_url': captchaUrl}, code: -105);
+      }
+      return response({'recaptcha_url': '', 'captcha_key': 'fixture-sms'});
+    }
     if (uri.path.endsWith('/auth_code')) {
       return response({
         'auth_code': 'fixture-code',

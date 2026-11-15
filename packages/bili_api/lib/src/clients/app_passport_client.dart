@@ -54,9 +54,17 @@ final class AppPassportClient {
         _ => ApiQrStatus.waitingScan,
       });
     }
+    return parseLogin(data, endpoint: 'app_qr_poll');
+  }
+
+  /// Validates the shared token/Cookie response of App login endpoints.
+  ApiAppQrPoll parseLogin(
+    Map<String, Object?> data, {
+    required String endpoint,
+  }) {
     final token = data['token_info'] ?? data;
     if (token is! Map<String, Object?>) {
-      throw const ApiFailure(ApiFailureCategory.protocol, 'app_qr_poll');
+      throw ApiFailure(ApiFailureCategory.protocol, endpoint);
     }
     final mid = '${token['mid'] ?? ''}',
         access = token['access_token'],
@@ -68,23 +76,23 @@ final class AppPassportClient {
         seconds is! int ||
         seconds <= 0 ||
         seconds > 366 * 86400) {
-      throw const ApiFailure(ApiFailureCategory.protocol, 'app_qr_poll');
+      throw ApiFailure(ApiFailureCategory.protocol, endpoint);
     }
     final refresh = token['refresh_token'];
     if (refresh != null &&
         (refresh is! String || refresh.isEmpty || refresh.length > 4096)) {
-      throw const ApiFailure(ApiFailureCategory.protocol, 'app_qr_poll');
+      throw ApiFailure(ApiFailureCategory.protocol, endpoint);
     }
     final cookies = <ApiLoginCookie>[];
     final info = data['cookie_info'];
     if (info != null) {
       final entries = info is Map<String, Object?> ? info['cookies'] : null;
       if (entries is! List || entries.length > 128) {
-        throw const ApiFailure(ApiFailureCategory.protocol, 'app_qr_poll');
+        throw ApiFailure(ApiFailureCategory.protocol, endpoint);
       }
       for (final entry in entries) {
         if (entry is! Map<String, Object?>) {
-          throw const ApiFailure(ApiFailureCategory.protocol, 'app_qr_poll');
+          throw ApiFailure(ApiFailureCategory.protocol, endpoint);
         }
         final name = entry['name'], value = entry['value'];
         final domain = entry['domain'] ?? '.bilibili.com';
@@ -106,7 +114,7 @@ final class AppPassportClient {
             !const {'bilibili.com', '.bilibili.com'}.contains(domain) ||
             (expiry != null &&
                 (expiry is! int || expiry < 0 || expiry > 8640000000000))) {
-          throw const ApiFailure(ApiFailureCategory.protocol, 'app_qr_poll');
+          throw ApiFailure(ApiFailureCategory.protocol, endpoint);
         }
         cookies.add(
           ApiLoginCookie(

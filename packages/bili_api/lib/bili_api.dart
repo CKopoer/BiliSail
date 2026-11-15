@@ -2,6 +2,7 @@ export 'src/api_client.dart';
 export 'src/clients/cast_client.dart';
 export 'src/clients/app_recommendation_client.dart';
 export 'src/clients/app_passport_client.dart';
+export 'src/clients/password_sms_login_client.dart';
 export 'src/models/app_recommendation_models.dart';
 export 'src/video_identifiers.dart';
 export 'src/clients/account_client.dart';

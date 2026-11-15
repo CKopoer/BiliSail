@@ -64,7 +64,7 @@ PiliPlus 当前：...&splash_id=&statistics=...&ts=...
 | 正常 HD 扫码且同账号 App token 有效 | 当前账号 | 当前账号 App feed |
 | App token 已过期 / 失效 | 取决于 Web Cookie 是否仍有效 | 认证错误，提示重新登录 |
 
-设置组件的“正常登录后自动使用账号推荐”没有表达上述差别。[身份摘要](../../lib/features/settings/presentation/app_recommendation_identity_settings.dart) 虽会显示游客 / 账号，但没有解释为何已登录仍是游客。建议明确“扫码登录取得 App 凭据后使用账号推荐；密码 / 短信及旧 Web 会话可能仍使用游客推荐”，并以摘要说明当前身份。
+设置组件的“正常登录后自动使用账号推荐”没有表达上述差别。[身份摘要](../../lib/features/settings/presentation/recommendation_settings_section.dart) 虽会显示游客 / 账号，但没有解释为何已登录仍是游客。建议明确“扫码登录取得 App 凭据后使用账号推荐；密码 / 短信及旧 Web 会话可能仍使用游客推荐”，并以摘要说明当前身份。
 
 保持既有[统一登录约定](../unified-login-design.md)：本次没有重新引入推荐专属扫码、更新登录入口或 Cookie 换 token。当前 `signIn` 对已登录会话直接返回；在现有流程下，只有 Web 会话的用户若要取得 App 凭据，需要退出后重新使用正常扫码登录，不能仅以“已登录”判断已完成 App 授权。
 

@@ -10,6 +10,8 @@ import '../../../shared/ui/network_avatar.dart';
 import '../application/auth_controller.dart';
 import '../domain/auth_repository.dart';
 import 'web_login_presenter.dart';
+import 'password_sms_login_dialog.dart';
+import '../../../shared/ui/app_dialog.dart';
 
 class AccountDialog extends ConsumerStatefulWidget {
   const AccountDialog({super.key, this.onOpenUser});
@@ -22,6 +24,7 @@ class _AccountDialogState extends ConsumerState<AccountDialog>
     with WidgetsBindingObserver {
   late final AuthRepository _repository;
   bool _openingWeb = false;
+  bool _openingPasswordSms = false;
   int _generation = 0;
 
   @override
@@ -33,6 +36,7 @@ class _AccountDialogState extends ConsumerState<AccountDialog>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_openingPasswordSms) return;
     if ((state == AppLifecycleState.paused ||
             state == AppLifecycleState.hidden) &&
         _repository.current.status != AuthStatus.waitingWeb) {
@@ -41,6 +45,23 @@ class _AccountDialogState extends ConsumerState<AccountDialog>
       _generation++;
       _repository.cancelSignIn();
       if (_openingWeb) setState(() => _openingWeb = false);
+    }
+  }
+
+  Future<void> _openPasswordSmsLogin() async {
+    if (_openingPasswordSms || _openingWeb) return;
+    final controller = ref.read(authControllerProvider.notifier);
+    final attempt = controller.beginPasswordSmsLogin();
+    if (attempt == null) return;
+    setState(() => _openingPasswordSms = true);
+    try {
+      await showAppDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => PasswordSmsLoginDialog(attempt: attempt),
+      );
+    } finally {
+      if (mounted) setState(() => _openingPasswordSms = false);
     }
   }
 
@@ -201,13 +222,22 @@ class _AccountDialogState extends ConsumerState<AccountDialog>
                             onPressed: auth.isBusy ? null : controller.signIn,
                             child: const Text('获取登录二维码'),
                           ),
+                          if (controller.passwordSmsSupported) ...[
+                            const SizedBox(height: 12),
+                            OutlinedButton(
+                              onPressed: auth.isBusy || _openingPasswordSms
+                                  ? null
+                                  : () => unawaited(_openPasswordSmsLogin()),
+                              child: const Text('密码 / 短信登录'),
+                            ),
+                          ],
                           if (ref.watch(webLoginSupportedProvider)) ...[
                             const SizedBox(height: 12),
                             OutlinedButton(
                               onPressed: auth.isBusy
                                   ? null
                                   : () => unawaited(_openWebLogin()),
-                              child: const Text('密码 / 短信登录'),
+                              child: const Text('官网登录'),
                             ),
                           ],
                         ],

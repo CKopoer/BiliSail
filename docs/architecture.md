@@ -220,6 +220,8 @@ macOS 使用 headless engine 后再创建明确的主窗口；主窗挂接完成
 
 ## 7. 存储与缓存
 
+2026-11-15 登录更新：密码／短信入口采用 App Passport，支持 RSA、极验与绑定手机号验证，成功后复用 SessionRepository 的 nav／UID 校验、双凭据安全提交和回滚。显式官网登录及已有 Web-only 快照继续兼容；推荐设置已移除来源说明与 App 身份摘要。协议与验证见[密码／短信 App 登录](validation/password-sms-app-login-2026-11-15.md)。以下推荐接入段落保留 2026-10-27 当时状态。
+
 2026-10-27 推荐流设置以独立 `RecommendationSettings` 嵌入 `AppSettings`，沿用偏好快照、串行保存及失败回退。查询级过滤在应用层执行，普通分页只筛选新响应，调整规则重筛已加载索引，相关视频复用原始远端 Provider；关闭过滤复用原分块快照。刷新可保留最多 200 条旧推荐。App 来源通过 `AppRecommendationFeedRepository` 能力端口接入；身份仓储管理 buvid 和旧授权兼容读取；SessionRepository 统一保存 Cookie 及可选 App token，HD 扫码取得两种凭据，内嵌官网密码/短信仅保存 Web 会话，不再执行 Cookie 换 token 或提供推荐专属扫码。无 App 凭据时仍可使用游客 App 推荐，设置只显示当前推荐身份，设备标识保留内部自动管理。来源/身份版本变更只取消并清空推荐查询及反馈上下文，其他频道、播放器继续保留；隐藏推荐不发起刷新。API 包负责签名、DTO 和 aid 本地转换，不持有产品偏好。设计与验证见[推荐流设置](recommendation-settings-design.md)、[App 推荐](app-recommendation-design.md)、[统一登录](unified-login-design.md)。
 
 2026-10-07 已接入下载与离线播放：进程级 `SqliteDownloadRepository` 持有有界队列，SQLite schema 3 的 `download_tasks` 用一份任务记录事务保存内容身份与双轨断点；实际未创建下表目标设计中的 `download_tracks/download_ranges`。音视频文件、无 URL 的 manifest、字幕/弹幕正文和封面独立落盘，下载设置用 `downloads.v1` 保存。每个 PlaybackSession 注入独立本地/在线适配器，离线标签复用现有管理器与控件，关闭云端进度和空降助手查询，继续保存本地进度。方案、恢复规则及实测见 [下载与离线播放](downloads.md)。

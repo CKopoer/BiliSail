@@ -43,6 +43,8 @@ class FakePassportController extends PlatformWebViewController {
   FakePassportController(super.params, this.owner) : super.implementation();
   final FakePassportPlatform owner;
   final requests = <LoadRequestParams>[];
+  final channels = <String, JavaScriptChannelParams>{};
+  String? html;
   late FakePassportNavigation navigation;
   int closes = 0;
 
@@ -60,6 +62,12 @@ class FakePassportController extends PlatformWebViewController {
   ) async {}
   @override
   Future<void> setJavaScriptMode(JavaScriptMode javaScriptMode) async {}
+  @override
+  Future<void> addJavaScriptChannel(JavaScriptChannelParams params) async =>
+      channels[params.name] = params;
+  @override
+  Future<void> loadHtmlString(String html, {String? baseUrl}) async =>
+      this.html = html;
   @override
   Future<void> setPlatformNavigationDelegate(
     PlatformNavigationDelegate handler,

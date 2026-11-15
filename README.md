@@ -63,7 +63,7 @@ BiliSail（哔帆）以视频、影视和直播观看为核心，提供双／多
 | DLNA 投屏 | 视频／影视／直播默认使用兼容播放，可主动尝试电视弹幕实验模式，支持设备搜索和暂停／继续／停止；真实电视兼容性待验，见 [投屏记录](docs/validation/dlna-casting.md) |
 | 直播 | HLS / FLV、可用清晰度、实时聊天与表情、画面弹幕、Super Chat 展示、用户主页跳转及弹幕发送入口 |
 | 弹幕与字幕 | 滚动、顶部、底部弹幕，暂停与缓冲冻结、seek 重定位；样式、密度与本地过滤配置，字幕 cue 显示 |
-| 账号与个人空间 | 扫码登录、内嵌官方网页密码／短信登录、系统安全存储；用户主页、关注分组、收藏夹查看与编辑、追番、追剧、稍后再看及消息／私信 |
+| 账号与个人空间 | 扫码与 App 密码／短信双凭据登录、独立官网登录、系统安全存储；用户主页、关注分组、收藏夹查看与编辑、追番、追剧、稍后再看及消息／私信 |
 | 评论与动态互动 | 最热／最新评论、楼中楼、表情与图片、作者装扮、服务端提供的 IP 属地、正文链接与时间点跳转；视频点赞／投币／收藏，动态点赞、评论、复制链接与转发 |
 | 导航与界面 | 单／双／多标签模式与 Android 默认单标签、Windows／macOS 双标签独立播放窗口及媒体返回历史、Android 应用内双标签、多标签可选并发播放、桌面侧栏与窄屏首页／动态／我的／设置、我的页历史／稍后再看／收藏／下载内容标签、分类横向滚轮、紧凑播放布局、桌面平滑滚动、键盘与鼠标侧键配置、图片缓存 |
 | 历史与续播 | 当前账号云端观看历史分页；登录点播上报云端进度，记住进度开启时本地优先、云端补充；新点播继承本次运行中最近选择的倍速 |
@@ -114,7 +114,7 @@ CI 和 Release 构建的 Windows 产物同时包含 `.msix`、`.msi` 和 `.exe` 
 
 项目固定使用 **Flutter 3.47.6 stable / Dart 3.13.5**。直接依赖采用精确版本，根应用和各包均保留锁文件。
 
-Windows 开发还需安装 **Visual Studio 2022** 的“使用 C++ 的桌面开发”工作负载及 Windows SDK，并将 NuGet CLI 加入 `PATH`（内嵌网页插件构建使用）。Windows 密码／短信登录需要 WebView2 Runtime；来源与平台边界见[登录验证](docs/validation/password-sms-login.md)。Android 和 macOS 的构建需各自的工具链，macOS 构建需在 macOS 主机上执行。Linux 构建需 WebKitGTK 4.1 开发包；网页登录与安装包运行依赖见[WebView 平台记录](docs/validation/webview-all-linux-2026-11-14.md)。
+Windows 开发还需安装 **Visual Studio 2022** 的“使用 C++ 的桌面开发”工作负载及 Windows SDK，并将 NuGet CLI 加入 `PATH`（内嵌网页插件构建使用）。Windows 人机验证及官网登录需要 WebView2 Runtime；密码／短信流程与验证边界见[App 登录记录](docs/validation/password-sms-app-login-2026-11-15.md)。Android 和 macOS 的构建需各自的工具链，macOS 构建需在 macOS 主机上执行。Linux 构建需 WebKitGTK 4.1 开发包；网页登录与安装包运行依赖见[WebView 平台记录](docs/validation/webview-all-linux-2026-11-14.md)。
 
 ### Windows 调试
 

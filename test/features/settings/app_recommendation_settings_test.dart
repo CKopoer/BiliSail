@@ -7,7 +7,7 @@ import 'package:bilisail/features/settings/application/settings_controller.dart'
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/domain/settings_category.dart';
 import 'package:bilisail/features/settings/domain/settings_repository.dart';
-import 'package:bilisail/features/settings/presentation/app_recommendation_identity_settings.dart';
+
 import 'package:bilisail/features/settings/presentation/settings_screen.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:flutter/material.dart';
@@ -38,7 +38,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('当前使用游客推荐。'), findsOneWidget);
+    expect(find.text('当前使用游客推荐。'), findsNothing);
     expect(find.text('扫码授权 App 推荐'), findsNothing);
     expect(find.text('更新登录'), findsNothing);
     expect(find.textContaining('buvid'), findsNothing);
@@ -56,7 +56,7 @@ void main() {
     expect(find.textContaining('buvid'), findsNothing);
     expect(find.textContaining('设备标识'), findsNothing);
     expect(find.text(identity.device), findsNothing);
-    expect(find.text('当前使用游客推荐。'), findsOneWidget);
+    expect(find.text('当前使用游客推荐。'), findsNothing);
     await tester.tap(find.widgetWithText(ChoiceChip, '桌面端 / PC'));
     await tester.pumpAndSettle();
     expect(settings.value.recommendations.source, RecommendationSource.desktop);
@@ -71,33 +71,6 @@ void main() {
     expect(settings.value.recommendations.source, RecommendationSource.web);
     expect(tester.takeException(), isNull);
   });
-  for (final expired in [false, true]) {
-    testWidgets('App recommendation login summary: expired=$expired', (
-      tester,
-    ) async {
-      final identity = _Identity(authorizedMid: '42', expired: expired);
-      addTearDown(identity.events.close);
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            appRecommendationIdentityRepositoryProvider.overrideWithValue(
-              identity,
-            ),
-          ],
-          child: const MaterialApp(
-            home: Scaffold(body: AppRecommendationIdentitySettings()),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(
-        find.text(expired ? '账号推荐登录已失效，请重新扫码登录。' : '当前使用账号推荐。'),
-        findsOneWidget,
-      );
-      expect(find.text('当前使用游客推荐。'), findsNothing);
-      expect(find.text(identity.device), findsNothing);
-    });
-  }
 }
 
 final class _Settings implements SettingsRepository {
@@ -111,9 +84,6 @@ final class _Settings implements SettingsRepository {
 }
 
 final class _Identity implements AppRecommendationIdentityRepository {
-  _Identity({this.authorizedMid, this.expired = false});
-  final String? authorizedMid;
-  final bool expired;
   final events = StreamController<int>.broadcast();
   String device = 'fixture_device_0123456789';
   @override
@@ -121,11 +91,8 @@ final class _Identity implements AppRecommendationIdentityRepository {
   @override
   Stream<int> get changes => events.stream;
   @override
-  Future<AppRecommendationIdentity> load() async => AppRecommendationIdentity(
-    buvid: device,
-    authorizedMid: authorizedMid,
-    expired: expired,
-  );
+  Future<AppRecommendationIdentity> load() async =>
+      AppRecommendationIdentity(buvid: device);
   @override
   Future<void> setBuvid(String value) async {
     device = value;

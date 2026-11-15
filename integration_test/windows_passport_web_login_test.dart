@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:bilisail/core/input/shortcut_dispatcher.dart';
+import 'package:bilisail/core/platform/passport_captcha.dart';
 import 'package:bilisail/core/platform/passport_web_cookies.dart';
 import 'package:bilisail/core/platform/passport_webview_environment.dart';
 import 'package:bilisail/core/platform/window_service.dart';
@@ -21,6 +22,104 @@ const _interactivePage = '''<!doctype html><html><body>
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('native captcha document loads, accepts input and returns proof', (
+    tester,
+  ) async {
+    final environment = await PassportWebViewEnvironment.create();
+    final controller = environment.session.controller;
+    addTearDown(() async {
+      await tester.pumpWidget(const MaterialApp(home: Scaffold()));
+      await tester.pumpAndSettle();
+      await environment.dispose();
+    });
+    // Replace only the remote provider with a fixture. Keep our real generated
+    // page, navigation policy, WebView2, JavaScript channel and native input.
+    final html = passportCaptchaHtml('fixture-gt', 'fixture-challenge')
+        .replaceAll(RegExp(r'<script src="[^"]+"[^>]*></script>'), '')
+        .replaceFirst('</body>', '''<script>
+window.Geetest=function(options){
+  var handlers={},instance={
+    onSuccess:function(f){handlers.success=f;return instance;},
+    onError:function(f){return instance;},
+    onClose:function(f){return instance;},
+    onReady:function(f){f();return instance;},
+    verify:function(){document.body.dataset.verifications=
+      String(Number(document.body.dataset.verifications||0)+1);},
+    getValidate:function(){return {geetest_challenge:'fixture-challenge',
+      geetest_validate:'fixture-validate',geetest_seccode:'fixture-seccode'};}
+  };
+  var button=document.createElement('button');
+  button.id='complete';button.textContent='Complete fixture';
+  button.style.cssText='display:block;width:200px;height:80px';
+  button.onclick=function(){handlers.success();};
+  document.body.appendChild(button);
+  return instance;
+};
+libraryReady();BiliSailCaptchaConfiguration({status:'success',data:{}});
+</script></body>''');
+    PassportCaptchaEvent? event;
+    var loaded = false;
+    var failed = false;
+    await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
+    await controller.addJavaScriptChannel(
+      'BiliSailCaptcha',
+      onMessageReceived: (message) =>
+          event = parsePassportCaptchaEvent(message.message),
+    );
+    await controller.setNavigationDelegate(
+      NavigationDelegate(
+        onNavigationRequest: (request) =>
+            !request.isMainFrame ||
+                passportCaptchaPageAllowsNavigation(request.url, html)
+            ? NavigationDecision.navigate
+            : NavigationDecision.prevent,
+        onPageFinished: (_) => loaded = true,
+        onWebResourceError: (_) => failed = true,
+      ),
+    );
+    // Match the production dialog: start loading before the view is attached.
+    await controller.loadHtmlString(html);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 440,
+              height: 472,
+              child: NativeInputRegion(
+                child: WebViewWidget(controller: controller),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    for (var tick = 0; tick < 30 && !loaded; tick++) {
+      await tester.pump(const Duration(seconds: 1));
+    }
+    expect(loaded, isTrue);
+    expect(failed, isFalse);
+    expect(
+      await controller.runJavaScriptReturningResult(
+        "document.getElementById('status').textContent",
+      ),
+      '请完成人机验证',
+    );
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer();
+    await _clickHtml(tester, controller, mouse, 'retry');
+    expect(
+      await controller.runJavaScriptReturningResult(
+        'document.body.dataset.verifications',
+      ),
+      '2',
+    );
+    await _clickHtml(tester, controller, mouse, 'complete');
+    expect(event?.kind, PassportCaptchaEventKind.success);
+    expect(event?.proof?.validate, 'fixture-validate');
+    await mouse.removePointer();
+  });
 
   testWidgets(
     'private WebView accepts clicks and editing inside the input host',
