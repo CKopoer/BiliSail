@@ -823,7 +823,7 @@ final class _SettingsCategoryPageState
                               s.videoDecoding ==
                                       VideoDecodingPreference.software
                                   ? '软件解码使用兼容渲染；切回硬件解码后恢复已保存的输出偏好。'
-                                  : 'media_kit 保留弹幕、字幕和控件。解码直出需要设备硬解支持；画面异常时切回兼容渲染。',
+                                  : '保留弹幕、字幕和控件。解码直出需要设备硬解支持；HDR／杜比视界自动使用兼容渲染，其他画面异常时也可切回。',
                               style: const TextStyle(fontSize: 12),
                             ),
                           ],

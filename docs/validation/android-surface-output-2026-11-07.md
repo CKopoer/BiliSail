@@ -1,5 +1,7 @@
 # Android 解码直出纹理与 SurfaceView 对照
 
+2026-11-15 后续修正：media_kit 对已识别 HDR／杜比视界源在创建输出前使用兼容 GPU 渲染，保留硬解与已保存直出偏好，SDR 仍按偏好直出；原因与未构建／实机边界见[HDR 色彩记录](hdr-direct-output-2026-11-15.md)。以下性能测量仍仅代表当时 SDR H.264 素材。
+
 日期：2026-11-07。范围：Android 的 media_kit／libmpv、fvp／MDK 增加可选解码直出 Surface，继续由 Flutter 纹理与现有弹幕、字幕、控件合成；另以独立原型评估 SurfaceView 的 HC／HCPP。默认仍为兼容渲染，SurfaceView 未作为产品设置开放。
 
 同日后续修正 fvp 直出打开时空纹理消费被误认作首帧的竞态，详见[启动黑屏修复](android-fvp-direct-black-2026-11-07.md)。本页性能数据属于修复前版本，没有重新测量。

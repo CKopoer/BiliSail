@@ -35,6 +35,7 @@ void main() {
         MediaTrack(
           uri: Uri.parse('content://media/external/downloads/1'),
           requestPolicy: MediaRequestPolicy(),
+          isHdr: true,
         ),
       );
       final audio = await leases.open(
@@ -44,6 +45,8 @@ void main() {
         ),
       );
       expect(video.uri.toString(), 'fd://41');
+      expect(video.isHdr, isTrue);
+      expect(audio.isHdr, isFalse);
       expect(audio.uri.toString(), 'fd://42');
       expect(calls.where((c) => c.method == 'closeMedia'), isEmpty);
       await leases.close();

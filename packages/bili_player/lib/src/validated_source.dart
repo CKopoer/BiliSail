@@ -117,8 +117,15 @@ final class ValidatedSource {
       }
     }
     const previewWindow = Duration(seconds: 5);
+    // MediaCodec direct output bypasses mpv's color conversion. Flutter's
+    // texture has no HDR passthrough contract, so use the GPU renderer while
+    // retaining the requested decoder. Normalize before allocation/reuse.
+    final androidOutput = !audioOnly && media.isHdr
+        ? AndroidVideoOutputMode.renderedTexture
+        : options.androidVideoOutput;
     final effectiveOptions =
         live ||
+            androidOutput != options.androidVideoOutput ||
             (source is DashVideoSource &&
                 options.maxBufferAhead > previewWindow)
         ? OpenOptions(
@@ -128,7 +135,7 @@ final class ValidatedSource {
             volume: options.volume,
             audioGainDb: options.audioGainDb,
             videoDecoding: options.videoDecoding,
-            androidVideoOutput: options.androidVideoOutput,
+            androidVideoOutput: androidOutput,
             openTimeout: options.openTimeout,
             retainPresentation: options.retainPresentation,
             maxBufferAhead: source is DashVideoSource

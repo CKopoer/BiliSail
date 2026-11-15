@@ -1,5 +1,7 @@
 # 播放、直播与弹幕设计
 
+2026-11-15 Android 解码直出 HDR 色彩修复：根据实际解析的 HDR／杜比媒体提示，在原生创建与复用判断前改用兼容 GPU 输出，使 HDR 可经过色调映射；保留硬解偏好及已保存的直出设置，切回 SDR 后恢复直出。普通视频、PGC、离线和预览共用规则，已有 Profile 5 转换继续保留。PiliPlus 来源、自动回归与本轮未构建／实机边界见[直出 HDR 色彩记录](validation/hdr-direct-output-2026-11-15.md)。
+
 2026-11-15 点播预读错误覆盖修正：解封装层的 `partial file` 虽已识别为提前读断，主类别仍为 unknown，可能直到已有缓存耗尽、音频解码失败后才恢复。现将明确提前截断、分片／清单读取失败归为 I/O，并让 SDK log／error 共用同一有界恢复入口，补齐 TLS 路由；正常 EOF、满缓存 idle 与普通坏包 warning 保持原有边界。现场时间线、类别审查及回归见[提前截断错误恢复](validation/prefetch-read-error-coverage-2026-11-15.md)。
 
 2026-11-15 Windows 有声停帧修复：明确硬解帧错误可能由 mpv 以 warning 报告，总 position 也可能仅由音频维持。新增视频错误入口，对明确硬解失败／输出 error 保守暂停整对并进入已有有界恢复，不让音频推进消除失败；普通坏帧和原生正常回退沿用既有策略。证据、恢复范围与未证明的原始 GPU／码流原因见[有声停帧记录](validation/windows-video-freeze-2026-11-15.md)。

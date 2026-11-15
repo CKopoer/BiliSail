@@ -10,6 +10,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [Android 直出 HDR 色彩](validation/hdr-direct-output-2026-11-15.md) | HDR 源使用 GPU 色调映射并保留硬解、直出偏好恢复、PiliPlus 对照与未构建／实机边界 |
 | [点播提前截断错误恢复](validation/prefetch-read-error-coverage-2026-11-15.md) | 提前读断分类遗漏、TLS／分片错误审查、统一恢复入口及缓存耗尽前回归 |
 | [桌面滚轮动画与参数](validation/scroll-animation-switch-2026-11-15.md) | 弹簧／Chromium／多平台平滑、曲线与倍率、设置持久化、嵌套与标签状态及未构建边界 |
 | [密码／短信 App 登录](validation/password-sms-app-login-2026-11-15.md) | App 双凭据、真实 -105／fullpage 验证、注册刷新与取消、推荐设置提示移除 |

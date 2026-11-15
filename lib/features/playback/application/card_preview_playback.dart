@@ -47,6 +47,7 @@ final class CardPreviewPlayback {
                     requestPolicy: MediaRequestPolicy(headers: media.headers),
                     codec: media.video.codec,
                     bandwidth: media.video.bandwidth,
+                    isHdr: media.isHdr,
                   ),
                 ),
               )

@@ -54,6 +54,13 @@ final class PlaybackMedia {
   final PlaybackTrack video;
   final PlaybackTrack? audio;
 
+  /// Use the selected representation, including offline selections and Dolby
+  /// codec hints, rather than the requested quality that may have fallen back.
+  bool get isHdr =>
+      const {125, 126, 129}.contains(quality) ||
+      VideoCodecPreference.fromCodec(video.codec) ==
+          VideoCodecPreference.dolbyVision;
+
   /// Whether the resolver confirmed a complete video with no audio resource.
   final bool isIntentionallySilent;
   final List<PlaybackAudioTrack> audioTracks;
