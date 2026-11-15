@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'player_contract.dart';
 
+enum NativeBufferRecoveryReason { readError, stalledRead }
+
 /// A bounded recovery episode for failed prefetch while cached playback runs.
 /// Position advancing is not evidence that the network reader has recovered.
 final class NativeBufferRecovery {
@@ -19,7 +21,7 @@ final class NativeBufferRecovery {
   final PlaybackSnapshot Function() snapshot;
   final Future<bool> Function() probe;
   final void Function() cancelProbe;
-  final void Function() onRecoveryRequired;
+  final void Function(NativeBufferRecoveryReason) onRecoveryRequired;
   Timer? _retry, _deadline, _readDeadline;
   Object? _episode;
   Duration _buffered = Duration.zero;
@@ -33,7 +35,9 @@ final class NativeBufferRecovery {
     // different timestamps; the estimated cache endpoint cannot prove a read
     // failure. Let native playback consume the cache and report real errors or
     // premature playback completion through the existing engine event route.
-    if (endOfInput) cancel();
+    // Once the reader becomes idle, a pending silent-read probe is stale too.
+    // A reachable origin cannot turn normal cache backpressure into a failure.
+    if (!_reading) cancel();
     update();
   }
 
@@ -66,7 +70,7 @@ final class NativeBufferRecovery {
     if (immediate) {
       // A confirmed read failure needs no reachability probe or cache drain.
       // The session owns retry/backoff and pauses both tracks before reopening.
-      if (_active) _requestRecovery();
+      if (_active) _requestRecovery(NativeBufferRecoveryReason.readError);
       return;
     }
     if (!_eligible || _episode != null || _exhausted) return;
@@ -85,11 +89,18 @@ final class NativeBufferRecovery {
 
   void update() {
     if (_disposed) return;
+    final buffered = snapshot().buffered;
     // Only new cached media rearms the budget, never repeated error logs or
     // consuming already-buffered packets. A backward seek cancels the episode.
-    if (snapshot().buffered > _buffered + const Duration(milliseconds: 50)) {
+    if (buffered > _buffered + const Duration(milliseconds: 50)) {
       _exhausted = false;
-      _buffered = snapshot().buffered;
+      _buffered = buffered;
+      cancel();
+    } else if (buffered < _buffered - const Duration(milliseconds: 50)) {
+      // Seeking or native cache eviction can move the endpoint backwards.
+      // Later growth must be compared to this range, not a retired high-water
+      // mark. A regression alone does not rearm an exhausted retry budget.
+      _buffered = buffered;
       cancel();
     } else if (!_eligible) {
       cancel();
@@ -119,7 +130,7 @@ final class NativeBufferRecovery {
     update();
     if (!identical(_episode, episode)) return;
     if (reachable) {
-      _requestRecovery();
+      _requestRecovery(NativeBufferRecoveryReason.stalledRead);
     } else if (++_attempts >= maximumAttempts) {
       _exhausted = true;
       cancel();
@@ -128,10 +139,10 @@ final class NativeBufferRecovery {
     }
   }
 
-  void _requestRecovery() {
+  void _requestRecovery(NativeBufferRecoveryReason reason) {
     _recoveryRequested = true;
     cancel();
-    onRecoveryRequired();
+    onRecoveryRequired(reason);
   }
 
   void cancel() {

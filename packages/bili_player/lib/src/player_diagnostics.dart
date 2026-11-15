@@ -69,6 +69,7 @@ enum NativeErrorCause {
   connection,
   tls,
   hardwareDecoder,
+  videoOutput,
   decoder,
   missingFile,
   inputOutput,
@@ -86,6 +87,10 @@ enum PlaybackStallReason {
   videoClock,
   repeatedDecoderBuffering,
   repeatedCacheUnderrun,
+  prefetchReadError,
+  prefetchReadStall,
+  audioDecodeError,
+  videoDecodeError,
 }
 
 enum NativeErrorDetail {
@@ -124,6 +129,7 @@ final class NativeErrorSummary {
 
   factory NativeErrorSummary.classify(String text, {String prefix = 'other'}) {
     final value = text.toLowerCase();
+    final normalizedPrefix = prefix.startsWith('vo/') ? 'vo' : prefix;
     final component =
         const {
           'ffmpeg',
@@ -140,8 +146,8 @@ final class NativeErrorSummary {
           'ao',
           'vo',
           'media_kit',
-        }.contains(prefix)
-        ? prefix
+        }.contains(normalizedPrefix)
+        ? normalizedPrefix
         : 'other';
     final match = RegExp(
       r'\b(?:http(?: error)?|server returned)\s*:?\s*([45]\d{2})\b',
@@ -184,6 +190,7 @@ final class NativeErrorSummary {
         NativeErrorDetail.segmentRead,
       _
           when value.contains('error decoding') ||
+              value.contains('error while decoding') ||
               value.contains('failed to decode') =>
         NativeErrorDetail.decoderFailure,
       _ => NativeErrorDetail.unknown,
@@ -202,6 +209,7 @@ final class NativeErrorSummary {
               value.startsWith('tcp:') ||
               value.contains('resolve') =>
         NativeErrorCause.connection,
+      _ when component == 'vo' => NativeErrorCause.videoOutput,
       _
           when detail != NativeErrorDetail.hardwareAdvice &&
               detail != NativeErrorDetail.avDesync &&

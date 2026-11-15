@@ -18,10 +18,12 @@ void main() {
   late NativeBufferRecovery recovery;
   late int probes, recoveries, cancellations;
   late bool online;
+  late List<NativeBufferRecoveryReason> reasons;
   setUp(() {
     snapshot = playing;
     probes = recoveries = cancellations = 0;
     online = false;
+    reasons = [];
     recovery = NativeBufferRecovery(
       snapshot: () => snapshot,
       probe: () async {
@@ -29,7 +31,10 @@ void main() {
         return online;
       },
       cancelProbe: () => cancellations++,
-      onRecoveryRequired: () => recoveries++,
+      onRecoveryRequired: (reason) {
+        reasons.add(reason);
+        recoveries++;
+      },
     );
   });
   tearDown(() => recovery.dispose());
@@ -43,6 +48,7 @@ void main() {
       // No reachability probe is needed, even when the old origin is offline.
       recovery.reportNetworkError(immediate: true);
       expect(recoveries, 1);
+      expect(reasons, [NativeBufferRecoveryReason.readError]);
       expect(probes, 0);
       expect(snapshot.position, lessThan(snapshot.buffered));
       recovery.reportNetworkError(immediate: true);
@@ -77,7 +83,7 @@ void main() {
         return result.future;
       },
       cancelProbe: () => cancellations++,
-      onRecoveryRequired: () => recoveries++,
+      onRecoveryRequired: (_) => recoveries++,
     );
     recovery.reportNetworkError();
     await tester.pump(const Duration(seconds: 5));
@@ -180,7 +186,7 @@ void main() {
         return result.future;
       },
       cancelProbe: () => cancellations++,
-      onRecoveryRequired: () => recoveries++,
+      onRecoveryRequired: (_) => recoveries++,
     );
     recovery.readingChanged(true);
     await tester.pump(const Duration(seconds: 5));
@@ -223,6 +229,7 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
     expect(recoveries, 1);
     expect(snapshot.position, lessThan(snapshot.buffered));
+    expect(reasons, [NativeBufferRecoveryReason.stalledRead]);
   });
 
   testWidgets(
@@ -243,6 +250,83 @@ void main() {
       expect(probes, 0);
     },
   );
+
+  testWidgets('native idle cancels an already armed silent-read episode', (
+    tester,
+  ) async {
+    addTearDown(() => recovery.dispose());
+    recovery.readingChanged(true);
+    await tester.pump(const Duration(seconds: 5));
+    // The read deadline has elapsed, but native then reports cache backpressure
+    // before the reachability probe. This is no longer a blocked read.
+    recovery.readingChanged(false);
+    online = true;
+    await tester.pump(const Duration(seconds: 10));
+    expect(probes, 0);
+    expect(recoveries, 0);
+    recovery.reportNetworkError(immediate: true);
+    expect(recoveries, 1);
+    expect(reasons, [NativeBufferRecoveryReason.readError]);
+  });
+
+  testWidgets('native idle retires a late successful silent-read probe', (
+    tester,
+  ) async {
+    addTearDown(() => recovery.dispose());
+    recovery.dispose();
+    final result = Completer<bool>();
+    recovery = NativeBufferRecovery(
+      snapshot: () => snapshot,
+      probe: () {
+        probes++;
+        return result.future;
+      },
+      cancelProbe: () => cancellations++,
+      onRecoveryRequired: (_) => recoveries++,
+    );
+    recovery.readingChanged(true);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pump(const Duration(seconds: 5));
+    expect(probes, 1);
+    recovery.readingChanged(false);
+    result.complete(true);
+    await tester.pump();
+    expect(recoveries, 0);
+    // A later real read stall still has its own observation window.
+    recovery.readingChanged(true);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pump(const Duration(seconds: 5));
+    expect(recoveries, 1);
+  });
+
+  testWidgets('backward seek discards the previous cache high-water mark', (
+    tester,
+  ) async {
+    addTearDown(() => recovery.dispose());
+    recovery.readingChanged(true);
+    snapshot = snapshot.copyWith(
+      isSeeking: true,
+      buffered: const Duration(seconds: 40),
+      position: const Duration(seconds: 20),
+    );
+    recovery.update();
+    snapshot = snapshot.copyWith(isSeeking: false);
+    recovery.update();
+    online = true;
+    // This healthy endpoint remains below the old 90-second cache. Its growth
+    // must restart the observation window, rather than inherit the seek's timer.
+    await tester.pump(const Duration(seconds: 3));
+    snapshot = snapshot.copyWith(buffered: const Duration(seconds: 43));
+    recovery.update();
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(seconds: 2));
+    expect(probes, 0);
+    expect(recoveries, 0);
+    snapshot = snapshot.copyWith(buffered: const Duration(seconds: 46));
+    recovery.update();
+    recovery.dispose();
+  });
 
   testWidgets('prefetch recovers before cached playback runs out', (
     tester,
@@ -310,7 +394,7 @@ void main() {
         return result.future;
       },
       cancelProbe: () => cancellations++,
-      onRecoveryRequired: () => recoveries++,
+      onRecoveryRequired: (_) => recoveries++,
     );
     recovery.reportNetworkError();
     await tester.pump(const Duration(seconds: 5));
