@@ -53,6 +53,21 @@ macOS 原生插件按根 `pubspec.yaml` 的项目级开关统一使用 CocoaPods
 
 Dart 3.13.5 内置的 [Pub 源码](https://github.com/dart-lang/pub/blob/ec276d10a7fa0f6c6ec005340fb9ad29f3b012d0/lib/src/source/hosted.dart#L40) 会将官方旧域名 `https://pub.dartlang.org` 规范化为 `https://pub.dev`，再用于 hosted 来源身份比较；两者的文本差异不等于来源冲突。`pub.flutter-io.cn` 是另一来源，不能依赖这种官方别名规范化消除镜像冲突。验证以固定 Flutter 3.47.6 的实际解析、内容哈希与 `--enforce-lockfile` 为准。
 
+## 2026-11-17：Flutter 3.50 后的 Android 与 macOS 构建失败
+
+[CI 43904052334](https://github.com/CKopoer/BiliSail/actions/runs/43904052334) 的格式／分析、四份根测试、包测试、mux 原生回归及其余平台构建均通过，Android arm64 与 macOS arm64 在打包步骤失败。
+
+- [Android 日志](https://github.com/CKopoer/BiliSail/actions/runs/43904052334/job/133431137851) 明确在应用 Flutter Gradle 插件时拒绝 AGP 9.1.0，要求至少 9.1.1。核对固定 Flutter SDK 的 `DependencyVersionChecker.kt`，Kotlin 最低版本也已变为 2.4.10；同步将项目的 AGP／Kotlin 插件固定为 9.1.1／2.4.10。Gradle 9.3.1 和 JDK 17 仍满足最低要求，保留 Wrapper 版本及摘要；[AGP 官方兼容表](https://developer.android.com/build/releases/agp-9-1-0-release-notes)也支持这一组合。不跳过 Flutter 的构建依赖验证。
+- [macOS arm64 日志](https://github.com/CKopoer/BiliSail/actions/runs/43904052334/job/133431137856) 已完成 Release 编译与签名，`startup` 在 `first-frame-wait` 后立即报 `state`，并非超时或原生崩溃。对应 Dart 路径在 raster timing 完成后立即检查 `framesEnabled`。固定 SDK 的 `FlutterWindowController.mm` 在 `onFirstFrame` 中才显示普通窗口，`FlutterView.mm` 的呈现回调在 AppKit 主线程执行；Dart 收到 raster timing 不保证原生窗口已经显示、生命周期消息已经送达。由日志与源码可定位到这个异步交接窗口；本机 Windows 不能复现真实 AppKit 时序。
+
+首帧探测现等待真实引擎生命周期使帧调度恢复，等待上限五秒，并在 `finally` 中移除监听。随后仍要求另一个正常调度帧完成；持续 `hidden/paused/detached` 仍失败，不调用激活、不改写生命周期，也不跳过两轮播放窗或跨进程 Keychain 验收。回归覆盖 raster timing 后延迟转为前台／可见后台，以及始终禁帧的超时失败。
+
+新增 [Android 工具链检查](../../tool/test-android-toolchain.ps1)，由根检查的 Lint 阶段调用，直接对照当前固定 Flutter SDK 的实际最低 Gradle／AGP／Kotlin 版本，避免仅通过离线检查而遗漏 Android 配置门槛。
+
+本轮 Windows 本地验证：`tool/check.ps1 -SkipPub` 完整通过格式、静态分析、打包边界及 7,194 项 Dart／Flutter 测试（根应用 5,749、API 1,021、播放器 258、弹幕 161、封装 5）；根应用 13 项、播放器 3 项环境／原生用例跳过，10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计作原生通过。启动定向回归 26 项通过；隔离夹具确认工具链检查分别拒绝旧 AGP、旧 Kotlin 和过低 Gradle。两份文档的本地文件链接及 `git diff --check` 通过，五份 Pub 锁文件未变。检查日志为 `build/ci-43904052334-check.log`。
+
+`tool/build-android-development.ps1 -Mode Release` 从固定源码准备 Android mux 后成功构建，普通入口的 `dev.bilisail.bilisail.test`／`BiliSail 测试版` Release APK 完成包名、名称、版本、签名、不可调试、arm64 ABI 和 AOT 校验，输出 `build/development/android-arm64/BiliSail-test-arm64-release.apk`；没有安装或操作设备，日志为 `build/ci-43904052334-android-release.log`。本机无法执行 macOS 构建／AppKit 启动，修复后的真实窗口时序与完整远端 CI 仍待推送后复验；本轮未推送或重跑远端工作流。
+
 ## 2026-11-08：实际 CI 耗时与缓存调整
 
 分析对象为 [CI 42480258474](https://github.com/CKopoer/BiliSail/actions/runs/42480258474)，源码 `28dfa0f8f3060016ce8a2a59c9a71e8942966178`，总墙钟约 31 分 53 秒。全部检查和六个构建目标通过，Windows ARM64 构建失败；这是该次运行的证据，不代表本轮未提交改动已经通过远端验证。

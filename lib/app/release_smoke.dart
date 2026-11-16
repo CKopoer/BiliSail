@@ -233,7 +233,23 @@ class ReleaseSmokeRequest {
     await rasterized();
     final binding = WidgetsBinding.instance;
     if (!binding.framesEnabled) {
-      throw StateError('Startup window cannot schedule frames');
+      // macOS presents the native window from its first-frame callback. The
+      // raster timing can reach Dart before AppKit shows it and the engine's
+      // visibility message arrives. Wait for that real transition, without
+      // activating the app or changing the lifecycle ourselves.
+      final enabled = Completer<void>();
+      final listener = AppLifecycleListener(
+        onStateChange: (_) {
+          if (binding.framesEnabled && !enabled.isCompleted) {
+            enabled.complete();
+          }
+        },
+      );
+      try {
+        await enabled.future.timeout(const Duration(seconds: 5));
+      } finally {
+        listener.dispose();
+      }
     }
     // The warm-up frame can render even when lifecycle disables later frames.
     // Require another normally scheduled frame before accepting startup.

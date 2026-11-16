@@ -75,6 +75,9 @@ try {
   Invoke-Check flutter @('--version')
   $sdk = (& flutter --version --machine | ConvertFrom-Json)
   if ($sdk.frameworkVersion -ne '3.50.0') { throw 'This checkout is verified with Flutter 3.50.0.' }
+  if ($runLint) {
+    & (Join-Path $PSScriptRoot 'test-android-toolchain.ps1') -FlutterSdkPath $sdk.flutterRoot
+  }
   $pubArgs = @('pub', 'get')
   if ($EnforceLockfile) { $pubArgs += '--enforce-lockfile' }
   if (!$SkipPub) {

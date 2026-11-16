@@ -166,6 +166,40 @@ void main() {
     });
   }
 
+  for (final state in [AppLifecycleState.resumed, AppLifecycleState.inactive]) {
+    testWidgets(
+      'startup waits for native visibility after rasterization: $state',
+      (tester) async {
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+        addTearDown(
+          () => tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.resumed,
+          ),
+        );
+        var completed = false;
+        final pending = request('startup')
+            .waitForFirstFrame(rasterized: () async {})
+            .then((_) => completed = true);
+        await tester.idle();
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(completed, isFalse);
+        expect(tester.binding.framesEnabled, isFalse);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        if (state == AppLifecycleState.resumed) {
+          tester.binding.handleAppLifecycleStateChanged(state);
+        }
+        await tester.idle();
+        expect(completed, isFalse);
+        await tester.pump();
+        await pending;
+        expect(completed, isTrue);
+        expect(tester.binding.lifecycleState, state);
+      },
+    );
+  }
+
   for (final state in [
     AppLifecycleState.hidden,
     AppLifecycleState.paused,
@@ -180,10 +214,13 @@ void main() {
           AppLifecycleState.resumed,
         ),
       );
-      await expectLater(
+      final pending = expectLater(
         request('startup').waitForFirstFrame(rasterized: () async {}),
-        throwsStateError,
+        throwsA(isA<TimeoutException>()),
       );
+      await tester.idle();
+      await tester.pump(const Duration(seconds: 5));
+      await pending;
       expect(tester.binding.lifecycleState, state);
       expect(tester.binding.framesEnabled, isFalse);
     });
