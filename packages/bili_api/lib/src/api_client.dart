@@ -2631,9 +2631,10 @@ final class BiliApiClient {
       ),
       'danmaku_segment',
       activeContext,
+      maxBytes: _maxDanmakuSegmentBytes,
     );
     _checkDecodeContext(activeContext, epoch, deadline);
-    if (response.body.length > 2 * 1024 * 1024) {
+    if (response.body.length > _maxDanmakuSegmentBytes) {
       throw const ApiFailure(ApiFailureCategory.protocol, 'danmaku_segment');
     }
     if (response.body.length <= 32 * 1024) {
@@ -2937,6 +2938,7 @@ final class BiliApiClient {
     String endpoint,
     ApiRequestContext? context, {
     int? maxAttempts,
+    int? maxBytes,
     _ReadAttemptBudget? attemptBudget,
     bool readOnly = true,
     String referer = 'https://www.bilibili.com/',
@@ -2991,6 +2993,7 @@ final class BiliApiClient {
       // The official progress preview retries on the next interaction, rather
       // than replaying a failed videoshot request inside the same interaction.
       maxAttempts: maxAttempts ?? (endpoint == 'video_storyboard' ? 1 : 3),
+      maxBytes: maxBytes,
       attemptBudget: attemptBudget,
       readOnly: readOnly,
     );
@@ -3549,9 +3552,13 @@ final class _DecodeWaiter {
   bool granted = false;
 }
 
+// Dense signed-in pools can exceed 3 MiB even with ordinary-sized elements.
+// Keep the reply byte budget separate from item and per-field limits.
+const _maxDanmakuSegmentBytes = 8 * 1024 * 1024;
+
 /// Small bounded decoder for only the fields used by ordinary video comments.
 List<ApiDanmakuItem> decodeDanmakuSegment(Uint8List bytes) {
-  if (bytes.length > 2 * 1024 * 1024) {
+  if (bytes.length > _maxDanmakuSegmentBytes) {
     throw const ApiFailure(ApiFailureCategory.protocol, 'danmaku_segment');
   }
   const maxItems = 6000;
