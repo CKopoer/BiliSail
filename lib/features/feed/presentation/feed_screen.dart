@@ -17,6 +17,7 @@ import '../../../shared/ui/dynamic_compose_dialog.dart';
 import '../application/dynamic_authors_controller.dart';
 import '../application/home_controller.dart';
 import '../application/feed_controller.dart';
+import '../domain/app_recommendation_request.dart';
 import '../application/app_recommendation_identity.dart';
 import '../domain/home_channel.dart';
 import 'home_content.dart';
@@ -361,7 +362,9 @@ final class _HomeChannelPageState extends ConsumerState<_HomeChannelPage> {
     if (widget.channel == HomeChannel.ranking) {
       ref.invalidate(rankingCategoriesProvider);
     }
-    return ref.read(feedControllerProvider.notifier).refresh();
+    return ref
+        .read(feedControllerProvider.notifier)
+        .refresh(appReason: AppRecommendationLoadReason.pullDown);
   }
 
   Future<void> _rejectRecommendation(VideoSummary video) async {

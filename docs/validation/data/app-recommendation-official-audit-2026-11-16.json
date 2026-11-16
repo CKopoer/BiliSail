@@ -1,0 +1,115 @@
+{
+  "date": "2026-11-16",
+  "baseline": "b6cf1f31f788c5191d59c798b0aae57d9b7a1fa3",
+  "kind": "public_read_only_protocol_probe_not_account_quality_validation",
+  "official_apk": {
+    "download_page": "https://app.bilibili.com/",
+    "url": "https://dl.hdslb.com/mobile/latest/android64/iBiliPlayer-bili.apk",
+    "package": "tv.danmaku.bili",
+    "version_name": "9.19.0",
+    "version_code": 9190400,
+    "size_bytes": 241376892,
+    "sha256": "c3ea50c7773267f252e441b5c1aebf7574492223b2bb1568d7a7093d1f8eb59c",
+    "cdn_last_modified_utc": "2026-11-11T10:43:30Z"
+  },
+  "decompiler": "jadx 1.5.6",
+  "official_classes": {
+    "classes14.dex": [
+      "ir8.getIndexList",
+      "com.bilibili.pegasus.data.request.PegasusFlush",
+      "iiy1",
+      "com.bilibili.pegasus.vm.PegasusViewModel.m1",
+      "lbt0",
+      "aje",
+      "com.bilibili.pegasus.common.inline.PlayerParamsBuilderKt.addBasicPlayerParams"
+    ],
+    "classes8.dex": [
+      "ntz0"
+    ],
+    "classes13.dex": [
+      "com.bilibili.okretro.interceptor.DefaultRequestInterceptor"
+    ]
+  },
+  "privacy": {
+    "saved_credentials_read": false,
+    "saved_device_read": false,
+    "same_ephemeral_device_for_all_cases": true,
+    "account_writes": false,
+    "playback_reports_sent": false
+  },
+  "cases": [
+    {
+      "case": "current_initial",
+      "idx": "0",
+      "pull": true,
+      "flush": 8,
+      "http_status": 200,
+      "business_code": 0,
+      "raw_count": 12,
+      "card_goto": {
+        "av": 12
+      },
+      "first_idx": 1794819840,
+      "last_idx": 1794819829,
+      "playable_non_ad": 12,
+      "overlap_with_previous_samples": []
+    },
+    {
+      "case": "current_counter_next",
+      "idx": "1",
+      "pull": false,
+      "flush": 8,
+      "http_status": 200,
+      "business_code": 0,
+      "raw_count": 12,
+      "card_goto": {
+        "av": 12
+      },
+      "first_idx": null,
+      "last_idx": -11,
+      "playable_non_ad": 11,
+      "overlap_with_previous_samples": [
+        0
+      ]
+    },
+    {
+      "case": "response_idx_next",
+      "idx": "1794819840",
+      "pull": false,
+      "flush": 8,
+      "http_status": 200,
+      "business_code": 0,
+      "raw_count": 10,
+      "card_goto": {
+        "av": 10
+      },
+      "first_idx": 1794819839,
+      "last_idx": 1794819830,
+      "playable_non_ad": 9,
+      "overlap_with_previous_samples": [
+        0,
+        0
+      ]
+    },
+    {
+      "case": "response_idx_pull_down",
+      "idx": "1794819840",
+      "pull": true,
+      "flush": 6,
+      "http_status": 200,
+      "business_code": 0,
+      "raw_count": 10,
+      "card_goto": {
+        "av": 10
+      },
+      "first_idx": 1794819850,
+      "last_idx": 1794819841,
+      "playable_non_ad": 10,
+      "overlap_with_previous_samples": [
+        0,
+        0,
+        0
+      ]
+    }
+  ]
+}

@@ -46,6 +46,7 @@ final class BiliApiClient {
     this.prepareWebRequests = false,
     this.loadWebDevice,
     this.saveWebDevice,
+    this.loadAppDevice,
     this.timeout = const Duration(seconds: 12),
     DateTime Function()? clock,
     Future<List<ApiDanmakuItem>> Function(Uint8List)? danmakuDecoder,
@@ -78,6 +79,37 @@ final class BiliApiClient {
     save: saveWebDevice,
   );
   final Duration timeout;
+  final Future<AppDeviceInfo> Function()? loadAppDevice;
+  final _appRandom = Random.secure();
+  late final String _appSessionId = _appRandomHex(4);
+  String _appRandomHex(int bytes) => List.generate(
+    bytes,
+    (_) => _appRandom.nextInt(256).toRadixString(16).padLeft(2, '0'),
+  ).join();
+
+  Future<AppDeviceInfo> appDeviceInfo({ApiRequestContext? context}) async {
+    final active = boundedReadContext(context);
+    final epoch = _sessionProvider?.sessionEpoch;
+    void check() => _checkDecodeContext(
+      active,
+      epoch,
+      active.deadline!,
+      endpoint: 'app_device',
+    );
+    check();
+    final value =
+        await (loadAppDevice?.call() ?? Future.value(const AppDeviceInfo()))
+            .timeout(
+              active.deadline!.difference(_clock()),
+              onTimeout: () => throw const ApiFailure(
+                ApiFailureCategory.timeout,
+                'app_device',
+              ),
+            );
+    check();
+    return value;
+  }
+
   final DateTime Function() _clock;
   final Future<List<ApiDanmakuItem>> Function(Uint8List) _danmakuDecoder;
   final Future<ApiPgcSeason> Function(Uint8List) _pgcSeasonDecoder;
@@ -226,6 +258,7 @@ final class BiliApiClient {
     required String buvid,
     String? accessToken,
     String? appAccountMid,
+    AppDeviceInfo? deviceInfo,
     ApiRequestContext? context,
   }) async {
     const feedPaths = {
@@ -263,6 +296,8 @@ final class BiliApiClient {
       endpoint: endpoint,
     );
     check();
+    final device = deviceInfo ?? await appDeviceInfo(context: active);
+    check();
     final signed = AppProfile.sign({
       ...parameters,
       if (accessToken != null && accessToken.isNotEmpty)
@@ -270,12 +305,16 @@ final class BiliApiClient {
     }, _clock());
     final headers = {
       'Accept': 'application/json',
-      'User-Agent': AppProfile.userAgent,
+      'User-Agent': AppProfile.userAgentFor(device),
       'buvid': buvid,
       'app-key': 'android_hd',
       'env': 'prod',
       if (path == '/x/v2/feed/index')
-        ...AppProfile.recommendationHeaders(appAccountMid),
+        ...AppProfile.recommendationHeaders(
+          appAccountMid,
+          sessionId: _appSessionId,
+          traceId: '${_appRandomHex(16)}:${_appRandomHex(8)}:0:0',
+        ),
     };
     final uri = Uri.https(
       passport ? 'passport.bilibili.com' : 'app.bilibili.com',
@@ -382,9 +421,15 @@ final class BiliApiClient {
     check();
     final uri = Uri.https('passport.bilibili.com', path);
     final isCaptchaRegistration = path == '/x/safecenter/captcha/pre';
+    final device = isCaptchaRegistration
+        ? null
+        : await appDeviceInfo(context: active);
+    check();
     final headers = {
       'Accept': 'application/json',
-      'User-Agent': isCaptchaRegistration ? webUserAgent : AppProfile.userAgent,
+      'User-Agent': device == null
+          ? webUserAgent
+          : AppProfile.userAgentFor(device),
       // This Web registration endpoint chooses Geetest 4 when given App buvid
       // headers. Like the reference flow, request its Web/fullpage registration
       // separately, then use that registration's token for the signed SMS form.
@@ -392,11 +437,9 @@ final class BiliApiClient {
         'buvid': buvid,
         'env': 'prod',
         'app-key': 'android_hd',
-        'x-bili-trace-id':
-            '11111111111111111111111111111111:1111111111111111:0:0',
+        'x-bili-trace-id': '${_appRandomHex(16)}:${_appRandomHex(8)}:0:0',
         'x-bili-aurora-eid': '',
         'x-bili-aurora-zone': '',
-        'bili-http-engine': 'cronet',
       },
       'Referer': ?referer,
     };

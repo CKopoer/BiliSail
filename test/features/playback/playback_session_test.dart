@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:bilisail/domain/recommendation_playback_context.dart';
+
 import 'package:bili_danmaku/bili_danmaku.dart';
 
 import 'package:bilisail/domain/playback_rates.dart';
@@ -34,6 +36,69 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('recommendation attribution survives quality changes and clears for another video or account', () async {
+    var epoch = 0;
+    final engine = _FakeEngine();
+    final history = _FakeHistory();
+    final session = PlaybackSession(
+      engine: engine,
+      repository: _FakeRepository(autoResolve: true),
+      progress: _FakeProgress(),
+      historyRepository: history,
+      accountScope: () => 'user:1',
+      sessionEpoch: () => epoch,
+    );
+    addTearDown(session.close);
+    session.configureSettings(AppSettings(resumePlayback: false));
+    final video = _detail('11');
+    final attribution = RecommendationPlaybackContext(
+      videoId: video.summary.id.value,
+      trackId: 'from-feed',
+      sessionEpoch: 0,
+    );
+    final owner = Object();
+    session.attach(owner);
+    await session.activate(
+      owner,
+      video,
+      _part('11'),
+      recommendation: attribution,
+    );
+    await _flush();
+    expect(history.reports.last.recommendation, same(attribution));
+    final nextAttribution = RecommendationPlaybackContext(
+      videoId: video.summary.id.value,
+      trackId: 'from-next-feed-click',
+      sessionEpoch: 0,
+    );
+    final opens = engine.openOptions.length;
+    await session.activate(
+      owner,
+      video,
+      _part('11'),
+      recommendation: nextAttribution,
+    );
+    expect(engine.openOptions, hasLength(opens));
+    await session.open(video, _part('11'), quality: 64, force: true);
+    engine.emit(
+      engine.currentSnapshot.copyWith(position: const Duration(seconds: 10)),
+    );
+    await session.pause();
+    await _flush();
+    expect(history.reports.last.recommendation, same(nextAttribution));
+    await session.open(_detail('12'), _part('12'));
+    await _flush();
+    expect(history.reports.last.recommendation, isNull);
+    epoch++;
+    await session.open(
+      video,
+      _part('11'),
+      recommendation: attribution,
+      force: true,
+    );
+    await _flush();
+    expect(history.reports.last.recommendation, isNull);
+  });
   test(
     'content link position overrides resume and seeks a retained owner once',
     () async {

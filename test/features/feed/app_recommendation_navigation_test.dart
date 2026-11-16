@@ -1,4 +1,6 @@
 import 'package:bilisail/core/platform/external_links.dart';
+import 'package:bilisail/domain/recommendation_playback_context.dart';
+import 'package:bilisail/features/playback/application/recommendation_playback_registry.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/feed/domain/home_channel.dart';
 import 'package:bilisail/features/feed/presentation/feed_video_grid.dart';
@@ -9,6 +11,76 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 void main() {
+  testWidgets(
+    'App video click routes an opaque reference and retains server attribution',
+    (tester) async {
+      final registry = RecommendationPlaybackRegistry();
+      const id = VideoId('BV17x411w7KC');
+      const attribution = RecommendationPlaybackContext(
+        videoId: 'BV17x411w7KC',
+        trackId: 'raw-private-track',
+        sessionEpoch: 0,
+      );
+      Uri? destination;
+      final router = GoRouter(
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (_, _) => Scaffold(
+              body: CustomScrollView(
+                slivers: [
+                  FeedVideoGrid(
+                    items: [
+                      VideoSummary(
+                        id: id,
+                        title: 'tracked video',
+                        coverUrl: '',
+                        author: '',
+                        duration: Duration.zero,
+                        recommendationPlayback: attribution,
+                      ),
+                    ],
+                    channel: HomeChannel.popular,
+                    onReject: (_) {},
+                    onUndo: (_) {},
+                  ),
+                ],
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/video/:id',
+            builder: (_, state) {
+              destination = state.uri;
+              return const Scaffold(body: Text('player'));
+            },
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            recommendationPlaybackRegistryProvider.overrideWithValue(registry),
+          ],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+      tester.widget<VideoCard>(find.byType(VideoCard)).onTap();
+      await tester.pumpAndSettle();
+      expect(destination.toString(), isNot(contains(attribution.trackId)));
+      expect(
+        registry.resolve(destination?.queryParameters['recommendation'], id, 0),
+        same(attribution),
+      );
+      expect(
+        registry.resolve(destination?.queryParameters['recommendation'], id, 1),
+        isNull,
+      );
+    },
+  );
+
   for (final (kind, id, route) in [
     (RecommendationTargetKind.episode, '42', '/pgc/episode/42'),
     (RecommendationTargetKind.season, '99', '/pgc/season/99'),

@@ -15,11 +15,13 @@ class MainActivity : AudioServiceActivity() {
     private var mobileWindow: MobileWindowHandler? = null
     private var appIcon: AppIconHandler? = null
     private var pictureInPicture: PictureInPictureHandler? = null
+    private var appRequestDevice: AppRequestDeviceHandler? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         updateDisplayMetrics(flutterEngine)
         appIcon = AppIconHandler(this, flutterEngine.dartExecutor.binaryMessenger)
+        appRequestDevice = AppRequestDeviceHandler(this, flutterEngine.dartExecutor.binaryMessenger)
         downloadStorage = DownloadStorageHandler(this, flutterEngine.dartExecutor.binaryMessenger)
         imageExport = ImageExportHandler(this, flutterEngine.dartExecutor.binaryMessenger)
         logExport = LogExportHandler(this, flutterEngine.dartExecutor.binaryMessenger)
@@ -77,6 +79,8 @@ class MainActivity : AudioServiceActivity() {
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        appRequestDevice?.close()
+        appRequestDevice = null
         surfaceBenchmarks?.close()
         surfaceBenchmarks = null
         pictureInPicture?.close()

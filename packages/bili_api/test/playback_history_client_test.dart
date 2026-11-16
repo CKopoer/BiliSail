@@ -45,6 +45,40 @@ void main() {
     expect(uri.queryParameters['bvid'], _bvid);
     expect(uri.queryParameters['w_rid'], isNotEmpty);
   });
+
+  test(
+    'existing heartbeat carries the official track_id and source placement',
+    () async {
+      await client.report(
+        _bvid,
+        _cid,
+        position: const Duration(seconds: 12),
+        duration: const Duration(minutes: 2),
+        completed: false,
+        trackId: 'server%2Ftrack',
+        fromSpmid: 'tm.recommend.0.0',
+      );
+      expect(transport.posts.single.fields['track_id'], 'server%2Ftrack');
+      expect(transport.posts.single.fields['from_spmid'], 'tm.recommend.0.0');
+      expect(transport.posts.single.fields['spmid'], '333.788.0.0');
+      expect(
+        transport.posts.single.uri.path,
+        '/x/click-interface/web/heartbeat',
+      );
+      await expectLater(
+        client.report(
+          _bvid,
+          _cid,
+          position: Duration.zero,
+          duration: const Duration(minutes: 2),
+          completed: false,
+          trackId: 'bad\r\nvalue',
+        ),
+        throwsArgumentError,
+      );
+      expect(transport.posts, hasLength(1));
+    },
+  );
   for (final (data, expected) in <(Map<String, Object?>, Duration?)>[
     ({}, null),
     ({'last_play_time': 0, 'last_play_cid': 0}, null),
