@@ -132,7 +132,10 @@ class PlayerMoreDialog extends StatelessWidget {
           compact: true,
           menuItem: true,
         ),
-      if (session.error != null)
+      if (session.error != null ||
+          (media != null &&
+              session.contentTarget is! OfflinePlaybackTarget &&
+              !session.isResolving))
         action(
           '重新加载',
           Icons.refresh,

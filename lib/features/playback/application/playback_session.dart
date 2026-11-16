@@ -10,7 +10,6 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/app_failure.dart';
-import '../../../domain/media_cdn.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
 import '../../../domain/recommendation_playback_context.dart';
@@ -99,10 +98,10 @@ class PlaybackSession extends ChangeNotifier {
       engine.failures.listen((failure) {
         if (failure.generation != engine.currentSnapshot.generation ||
             _resolving ||
-            _audioRecovery?.preparing == true) {
+            _closing) {
           return;
         }
-        if (_scheduleRecovery(failure)) {
+        if (_scheduleNetworkRetry(failure, media)) {
           return;
         }
         error = contentTarget is OfflinePlaybackTarget
@@ -135,15 +134,7 @@ class PlaybackSession extends ChangeNotifier {
       .firstOrNull;
   final PlayerEngine engine;
   Timer? _recoveryTimer;
-  bool _recoveryScheduled = false;
-  bool _recoveryInProgress = false;
-  Object? _recoveryRequest;
-  bool _preferRecoveryBackup = false;
-  int _recoveryAttempts = 0;
-  int _nativeOpenAttempts = 0;
-  int? _recoveryGeneration;
-  Duration _remainingRecoveryBudget = _PlaybackStartupRecovery.totalBudget;
-  Duration? _healthySince;
+  bool _reopening = false;
   final PlaybackRepository repository;
   final PlaybackMetadataRepository? metadataRepository;
   final ContentPlaybackRepository? contentRepository;
@@ -158,112 +149,55 @@ class PlaybackSession extends ChangeNotifier {
   final String Function() accountScope;
   final _clock = Stopwatch();
   final Duration Function()? startupNow;
-  _PlaybackStartupRecovery? _audioRecovery;
   AudioQualityPreference? _audioQuality;
 
-  bool _scheduleRecovery(PlayerFailure failure, {Duration? remaining}) {
-    if (_disposed ||
+  bool _scheduleNetworkRetry(PlayerFailure failure, PlaybackMedia? source) {
+    if (source == null ||
+        (failure.kind != PlayerFailureKind.networkRead &&
+            failure.kind != PlayerFailureKind.networkOpen) ||
+        _reopening ||
+        _disposed ||
         _closing ||
-        _resolving ||
-        (contentTarget == null && (detail == null || part == null)) ||
-        contentTarget is OfflinePlaybackTarget ||
         !_desiredPlaying ||
         !_playbackAllowed ||
-        _scope != accountScope() ||
-        _epoch != sessionEpoch() ||
-        !const {
-          PlayerFailureKind.nativePlayback,
-          PlayerFailureKind.videoInterrupted,
-        }.contains(failure.kind)) {
+        contentTarget is OfflinePlaybackTarget ||
+        !sourceMatchesAccount) {
       return false;
     }
-    if (_recoveryScheduled) {
-      error = null;
-      return true;
-    }
-    if (remaining != null) {
-      _remainingRecoveryBudget = remaining;
-    } else if (_recoveryAttempts == 0) {
-      _remainingRecoveryBudget = _PlaybackStartupRecovery.totalBudget;
-    }
-    // CDN fallback and URL refresh share three native opens. A replacement
-    // resolution must not multiply the startup layer's two-open allowance.
-    if (_recoveryAttempts >= 2 || _nativeOpenAttempts >= 3) return false;
+    if (_recoveryTimer != null) return true;
     final generation = _generation;
-    final engineGeneration = engine.currentSnapshot.generation;
-    final delay = Duration(seconds: _recoveryAttempts++);
-    if (_remainingRecoveryBudget <= delay) return false;
-    final queuedAt = startupNow?.call() ?? _clock.elapsed;
-    final request = Object();
-    _recoveryRequest = request;
-    _recoveryScheduled = true;
-    _preferRecoveryBackup = media != null;
-    _healthySince = null;
     error = null;
-    auxiliaryMessage = '音视频加载中断，正在自动重试（$_recoveryAttempts/2）';
-    void recover() {
-      if (!identical(request, _recoveryRequest)) return;
-      _recoveryTimer = null;
-      _recoveryScheduled = false;
-      if (_disposed ||
-          _closing ||
-          generation != _generation ||
-          engineGeneration != engine.currentSnapshot.generation ||
-          _scope != accountScope() ||
-          _epoch != sessionEpoch()) {
-        return;
-      }
-      if (!_desiredPlaying || !_playbackAllowed) {
-        auxiliaryMessage = null;
-        error = failure.message;
-        _notify();
-        return;
-      }
-      _remainingRecoveryBudget -=
-          (startupNow?.call() ?? _clock.elapsed) - queuedAt;
-      if (_remainingRecoveryBudget <= Duration.zero) {
-        auxiliaryMessage = null;
-        error = failure.message;
-        _notify();
-        return;
-      }
-      final replacementGeneration = _generation + 1;
-      _recoveryGeneration = replacementGeneration;
-      final recovery = retry(retainPresentation: true);
-      // open clears the queued timer synchronously. Keep recovery visible
-      // through resolution, native open and the first audio readiness check.
-      _recoveryInProgress = true;
-      unawaited(
-        recovery.whenComplete(() {
-          if (!_disposed && !_closing && replacementGeneration == _generation) {
-            _recoveryInProgress = false;
-            _notify();
-          }
-        }),
-      );
-    }
-
-    // The first recovery has no artificial wait. Repeated failure backs off.
-    if (delay == Duration.zero) {
-      scheduleMicrotask(recover);
-    } else {
-      _recoveryTimer = Timer(delay, recover);
-    }
+    // Running read errors have already passed the SDK buffer check after 3s.
+    // A terminal network open error has no active reader left to check.
+    _recoveryTimer = Timer(
+      failure.kind == PlayerFailureKind.networkOpen
+          ? const Duration(seconds: 3)
+          : Duration.zero,
+      () {
+        _recoveryTimer = null;
+        if (_disposed ||
+            _closing ||
+            generation != _generation ||
+            failure.generation != engine.currentSnapshot.generation ||
+            !_desiredPlaying ||
+            !_playbackAllowed ||
+            !sourceMatchesAccount) {
+          return;
+        }
+        unawaited(_retry(source));
+      },
+    );
     _notify();
     return true;
   }
 
   void _cancelRecovery() {
-    if (_recoveryScheduled) {
+    if (_recoveryTimer != null) {
       error = '音视频加载中断，请重新加载或切换线路。';
-      auxiliaryMessage = null;
+      _recoveryTimer!.cancel();
+      _recoveryTimer = null;
     }
-    _recoveryTimer?.cancel();
-    _recoveryTimer = null;
-    _recoveryScheduled = false;
-    _recoveryInProgress = false;
-    _recoveryRequest = null;
-    _healthySince = null;
+    _reopening = false;
   }
 
   final _subscriptions = <StreamSubscription<Object?>>[];
@@ -562,7 +496,7 @@ class PlaybackSession extends ChangeNotifier {
   bool commentsEnabled = true;
   double commentFontScale = 1;
   bool get isResolving => _resolving;
-  bool get isRecovering => _recoveryScheduled || _recoveryInProgress;
+  bool get isRecovering => _recoveryTimer != null || _reopening;
   int get sourceGeneration => _generation;
   String get sourceAccountScope => _scope;
   bool get sourceMatchesAccount =>
@@ -909,7 +843,7 @@ class PlaybackSession extends ChangeNotifier {
     LiveStreamPreference? liveStream,
     bool allowColorFallback = true,
     Duration? startupBudget,
-    bool retainPresentation = false,
+    PlaybackMedia? retryMedia,
     RecommendationPlaybackContext? recommendation,
   }) async {
     if (_disposed || _closing) return;
@@ -925,27 +859,19 @@ class PlaybackSession extends ChangeNotifier {
     }
     final generation = ++_generation;
     _cancelRecovery();
-    if (_recoveryGeneration != generation) {
-      if (startupBudget == null) {
-        _recoveryAttempts = 0;
-        _nativeOpenAttempts = 0;
-      }
-      _remainingRecoveryBudget =
-          startupBudget ?? _PlaybackStartupRecovery.totalBudget;
-    }
+    _reopening = retryMedia != null;
+    final openBudget = startupBudget ?? const Duration(seconds: 35);
     _allowColorFallback = allowColorFallback;
     final requestedAudioOnly =
         _listeningMode.enabled && target is! LivePlaybackTarget;
     _audioOnly = requestedAudioOnly;
     if (_ownsSleepTimer && target is LivePlaybackTarget) sleepTimer.cancel();
     sleepTimer.checkDeadline();
-    _audioRecovery = null;
     // Capture source settings together; a preference change during resolution
     // applies to the next open rather than half of this source generation.
     final preferredCodec = allowColorFallback
         ? _settings.preferredVideoCodec
         : VideoCodecPreference.h264;
-    final mediaCdn = _settings.mediaCdn;
     final videoDecoding = switch (_settings.videoDecoding) {
       VideoDecodingPreference.automatic => VideoDecodingMode.automatic,
       VideoDecodingPreference.software => VideoDecodingMode.software,
@@ -1062,7 +988,7 @@ class PlaybackSession extends ChangeNotifier {
     _resolving = true;
     danmaku.replaceEvents(const []);
     _notify();
-    _PlaybackStartupRecovery? preparingRecovery;
+    Duration? nativeOpenStarted;
     PlaybackMedia? compatibilityMedia;
     try {
       await savedProgress;
@@ -1080,13 +1006,14 @@ class PlaybackSession extends ChangeNotifier {
       final stopped = startupDiagnostics.measure(
         generation,
         PlaybackStartupStage.stopPrevious,
-        retainPresentation ? engine.pause : engine.stop,
+        retryMedia != null ? engine.pause : engine.stop,
       );
       final contentResolver = contentRepository;
       final resolution = startupDiagnostics.measure(
         generation,
         PlaybackStartupStage.resolve,
         () async {
+          if (retryMedia != null) return retryMedia;
           if (target != null) {
             if (contentResolver == null) {
               throw const AppFailure(AppFailureKind.playback, '内容播放服务未配置');
@@ -1191,7 +1118,6 @@ class PlaybackSession extends ChangeNotifier {
       if (!isCurrent()) return;
       final policy = MediaRequestPolicy(headers: resolved.headers);
       _openingPosition = resume;
-      PlayerFailure? lastFailure;
       final audio = resolved.audio;
       if (resolved.kind == PlaybackMediaKind.dash &&
           audio == null &&
@@ -1212,173 +1138,80 @@ class PlaybackSession extends ChangeNotifier {
               requestedLiveLine < resolved.video.urls.length
           ? requestedLiveLine
           : 0;
-      final firstVideo = resolved.video.urls[isLive ? liveLineIndex : 0];
-      final alternateVideo = isLive
-          ? resolved.video.urls.length > 1
-                ? resolved.video.urls[(liveLineIndex + 1) %
-                      resolved.video.urls.length]
-                : null
-          : backupMediaCdnUrl(resolved.video.urls, mediaCdn);
-      final alternateAudio = audio == null
-          ? null
-          : backupMediaCdnUrl(audio.urls, mediaCdn);
-      final preferBackup =
-          _recoveryGeneration == generation && _preferRecoveryBackup;
-      final videoPrimary = preferBackup
-          ? alternateVideo ?? firstVideo
-          : firstVideo;
-      final videoBackup = preferBackup && alternateVideo != null
-          ? firstVideo
-          : alternateVideo;
-      final firstAudio = audio?.urls.first;
-      final audioPrimary = preferBackup
-          ? alternateAudio ?? firstAudio
-          : firstAudio;
-      final audioBackup = preferBackup && alternateAudio != null
-          ? firstAudio
-          : alternateAudio;
-      final hasBackup = requestedAudioOnly
-          ? audioBackup != null
-          : videoBackup != null || audioBackup != null;
-      final recovery = _PlaybackStartupRecovery(
-        budget: _remainingRecoveryBudget,
-        now: startupNow ?? () => _clock.elapsed,
-        hasBackup: hasBackup,
-        isCurrent: isCurrent,
-      )..start();
-      preparingRecovery = recovery;
-      var openedLiveLine = liveLineIndex;
-      // At most two opens in one resolution, using only server-provided backups.
-      Future<void> openMedia(PlaybackSnapshot? checkpoint) async {
-        for (; recovery.attempts < 2;) {
-          if (!isCurrent()) return;
-          if (_nativeOpenAttempts >= 3) {
-            throw PlayerFailure(
-              PlayerFailureKind.nativePlayback,
-              '自动重试次数已用尽，请重新加载或切换线路。',
-              engine.currentSnapshot.generation,
-            );
-          }
-          final remaining = recovery.totalRemaining;
-          if (remaining <= Duration.zero) {
-            throw PlayerFailure(
-              PlayerFailureKind.nativePlayback,
-              'Playback preparation timed out.',
-              engine.currentSnapshot.generation,
-            );
-          }
-          final attempt = recovery.attempts++;
-          // Leave time for a different returned CDN when the primary stalls.
-          // Single-URL and live sources retain their existing startup budget.
-          final attemptBudget =
-              !isLive &&
-                  hasBackup &&
-                  attempt == 0 &&
-                  remaining > _PlaybackStartupRecovery.primaryBudget
-              ? _PlaybackStartupRecovery.primaryBudget
-              : remaining;
-          final videoUri = attempt == 0
-              ? videoPrimary
-              : videoBackup ?? videoPrimary;
-          final audioUri = audio == null
-              ? null
-              : attempt == 0
-              ? audioPrimary
-              : audioBackup ?? audioPrimary;
-          try {
-            _nativeOpenAttempts++;
-            await startupDiagnostics.measure(
-              generation,
-              PlaybackStartupStage.nativeOpen,
-              () => engine.open(
-                requestedAudioOnly && audio != null && audioUri != null
-                    ? ProgressiveSource(
-                        MediaTrack(
+      final videoUri = resolved.video.urls[liveLineIndex];
+      final audioUri = audio?.urls.first;
+      nativeOpenStarted = startupNow?.call() ?? _clock.elapsed;
+      await startupDiagnostics.measure(
+        generation,
+        PlaybackStartupStage.nativeOpen,
+        () => engine.open(
+          requestedAudioOnly && audio != null && audioUri != null
+              ? ProgressiveSource(
+                  MediaTrack(
+                    uri: audioUri,
+                    requestPolicy: policy,
+                    codec: audio.codec,
+                    bandwidth: audio.bandwidth,
+                  ),
+                  isAudioOnly: true,
+                )
+              : resolved.kind == PlaybackMediaKind.liveHls
+              ? ManifestSource(
+                  MediaTrack(
+                    uri: videoUri,
+                    requestPolicy: policy,
+                    isHdr: resolved.isHdr,
+                  ),
+                  isLive: true,
+                )
+              : resolved.kind == PlaybackMediaKind.liveFlv ||
+                    resolved.kind == PlaybackMediaKind.progressive
+              ? ProgressiveSource(
+                  MediaTrack(
+                    uri: videoUri,
+                    requestPolicy: policy,
+                    isHdr: resolved.isHdr,
+                  ),
+                  isLive: isLive,
+                )
+              : DashPairSource(
+                  isIntentionallySilent: resolved.isIntentionallySilent,
+                  duration: resolved.duration,
+                  video: MediaTrack(
+                    uri: videoUri,
+                    requestPolicy: policy,
+                    codec: resolved.video.codec,
+                    bandwidth: resolved.video.bandwidth,
+                    isHdr: resolved.isHdr,
+                  ),
+                  audio: audio == null || audioUri == null
+                      ? null
+                      : MediaTrack(
                           uri: audioUri,
                           requestPolicy: policy,
                           codec: audio.codec,
                           bandwidth: audio.bandwidth,
                         ),
-                        isAudioOnly: true,
-                      )
-                    : resolved.kind == PlaybackMediaKind.liveHls
-                    ? ManifestSource(
-                        MediaTrack(
-                          uri: videoUri,
-                          requestPolicy: policy,
-                          isHdr: resolved.isHdr,
-                        ),
-                        isLive: true,
-                      )
-                    : resolved.kind == PlaybackMediaKind.liveFlv ||
-                          resolved.kind == PlaybackMediaKind.progressive
-                    ? ProgressiveSource(
-                        MediaTrack(
-                          uri: videoUri,
-                          requestPolicy: policy,
-                          isHdr: resolved.isHdr,
-                        ),
-                        isLive: isLive,
-                      )
-                    : DashPairSource(
-                        isIntentionallySilent: resolved.isIntentionallySilent,
-                        duration: resolved.duration,
-                        video: MediaTrack(
-                          uri: videoUri,
-                          requestPolicy: policy,
-                          codec: resolved.video.codec,
-                          bandwidth: resolved.video.bandwidth,
-                          isHdr: resolved.isHdr,
-                        ),
-                        audio: audio == null || audioUri == null
-                            ? null
-                            : MediaTrack(
-                                uri: audioUri,
-                                requestPolicy: policy,
-                                codec: audio.codec,
-                                bandwidth: audio.bandwidth,
-                              ),
-                      ),
-                OpenOptions(
-                  startPosition: checkpoint?.position ?? resume,
-                  play: false,
-                  rate: isLive ? 1 : checkpoint?.rate ?? oldRate,
-                  volume: checkpoint?.volume ?? oldVolume,
-                  audioGainDb: _audioGainFor(resolved),
-                  videoDecoding: videoDecoding,
-                  androidVideoOutput: switch (_settings.androidVideoOutput) {
-                    AndroidVideoOutputPreference.renderedTexture =>
-                      AndroidVideoOutputMode.renderedTexture,
-                    AndroidVideoOutputPreference.directTexture =>
-                      AndroidVideoOutputMode.directTexture,
-                  },
-                  openTimeout: attemptBudget,
-                  retainPresentation:
-                      retainPresentation || checkpoint != null || attempt > 0,
                 ),
-              ),
-            );
-            lastFailure = null;
-            if (isLive) openedLiveLine = resolved.video.urls.indexOf(videoUri);
-            break;
-          } on PlayerFailure catch (failure) {
-            lastFailure = failure;
-            if (!hasBackup ||
-                failure.kind != PlayerFailureKind.nativePlayback) {
-              break;
-            }
-          }
-        }
-        if (lastFailure case final failure?) throw failure;
-      }
-
-      recovery.reopen = (checkpoint) => openMedia(checkpoint);
-      await openMedia(null);
-      recovery.stop();
+          OpenOptions(
+            startPosition: resume,
+            play: false,
+            rate: isLive ? 1 : oldRate,
+            volume: oldVolume,
+            audioGainDb: _audioGainFor(resolved),
+            videoDecoding: videoDecoding,
+            androidVideoOutput: switch (_settings.androidVideoOutput) {
+              AndroidVideoOutputPreference.renderedTexture =>
+                AndroidVideoOutputMode.renderedTexture,
+              AndroidVideoOutputPreference.directTexture =>
+                AndroidVideoOutputMode.directTexture,
+            },
+            openTimeout: openBudget,
+            retainPresentation: retryMedia != null,
+          ),
+        ),
+      );
       if (!isCurrent()) return;
-      if (resolved.kind == PlaybackMediaKind.dash && audio != null) {
-        _audioRecovery = recovery;
-      }
       media = resolved;
       if (requestedAudioQuality != null &&
           resolved.audioTracks.isNotEmpty &&
@@ -1386,7 +1219,7 @@ class PlaybackSession extends ChangeNotifier {
         auxiliaryMessage = '所选音质当前不可用，已使用可用音轨';
       }
       if (isLive) {
-        _liveLine = openedLiveLine;
+        _liveLine = liveLineIndex;
         if (!requestedLiveStream.isAutomatic &&
             resolved.liveStream != null &&
             resolved.liveStream != requestedLiveStream) {
@@ -1395,8 +1228,8 @@ class PlaybackSession extends ChangeNotifier {
         if (samePart && quality != 0 && resolved.quality != quality) {
           auxiliaryMessage =
               '该清晰度当前不可用，已切换到${resolved.qualityLabels[resolved.quality] ?? resolved.quality}';
-        } else if (requestedLiveLine != openedLiveLine) {
-          auxiliaryMessage = '所选直播线路不可用，已切换到${liveLineLabel(openedLiveLine)}';
+        } else if (requestedLiveLine != liveLineIndex) {
+          auxiliaryMessage = '所选直播线路不可用，已切换到${liveLineLabel(liveLineIndex)}';
         }
       }
       if (target == null) {
@@ -1416,7 +1249,6 @@ class PlaybackSession extends ChangeNotifier {
         _syncPlayback,
       );
       if (!isCurrent()) return;
-      _remainingRecoveryBudget = recovery.totalRemaining;
       _reportProgress();
       _notify();
       mediaReady.complete(true);
@@ -1431,18 +1263,6 @@ class PlaybackSession extends ChangeNotifier {
       if (isCurrent() && failure.kind != AppFailureKind.cancelled) {
         error = failure.message;
         _resolving = false;
-        if (const {
-          AppFailureKind.network,
-          AppFailureKind.timeout,
-        }.contains(failure.kind)) {
-          _scheduleRecovery(
-            PlayerFailure(
-              PlayerFailureKind.nativePlayback,
-              failure.message,
-              engine.currentSnapshot.generation,
-            ),
-          );
-        }
         _notify();
       }
     } on PlayerFailure catch (failure) {
@@ -1464,6 +1284,16 @@ class PlaybackSession extends ChangeNotifier {
                 ?..sort((a, b) => b.compareTo(a));
           final fallbackQuality =
               candidates?.firstOrNull ?? (quality < 80 ? quality : 80);
+          final remaining =
+              openBudget -
+              ((startupNow?.call() ?? _clock.elapsed) -
+                  (nativeOpenStarted ?? Duration.zero));
+          if (remaining <= Duration.zero) {
+            error = failure.message;
+            _resolving = false;
+            _notify();
+            return;
+          }
           final fallbackGeneration = _generation + 1;
           await _open(
             video,
@@ -1479,8 +1309,7 @@ class PlaybackSession extends ChangeNotifier {
             voice: _voice,
             audioQuality: requestedAudioQuality,
             allowColorFallback: false,
-            startupBudget:
-                preparingRecovery?.totalRemaining ?? _remainingRecoveryBudget,
+            startupBudget: remaining,
           );
           if (!_disposed &&
               _generation == fallbackGeneration &&
@@ -1498,10 +1327,9 @@ class PlaybackSession extends ChangeNotifier {
             ? '无法播放本地视频，文件可能无法解码或已不可访问'
             : failure.message;
         _resolving = false;
-        _scheduleRecovery(
-          failure,
-          remaining: preparingRecovery?.totalRemaining,
-        );
+        if (retryMedia == null) {
+          _scheduleNetworkRetry(failure, compatibilityMedia);
+        }
         _notify();
       }
     } catch (_) {
@@ -1513,6 +1341,10 @@ class PlaybackSession extends ChangeNotifier {
         _notify();
       }
     } finally {
+      if (isCurrent() && _reopening) {
+        _reopening = false;
+        _notify();
+      }
       if (!mediaReady.isCompleted) mediaReady.complete(false);
     }
   }
@@ -1523,26 +1355,6 @@ class PlaybackSession extends ChangeNotifier {
     }
     sleepTimer.checkDeadline();
     final previous = snapshots.value;
-    if (value.generation == previous.generation &&
-        value.phase == PlaybackPhase.playing &&
-        value.desiredPlaying &&
-        !value.isBuffering &&
-        !value.isSeeking &&
-        value.position > previous.position &&
-        value.position - previous.position < const Duration(seconds: 2)) {
-      final now = startupNow?.call() ?? _clock.elapsed;
-      final since = _healthySince ??= now;
-      if (now - since >= const Duration(seconds: 30)) {
-        _recoveryAttempts = 0;
-        _nativeOpenAttempts = 1;
-      }
-    } else if (value.phase != PlaybackPhase.playing ||
-        value.isSeeking ||
-        value.isBuffering ||
-        value.generation != previous.generation ||
-        value.position < previous.position) {
-      _healthySince = null;
-    }
     final previousPhase = previous.phase;
     final enteredEnded =
         value.phase == PlaybackPhase.ended &&
@@ -2553,6 +2365,7 @@ class PlaybackSession extends ChangeNotifier {
       return;
     }
     _desiredPlaying = !_desiredPlaying;
+    if (!_desiredPlaying) _cancelRecovery();
     if (_resolving) {
       _notify();
       return;
@@ -2608,79 +2421,6 @@ class PlaybackSession extends ChangeNotifier {
     return _syncPlayback();
   }
 
-  Future<void> _playWithAudioRecovery() async {
-    final recovery = _audioRecovery;
-    if (recovery == null) {
-      await engine.play();
-      return;
-    }
-    recovery.preparing = true;
-    recovery.start();
-    try {
-      while (recovery.isCurrent()) {
-        if (!_desiredPlaying || !_playbackAllowed) return;
-        try {
-          final remaining = recovery.remaining;
-          if (remaining <= Duration.zero) {
-            throw PlayerFailure(
-              PlayerFailureKind.nativePlayback,
-              'Playback preparation timed out.',
-              engine.currentSnapshot.generation,
-            );
-          }
-          // Future timeout alone cannot cancel native I/O. The backup path
-          // stops this generation before reopening, also interrupting decoding.
-          await engine.play().timeout(
-            remaining,
-            onTimeout: () {
-              throw PlayerFailure(
-                PlayerFailureKind.nativePlayback,
-                'Audio preparation timed out.',
-                engine.currentSnapshot.generation,
-              );
-            },
-          );
-        } on PlayerFailure catch (failure) {
-          if (!recovery.isCurrent()) return;
-          if (failure.kind != PlayerFailureKind.nativePlayback ||
-              !recovery.canRetry) {
-            // Exhausting a deadline must also cancel the underlying command.
-            if (recovery.remaining <= Duration.zero) await engine.pause();
-            rethrow;
-          }
-          final checkpoint = engine.currentSnapshot;
-          _resolving = true;
-          _notify();
-          await engine.pause();
-          if (!recovery.isCurrent()) return;
-          await recovery.reopen(checkpoint);
-          if (!recovery.isCurrent()) return;
-          await _applyAudioGain();
-          if (!recovery.isCurrent()) return;
-          danmaku.seekConfirmed(engine.currentSnapshot.position);
-          _resolving = false;
-          continue;
-        }
-        if (!recovery.isCurrent()) return;
-        _audioRecovery = null;
-        if (!_desiredPlaying || !_playbackAllowed) await engine.pause();
-        return;
-      }
-    } on PlayerFailure {
-      if (!recovery.isCurrent()) return;
-      _remainingRecoveryBudget = recovery.totalRemaining;
-      _audioRecovery = null;
-      rethrow;
-    } finally {
-      recovery.stop();
-      recovery.preparing = false;
-      if (recovery.isCurrent()) {
-        _resolving = false;
-        _notify();
-      }
-    }
-  }
-
   Future<void> _syncPlayback({
     bool forcePause = false,
     bool forcePlay = false,
@@ -2702,7 +2442,7 @@ class PlaybackSession extends ChangeNotifier {
         // play even when seeking out of EOF retains the previous play intent.
         if (_desiredPlaying &&
             (forcePlay || !engine.currentSnapshot.desiredPlaying)) {
-          await _playWithAudioRecovery();
+          await engine.play();
         } else if (!_desiredPlaying &&
             (forcePause || engine.currentSnapshot.desiredPlaying)) {
           await engine.pause();
@@ -2745,6 +2485,7 @@ class PlaybackSession extends ChangeNotifier {
 
   Future<void> seek(Duration target) async {
     if (isLive || _disposed || _closing) return;
+    if (_recoveryTimer != null) _cancelRecovery();
     if (target < Duration.zero) target = Duration.zero;
     final revision = ++_seekRevision;
     final generation = _generation;
@@ -2942,9 +2683,6 @@ class PlaybackSession extends ChangeNotifier {
     } on PlayerFailure catch (failure) {
       if (generation == _generation && !_disposed) {
         error = failure.message;
-        if (engine.currentSnapshot.phase == PlaybackPhase.failed) {
-          _scheduleRecovery(failure, remaining: _remainingRecoveryBudget);
-        }
         _notify();
       }
     }
@@ -3109,7 +2847,9 @@ class PlaybackSession extends ChangeNotifier {
     );
   }
 
-  Future<void> retry({bool retainPresentation = false}) async {
+  Future<void> retry() => _retry(null);
+
+  Future<void> _retry(PlaybackMedia? retryMedia) async {
     final video = detail;
     final selected = part;
     if (contentTarget != null || (video != null && selected != null)) {
@@ -3127,7 +2867,7 @@ class PlaybackSession extends ChangeNotifier {
         target: contentTarget,
         title: contentTitle,
         allowColorFallback: _allowColorFallback,
-        retainPresentation: retainPresentation,
+        retryMedia: retryMedia,
       );
     }
   }
@@ -3135,7 +2875,6 @@ class PlaybackSession extends ChangeNotifier {
   Future<void> stop({bool clearCheckpoints = true}) async {
     if (_ownsSleepTimer) sleepTimer.cancel();
     _cancelRecovery();
-    _audioRecovery = null;
     _audioOnly = false;
     _audioQuality = null;
     _nextSourceIntent = null;
@@ -3224,51 +2963,6 @@ class PlaybackSession extends ChangeNotifier {
     if (firstError != null) {
       Error.throwWithStackTrace(firstError!, firstStack!);
     }
-  }
-}
-
-// A resolution owns one opening budget, including the first audio decode.
-// Paused user time is excluded, and a deferred first play keeps the same attempts.
-final class _PlaybackStartupRecovery {
-  static const totalBudget = Duration(seconds: 35);
-  static const primaryBudget = Duration(seconds: 6);
-
-  _PlaybackStartupRecovery({
-    this.budget = totalBudget,
-    required this.now,
-    required this.hasBackup,
-    required this.isCurrent,
-  });
-
-  final Duration Function() now;
-  final Duration budget;
-  final bool hasBackup;
-  final bool Function() isCurrent;
-  late final Future<void> Function(PlaybackSnapshot) reopen;
-  int attempts = 0;
-  bool preparing = false;
-  Duration _elapsed = Duration.zero;
-  Duration? _startedAt;
-
-  Duration get elapsed =>
-      _elapsed +
-      switch (_startedAt) {
-        final started? => now() - started,
-        null => Duration.zero,
-      };
-  Duration get remaining =>
-      (hasBackup && attempts == 1 && primaryBudget < budget
-          ? primaryBudget
-          : budget) -
-      elapsed;
-  Duration get totalRemaining => budget - elapsed;
-  bool get canRetry =>
-      hasBackup && attempts < 2 && totalRemaining > Duration.zero;
-
-  void start() => _startedAt ??= now();
-  void stop() {
-    _elapsed = elapsed;
-    _startedAt = null;
   }
 }
 

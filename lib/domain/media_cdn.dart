@@ -30,20 +30,6 @@ enum MediaCdnPreference {
   final String? host;
 }
 
-/// A failed automatic primary should try a returned regular CDN rather than
-/// another PCDN before exhausting the bounded recovery attempts. Explicit
-/// preferences keep their order. The original signed URI is returned intact.
-Uri? backupMediaCdnUrl(List<Uri> urls, MediaCdnPreference preference) {
-  if (urls.isEmpty) return null;
-  final alternatives = urls.where((url) => url != urls.first);
-  return _orderProvidedUrls(
-    alternatives,
-    preference == MediaCdnPreference.automatic
-        ? MediaCdnPreference.regular
-        : preference,
-  ).firstOrNull;
-}
-
 List<Uri> orderMediaCdnUrls(Iterable<Uri> urls, MediaCdnPreference preference) {
   final provided = _orderProvidedUrls(urls, preference);
   final host = preference.host;

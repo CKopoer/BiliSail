@@ -69,7 +69,12 @@ void main() {
                     : 'eof_audio_short.m4a',
               ),
             ),
-            const OpenOptions(play: false, volume: 0, rate: 2),
+            const OpenOptions(
+              play: false,
+              volume: 0,
+              rate: 2,
+              maxBufferAhead: Duration(seconds: 120),
+            ),
           ),
         );
         await _frames(tester, engine.play());
@@ -92,11 +97,11 @@ void main() {
         expect(engine.inspectDiagnostics().hasDecodedAudio, true);
         expect(engine.inspectDiagnostics().hasDecodedVideo, true);
         if (long) {
-          // Reproduce the incident's 140.5s duration, 139.853s cache endpoint
-          // and 2x rate. Normal input EOF must not stop playback at ~20s.
+          // The two tracks end at different timestamps. Native prefetch can
+          // stop at its hysteresis threshold before this explicit late seek.
           expect(snapshot.position, greaterThan(const Duration(seconds: 24)));
           expect(snapshot.duration, const Duration(milliseconds: 140500));
-          expect(snapshot.buffered.inMilliseconds, closeTo(139853, 2));
+          expect(snapshot.buffered, greaterThan(snapshot.position));
           await _frames(tester, engine.seek(const Duration(seconds: 130)));
           watch.reset();
           while (watch.elapsed < const Duration(seconds: 8) &&
@@ -110,7 +115,12 @@ void main() {
         }
         expect(failures, isEmpty);
         expect(engine.currentSnapshot.phase, PlaybackPhase.ended);
-        expect(complete, hasLength(mode == 'unequalFile' ? 0 : 2));
+        // A seek outside the cached window can fetch new byte ranges. Only
+        // offset-zero requests indicate the playlist was opened from scratch.
+        expect(
+          complete.where((r) => r.contains(':0-')),
+          hasLength(mode == 'unequalFile' ? 0 : 2),
+        );
         expect(tester.takeException(), isNull);
       } finally {
         await subscription.cancel();

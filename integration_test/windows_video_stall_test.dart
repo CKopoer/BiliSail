@@ -134,7 +134,7 @@ void main() {
   for (final audioFault in [false, true]) {
     for (final automatic in [false, true]) {
       testWidgets(
-        'truncated DASH ${audioFault ? 'audio' : 'video'} stops pair; automatic=$automatic',
+        'truncated DASH ${audioFault ? 'audio' : 'video'} stays on the selected source; session=$automatic',
         (tester) => _runStall(tester, automatic, audioFault),
       );
     }
@@ -152,7 +152,7 @@ void main() {
       );
     }
     testWidgets(
-      'silent buffered clock freeze; automatic=$automatic',
+      'paused native clock alone does not reopen; session=$automatic',
       (tester) => _runSilentStall(tester, automatic: automatic),
     );
   }
@@ -217,7 +217,6 @@ Future<void> _runVideoFailure(
     expect(engine.currentSnapshot.position, greaterThan(before));
     expect(engine.currentSnapshot.isBuffering, false);
     expect(engine.inspectDiagnostics().hasDecodedAudio, true);
-    final failedAt = engine.currentSnapshot.position;
     // Deliberately inject the locked SDK's log event in this native regression.
     // ignore: invalid_use_of_protected_member
     player.native.logController.add(
@@ -229,45 +228,13 @@ Future<void> _runVideoFailure(
             : 'Error while decoding frame (hardware decoding)!',
       ),
     );
-    final watch = Stopwatch()..start();
-    while ((failures.isEmpty ||
-            automatic &&
-                (engine.currentSnapshot.generation == generation ||
-                    engine.currentSnapshot.position <
-                        failedAt + const Duration(milliseconds: 500))) &&
-        watch.elapsed < const Duration(seconds: 8)) {
-      await tester.pump(const Duration(milliseconds: 50));
-    }
-    expect(failures, hasLength(1));
-    expect(
-      events.where(
-        (e) => e.stallReason == PlaybackStallReason.videoDecodeError,
-      ),
-      hasLength(1),
-    );
+    await tester.pump(const Duration(seconds: 3));
+    expect(failures, isEmpty);
+    expect(engine.currentSnapshot.generation, generation);
+    expect(events.any((e) => e.kind == PlayerDiagnosticKind.nativeLog), true);
     expect(
       jsonEncode(events.map((e) => e.toJson()).toList()),
       isNot(contains('synthetic-secret')),
-    );
-    if (automatic) {
-      expect(engine.currentSnapshot.generation, greaterThan(generation));
-      expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
-      expect(engine.inspectDiagnostics().hasDecodedVideo, true);
-      expect(engine.inspectDiagnostics().hasDecodedAudio, true);
-    } else {
-      expect(engine.currentSnapshot.phase, PlaybackPhase.failed);
-      // SDK position notifications can arrive after pause acknowledgment.
-      // Compare the actual native clock to prove the remaining track stopped.
-      final stopped = double.parse(await player.getPropertyAsync('time-pos'));
-      await tester.pump(const Duration(milliseconds: 400));
-      expect(
-        (double.parse(await player.getPropertyAsync('time-pos')) - stopped)
-            .abs(),
-        lessThan(0.1),
-      );
-    }
-    debugPrint(
-      'VIDEO_PIPELINE_FAILURE automatic=$automatic output=$outputFailure failures=${failures.length} reopened=${engine.currentSnapshot.generation > generation}',
     );
     expect(tester.takeException(), isNull);
   } finally {
@@ -329,14 +296,10 @@ Future<void> _runSilentStall(
       engine.currentSnapshot.position,
       greaterThanOrEqualTo(const Duration(seconds: 1)),
     );
-    expect(
-      engine.currentSnapshot.buffered - engine.currentSnapshot.position,
-      greaterThan(const Duration(seconds: 8)),
-    );
     final generation = engine.currentSnapshot.generation;
     final frozenAt = engine.currentSnapshot.position;
     // Fault injection outside the engine: retain its playback intent, emit no
-    // error, and leave a full demuxer cache. This is not a GPU-driver repro.
+    // error. This is a local file, so no network retry should be scheduled.
     final native = tester
         .widget<mkv.Video>(find.byType(mkv.Video))
         .controller
@@ -346,53 +309,19 @@ Future<void> _runSilentStall(
     // to model this issue's buffering=false signature.
     native.native.isBufferingStateChangeAllowed = false;
     native.setProperty('pause', 'yes');
-    watch.reset();
-    while ((failures.isEmpty ||
-            automatic &&
-                (engine.currentSnapshot.generation == generation ||
-                    engine.currentSnapshot.position <
-                        frozenAt + const Duration(seconds: 1))) &&
-        watch.elapsed < const Duration(seconds: 15)) {
-      await tester.pump(const Duration(milliseconds: 100));
-    }
-    debugPrint(
-      'SILENT_STALL_FINAL ${PlayerDiagnosticEvent(kind: PlayerDiagnosticKind.nativeLog, snapshot: engine.currentSnapshot).toJson()} '
-      'events=${events.map((e) => e.kind.name).toList()}',
-    );
-    expect(failures, hasLength(1));
-    expect(failures.single.kind, PlayerFailureKind.nativePlayback);
-    final stall = events.singleWhere(
-      (e) => e.kind == PlayerDiagnosticKind.playbackStalled,
-    );
-    expect(stall.stallReason, PlaybackStallReason.playbackClock);
-    expect(stall.snapshot.isBuffering, false);
-    expect(stall.snapshot.desiredPlaying, true);
-    expect(stall.stalledFor!.inMilliseconds, inInclusiveRange(2000, 2250));
-    if (automatic) {
-      expect(engine.currentSnapshot.generation, greaterThan(generation));
-      expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
-      expect(
-        engine.currentSnapshot.position,
-        greaterThanOrEqualTo(frozenAt + const Duration(seconds: 1)),
-      );
-    } else {
-      expect(engine.currentSnapshot.phase, PlaybackPhase.failed);
-      final stoppedAt = engine.inspectDiagnostics().position;
-      await tester.pump(const Duration(milliseconds: 500));
-      expect(
-        (engine.inspectDiagnostics().position - stoppedAt).abs(),
-        lessThan(const Duration(milliseconds: 100)),
-      );
-    }
-    debugPrint(
-      'SILENT_STALL automatic=$automatic '
-      'reason=${stall.stallReason?.name} elapsedMs=${stall.stalledFor?.inMilliseconds} '
-      'reopened=${engine.currentSnapshot.generation > generation}',
+    await tester.pump(const Duration(seconds: 4));
+    expect(failures, isEmpty);
+    expect(engine.currentSnapshot.generation, generation);
+    expect(
+      (engine.currentSnapshot.position - frozenAt).abs(),
+      lessThan(const Duration(seconds: 1)),
     );
   } finally {
-    session?.dispose();
     await subscription.cancel();
-    await _withFrames(tester, engine.dispose());
+    await _withFrames(
+      tester,
+      session == null ? engine.dispose() : session.close(),
+    );
     await tester.pumpWidget(const SizedBox.shrink());
   }
 }
@@ -698,12 +627,9 @@ Future<void> _runStall(
     );
     final initialGeneration = engine.currentSnapshot.generation;
     final watch = Stopwatch()..start();
-    bool done() =>
-        failures.isNotEmpty &&
-        (!automatic ||
-            engine.currentSnapshot.phase == PlaybackPhase.playing &&
-                engine.currentSnapshot.position > const Duration(seconds: 6));
-    while (watch.elapsed < const Duration(seconds: 20) && !done()) {
+    while (failures.isEmpty &&
+        engine.currentSnapshot.phase != PlaybackPhase.ended &&
+        watch.elapsed < const Duration(seconds: 16)) {
       await tester.pump(const Duration(milliseconds: 100));
     }
     debugPrint(
@@ -712,59 +638,18 @@ Future<void> _runStall(
       'bufferedMs=${engine.currentSnapshot.buffered.inMilliseconds} '
       'failures=${failures.length}',
     );
-    expect(failures, hasLength(1));
-    final hardwareFailure = events.any(
-      (event) => event.stallReason == PlaybackStallReason.videoDecodeError,
-    );
+    expect(engine.currentSnapshot.generation, initialGeneration);
+    // A truncated track can be reported as early EOF, a terminal error, or
+    // a decoder log while the other track completes. None changes the CDN.
+    expect(failures.length, lessThanOrEqualTo(1));
     expect(
-      failures.single.kind,
-      audioFault || hardwareFailure
-          ? PlayerFailureKind.nativePlayback
-          : PlayerFailureKind.videoInterrupted,
+      events.any((e) => e.nativeError != null) ||
+          failures.isNotEmpty ||
+          engine.currentSnapshot.phase == PlaybackPhase.ended,
+      true,
     );
-    if (hardwareFailure) {
-      expect(
-        events.any(
-          (event) =>
-              event.nativeError?.cause == NativeErrorCause.hardwareDecoder,
-        ),
-        true,
-        reason: 'A truncated packet may fail hardware decoding before EOF.',
-      );
-    } else if (!audioFault) {
-      expect(
-        events.any((e) => e.kind == PlayerDiagnosticKind.videoInterrupted),
-        true,
-      );
-    }
-    if (automatic) {
-      expect(session?.error, isNull);
-      expect(engine.currentSnapshot.generation, greaterThan(initialGeneration));
-      expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
-      expect(
-        engine.currentSnapshot.position,
-        greaterThan(const Duration(seconds: 6)),
-      );
-      expect(engine.inspectDiagnostics().hasDecodedVideo, true);
-      expect(tester.takeException(), isNull);
-      return;
-    }
-    expect(engine.currentSnapshot.phase, PlaybackPhase.failed);
-    final stoppedAt = engine.currentSnapshot.position;
-    // Failed snapshots deliberately freeze their checkpoint. Read media_kit's
-    // independent native position as well, so that freeze cannot hide audio
-    // continuing to play underneath a failed application snapshot.
-    final nativeStoppedAt = engine.inspectDiagnostics().position;
-    await tester.pump(const Duration(seconds: 1));
-    expect(
-      (engine.currentSnapshot.position - stoppedAt).inMilliseconds.abs(),
-      lessThan(250),
-    );
-    expect(
-      (engine.inspectDiagnostics().position - nativeStoppedAt).abs(),
-      lessThan(const Duration(milliseconds: 250)),
-    );
-
+    final stoppedAt = const Duration(seconds: 2);
+    final failureCount = failures.length;
     broken = false;
     await _withFrames(
       tester,
@@ -782,7 +667,7 @@ Future<void> _runStall(
     expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
     expect(engine.currentSnapshot.position, greaterThan(stoppedAt));
     expect(engine.inspectDiagnostics().hasDecodedVideo, true);
-    expect(failures, hasLength(1));
+    expect(failures, hasLength(failureCount));
     expect(tester.takeException(), isNull);
   } finally {
     await subscription.cancel();

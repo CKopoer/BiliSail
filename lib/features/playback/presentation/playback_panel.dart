@@ -2107,28 +2107,86 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                               left: 0,
                               right: 0,
                               top: 0,
-                              child: _PlaybackViewers(
-                                request: _appVisible
-                                    ? _viewerRequest(session)
-                                    : null,
-                                builder: (viewers) => _controlsVisibility(
-                                  visible: controls,
-                                  hoverRegion: 'title',
-                                  retainDynamicPress: true,
-                                  child: _PlayerTopBar(
-                                    navigation: widget.navigation,
-                                    smallWindow: smallWindow,
-                                    showSleepTimer: !layout.compact,
-                                    onMenuChanged: _onControlsMenuChanged,
-                                    onMore: _openMoreDialog,
-                                    fullScreen: widget.fullScreen,
-                                    onExitFullScreen: _toggleFullScreen,
-                                    onNavigate: widget.onNavigate,
-                                    viewers: smallWindow ? null : viewers,
-                                    session: session,
-                                    onSettings: _openSettings,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _PlaybackViewers(
+                                    request: _appVisible
+                                        ? _viewerRequest(session)
+                                        : null,
+                                    builder: (viewers) => _controlsVisibility(
+                                      visible: controls,
+                                      hoverRegion: 'title',
+                                      retainDynamicPress: true,
+                                      child: _PlayerTopBar(
+                                        navigation: widget.navigation,
+                                        smallWindow: smallWindow,
+                                        showSleepTimer: !layout.compact,
+                                        onMenuChanged: _onControlsMenuChanged,
+                                        onMore: _openMoreDialog,
+                                        fullScreen: widget.fullScreen,
+                                        onExitFullScreen: _toggleFullScreen,
+                                        onNavigate: widget.onNavigate,
+                                        viewers: smallWindow ? null : viewers,
+                                        session: session,
+                                        onSettings: _openSettings,
+                                      ),
+                                    ),
                                   ),
-                                ),
+                                  if (session.error case final String error)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 4,
+                                      ),
+                                      color: Colors.black87,
+                                      child: Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.error_outline,
+                                            color: Colors.white70,
+                                            size: 20,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              error,
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ),
+                                          PopupMenuButton<String>(
+                                            tooltip: '播放错误选项',
+                                            icon: const Icon(
+                                              Icons.more_vert,
+                                              color: Colors.white,
+                                            ),
+                                            onSelected: (action) {
+                                              if (action == 'reload') {
+                                                unawaited(session.retry());
+                                              } else {
+                                                widget.onFullScreen();
+                                              }
+                                            },
+                                            itemBuilder: (_) => [
+                                              const PopupMenuItem(
+                                                value: 'reload',
+                                                child: Text('重新加载'),
+                                              ),
+                                              if (widget.fullScreen)
+                                                const PopupMenuItem(
+                                                  value: 'exitFullScreen',
+                                                  child: Text('退出全屏'),
+                                                ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
                             if (session.error == null)
@@ -2145,64 +2203,6 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                     snapshot.desiredPlaying &&
                                     snapshot.phase != PlaybackPhase.ended &&
                                     snapshot.isBuffering,
-                              ),
-                            if (session.error case final String error)
-                              Positioned(
-                                left: 0,
-                                right: 0,
-                                top: 0,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 4,
-                                  ),
-                                  color: Colors.black87,
-                                  child: Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.error_outline,
-                                        color: Colors.white70,
-                                        size: 20,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          error,
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      ),
-                                      PopupMenuButton<String>(
-                                        tooltip: '播放错误选项',
-                                        icon: const Icon(
-                                          Icons.more_vert,
-                                          color: Colors.white,
-                                        ),
-                                        onSelected: (action) {
-                                          if (action == 'reload') {
-                                            unawaited(session.retry());
-                                          } else {
-                                            widget.onFullScreen();
-                                          }
-                                        },
-                                        itemBuilder: (_) => [
-                                          const PopupMenuItem(
-                                            value: 'reload',
-                                            child: Text('重新加载'),
-                                          ),
-                                          if (widget.fullScreen)
-                                            const PopupMenuItem(
-                                              value: 'exitFullScreen',
-                                              child: Text('退出全屏'),
-                                            ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
                               ),
                             if (!controls &&
                                 settings.showCollapsedProgress &&

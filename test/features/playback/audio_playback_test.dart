@@ -502,22 +502,18 @@ void main() {
     }
   }
 
-  test(
-    'audio CDN fallback never opens video and retry stays in listening mode',
-    () async {
-      await session.open(_detail, _part);
-      engine.failNextAudio = true;
-      await session.setAudioOnly(true);
-      final sources = engine.sources.skip(1).cast<ProgressiveSource>();
-      expect(
-        sources.map((source) => source.media.uri),
-        repository.media.audio?.urls,
-      );
-      await session.retry();
-      expect(session.audioOnly, isTrue);
-      expect(engine.sources.last, isA<ProgressiveSource>());
-    },
-  );
+  test('failed audio open preserves listening mode on manual retry', () async {
+    await session.open(_detail, _part);
+    engine.failNextAudio = true;
+    await session.setAudioOnly(true);
+    final sources = engine.sources.skip(1).cast<ProgressiveSource>();
+    expect(sources.map((source) => source.media.uri), [
+      repository.media.audio!.urls.first,
+    ]);
+    await session.retry();
+    expect(session.audioOnly, isTrue);
+    expect(engine.sources.last, isA<ProgressiveSource>());
+  });
 
   test('navigation and next parts follow the global choice instead of old checkpoints', () async {
     final first = Object(), second = Object();

@@ -107,7 +107,7 @@ void main() {
           );
           await _until(
             tester,
-            () => engine.currentSnapshot.buffered > const Duration(seconds: 20),
+            () => engine.currentSnapshot.buffered > const Duration(seconds: 13),
           );
           final generation = engine.currentSnapshot.generation;
           holdNetwork = true;

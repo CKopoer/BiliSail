@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'native_error_monitor.dart';
-import 'native_video_buffer_monitor.dart';
 import 'native_readiness.dart';
 import 'playback_backend.dart';
 import 'playback_startup.dart';
@@ -26,33 +24,8 @@ class SharedPlayerEngine
     this.onDiagnostic,
     this.seekCoalescingDelay = Duration.zero,
     VideoOutput? initialVideoOutput,
-    Duration Function()? monotonicNow,
   }) {
     _output.bind(initialVideoOutput);
-    _errors = NativeErrorMonitor(
-      onStalled: (_) {
-        _diagnose(
-          PlayerDiagnosticKind.playbackStalled,
-          stallReason: PlaybackStallReason.playbackClock,
-          stalledFor: _snapshot.isBuffering
-              ? NativeErrorMonitor.bufferingTimeout
-              : NativeErrorMonitor.stallTimeout,
-        );
-        unawaited(_fail(PlayerFailureKind.nativePlayback));
-      },
-      onRecovered: (_) => _diagnose(PlayerDiagnosticKind.recovered),
-    );
-    _videoBuffers = NativeVideoBufferMonitor(
-      now: monotonicNow,
-      onStalled: (blockedFor) {
-        _diagnose(
-          PlayerDiagnosticKind.playbackStalled,
-          stallReason: PlaybackStallReason.repeatedDecoderBuffering,
-          stalledFor: blockedFor,
-        );
-        unawaited(_fail(PlayerFailureKind.nativePlayback));
-      },
-    );
   }
 
   final FutureOr<PlaybackBackend> Function() createBackend;
@@ -62,8 +35,9 @@ class SharedPlayerEngine
   final _output = SwitchingVideoOutput();
   final _snapshots = StreamController<PlaybackSnapshot>.broadcast(sync: true);
   final _failures = StreamController<PlayerFailure>.broadcast(sync: true);
-  late final NativeErrorMonitor _errors;
-  late final NativeVideoBufferMonitor _videoBuffers;
+  Timer? _networkRetry;
+  final _networkClock = Stopwatch()..start();
+  Duration? _lastNetworkError;
   PlaybackBackend? _backend;
   PlaybackBackend? get activeBackend => _backend;
   Future<PlaybackBackend>? _allocation;
@@ -153,8 +127,6 @@ class SharedPlayerEngine
       return;
     }
     _snapshot = value;
-    _errors.update(value);
-    _videoBuffers.update(value);
     _pendingSnapshots.add(value);
     if (_publishing) return;
     _publishing = true;
@@ -253,8 +225,7 @@ class SharedPlayerEngine
     _seekRetirement = Future.value();
     _pendingSeek?.complete();
     _pendingSeek = null;
-    _errors.reset();
-    _videoBuffers.reset();
+    _cancelNetworkRetry();
     if (!retainPresentation) {
       _output.clearRetainedFrame();
       if (!keepBackend) _interrupt(_backend);
@@ -331,6 +302,13 @@ class SharedPlayerEngine
       generation,
       options.openTimeout,
     );
+    if (!options.retainPresentation) {
+      _lastNetworkError = null;
+    } else {
+      // The configurable engine can allocate a fresh child for a failed
+      // source. Preserve the throttle after its three-second network check.
+      _lastNetworkError ??= _networkClock.elapsed - const Duration(seconds: 3);
+    }
     _opening = true;
     _waitingForPair = false;
     _backendBuffering = false;
@@ -484,6 +462,7 @@ class SharedPlayerEngine
         _publish(
           _timeline(
             position: tracks.position,
+            buffered: backend.buffered ?? tracks.position,
             duration: _live
                 ? Duration.zero
                 : _snapshot.duration > Duration.zero
@@ -637,19 +616,48 @@ class SharedPlayerEngine
             isSeeking: false,
           ),
         );
-      case BackendEventKind.warning:
-        _errors.report(_snapshot);
-        if (event.videoDecodeError) _videoBuffers.report(_snapshot);
-      case BackendEventKind.failure:
-        if (event.stallReason case final reason?) {
-          _diagnose(
-            PlayerDiagnosticKind.playbackStalled,
-            failureKind: event.failureKind,
-            stallReason: reason,
-          );
+      case BackendEventKind.networkError:
+        if (!_snapshot.desiredPlaying || _networkRetry != null) return;
+        final now = _networkClock.elapsed;
+        final last = _lastNetworkError;
+        if (!_live &&
+            last != null &&
+            now - last < const Duration(seconds: 10)) {
+          return;
         }
-        unawaited(_fail(event.failureKind));
+        _lastNetworkError = now;
+        _networkRetry = Timer(const Duration(seconds: 3), () {
+          _networkRetry = null;
+          if (!_current(generation, backend) ||
+              _terminal ||
+              _seeking ||
+              !_snapshot.desiredPlaying) {
+            return;
+          }
+          // The UI timeline clamps the cached endpoint to position. Only the
+          // raw SDK endpoint can indicate zero buffered seconds.
+          if (_live ||
+              (_backendBuffering && backend.buffered?.inSeconds == 0)) {
+            unawaited(_fail(PlayerFailureKind.networkRead));
+          }
+        });
+      case BackendEventKind.failure:
+        // A matching network error can be followed immediately by END_FILE.
+        // The open has terminated, so there is no reader left to wait on.
+        final networkEnded =
+            _networkRetry != null &&
+            (_live || (_backendBuffering && backend.buffered?.inSeconds == 0));
+        unawaited(
+          _fail(
+            networkEnded ? PlayerFailureKind.networkOpen : event.failureKind,
+          ),
+        );
     }
+  }
+
+  void _cancelNetworkRetry() {
+    _networkRetry?.cancel();
+    _networkRetry = null;
   }
 
   Future<PlayerFailure> _fail(
@@ -673,7 +681,7 @@ class SharedPlayerEngine
     }
     _playOperation?.cancel();
     _seekOperation?.cancel();
-    _errors.reset();
+    _cancelNetworkRetry();
     unawaited(() async {
       var released = false;
       try {
@@ -772,7 +780,8 @@ class SharedPlayerEngine
       _waitingForPair = false;
       _output.clearRetainedFrame();
       _publish(
-        _snapshot.copyWith(phase: _phase(), isBuffering: _backendBuffering),
+        _timeline(buffered: backend.buffered)
+            .copyWith(phase: _phase(), isBuffering: _backendBuffering),
       );
     } on SourceSuperseded {
       final failing = _failing;
@@ -796,6 +805,7 @@ class SharedPlayerEngine
 
   @override
   Future<void> pause() {
+    _cancelNetworkRetry();
     if (_disposed || _snapshot.phase == PlaybackPhase.idle) {
       return Future.value();
     }
@@ -815,6 +825,7 @@ class SharedPlayerEngine
 
   @override
   Future<void> seek(Duration target) {
+    _cancelNetworkRetry();
     if (target < Duration.zero) throw ArgumentError.value(target, 'target');
     if (_disposed ||
         _live ||

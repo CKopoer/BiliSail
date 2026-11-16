@@ -9,7 +9,9 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
       LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
 
-  testWidgets('media_kit rolling two-minute forward buffer', (tester) async {
+  testWidgets('media_kit rolling 16-second VOD cache with hysteresis', (
+    tester,
+  ) async {
     initializePlayerBackend();
     final fixturePath = Platform.environment['BILI_TEST_BUFFER_DIR'];
     expect(fixturePath, isNotNull, reason: 'Use tool/test-windows-buffer.ps1');
@@ -102,10 +104,10 @@ void main() {
       while (watch.elapsed < const Duration(seconds: 15)) {
         nativeSeconds =
             (await information.inspectPlaybackInformation())?.cacheSeconds ?? 0;
-        if (nativeSeconds >= 119) break;
+        if (nativeSeconds >= 10) break;
         await tester.pump(const Duration(milliseconds: 100));
       }
-      expect(nativeSeconds, greaterThanOrEqualTo(119));
+      expect(nativeSeconds, greaterThanOrEqualTo(10));
       await tester.pump(const Duration(milliseconds: 600));
       nativeSeconds =
           (await information.inspectPlaybackInformation())?.cacheSeconds ?? 0;
@@ -116,13 +118,13 @@ void main() {
       );
       // The timeline follows native demuxer time, without a byte-cache proxy
       // or MP4 index. mpv reports its main demuxer.
-      expect(nativeAhead, greaterThanOrEqualTo(const Duration(seconds: 119)));
+      expect(nativeAhead, greaterThanOrEqualTo(const Duration(seconds: 10)));
       expect(
         nativeAhead,
-        lessThanOrEqualTo(const Duration(milliseconds: 120500)),
+        lessThanOrEqualTo(const Duration(milliseconds: 16800)),
       );
-      expect(ahead, greaterThanOrEqualTo(const Duration(seconds: 119)));
-      expect(ahead, lessThanOrEqualTo(const Duration(milliseconds: 120500)));
+      expect(ahead, greaterThanOrEqualTo(const Duration(seconds: 10)));
+      expect(ahead, lessThanOrEqualTo(const Duration(milliseconds: 16800)));
       expect(
         ahead,
         lessThanOrEqualTo(nativeAhead + const Duration(milliseconds: 500)),
@@ -141,7 +143,7 @@ void main() {
     await engine.play();
     await _until(
       tester,
-      () => engine.currentSnapshot.position >= const Duration(seconds: 4),
+      () => engine.currentSnapshot.position >= const Duration(seconds: 8),
     );
     await engine.pause();
     final advancedBuffer = await checkWindow('advanced');
@@ -178,7 +180,7 @@ void main() {
     );
     await _until(
       tester,
-      () => engine.currentSnapshot.buffered >= const Duration(seconds: 58),
+      () => engine.currentSnapshot.buffered >= const Duration(seconds: 15),
     );
     expect(
       engine.currentSnapshot.duration,

@@ -269,7 +269,7 @@ final class ConfigurablePlayerEngine
             videoDecoding: options.videoDecoding,
             androidVideoOutput: options.androidVideoOutput,
             openTimeout: operation.remaining,
-            maxBufferAhead: options.maxBufferAhead,
+            maxBufferAhead: options.requestedBufferAhead,
             retainPresentation: options.retainPresentation,
           ),
         );
