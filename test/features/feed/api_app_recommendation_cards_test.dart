@@ -1,3 +1,5 @@
+import 'package:bilisail/features/feed/domain/feed_repository.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -66,6 +68,48 @@ void main() {
   });
 
   test(
+    'App card attribution preserves the URI track, target and account epoch',
+    () async {
+      transport.entries = [
+        _entry('av', uri: 'bilibili://video/170001?trackid=av%252Ftrack'),
+        _entry(
+          'bangumi',
+          param: '7',
+          uri: 'bilibili://bangumi/play/ep7?trackid=episode-track',
+        ),
+      ];
+      final page = await repository.loadAppRecommendations(
+        request: const AppRecommendationRequest(),
+        cancellation: RequestCancellation(),
+      );
+      expect(page.items[0].recommendationPlayback?.trackId, 'av%2Ftrack');
+      expect(
+        page.items[0].recommendationPlayback?.matches(
+          page.items[0].id.value,
+          0,
+        ),
+        isTrue,
+      );
+      expect(page.items[1].recommendationPlayback?.episodeId, '7');
+      expect(
+        page.items[1].recommendationPlayback?.matches(
+          'resolved-video',
+          0,
+          episode: '7',
+        ),
+        isTrue,
+      );
+      expect(
+        page.items[0].recommendationPlayback?.matches(
+          page.items[0].id.value,
+          1,
+        ),
+        isFalse,
+      );
+    },
+  );
+
+  test(
     'Web and App recommendation mappings preserve publication timestamps',
     () async {
       const seconds = 1793505600;
@@ -82,7 +126,7 @@ void main() {
         null,
       ];
       final app = await repository.loadAppRecommendations(
-        page: 1,
+        request: const AppRecommendationRequest(),
         cancellation: RequestCancellation(),
       );
       final web = await repository.loadFeed(
@@ -108,7 +152,7 @@ void main() {
         _entry('av', param: '44'),
       ];
       final app = await repository.loadAppRecommendations(
-        page: 1,
+        request: const AppRecommendationRequest(),
         cancellation: RequestCancellation(),
       );
       expect(app.items.map((item) => item.recommendationReason), [
@@ -158,7 +202,7 @@ void main() {
       _entry('future_card'),
     ];
     final page = await repository.loadAppRecommendations(
-      page: 1,
+      request: const AppRecommendationRequest(),
       cancellation: RequestCancellation(),
     );
     expect(page.items.length, 5);
@@ -255,7 +299,7 @@ void main() {
           _entry('future_card', param: '${i + 1}', uri: cases[i].$1),
       ];
       final page = await repository.loadAppRecommendations(
-        page: 1,
+        request: const AppRecommendationRequest(),
         cancellation: RequestCancellation(),
       );
       for (var i = 0; i < cases.length; i++) {

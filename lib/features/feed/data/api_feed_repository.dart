@@ -1,4 +1,5 @@
 import '../../../domain/user.dart';
+import '../../../domain/recommendation_playback_context.dart';
 
 import 'package:bili_api/bili_api.dart';
 
@@ -128,7 +129,7 @@ class ApiFeedRepository
 
   @override
   Future<PageResult<VideoSummary>> loadAppRecommendations({
-    required int page,
+    required AppRecommendationRequest request,
     required RequestCancellation cancellation,
   }) => requests.run((context) async {
     final store = appIdentity;
@@ -139,7 +140,21 @@ class ApiFeedRepository
     ApiPage<ApiAppRecommendation> result;
     try {
       result = await AppRecommendationClient(api).load(
-        page: page,
+        cursor: request.cursor,
+        reason: switch (request.reason) {
+          AppRecommendationLoadReason.initial =>
+            ApiAppRecommendationLoadReason.initial,
+          AppRecommendationLoadReason.tabClick =>
+            ApiAppRecommendationLoadReason.tabClick,
+          AppRecommendationLoadReason.pullDown =>
+            ApiAppRecommendationLoadReason.pullDown,
+          AppRecommendationLoadReason.refreshButton =>
+            ApiAppRecommendationLoadReason.refreshButton,
+          AppRecommendationLoadReason.loadMore =>
+            ApiAppRecommendationLoadReason.loadMore,
+          AppRecommendationLoadReason.identityChanged =>
+            ApiAppRecommendationLoadReason.identityChanged,
+        },
         buvid: identity.buvid,
         accessToken: identity.accessToken,
         appAccountMid: identity.accountMid,
@@ -158,16 +173,36 @@ class ApiFeedRepository
     }
     return PageResult(
       hasMore: result.hasMore,
+      nextCursor: result.nextCursor,
       items: List.unmodifiable(
         result.items.map((item) {
           final video = item.video;
+          final trackId = item.trackId;
+          final target = _appRecommendationTarget(item);
+          final targetVideo = item.cardGoto == 'av'
+              ? video.bvid
+              : target?.kind == RecommendationTargetKind.video
+              ? target?.id
+              : null;
+          final episodeId = target?.kind == RecommendationTargetKind.episode
+              ? target?.id
+              : null;
           return VideoSummary(
             id: VideoId(
               item.cardGoto == 'av'
                   ? video.bvid
                   : 'app:${item.cardGoto}:${item.param}',
             ),
-            recommendationTarget: _appRecommendationTarget(item),
+            recommendationTarget: target,
+            recommendationPlayback:
+                trackId != null && (targetVideo != null || episodeId != null)
+                ? RecommendationPlaybackContext(
+                    videoId: targetVideo ?? '',
+                    episodeId: episodeId,
+                    trackId: trackId,
+                    sessionEpoch: requests.sessionEpoch,
+                  )
+                : null,
             title: video.title,
             coverUrl: video.coverUrl?.toString() ?? '',
             author: video.ownerName,

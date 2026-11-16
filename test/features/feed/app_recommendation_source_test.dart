@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:bilisail/domain/app_failure.dart';
+
 import 'package:bilisail/domain/page_result.dart';
 import 'package:bilisail/domain/recommendation_settings.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
@@ -47,7 +49,7 @@ void main() {
     await container.pump();
   }
 
-  void complete(String id) => feed.calls.last.result.complete(
+  void complete(String id, {String? cursor}) => feed.calls.last.result.complete(
     PageResult(
       items: [
         VideoSummary(
@@ -59,6 +61,7 @@ void main() {
         ),
       ],
       hasMore: true,
+      nextCursor: cursor,
     ),
   );
   List<String>? ids() => container
@@ -68,6 +71,52 @@ void main() {
       ?.value
       .map((item) => item.id.value)
       .toList();
+
+  test('flush and server anchor survive pagination, failed refresh and retry together', () async {
+    await source(RecommendationSource.app);
+    expect(feed.appRequests.last.reason, AppRecommendationLoadReason.initial);
+    expect(feed.appRequests.last.cursor, '0');
+    complete('first', cursor: '1794819840');
+    await container.pump();
+    final more = controller.loadMore();
+    expect(feed.appRequests.last.reason, AppRecommendationLoadReason.loadMore);
+    expect(feed.appRequests.last.cursor, '1794819840');
+    complete('second', cursor: '1794819830');
+    await more;
+    final filtered = controller.loadMore();
+    expect(feed.appRequests.last.cursor, '1794819840');
+    feed.calls.last.result.complete(
+      const PageResult(items: [], hasMore: true, nextCursor: '1794819820'),
+    );
+    await filtered;
+    final refresh = controller.refresh(
+      appReason: AppRecommendationLoadReason.pullDown,
+    );
+    final failed = feed.appRequests.last;
+    expect(failed.cursor, '1794819840');
+    feed.calls.last.result.completeError(
+      const AppFailure(AppFailureKind.network, 'fixture'),
+    );
+    await refresh;
+    final retry = controller.refresh();
+    expect(feed.appRequests.last.cursor, failed.cursor);
+    expect(feed.appRequests.last.reason, failed.reason);
+    complete('refreshed', cursor: '1794819850');
+    await retry;
+    final next = controller.loadMore();
+    expect(feed.appRequests.last.cursor, '1794819850');
+    complete('third');
+    await next;
+    identity.change();
+    await container.pump();
+    expect(feed.appRequests.last.cursor, '0');
+    expect(
+      feed.appRequests.last.reason,
+      AppRecommendationLoadReason.identityChanged,
+    );
+    complete('new-identity', cursor: '42');
+    await container.pump();
+  });
 
   for (final target in [
     RecommendationSource.app,
@@ -166,6 +215,7 @@ final class _Feed
         FeedRepository,
         AppRecommendationFeedRepository,
         DesktopRecommendationFeedRepository {
+  final appRequests = <AppRecommendationRequest>[];
   final calls =
       <
         ({
@@ -207,9 +257,17 @@ final class _Feed
   }) => read('popular', page, cancellation);
   @override
   Future<PageResult<VideoSummary>> loadAppRecommendations({
-    required int page,
+    required AppRecommendationRequest request,
     required RequestCancellation cancellation,
-  }) => read('app', page, cancellation);
+  }) {
+    appRequests.add(request);
+    return read(
+      'app',
+      request.reason == AppRecommendationLoadReason.loadMore ? 2 : 1,
+      cancellation,
+    );
+  }
+
   @override
   Future<PageResult<VideoSummary>> loadDesktopRecommendations({
     required int page,

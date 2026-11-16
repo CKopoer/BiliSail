@@ -13,6 +13,7 @@ import '../../../domain/app_failure.dart';
 import '../../../domain/media_cdn.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
+import '../../../domain/recommendation_playback_context.dart';
 import '../domain/playback_repository.dart';
 import '../domain/high_energy_trend.dart';
 import '../domain/subtitle_cue_index.dart';
@@ -153,6 +154,7 @@ class PlaybackSession extends ChangeNotifier {
   final int Function() sessionEpoch;
   static int _zeroEpoch() => 0;
   int _epoch = 0;
+  RecommendationPlaybackContext? _recommendation;
   final String Function() accountScope;
   final _clock = Stopwatch();
   final Duration Function()? startupNow;
@@ -649,6 +651,7 @@ class PlaybackSession extends ChangeNotifier {
       subtitleLabel: _subtitlePreference,
       voice: _voice,
       audioQuality: _audioQuality,
+      recommendation: _recommendation,
     );
     _checkpoints[owner] = checkpoint;
     if (_settings.navigationMode != WorkspaceNavigationMode.multipleTabs) {
@@ -670,6 +673,7 @@ class PlaybackSession extends ChangeNotifier {
     String? title,
     bool visible = true,
     Duration? position,
+    RecommendationPlaybackContext? recommendation,
   }) async {
     if (_disposed || !_owners.contains(owner)) return;
     if (identical(_activeOwner, owner) &&
@@ -680,6 +684,14 @@ class PlaybackSession extends ChangeNotifier {
         _epoch == sessionEpoch() &&
         (media != null || _resolving) &&
         (position == null || media != null)) {
+      if (recommendation?.matches(
+            video?.summary.id.value ?? '',
+            _epoch,
+            episode: target is PgcPlaybackTarget ? target.episodeId : null,
+          ) ==
+          true) {
+        _recommendation = recommendation;
+      }
       final wasVisible = _ownerVisible;
       _ownerVisible = visible;
       if (!wasVisible && visible) _resumeCommentPresentation();
@@ -731,6 +743,7 @@ class PlaybackSession extends ChangeNotifier {
     await open(
       video,
       selected,
+      recommendation: recommendation ?? restored?.recommendation,
       force: true,
       quality:
           restored?.quality ??
@@ -860,6 +873,7 @@ class PlaybackSession extends ChangeNotifier {
     AudioQualityPreference? audioQuality,
     int? liveLine,
     LiveStreamPreference? liveStream,
+    RecommendationPlaybackContext? recommendation,
   }) => _open(
     video,
     selected,
@@ -875,6 +889,7 @@ class PlaybackSession extends ChangeNotifier {
     audioQuality: audioQuality,
     liveLine: liveLine,
     liveStream: liveStream,
+    recommendation: recommendation,
   );
 
   Future<void> _open(
@@ -895,6 +910,7 @@ class PlaybackSession extends ChangeNotifier {
     bool allowColorFallback = true,
     Duration? startupBudget,
     bool retainPresentation = false,
+    RecommendationPlaybackContext? recommendation,
   }) async {
     if (_disposed || _closing) return;
     if (target == null && (video == null || selected == null)) return;
@@ -1007,6 +1023,18 @@ class PlaybackSession extends ChangeNotifier {
     _quality = quality;
     _liveLine = requestedLiveLine;
     _liveStreamPreference = requestedLiveStream;
+    final nextRecommendation =
+        recommendation ??
+        (detail?.summary.id == video?.summary.id ? _recommendation : null);
+    _recommendation =
+        nextRecommendation?.matches(
+              video?.summary.id.value ?? '',
+              sessionEpoch(),
+              episode: target is PgcPlaybackTarget ? target.episodeId : null,
+            ) ==
+            true
+        ? nextRecommendation
+        : null;
     detail = video;
     part = selected;
     contentTarget = target;
@@ -1766,6 +1794,15 @@ class PlaybackSession extends ChangeNotifier {
         position: snapshot.position,
         duration: snapshot.duration,
         completed: snapshot.phase == PlaybackPhase.ended,
+        recommendation:
+            _recommendation?.matches(
+                  target.video.value,
+                  _epoch,
+                  episode: target.episodeId,
+                ) ==
+                true
+            ? _recommendation
+            : null,
       ),
       scope: _scope,
       epoch: _epoch,
@@ -3138,6 +3175,7 @@ class PlaybackSession extends ChangeNotifier {
     // Capture the old progress before invalidating the source. A same-source
     // reopen during the write must advance generation instead of reusing it.
     final savedProgress = _saveProgress();
+    _recommendation = null;
     _cancelCloudResume();
     media = null;
     _resolving = false;
@@ -3251,6 +3289,7 @@ final class _PlaybackCheckpoint {
     this.target,
     this.voice = const PlaybackVoice.original(),
     this.audioQuality,
+    this.recommendation,
   });
   final VideoId? videoId;
   final String? cid;
@@ -3267,6 +3306,7 @@ final class _PlaybackCheckpoint {
   final String? subtitleLabel;
   final PlaybackVoice voice;
   final AudioQualityPreference? audioQuality;
+  final RecommendationPlaybackContext? recommendation;
 }
 
 String sponsorCategoryLabel(String category) => switch (category) {

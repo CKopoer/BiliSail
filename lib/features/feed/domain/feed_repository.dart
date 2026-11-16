@@ -2,6 +2,8 @@ import '../../../domain/page_result.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
 import 'popular_feed.dart';
+import 'app_recommendation_request.dart';
+export 'app_recommendation_request.dart';
 
 final class VideoCategory {
   const VideoCategory({required this.id, required this.name});
@@ -70,7 +72,7 @@ abstract interface class RecommendationFeedbackRepository {
 
 abstract interface class AppRecommendationFeedRepository {
   Future<PageResult<VideoSummary>> loadAppRecommendations({
-    required int page,
+    required AppRecommendationRequest request,
     required RequestCancellation cancellation,
   });
 }

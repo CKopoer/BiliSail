@@ -91,17 +91,27 @@ final class PasswordSmsLoginClient {
     'statistics': _statistics,
   };
 
-  Map<String, String> _device(String publicKey) => {
-    'bili_local_id': _deviceId, 'device': 'phone', 'device_id': _deviceId,
-    'device_name': 'vivo', 'device_platform': 'Android14vivo',
-    // These two Passport values are protocol-encoded before form encoding.
-    'dt': Uri.encodeComponent(
-      _encrypt(
-        publicKey,
-        List.generate(16, (_) => _random.nextInt(36).toRadixString(36)).join(),
+  Future<Map<String, String>> _device(
+    String publicKey,
+    ApiRequestContext? context,
+  ) async {
+    final info = await api.appDeviceInfo(context: context);
+    return {
+      'bili_local_id': _deviceId, 'device': 'phone', 'device_id': _deviceId,
+      'device_name': info.model,
+      'device_platform': 'Android${info.osVersion}${info.model}',
+      // These two Passport values are protocol-encoded before form encoding.
+      'dt': Uri.encodeComponent(
+        _encrypt(
+          publicKey,
+          List.generate(
+            16,
+            (_) => _random.nextInt(36).toRadixString(36),
+          ).join(),
+        ),
       ),
-    ),
-  };
+    };
+  }
 
   Map<String, String> _proof(
     ApiLoginCaptcha? captcha,
@@ -315,7 +325,7 @@ final class PasswordSmsLoginClient {
         '/x/passport-login/oauth2/login',
         {
           ..._base(buvid),
-          ..._device(key.key),
+          ...await _device(key.key, context),
           ..._proof(captcha, proof),
           'username': username,
           'password': _encrypt(key.key, key.salt + password),
@@ -377,7 +387,7 @@ final class PasswordSmsLoginClient {
         '/x/passport-login/login/sms',
         {
           ..._base(buvid),
-          ..._device(key.key),
+          ...await _device(key.key, context),
           ..._proof(captcha, proof),
           'cid': countryCode,
           'tel': phone,

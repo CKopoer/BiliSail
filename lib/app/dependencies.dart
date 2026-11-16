@@ -2,6 +2,9 @@ import '../features/downloads/data/android_public_download_storage.dart';
 import 'video_card_watch_later.dart';
 
 import 'dart:async';
+
+import '../core/platform/app_request_device.dart';
+
 import 'dart:io';
 
 import 'package:bili_api/bili_api.dart';
@@ -263,6 +266,7 @@ class AppDependencies {
       SystemCredentialStore(keyPrefix: 'bilisail.web_device.v1'),
     );
     final api = BiliApiClient(
+      loadAppDevice: const AppRequestDevice().load,
       sessionProvider: requests,
       prepareWebRequests: true,
       loadWebDevice: webDevice.load,
@@ -412,6 +416,7 @@ class AppDependencies {
     );
     session = SessionRepository(
       loginClientFactory: () => BiliApiClient(
+        loadAppDevice: const AppRequestDevice().load,
         prepareWebRequests: true,
         loadWebDevice: webDevice.load,
         saveWebDevice: webDevice.save,

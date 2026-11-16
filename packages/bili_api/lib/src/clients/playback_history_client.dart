@@ -53,9 +53,20 @@ final class PlaybackHistoryClient {
     required bool completed,
     String? episodeId,
     String? seasonId,
+    String? trackId,
+    String? fromSpmid,
     ApiRequestContext? context,
   }) async {
     _identity(bvid, cid, episodeId, seasonId);
+    if ([trackId, fromSpmid].any(
+      (value) =>
+          value != null &&
+          (value.isEmpty ||
+              value.length > 2048 ||
+              RegExp(r'[\x00-\x1f\x7f]').hasMatch(value)),
+    )) {
+      throw ArgumentError('Invalid playback attribution');
+    }
     if (duration <= Duration.zero || position < Duration.zero) {
       throw ArgumentError('Invalid playback time');
     }
@@ -72,6 +83,9 @@ final class PlaybackHistoryClient {
         'type': episodeId == null ? '3' : '4',
         'epid': ?episodeId,
         'sid': ?seasonId,
+        'track_id': ?trackId,
+        'from_spmid': ?fromSpmid,
+        if (trackId != null) 'spmid': '333.788.0.0',
       },
       context: context,
     );

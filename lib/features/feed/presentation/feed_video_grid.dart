@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/platform/external_links.dart';
+import '../../../core/network/api_requests.dart';
+import '../../playback/application/recommendation_playback_registry.dart';
 import '../../../core/presentation/workspace_activity.dart';
 import '../../../shared/ui/app_notice.dart';
 import '../../../domain/video.dart';
@@ -101,8 +103,26 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
 
   Future<void> _open() async {
     final target = widget.video.recommendationTarget;
+    String attributedRoute(String route, {String? episode}) {
+      final attribution = widget.video.recommendationPlayback;
+      final epoch = ref.read(sessionEpochProvider)();
+      final videoId = target?.kind == RecommendationTargetKind.video
+          ? target?.id ?? ''
+          : widget.video.id.value;
+      if (attribution == null ||
+          !attribution.matches(videoId, epoch, episode: episode)) {
+        return route;
+      }
+      final routeId = ref
+          .read(recommendationPlaybackRegistryProvider)
+          .capture(attribution);
+      return Uri.parse(route)
+          .replace(queryParameters: {'recommendation': routeId})
+          .toString();
+    }
+
     if (target == null) {
-      context.go('/video/${widget.video.id.value}');
+      context.go(attributedRoute('/video/${widget.video.id.value}'));
       return;
     }
     final route = switch (target.kind) {
@@ -113,7 +133,14 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
       _ => null,
     };
     if (route != null) {
-      context.go(route);
+      context.go(
+        attributedRoute(
+          route,
+          episode: target.kind == RecommendationTargetKind.episode
+              ? target.id
+              : null,
+        ),
+      );
       return;
     }
     final url = target.url;

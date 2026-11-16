@@ -1,5 +1,6 @@
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
+import '../../../domain/recommendation_playback_context.dart';
 
 final class PlaybackHistoryTarget {
   const PlaybackHistoryTarget(
@@ -20,10 +21,12 @@ final class PlaybackHistoryRecord {
     required this.position,
     required this.duration,
     required this.completed,
+    this.recommendation,
   });
   final PlaybackHistoryTarget target;
   final Duration position, duration;
   final bool completed;
+  final RecommendationPlaybackContext? recommendation;
 }
 
 abstract interface class PlaybackHistoryRepository {
