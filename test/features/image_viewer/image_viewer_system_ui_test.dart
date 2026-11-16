@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 import 'dart:ui' as ui;
 
@@ -7,7 +9,7 @@ import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/features/image_viewer/application/image_viewer_controller.dart';
 import 'package:bilisail/features/image_viewer/domain/original_image.dart';
 import 'package:bilisail/shared/ui/image_viewer.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -83,11 +85,11 @@ void main() {
           await tester.pump(const Duration(milliseconds: 300));
           expect(find.text('正在加载预览图…'), findsOneWidget);
           expect(tester.getRect(find.byType(Dialog)), Offset.zero & size);
-          final close = tester.getRect(find.byTooltip('关闭图片'));
+          final close = tester.getRect(findMaterialTooltip('关闭图片'));
           expect(close.top, greaterThanOrEqualTo(24));
           expect(close.right, lessThanOrEqualTo(size.width - 16));
           expect(
-            tester.getRect(find.byTooltip('放大')).bottom,
+            tester.getRect(findMaterialTooltip('放大')).bottom,
             lessThanOrEqualTo(size.height - 24),
           );
           await _expectInsetPixels(tester, boundary, theme.colorScheme.surface);
@@ -133,7 +135,7 @@ void main() {
             styles.last['systemNavigationBarIconBrightness'],
             '${dark ? Brightness.light : Brightness.dark}',
           );
-          await tester.tap(find.byTooltip('关闭图片'));
+          await tester.tap(findMaterialTooltip('关闭图片'));
           await tester.pumpAndSettle();
           expect(find.byType(ImageViewer), findsNothing);
           expect(find.text('查看'), findsOneWidget);

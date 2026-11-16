@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -12,7 +14,7 @@ import 'package:bilisail/features/dynamic/presentation/dynamic_topic_screen.dart
 import 'package:bilisail/shared/ui/dynamic_compose_dialog.dart';
 import 'package:bilisail/shared/ui/dynamic_publish_forms.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -102,14 +104,14 @@ void main() {
       await tester.enterText(field, '前替换后');
       tester.widget<TextField>(field).controller!.selection =
           const TextSelection(baseOffset: 1, extentOffset: 3);
-      await tester.tap(find.byTooltip('插入表情'));
+      await tester.tap(findMaterialTooltip('插入表情'));
       await tester.pumpAndSettle();
       expect(find.text('B站表情'), findsOneWidget);
       expect(find.text('小黄脸'), findsOneWidget);
       await tester.tap(find.text('[doge]'));
       await tester.pumpAndSettle();
       expect(tester.widget<TextField>(field).controller!.text, '前[doge]后');
-      await tester.tap(find.byTooltip('@用户'));
+      await tester.tap(findMaterialTooltip('@用户'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('测试用户'));
       await tester.pumpAndSettle();
@@ -139,7 +141,7 @@ void main() {
         find.byKey(const ValueKey('dynamic-compose-text')),
         '保留',
       );
-      await tester.tap(find.byTooltip('插入表情'));
+      await tester.tap(findMaterialTooltip('插入表情'));
       await tester.pumpAndSettle();
       expect(find.text('表情加载失败，请重试'), findsOneWidget);
       await tester.tap(find.text('重试'));
@@ -188,11 +190,11 @@ void main() {
         );
         expect(submit.bottom, lessThanOrEqualTo(size.height - keyboard));
         for (final tooltip in ['插入表情', '@用户', '选择话题', '投票', '直播预约']) {
-          await tester.tap(find.byTooltip(tooltip));
+          await tester.tap(findMaterialTooltip(tooltip));
           await tester.pumpAndSettle();
           expect(tester.takeException(), isNull);
           await tester.tap(
-            tooltip == '插入表情' ? find.text('关闭') : find.byTooltip('关闭'),
+            tooltip == '插入表情' ? find.text('关闭') : findMaterialTooltip('关闭'),
           );
           await tester.pumpAndSettle();
         }
@@ -214,7 +216,7 @@ void main() {
         find.byKey(const ValueKey('dynamic-compose-title')),
         '新标题',
       );
-      await tester.tap(find.byTooltip('投票'));
+      await tester.tap(findMaterialTooltip('投票'));
       await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const ValueKey('dynamic-poll-title')),
@@ -230,7 +232,7 @@ void main() {
       );
       await tester.tap(find.text('保存投票'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('直播预约'));
+      await tester.tap(findMaterialTooltip('直播预约'));
       await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const ValueKey('dynamic-reserve-title')),
@@ -238,13 +240,13 @@ void main() {
       );
       await tester.tap(find.text('保存预约'));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.byTooltip('评论权限'));
+      await tester.ensureVisible(findMaterialTooltip('评论权限'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('评论权限'));
+      await tester.tap(findMaterialTooltip('评论权限'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('精选评论'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('可见范围'));
+      await tester.tap(findMaterialTooltip('可见范围'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('仅自己可见'));
       await tester.pumpAndSettle();
@@ -280,7 +282,7 @@ void main() {
       expect(find.byType(DynamicDateTimePicker), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('dynamic-time-confirm')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('关闭并保留草稿'));
+      await tester.tap(findMaterialTooltip('关闭并保留草稿'));
       await tester.pumpAndSettle();
       await open(tester);
       expect(find.widgetWithText(FilledButton, '定时发布'), findsOneWidget);
@@ -344,10 +346,10 @@ void main() {
           find.byKey(const ValueKey('dynamic-compose-text')),
           '分享内容😀',
         );
-        await tester.tap(find.byTooltip('添加图片'));
+        await tester.tap(findMaterialTooltip('添加图片'));
         await tester.pumpAndSettle();
         expect(repository.uploads, isEmpty);
-        await tester.tap(find.byTooltip('选择话题'));
+        await tester.tap(findMaterialTooltip('选择话题'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('测试话题'));
         await tester.pumpAndSettle();
@@ -374,7 +376,7 @@ void main() {
         find.byKey(const ValueKey('dynamic-compose-text')),
         '保留草稿',
       );
-      await tester.tap(find.byTooltip('关闭并保留草稿'));
+      await tester.tap(findMaterialTooltip('关闭并保留草稿'));
       await tester.pumpAndSettle();
       await open(tester);
       expect(
@@ -478,12 +480,12 @@ void main() {
     expect(topic.favorites, isEmpty);
     expect(topic.reports, isEmpty);
     expect(find.byKey(const ValueKey('topic-favorite')), findsNothing);
-    await tester.tap(find.byTooltip('话题操作'));
+    await tester.tap(findMaterialTooltip('话题操作'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('收藏'));
     await tester.pumpAndSettle();
     expect(topic.favorites.single, ('12', true));
-    await tester.tap(find.byTooltip('话题操作'));
+    await tester.tap(findMaterialTooltip('话题操作'));
     await tester.pumpAndSettle();
     expect(find.text('取消收藏'), findsOneWidget);
     await tester.tap(find.text('举报'));

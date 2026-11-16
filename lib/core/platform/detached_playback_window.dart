@@ -1,4 +1,4 @@
-// The application pins Flutter 3.47.6. Keep its experimental windowing API
+// The application pins Flutter 3.50.0. Keep its experimental windowing API
 // behind this adapter so an SDK update has one explicit compatibility boundary.
 // ignore_for_file: implementation_imports, invalid_use_of_internal_member
 
@@ -517,14 +517,14 @@ class _FlutterDetachedPlaybackWindow extends DetachedPlaybackWindow {
     // normal user sizing automatically after its first frame. Native geometry
     // preparation keeps our custom caption from altering the saved outer size.
     if (Platform.isWindows) {
-      _controller = flutter_window.RegularWindowController.sizedToContent(
+      _controller = flutter_window.WindowController.shrinkWrap(
         resizable: true,
         constraints: constraints,
         title: title,
         delegate: delegate,
       )..setSize(size);
     } else {
-      _controller = flutter_window.RegularWindowController(
+      _controller = flutter_window.WindowController(
         size: size,
         constraints: constraints,
         title: title,
@@ -575,7 +575,7 @@ class _FlutterDetachedPlaybackWindow extends DetachedPlaybackWindow {
     );
   }
 
-  late final flutter_window.RegularWindowController _controller;
+  late final flutter_window.WindowController _controller;
   bool _open = true;
   bool _disposed = false;
   Size? _initialContentSize;
@@ -607,7 +607,7 @@ class _FlutterDetachedPlaybackWindow extends DetachedPlaybackWindow {
   @override
   Widget buildView(Widget child) {
     final view = _controller.rootView;
-    return flutter_window.RegularWindow(
+    return flutter_window.Window(
       controller: _controller,
       // Native preparation supplies the restored client size before Flutter's
       // asynchronous view metrics catch up, including a maximized first show.
@@ -667,8 +667,7 @@ class _FlutterDetachedPlaybackWindow extends DetachedPlaybackWindow {
   }
 }
 
-class _PlaybackWindowDelegate
-    with flutter_window.RegularWindowControllerDelegate {
+class _PlaybackWindowDelegate with flutter_window.WindowControllerDelegate {
   _PlaybackWindowDelegate({
     required this.onCloseRequested,
     required this.onDestroyed,
@@ -678,9 +677,8 @@ class _PlaybackWindowDelegate
   final VoidCallback onDestroyed;
 
   @override
-  void onWindowCloseRequested(
-    flutter_window.RegularWindowController controller,
-  ) => onCloseRequested();
+  void onWindowCloseRequested(flutter_window.WindowController controller) =>
+      onCloseRequested();
 
   @override
   void onWindowDestroyed() => onDestroyed();

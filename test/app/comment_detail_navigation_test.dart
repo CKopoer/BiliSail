@@ -1,3 +1,5 @@
+import '../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/domain/content_link.dart';
@@ -28,7 +30,7 @@ import 'package:bilisail/features/video/presentation/video_screen.dart';
 import 'package:bilisail/shared/ui/comments_panel.dart';
 import 'package:bilisail/shared/ui/playback_info_tabs.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -115,11 +117,11 @@ void main() {
 
           for (final action in ['button', 'system', 'shortcut', 'mouse']) {
             await _openDetail(tester);
-            expect(find.byTooltip('关闭评论详情'), findsNothing);
+            expect(findMaterialTooltip('关闭评论详情'), findsNothing);
             expect(find.text('简介'), findsNothing);
             expect(find.text('评论'), findsNothing);
             expect(
-              tester.getTopLeft(find.byTooltip('返回评论')).dy,
+              tester.getTopLeft(findMaterialTooltip('返回评论')).dy,
               closeTo(infoTop, 4),
             );
             await tester.drag(find.text('原评论'), const Offset(280, 0));
@@ -127,7 +129,7 @@ void main() {
             expect(find.text('评论详情'), findsOneWidget);
             switch (action) {
               case 'button':
-                await tester.tap(find.byTooltip('返回评论'));
+                await tester.tap(findMaterialTooltip('返回评论'));
               case 'system':
                 await tester.binding.handlePopRoute();
               case 'shortcut':

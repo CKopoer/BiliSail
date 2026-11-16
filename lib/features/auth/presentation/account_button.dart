@@ -1,6 +1,8 @@
+import '../../../core/presentation/motion_preferences.dart';
+
 import '../../../domain/user.dart';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/ui/app_dialog.dart';
@@ -44,7 +46,7 @@ class AccountButton extends ConsumerWidget {
             barrierLabel: MaterialLocalizations.of(context)
                 .modalBarrierDismissLabel,
             barrierColor: Colors.black38,
-            transitionDuration: MediaQuery.disableAnimationsOf(context)
+            transitionDuration: shouldReduceMotion(context)
                 ? Duration.zero
                 : const Duration(milliseconds: 280),
             pageBuilder: (_, _, _) =>

@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/domain/app_failure.dart';
@@ -18,7 +20,7 @@ import '../../support/memory_settings_repository.dart';
 
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:bili_player/bili_player.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -211,10 +213,10 @@ void main() {
     final harness = _Harness();
     addTearDown(harness.dispose);
     await _pumpComposer(tester, harness);
-    await tester.tap(find.byTooltip('发送弹幕样式'));
+    await tester.tap(findMaterialTooltip('发送弹幕样式'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('底部'));
-    await tester.tap(find.byTooltip('蓝色'));
+    await tester.tap(findMaterialTooltip('蓝色'));
     await tester.tap(find.text('完成'));
     await tester.pumpAndSettle();
     expect(harness.settings.value.danmakuSendStyle, (

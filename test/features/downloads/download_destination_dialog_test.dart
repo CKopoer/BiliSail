@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -6,7 +8,7 @@ import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/features/downloads/application/download_controller.dart';
 import 'package:bilisail/features/downloads/data/android_public_download_storage.dart';
 import 'package:bilisail/features/downloads/presentation/download_destination_dialog.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -226,10 +228,10 @@ void main() {
   ) async {
     await _pump(tester, onResult: (_) {});
     await _openDownloads(tester);
-    await tester.tap(find.byTooltip('上一级'));
+    await tester.tap(findMaterialTooltip('上一级'));
     await tester.pumpAndSettle();
     expect(find.text(_root), findsOneWidget);
-    await tester.tap(find.byTooltip('上一级'));
+    await tester.tap(findMaterialTooltip('上一级'));
     await tester.pumpAndSettle();
     expect(find.text('内部存储'), findsOneWidget);
     expect(find.text('选择存储位置'), findsOneWidget);

@@ -1,7 +1,9 @@
+import '../../../core/presentation/motion_preferences.dart';
+
 import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -738,10 +740,10 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
             key: const ValueKey('live-sc-details'),
             constraints: BoxConstraints(maxHeight: constraints.maxHeight * .5),
             child: AnimatedSwitcher(
-              duration: MediaQuery.disableAnimationsOf(context)
+              duration: shouldReduceMotion(context)
                   ? Duration.zero
                   : const Duration(milliseconds: 220),
-              reverseDuration: MediaQuery.disableAnimationsOf(context)
+              reverseDuration: shouldReduceMotion(context)
                   ? Duration.zero
                   : const Duration(milliseconds: 180),
               switchInCurve: Curves.easeOutCubic,

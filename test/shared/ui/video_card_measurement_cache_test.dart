@@ -3,7 +3,7 @@ import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 

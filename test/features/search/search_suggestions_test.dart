@@ -4,7 +4,7 @@ import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/features/search/application/search_discovery_controller.dart';
 import 'package:bilisail/features/search/domain/search_discovery_repository.dart';
 import 'package:bilisail/features/search/presentation/search_discovery_panel.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:flutter_test/flutter_test.dart';

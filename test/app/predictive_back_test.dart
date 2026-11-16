@@ -7,7 +7,7 @@ import 'package:bilisail/core/presentation/predictive_back_region.dart';
 import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/shared/ui/app_dialog.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';

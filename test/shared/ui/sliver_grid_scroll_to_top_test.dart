@@ -1,7 +1,9 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'package:bilisail/shared/ui/paged_scroll_viewport.dart';
 import 'package:bilisail/shared/ui/responsive_card_grid.dart';
 import 'package:bilisail/shared/ui/scroll_collapsing_header.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -203,7 +205,7 @@ Future<_Result> _run(
   await tester.pumpAndSettle();
   final originalElements = tester.elementList(find.byType(_Card)).toList();
   builds = 0;
-  await tester.tap(find.byTooltip('回到顶部'));
+  await tester.tap(findMaterialTooltip('回到顶部'));
   await tester.pump();
   final frames = <_Frame>[];
   var maximumMounted = 0;

@@ -9,7 +9,7 @@ import 'package:bilisail/features/playback/presentation/player_seek_controls.dar
 import 'package:bilisail/shared/ui/app_network_image.dart';
 import 'package:bilisail/shared/ui/storyboard_thumbnail.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

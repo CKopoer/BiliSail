@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import '../../support/fake_video_output.dart';
 import '../../support/input_test_app.dart';
 import '../../support/detached_window_fake.dart';
@@ -59,7 +61,7 @@ import 'package:bilisail/features/video/application/video_extras_controller.dart
 import 'package:bilisail/features/video/presentation/video_screen.dart';
 import 'package:bili_player/bili_player.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
@@ -91,7 +93,7 @@ void main() {
         );
         await _pumpFrames(tester);
         await _showControls(tester);
-        await tester.tap(find.byTooltip('更多播放选项'));
+        await tester.tap(findMaterialTooltip('更多播放选项'));
         await tester.pumpAndSettle();
         final entry = find.text('空降助手');
         await tester.ensureVisible(entry);
@@ -223,11 +225,11 @@ void main() {
         expect(session.snapshots.value.desiredPlaying, isFalse);
         if (desktop) {
           expect(window.miniPlayer.value, isTrue);
-          await tester.tap(find.byTooltip('取消置顶'));
+          await tester.tap(findMaterialTooltip('取消置顶'));
           await tester.pump();
           expect(window.alwaysOnTop.value, isFalse);
         }
-        await tester.tap(find.byTooltip('还原播放页'));
+        await tester.tap(findMaterialTooltip('还原播放页'));
         await _pumpFrames(tester);
         expect(find.byKey(const ValueKey('mini-player')), findsNothing);
         expect(engine.opens, opens);
@@ -263,11 +265,11 @@ void main() {
         await session.pause();
         await _showControls(tester);
         if (compact) {
-          await tester.tap(find.byTooltip('更多播放选项'));
+          await tester.tap(findMaterialTooltip('更多播放选项'));
           await tester.pumpAndSettle();
           await tester.tap(find.widgetWithText(ExpansionTile, '播放速度'));
         } else {
-          await tester.tap(find.byTooltip('播放速度'));
+          await tester.tap(findMaterialTooltip('播放速度'));
         }
         await tester.pumpAndSettle();
         expect(find.text('1.25x'), findsNothing);
@@ -532,7 +534,7 @@ void main() {
       await session.setAudioOnly(true);
       await _pumpFrames(tester);
       expect(find.byKey(const ValueKey('player-back')), findsNothing);
-      await tester.tap(find.byTooltip('全屏'));
+      await tester.tap(findMaterialTooltip('全屏'));
       await _pumpFrames(tester);
       final generation = session.sourceGeneration;
       final opens = engine.opens;
@@ -618,10 +620,10 @@ void main() {
           find.byKey(const ValueKey('player-back')),
           inPlayer ? findsOneWidget : findsNothing,
         );
-        expect(find.byTooltip('回到主页'), findsOneWidget);
+        expect(findMaterialTooltip('回到主页'), findsOneWidget);
         final opens = engine.opens;
         final generation = session.sourceGeneration;
-        await tester.tap(find.byTooltip('全屏（F）'));
+        await tester.tap(findMaterialTooltip('全屏（F）'));
         await _pumpFrames(tester);
         final back = find.byKey(const ValueKey('player-back'));
         expect(back.hitTestable(), findsOneWidget);
@@ -699,7 +701,7 @@ void main() {
         await _pumpFrames(tester);
         await _showControls(tester);
         if (fullScreen) {
-          await tester.tap(find.byTooltip('全屏（F）'));
+          await tester.tap(findMaterialTooltip('全屏（F）'));
           await _pumpFrames(tester);
         }
         await session.pause();
@@ -710,7 +712,7 @@ void main() {
 
         Future<void> openChoices() async {
           await _showControls(tester);
-          await tester.tap(find.byTooltip('更多播放选项'));
+          await tester.tap(findMaterialTooltip('更多播放选项'));
           await tester.pumpAndSettle();
           if (!fullScreen) {
             final audio = find.widgetWithText(ExpansionTile, '音质');
@@ -756,8 +758,9 @@ void main() {
         expect(engine.currentSnapshot.rate, 1.5);
         expect(engine.currentSnapshot.volume, 36);
         expect(engine.currentSnapshot.desiredPlaying, isFalse);
-        if (!fullScreen && find.byTooltip('关闭更多播放选项').evaluate().isNotEmpty) {
-          await tester.tap(find.byTooltip('关闭更多播放选项'));
+        if (!fullScreen &&
+            findMaterialTooltip('关闭更多播放选项').evaluate().isNotEmpty) {
+          await tester.tap(findMaterialTooltip('关闭更多播放选项'));
           await tester.pumpAndSettle();
         }
         await openChoices();
@@ -804,7 +807,7 @@ void main() {
           await _pumpFrames(tester);
           await _showControls(tester);
           if (fullScreen) {
-            await tester.tap(find.byTooltip('全屏（F）'));
+            await tester.tap(findMaterialTooltip('全屏（F）'));
             await _pumpFrames(tester);
           }
           await session.pause();
@@ -813,7 +816,7 @@ void main() {
           await session.setVolume(36);
           await _pumpFrames(tester);
           await _showControls(tester);
-          await tester.tap(find.byTooltip('音量'));
+          await tester.tap(findMaterialTooltip('音量'));
           await tester.pumpAndSettle();
           expect(
             find.byKey(const ValueKey('player-volume-slider')),
@@ -840,7 +843,7 @@ void main() {
           expect(engine.currentSnapshot.volume, 36);
           expect(engine.currentSnapshot.desiredPlaying, isFalse);
           await _showControls(tester);
-          await tester.tap(find.byTooltip('音量'));
+          await tester.tap(findMaterialTooltip('音量'));
           await tester.pumpAndSettle();
           final selected = find.widgetWithText(
             CheckedPopupMenuItem<AudioQualityPreference>,
@@ -923,9 +926,9 @@ void main() {
           );
           final completeButtons = buttons();
           expect(completeButtons, containsAll(['音量', '播放配置', '关闭弹幕']));
-          expect(find.byTooltip('发送弹幕'), findsNothing);
+          expect(findMaterialTooltip('发送弹幕'), findsNothing);
           void expectRateAtBottom() {
-            final rate = find.byTooltip('播放速度');
+            final rate = findMaterialTooltip('播放速度');
             expect(rate, session.isLive ? findsNothing : findsOneWidget);
             expect(
               find.descendant(
@@ -942,10 +945,10 @@ void main() {
               session.isLive ? findsNothing : findsOneWidget,
             );
             if (!session.isLive &&
-                find.byTooltip('清晰度').evaluate().isNotEmpty) {
+                findMaterialTooltip('清晰度').evaluate().isNotEmpty) {
               expect(
                 tester.getTopLeft(rate).dx,
-                tester.getTopRight(find.byTooltip('清晰度')).dx,
+                tester.getTopRight(findMaterialTooltip('清晰度')).dx,
               );
             }
           }
@@ -957,8 +960,8 @@ void main() {
             findsOneWidget,
           );
           expect(buttons(), containsAll(['播放配置', '关闭弹幕', '更多播放选项']));
-          expect(find.byTooltip('发送弹幕'), findsOneWidget);
-          expect(find.byTooltip('更多播放选项'), findsOneWidget);
+          expect(findMaterialTooltip('发送弹幕'), findsOneWidget);
+          expect(findMaterialTooltip('更多播放选项'), findsOneWidget);
           expect(find.byIcon(Icons.more_horiz), findsOneWidget);
           for (final tooltip in [
             '清晰度',
@@ -970,7 +973,7 @@ void main() {
             '弹幕配置',
             '字幕样式',
           ]) {
-            expect(find.byTooltip(tooltip), findsNothing);
+            expect(findMaterialTooltip(tooltip), findsNothing);
           }
           final topButtons =
               tester
@@ -998,14 +1001,14 @@ void main() {
           ]..sort();
           expect(topButtons, expectedTopButtons);
           expect(
-            tester.getTopLeft(find.byTooltip('更多播放选项')).dx,
-            greaterThan(tester.getTopLeft(find.byTooltip('播放配置')).dx),
+            tester.getTopLeft(findMaterialTooltip('更多播放选项')).dx,
+            greaterThan(tester.getTopLeft(findMaterialTooltip('播放配置')).dx),
           );
           expect(
             find.byKey(const ValueKey('small-window-quality-audio-row')),
             findsNothing,
           );
-          await tester.tap(find.byTooltip('更多播放选项'));
+          await tester.tap(findMaterialTooltip('更多播放选项'));
           await tester.pumpAndSettle();
           final drawer = find.byKey(const ValueKey('player-more-dialog'));
           for (final label in [
@@ -1070,7 +1073,7 @@ void main() {
               findsOneWidget,
             );
           }
-          await tester.tap(find.byTooltip('关闭更多播放选项'));
+          await tester.tap(findMaterialTooltip('关闭更多播放选项'));
           await tester.pumpAndSettle();
           expect(engine.opens, 1);
           expect(engine.maxSurfaces, 1);
@@ -1117,7 +1120,7 @@ void main() {
           await session.pause();
           await session.seek(const Duration(seconds: 35));
           final generation = session.sourceGeneration;
-          await tester.tap(find.byTooltip('更多播放选项'));
+          await tester.tap(findMaterialTooltip('更多播放选项'));
           await tester.pumpAndSettle();
           final drawer = find.byKey(const ValueKey('player-more-dialog'));
           expect(
@@ -1155,7 +1158,7 @@ void main() {
           await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
           await tester.pumpAndSettle();
           expect(session.snapshots.value.desiredPlaying, isFalse);
-          expect(find.byTooltip('退出全屏（Esc）'), findsNothing);
+          expect(findMaterialTooltip('退出全屏（Esc）'), findsNothing);
           await tester.ensureVisible(
             find.byKey(const ValueKey('player-more-volume')),
           );
@@ -1176,7 +1179,7 @@ void main() {
             DefaultTabController.of(tester.element(find.byType(TabBar))).index,
             2,
           );
-          await tester.tap(find.byTooltip('关闭'));
+          await tester.tap(findMaterialTooltip('关闭'));
           await tester.pumpAndSettle();
           expect(drawer, findsOneWidget);
           await tester.sendKeyEvent(LogicalKeyboardKey.escape);
@@ -1225,7 +1228,7 @@ void main() {
         await session.pause();
         final generation = session.sourceGeneration;
         final videoBefore = tester.getRect(find.byType(VideoSurface));
-        await tester.tap(find.byTooltip('更多播放选项'));
+        await tester.tap(findMaterialTooltip('更多播放选项'));
         await tester.pumpAndSettle();
         final drawer = find.byKey(const ValueKey('player-more-dialog'));
         void expectBelowVideo() {
@@ -1317,7 +1320,7 @@ void main() {
       ('清晰度', '清晰度 720P'),
       ('语音翻译', '语音 English · AI 翻译'),
     ]) {
-      await tester.tap(find.byTooltip('更多播放选项'));
+      await tester.tap(findMaterialTooltip('更多播放选项'));
       await tester.pumpAndSettle();
       final section = find.widgetWithText(ExpansionTile, title);
       await tester.ensureVisible(section);
@@ -1371,13 +1374,13 @@ void main() {
     );
     await _pumpFrames(tester);
     await _showControls(tester);
-    await tester.tap(find.byTooltip('更多播放选项'));
+    await tester.tap(findMaterialTooltip('更多播放选项'));
     await tester.pumpAndSettle();
     rebuild(() => target = const PgcPlaybackTarget('12', cid: '123'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('player-more-dialog')), findsNothing);
     await _showControls(tester);
-    await tester.tap(find.byTooltip('更多播放选项'));
+    await tester.tap(findMaterialTooltip('更多播放选项'));
     await tester.pumpAndSettle();
     rebuild(() => active = false);
     await tester.pumpAndSettle();
@@ -1387,7 +1390,7 @@ void main() {
     rebuild(() => active = true);
     await tester.pumpAndSettle();
     await _showControls(tester);
-    await tester.tap(find.byTooltip('更多播放选项'));
+    await tester.tap(findMaterialTooltip('更多播放选项'));
     await tester.pumpAndSettle();
     await tester.pumpWidget(const SizedBox());
     await _pumpFrames(tester);
@@ -1424,7 +1427,7 @@ void main() {
       );
       await _pumpFrames(tester);
       await _showControls(tester);
-      await tester.tap(find.byTooltip('发送弹幕'));
+      await tester.tap(findMaterialTooltip('发送弹幕'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const Key('owner-draft')), '旧源草稿');
       rebuild(() => target = const PgcPlaybackTarget('12', cid: '123'));
@@ -1432,7 +1435,7 @@ void main() {
       expect(find.byKey(const ValueKey('player-danmaku-dialog')), findsNothing);
       expect(tester.takeException(), isNull);
       await _showControls(tester);
-      await tester.tap(find.byTooltip('发送弹幕'));
+      await tester.tap(findMaterialTooltip('发送弹幕'));
       await tester.pumpAndSettle();
       expect(
         tester
@@ -1492,7 +1495,7 @@ void main() {
           await session.pause();
           await session.seek(const Duration(seconds: 35));
           final generation = session.sourceGeneration;
-          await tester.tap(find.byTooltip('发送弹幕'));
+          await tester.tap(findMaterialTooltip('发送弹幕'));
           await tester.pumpAndSettle();
           final dialog = find.byKey(const ValueKey('player-danmaku-dialog'));
           expect(dialog, findsOneWidget);
@@ -1516,22 +1519,22 @@ void main() {
           );
           expect(find.text('保留发送草稿'), findsOneWidget);
           expect(tester.takeException(), isNull);
-          await tester.tap(find.byTooltip('关闭发送窗口'));
+          await tester.tap(findMaterialTooltip('关闭发送窗口'));
           await tester.pumpAndSettle();
           tester.view.resetViewInsets();
           await tester.pumpAndSettle();
           await _showControls(tester);
-          await tester.tap(find.byTooltip('发送弹幕'));
+          await tester.tap(findMaterialTooltip('发送弹幕'));
           await tester.pumpAndSettle();
           expect(find.text('保留发送草稿'), findsOneWidget);
           await tester.sendKeyEvent(LogicalKeyboardKey.escape);
           await tester.pumpAndSettle();
           expect(dialog, findsNothing);
           await _showControls(tester);
-          await tester.tap(find.byTooltip('全屏（F）'));
+          await tester.tap(findMaterialTooltip('全屏（F）'));
           await _pumpFrames(tester);
-          if (find.byTooltip('发送弹幕').evaluate().isNotEmpty) {
-            await tester.tap(find.byTooltip('发送弹幕'));
+          if (findMaterialTooltip('发送弹幕').evaluate().isNotEmpty) {
+            await tester.tap(findMaterialTooltip('发送弹幕'));
             await _pumpFrames(tester);
           }
           expect(find.text('保留发送草稿'), findsOneWidget);
@@ -1582,16 +1585,16 @@ void main() {
       await _showControls(tester);
       await session.pause();
       await session.seek(const Duration(seconds: 35));
-      await tester.tap(find.byTooltip('发送弹幕'));
+      await tester.tap(findMaterialTooltip('发送弹幕'));
       await tester.pumpAndSettle();
       final field = find.descendant(
         of: find.byType(Dialog),
         matching: find.byType(TextField),
       );
       await tester.enterText(field, '单次弹幕');
-      await tester.tap(find.byTooltip('关闭发送窗口'));
+      await tester.tap(findMaterialTooltip('关闭发送窗口'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('发送弹幕'));
+      await tester.tap(findMaterialTooltip('发送弹幕'));
       await tester.pumpAndSettle();
       expect(find.text('单次弹幕'), findsOneWidget);
       expect(actions.calls.where((call) => call.startsWith('send:')), isEmpty);
@@ -1604,7 +1607,7 @@ void main() {
             .onPressed,
         isNull,
       );
-      await tester.tap(find.byTooltip('关闭发送窗口'));
+      await tester.tap(findMaterialTooltip('关闭发送窗口'));
       await tester.pumpAndSettle();
       actions.pending!.complete();
       await tester.pumpAndSettle();
@@ -1613,7 +1616,7 @@ void main() {
         hasLength(1),
       );
       expect(actions.sentPosition, const Duration(seconds: 35));
-      await tester.tap(find.byTooltip('发送弹幕'));
+      await tester.tap(findMaterialTooltip('发送弹幕'));
       await tester.pumpAndSettle();
       expect(tester.widget<TextField>(field).controller!.text, isEmpty);
       await session.retry();
@@ -1686,7 +1689,7 @@ void main() {
           expect(overlay, findsOneWidget);
 
           await _showControls(tester);
-          await tester.tap(find.byTooltip('全屏（F）'));
+          await tester.tap(findMaterialTooltip('全屏（F）'));
           await _pumpFrames(tester);
           expect(window.fullScreen, isTrue);
           expect(overlay, findsOneWidget);
@@ -1793,7 +1796,7 @@ void main() {
               '播放配置',
               '更多播放选项',
             ]) {
-              final button = find.byTooltip(tooltip).hitTestable();
+              final button = findMaterialTooltip(tooltip).hitTestable();
               expect(
                 find.descendant(of: top, matching: button),
                 findsOneWidget,
@@ -1816,7 +1819,7 @@ void main() {
                 tester.getTopLeft(next).dx,
                 tester
                     .getTopRight(
-                      find.byTooltip(
+                      findMaterialTooltip(
                         session.snapshots.value.desiredPlaying
                             ? '暂停（空格）'
                             : '播放（空格）',
@@ -1847,16 +1850,16 @@ void main() {
                   .canRequestFocus,
               isFalse,
             );
-            expect(find.byTooltip('发送弹幕'), findsOneWidget);
-            expect(find.byTooltip('发送弹幕').hitTestable(), findsOneWidget);
-            expect(find.byTooltip('字幕'), findsNothing);
-            expect(find.byTooltip('更多播放选项'), findsOneWidget);
+            expect(findMaterialTooltip('发送弹幕'), findsOneWidget);
+            expect(findMaterialTooltip('发送弹幕').hitTestable(), findsOneWidget);
+            expect(findMaterialTooltip('字幕'), findsNothing);
+            expect(findMaterialTooltip('更多播放选项'), findsOneWidget);
             expect(find.byIcon(Icons.more_horiz), findsOneWidget);
             expect(
-              find.byTooltip('听视频').hitTestable(),
+              findMaterialTooltip('听视频').hitTestable(),
               session.canListen ? findsOneWidget : findsNothing,
             );
-            expect(find.byTooltip('全屏（F）').hitTestable(), findsOneWidget);
+            expect(findMaterialTooltip('全屏（F）').hitTestable(), findsOneWidget);
             expect(
               find
                   .byKey(const ValueKey('playback-timeline-slider'))
@@ -1872,16 +1875,16 @@ void main() {
             await _pumpFrames(tester);
             expect(nextCalls, 1);
           }
-          await tester.tap(find.byTooltip('暂停（空格）'));
+          await tester.tap(findMaterialTooltip('暂停（空格）'));
           await _pumpFrames(tester);
           expect(session.snapshots.value.desiredPlaying, isFalse);
-          await tester.tap(find.byTooltip('播放（空格）'));
+          await tester.tap(findMaterialTooltip('播放（空格）'));
           await _pumpFrames(tester);
           expect(session.snapshots.value.desiredPlaying, isTrue);
-          await tester.tap(find.byTooltip('关闭弹幕'));
+          await tester.tap(findMaterialTooltip('关闭弹幕'));
           await _pumpFrames(tester);
           expect(find.text('画面弹幕'), findsNothing);
-          await tester.tap(find.byTooltip('开启弹幕'));
+          await tester.tap(findMaterialTooltip('开启弹幕'));
           await _pumpFrames(tester);
           expect(find.text('画面弹幕'), findsOneWidget);
           expect(toggles, 2);
@@ -1899,13 +1902,13 @@ void main() {
             expect(session.snapshots.value.desiredPlaying, isFalse);
             position = session.snapshots.value.position;
           }
-          await tester.tap(find.byTooltip('全屏（F）'));
+          await tester.tap(findMaterialTooltip('全屏（F）'));
           await _pumpFrames(tester);
           expect(window.fullScreen, isTrue);
-          expect(find.byTooltip('音量'), findsOneWidget);
+          expect(findMaterialTooltip('音量'), findsOneWidget);
           expect(find.byKey(const Key('small-editor')), findsOneWidget);
           expect(session.snapshots.value.desiredPlaying, isFalse);
-          await tester.tap(find.byTooltip('退出全屏（Esc）'));
+          await tester.tap(findMaterialTooltip('退出全屏（Esc）'));
           await _pumpFrames(tester);
           expect(window.fullScreen, isFalse);
           expectAllControls();
@@ -1959,7 +1962,7 @@ void main() {
             await _pumpFrames(tester);
             await _showControls(tester);
             if (fullscreen) {
-              await tester.tap(find.byTooltip('全屏（F）'));
+              await tester.tap(findMaterialTooltip('全屏（F）'));
               await _pumpFrames(tester);
             }
             await session.pause();
@@ -1972,7 +1975,7 @@ void main() {
               (3, '空降助手'),
             ]) {
               if (index == 3) {
-                await tester.tap(find.byTooltip('播放配置'));
+                await tester.tap(findMaterialTooltip('播放配置'));
                 await tester.pumpAndSettle();
                 final tab = find.widgetWithText(Tab, '空降助手');
                 await tester.ensureVisible(tab);
@@ -1984,14 +1987,14 @@ void main() {
                     .evaluate()
                     .isNotEmpty;
                 if (smallWindow && index != 0) {
-                  await tester.tap(find.byTooltip('更多播放选项'));
+                  await tester.tap(findMaterialTooltip('更多播放选项'));
                   await tester.pumpAndSettle();
                   final option = find.widgetWithText(ListTile, title);
                   await tester.ensureVisible(option);
                   await tester.pumpAndSettle();
                   await tester.tap(option);
                 } else {
-                  final button = find.byTooltip(title).hitTestable();
+                  final button = findMaterialTooltip(title).hitTestable();
                   expect(
                     find.descendant(
                       of: find.byKey(
@@ -2036,13 +2039,13 @@ void main() {
                 await tester.pumpAndSettle();
                 expect(settings.value.autoPlay, !previous);
               }
-              await tester.tap(find.byTooltip('关闭'));
+              await tester.tap(findMaterialTooltip('关闭'));
               await tester.pumpAndSettle();
-              if (find.byTooltip('关闭更多播放选项').evaluate().isNotEmpty) {
-                await tester.tap(find.byTooltip('关闭更多播放选项'));
+              if (findMaterialTooltip('关闭更多播放选项').evaluate().isNotEmpty) {
+                await tester.tap(findMaterialTooltip('关闭更多播放选项'));
                 await tester.pumpAndSettle();
               }
-              expect(find.byTooltip('播放配置').hitTestable(), findsOneWidget);
+              expect(findMaterialTooltip('播放配置').hitTestable(), findsOneWidget);
               expect(tester.takeException(), isNull);
             }
             expect(session.sourceGeneration, generation);
@@ -2090,10 +2093,10 @@ void main() {
         await _pumpFrames(tester);
         final generation = session.sourceGeneration;
         for (final tooltip in ['听视频', '关闭弹幕', '全屏（F）']) {
-          expect(find.byTooltip(tooltip), findsOneWidget);
+          expect(findMaterialTooltip(tooltip), findsOneWidget);
         }
-        expect(find.byTooltip('更多播放选项'), findsOneWidget);
-        await tester.tap(find.byTooltip('更多播放选项'));
+        expect(findMaterialTooltip('更多播放选项'), findsOneWidget);
+        await tester.tap(findMaterialTooltip('更多播放选项'));
         await tester.pumpAndSettle();
         await tester.tap(find.widgetWithText(ExpansionTile, '字幕'));
         await tester.pump(const Duration(milliseconds: 300));
@@ -2118,9 +2121,9 @@ void main() {
         expect(session.sourceGeneration, generation);
         expect(engine.opens, 1);
 
-        await tester.tap(find.byTooltip('关闭更多播放选项'));
+        await tester.tap(findMaterialTooltip('关闭更多播放选项'));
         await tester.pumpAndSettle();
-        await tester.tap(find.byTooltip('听视频'));
+        await tester.tap(findMaterialTooltip('听视频'));
         await _pumpFrames(tester);
         expect(session.audioOnly, isTrue);
         expect(find.byType(VideoSurface), findsNothing);
@@ -2137,7 +2140,7 @@ void main() {
         await _showControls(tester);
         expect(session.audioOnly, isFalse);
         expect(find.byType(VideoSurface), findsOneWidget);
-        expect(find.byTooltip('听视频').hitTestable(), findsOneWidget);
+        expect(findMaterialTooltip('听视频').hitTestable(), findsOneWidget);
         expect(engine.currentSnapshot.position, const Duration(seconds: 35));
         expect(engine.currentSnapshot.desiredPlaying, isFalse);
         expect(engine.maxSurfaces, 1);
@@ -2195,7 +2198,7 @@ void main() {
       final sidebar = find.byType(PlaybackSidebarToggle);
       expect(sidebar, width >= 1000 ? findsOneWidget : findsNothing);
       await _showControls(tester);
-      await tester.tap(find.byTooltip('全屏（F）'));
+      await tester.tap(findMaterialTooltip('全屏（F）'));
       await _pumpFrames(tester);
       expect(window.fullScreen, isTrue);
       expect(sidebar.hitTestable(), findsNothing);
@@ -2254,7 +2257,7 @@ void main() {
             await _pumpSurfaceTap(tester);
             expect(controls.hitTestable(), findsOneWidget);
             expect(engine.currentSnapshot.desiredPlaying, playing);
-            await tester.tap(find.byTooltip('全屏（F）'));
+            await tester.tap(findMaterialTooltip('全屏（F）'));
             await _pumpFrames(tester);
             expect(controls.hitTestable(), findsOneWidget);
             await tester.tapAt(_surfacePoint(tester));
@@ -2322,7 +2325,7 @@ void main() {
           await _pumpFrames(tester);
           await _showControls(tester);
           if (fullscreen) {
-            await tester.tap(find.byTooltip('全屏（F）'));
+            await tester.tap(findMaterialTooltip('全屏（F）'));
             await _pumpFrames(tester);
           }
           if (controlsVisible) {
@@ -2468,7 +2471,7 @@ void main() {
             await _pumpFrames(tester);
             await _showControls(tester);
             if (fullscreen) {
-              await tester.tap(find.byTooltip('全屏（F）'));
+              await tester.tap(findMaterialTooltip('全屏（F）'));
               await _pumpFrames(tester);
             }
             if (playing != session.snapshots.value.desiredPlaying) {
@@ -2597,7 +2600,7 @@ void main() {
           await _pumpFrames(tester);
           await _showControls(tester);
           if (fullscreen) {
-            await tester.tap(find.byTooltip('全屏（F）'));
+            await tester.tap(findMaterialTooltip('全屏（F）'));
             await _pumpFrames(tester);
           }
           if (playing != session.snapshots.value.desiredPlaying) {
@@ -2881,7 +2884,7 @@ void main() {
           await _pumpFrames(tester);
           await _showControls(tester);
           if (fullscreen) {
-            await tester.tap(find.byTooltip('全屏（F）'));
+            await tester.tap(findMaterialTooltip('全屏（F）'));
             await _pumpFrames(tester);
           }
           await session.setVolume(50);
@@ -2923,7 +2926,7 @@ void main() {
           expect(engine.currentSnapshot.position, before.position);
           expect(engine.opens, opens);
           if (fullscreen) {
-            await tester.tap(find.byTooltip('退出全屏（Esc）'));
+            await tester.tap(findMaterialTooltip('退出全屏（Esc）'));
             await _pumpFrames(tester);
           }
           await tester.pumpWidget(const SizedBox());
@@ -2953,7 +2956,7 @@ void main() {
           await _pumpFrames(tester);
           await _showControls(tester);
           if (fullscreen) {
-            await tester.tap(find.byTooltip('全屏（F）'));
+            await tester.tap(findMaterialTooltip('全屏（F）'));
             await _pumpFrames(tester);
           }
           await session.pause();
@@ -3048,7 +3051,7 @@ void main() {
       final opens = engine.opens;
       for (final fullscreen in [false, true]) {
         if (fullscreen) {
-          await tester.tap(find.byTooltip('全屏（F）'));
+          await tester.tap(findMaterialTooltip('全屏（F）'));
           await _pumpFrames(tester);
         }
         for (final show in [false, true, false]) {
@@ -3067,7 +3070,7 @@ void main() {
           expect(engine.maxSurfaces, 1);
         }
       }
-      await tester.tap(find.byTooltip('退出全屏（Esc）'));
+      await tester.tap(findMaterialTooltip('退出全屏（Esc）'));
       await _pumpFrames(tester);
       await tester.pumpWidget(const SizedBox());
       await _pumpFrames(tester);
@@ -3127,13 +3130,13 @@ void main() {
       await tester.tap(home);
       await tester.pump();
       expect(homes, 1);
-      await tester.tap(find.byTooltip('全屏（F）'));
+      await tester.tap(findMaterialTooltip('全屏（F）'));
       await _pumpFrames(tester);
       await tester.tap(back);
       await _pumpFrames(tester);
       expect(window.fullScreen, isFalse);
       expect(backs, 1);
-      await tester.tap(find.byTooltip('全屏（F）'));
+      await tester.tap(findMaterialTooltip('全屏（F）'));
       await _pumpFrames(tester);
       await tester.tap(home);
       await _pumpFrames(tester);
@@ -3189,14 +3192,14 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('player-back')));
       await tester.pump();
       expect(backs, 1);
-      await tester.tap(find.byTooltip('全屏（F）'));
+      await tester.tap(findMaterialTooltip('全屏（F）'));
       await _pumpFrames(tester);
       expect(find.text('92 人正在看'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('player-back')));
       await _pumpFrames(tester);
       expect(backs, 1);
       expect(find.byType(Dialog), findsNothing);
-      await tester.tap(find.byTooltip('全屏（F）'));
+      await tester.tap(findMaterialTooltip('全屏（F）'));
       await _pumpFrames(tester);
       await tester.tap(find.byKey(const ValueKey('player-home')));
       await _pumpFrames(tester);
@@ -3279,7 +3282,7 @@ void main() {
     );
     final opens = engine.opens;
     for (var round = 0; round < 2; round++) {
-      await tester.tap(find.byTooltip('全屏（F）'));
+      await tester.tap(findMaterialTooltip('全屏（F）'));
       await _pumpFrames(tester);
       final fullscreen = tester.element(find.byType(Dialog));
       expect(View.of(fullscreen).viewId, windows.lastWindow!.viewId);
@@ -3293,7 +3296,7 @@ void main() {
       expect(engine.opens, opens);
       expect(engine.activeSurfaces, 1);
       expect(engine.maxSurfaces, 1);
-      await tester.tap(find.byTooltip('退出全屏（Esc）'));
+      await tester.tap(findMaterialTooltip('退出全屏（Esc）'));
       await _pumpFrames(tester);
       expect(playbackNavigator.canPop(), isFalse);
       expect(tester.element(find.byType(PlaybackPanel)), same(panel));
@@ -3337,7 +3340,7 @@ void main() {
       await session.selectSubtitle(0);
       await _pumpFrames(tester);
       if (fullScreen) {
-        await tester.tap(find.byTooltip('全屏（F）'));
+        await tester.tap(findMaterialTooltip('全屏（F）'));
         await _pumpFrames(tester);
       }
       if (!controlsVisible) {
@@ -3393,7 +3396,7 @@ void main() {
         await _pumpFrames(tester);
         await _showControls(tester);
         if (fullScreen) {
-          await tester.tap(find.byTooltip('全屏（F）'));
+          await tester.tap(findMaterialTooltip('全屏（F）'));
           await _pumpFrames(tester);
         }
         final boundary = tester.renderObject<RenderRepaintBoundary>(
@@ -3468,7 +3471,7 @@ void main() {
     expect(inlineCompositions, greaterThan(0));
     expect(composition.outputs, contains(same(engine.videoOutput)));
     expect(find.byKey(const ValueKey('player-controls')), findsOneWidget);
-    await tester.tap(find.byTooltip('全屏（F）'));
+    await tester.tap(findMaterialTooltip('全屏（F）'));
     await _pumpFrames(tester);
     expect(composition.compositions, greaterThan(inlineCompositions));
     expect(
@@ -3477,7 +3480,7 @@ void main() {
     );
     expect(engine.opens, opens);
     expect(engine.maxSurfaces, 1);
-    await tester.tap(find.byTooltip('退出全屏（Esc）'));
+    await tester.tap(findMaterialTooltip('退出全屏（Esc）'));
     await _pumpFrames(tester);
     expect(engine.opens, opens);
     await tester.pumpWidget(const SizedBox());
@@ -3510,7 +3513,7 @@ void main() {
           );
           await _pumpFrames(tester);
           if (fullScreen) {
-            await tester.tap(find.byTooltip('全屏（F）'));
+            await tester.tap(findMaterialTooltip('全屏（F）'));
             await _pumpFrames(tester);
           }
           final controls = find.byKey(const ValueKey('player-controls'));
@@ -3600,10 +3603,10 @@ void main() {
             expect(tester.getRect(button), shown);
           }
           await _showControls(tester);
-          await tester.tap(find.byTooltip('全屏（F）'));
+          await tester.tap(findMaterialTooltip('全屏（F）'));
           await _pumpFrames(tester);
           expectPosition(controlsVisible: true);
-          await tester.tap(find.byTooltip('退出全屏（Esc）'));
+          await tester.tap(findMaterialTooltip('退出全屏（Esc）'));
           await _pumpFrames(tester);
           await tester.tap(button);
           await _pumpFrames(tester);
@@ -3653,10 +3656,10 @@ void main() {
       }
 
       expectClearance();
-      await tester.tap(find.byTooltip('全屏（F）'));
+      await tester.tap(findMaterialTooltip('全屏（F）'));
       await _pumpFrames(tester);
       expectClearance();
-      await tester.tap(find.byTooltip('退出全屏（Esc）'));
+      await tester.tap(findMaterialTooltip('退出全屏（Esc）'));
       await _pumpFrames(tester);
       await tester.tapAt(_surfacePoint(tester));
       await _pumpSurfaceTap(tester);
@@ -3879,10 +3882,10 @@ void main() {
         await session.pause();
         await _pumpFrames(tester);
         if (fullScreen) {
-          await tester.tap(find.byTooltip('全屏（F）'));
+          await tester.tap(findMaterialTooltip('全屏（F）'));
           await _pumpFrames(tester);
         }
-        await tester.tap(find.byTooltip('发送弹幕'));
+        await tester.tap(findMaterialTooltip('发送弹幕'));
         await _pumpFrames(tester);
         await tester.tap(find.byKey(const Key('keyboard-editor')));
         await tester.pumpAndSettle();
@@ -4013,7 +4016,7 @@ void main() {
           for (final systemBack in [false, true]) {
             // Unknown dimensions on entry and late landscape/portrait/square
             // dimensions must all leave the tablet's orientation policy alone.
-            await tester.tap(find.byTooltip('全屏（F）'));
+            await tester.tap(findMaterialTooltip('全屏（F）'));
             await _pumpFrames(tester);
             expect(window.isFullScreen, isTrue);
             expect(
@@ -4033,12 +4036,12 @@ void main() {
             if (systemBack) {
               await tester.binding.handlePopRoute();
             } else {
-              await tester.tap(find.byTooltip('退出全屏（Esc）'));
+              await tester.tap(findMaterialTooltip('退出全屏（Esc）'));
             }
             await _pumpFrames(tester);
             expect(window.isFullScreen, isFalse);
             expect(tester.view.physicalSize, initialSize);
-            expect(find.byTooltip('全屏（F）'), findsOneWidget);
+            expect(findMaterialTooltip('全屏（F）'), findsOneWidget);
           }
           expect(
             platformCalls.where(
@@ -4115,7 +4118,7 @@ void main() {
         tester.view.physicalSize = const Size(400, 800);
         await _pumpFrames(tester);
         expect(window.fullScreen, isFalse);
-        expect(find.byTooltip('全屏（F）'), findsOneWidget);
+        expect(findMaterialTooltip('全屏（F）'), findsOneWidget);
         expect(engine.opens, opens);
         expect(session.sourceGeneration, generation);
         expect(engine.currentSnapshot.position, const Duration(seconds: 37));
@@ -4154,7 +4157,7 @@ void main() {
     await _pumpFrames(tester);
     expect(window.fullScreen, isFalse);
     await _showControls(tester);
-    await tester.tap(find.byTooltip('全屏（F）'));
+    await tester.tap(findMaterialTooltip('全屏（F）'));
     await _pumpFrames(tester);
     expect(window.fullScreen, isTrue);
     tester.view.physicalSize = const Size(400, 800);
@@ -4248,7 +4251,7 @@ void main() {
           videoDimensions: const VideoDimensions(1920, 1080),
         ),
       );
-      await tester.tap(find.byTooltip('全屏（F）'));
+      await tester.tap(findMaterialTooltip('全屏（F）'));
       await _pumpFrames(tester);
       expect(window.orientations, [FullScreenOrientation.landscape]);
       expect(events.hasListener, isTrue);
@@ -4682,7 +4685,7 @@ void main() {
         );
         await _pumpFrames(tester);
         if (fullscreen) {
-          await tester.tap(find.byTooltip('全屏（F）'));
+          await tester.tap(findMaterialTooltip('全屏（F）'));
           await _pumpFrames(tester);
         }
         final opens = engine.opens;
@@ -4826,7 +4829,7 @@ void main() {
         videoDimensions: const VideoDimensions(1920, 1080),
       ),
     );
-    await tester.tap(find.byTooltip('全屏（F）'));
+    await tester.tap(findMaterialTooltip('全屏（F）'));
     await _pumpFrames(tester);
     expect(orientations, [
       ['DeviceOrientation.landscapeLeft', 'DeviceOrientation.landscapeRight'],
@@ -4840,7 +4843,7 @@ void main() {
       ['DeviceOrientation.landscapeLeft', 'DeviceOrientation.landscapeRight'],
       <String>[],
     ]);
-    await tester.tap(find.byTooltip('退出全屏（Esc）'));
+    await tester.tap(findMaterialTooltip('退出全屏（Esc）'));
     await _pumpFrames(tester);
     expect(window.isFullScreen, isFalse);
     expect(orientations, hasLength(2));
@@ -4882,7 +4885,7 @@ void main() {
           );
           final generation = engine.currentSnapshot.generation;
           final opens = engine.opens;
-          await tester.tap(find.byTooltip('全屏（F）'));
+          await tester.tap(findMaterialTooltip('全屏（F）'));
           await _pumpFrames(tester);
           expect(window.fullScreen, isTrue);
           expect(
@@ -4896,7 +4899,7 @@ void main() {
           }
           await _pumpFrames(tester);
           expect(window.orientations, hasLength(1));
-          await tester.tap(find.byTooltip('退出全屏（Esc）'));
+          await tester.tap(findMaterialTooltip('退出全屏（Esc）'));
           await _pumpFrames(tester);
           expect(window.fullScreen, isFalse);
           expect(window.orientations.last, isNull);
@@ -4928,7 +4931,7 @@ void main() {
       );
       await _pumpFrames(tester);
       await _showControls(tester);
-      await tester.tap(find.byTooltip('全屏（F）'));
+      await tester.tap(findMaterialTooltip('全屏（F）'));
       await _pumpFrames(tester);
       expect(window.orientations, [FullScreenOrientation.portrait]);
       engine._emit(
@@ -4987,7 +4990,7 @@ void main() {
             videoDimensions: const VideoDimensions(1920, 1080),
           ),
         );
-        await tester.tap(find.byTooltip('全屏（F）'));
+        await tester.tap(findMaterialTooltip('全屏（F）'));
         await _pumpFrames(tester);
         await tester.pumpWidget(
           dispose
@@ -5078,7 +5081,7 @@ void main() {
           expect(style?.statusBarBrightness, Brightness.dark);
         }
 
-        await tester.tap(find.byTooltip('全屏（F）'));
+        await tester.tap(findMaterialTooltip('全屏（F）'));
         // Late dimensions must not issue a native rotation before the route's
         // first paint, even while the explicit entry waits for endOfFrame.
         engine._emit(
@@ -5187,7 +5190,7 @@ void main() {
           );
           final opens = engine.opens;
           final generation = session.sourceGeneration;
-          await tester.tap(find.byTooltip('全屏（F）'));
+          await tester.tap(findMaterialTooltip('全屏（F）'));
           await _pumpFrames(tester);
           tester.view.physicalSize = const Size(844, 390);
           tester.view.display.size = const Size(844, 390);
@@ -5196,7 +5199,7 @@ void main() {
           await _pumpFrames(tester);
           switch (action) {
             case 'button':
-              await tester.tap(find.byTooltip('退出全屏（Esc）'));
+              await tester.tap(findMaterialTooltip('退出全屏（Esc）'));
             case 'back':
               await tester.binding.handlePopRoute();
             case 'escape':
@@ -5276,7 +5279,7 @@ void main() {
       );
       await _pumpFrames(tester);
       await _showControls(tester);
-      await tester.tap(find.byTooltip('全屏（F）'));
+      await tester.tap(findMaterialTooltip('全屏（F）'));
       await _pumpFrames(tester);
       await tester.binding.handlePopRoute();
       await _pumpFrames(tester);
@@ -5315,7 +5318,7 @@ void main() {
     );
     await _pumpFrames(tester);
     await _showControls(tester);
-    await tester.tap(find.byTooltip('全屏（F）'));
+    await tester.tap(findMaterialTooltip('全屏（F）'));
     await _pumpFrames(tester);
     engine._emit(
       engine.currentSnapshot.copyWith(
@@ -5330,7 +5333,7 @@ void main() {
     await _pumpFrames(tester);
     expect(window.fullScreen, isFalse);
     expect(window.orientations, [FullScreenOrientation.landscape, null]);
-    expect(find.byTooltip('退出全屏（Esc）'), findsNothing);
+    expect(findMaterialTooltip('退出全屏（Esc）'), findsNothing);
     await tester.pumpWidget(const SizedBox());
     await _pumpFrames(tester);
   });
@@ -5351,12 +5354,12 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
       await _pumpFrames(tester);
       await _showControls(tester);
-      expect(find.byTooltip('退出全屏（Esc）'), findsOneWidget);
+      expect(findMaterialTooltip('退出全屏（Esc）'), findsOneWidget);
       await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
       await tester.sendKeyDownEvent(LogicalKeyboardKey.keyW);
       await _pumpFrames(tester);
       expect(find.byKey(const ValueKey('workspace-tab-tab-1')), findsNothing);
-      expect(find.byTooltip('退出全屏（Esc）'), findsNothing);
+      expect(findMaterialTooltip('退出全屏（Esc）'), findsNothing);
       await tester.sendKeyEvent(LogicalKeyboardKey.keyT);
       await _pumpFrames(tester);
       expect(find.byKey(const ValueKey('workspace-tab-tab-2')), findsOneWidget);
@@ -5647,7 +5650,7 @@ void main() {
       await session.pause();
       for (final fullscreen in [false, true]) {
         if (fullscreen) {
-          await tester.tap(find.byTooltip('全屏（F）'));
+          await tester.tap(findMaterialTooltip('全屏（F）'));
           await _pumpFrames(tester);
         }
         session.danmaku.replaceEvents(const [
@@ -5708,7 +5711,7 @@ void main() {
           expect(engine.maxSurfaces, 1);
         }
       }
-      await tester.tap(find.byTooltip('退出全屏（Esc）'));
+      await tester.tap(findMaterialTooltip('退出全屏（Esc）'));
       await _pumpFrames(tester);
       await tester.pumpWidget(const SizedBox());
       await _pumpFrames(tester);
@@ -5763,7 +5766,7 @@ void main() {
             for (final fullscreen in [false, true]) {
               if (fullscreen) {
                 await setControls(true);
-                await tester.tap(find.byTooltip('全屏（F）'));
+                await tester.tap(findMaterialTooltip('全屏（F）'));
                 await _pumpFrames(tester);
               }
               await setControls(false);
@@ -6015,10 +6018,10 @@ void main() {
       for (final fullscreen in [false, true]) {
         if (width == 320 && !fullscreen) continue;
         if (fullscreen) {
-          await tester.tap(find.byTooltip('全屏（F）'));
+          await tester.tap(findMaterialTooltip('全屏（F）'));
           await _pumpFrames(tester);
         }
-        await tester.tap(find.byTooltip('音量'));
+        await tester.tap(findMaterialTooltip('音量'));
         await tester.pumpAndSettle();
         expect(slider, findsOneWidget);
         expect(tester.widget<Slider>(slider).divisions, isNull);
@@ -6051,7 +6054,7 @@ void main() {
         expect(slider, findsNothing);
         expect(find.byIcon(Icons.volume_off_outlined), findsOneWidget);
 
-        await tester.tap(find.byTooltip('音量'));
+        await tester.tap(findMaterialTooltip('音量'));
         await tester.pumpAndSettle();
         expect(tester.widget<Slider>(slider).value, 0);
         final reopenedRect = tester.getRect(slider);
@@ -6069,7 +6072,7 @@ void main() {
         expect(engine.maxSurfaces, 1);
         expect(tester.takeException(), isNull);
       }
-      await tester.tap(find.byTooltip('退出全屏（Esc）'));
+      await tester.tap(findMaterialTooltip('退出全屏（Esc）'));
       await _pumpFrames(tester);
       await tester.pumpWidget(const SizedBox());
       await _pumpFrames(tester);
@@ -6106,7 +6109,7 @@ void main() {
             : 120.0;
         for (final fullscreen in [false, true]) {
           if (fullscreen) {
-            await tester.tap(find.byTooltip('全屏'));
+            await tester.tap(findMaterialTooltip('全屏'));
             await _pumpFrames(tester);
           }
           final point = tester.getCenter(
@@ -6135,7 +6138,7 @@ void main() {
           expect(engine.opens, 1);
           expect(engine.maxSurfaces, 1);
         }
-        await tester.tap(find.byTooltip('退出全屏'));
+        await tester.tap(findMaterialTooltip('退出全屏'));
         await _pumpFrames(tester);
         await tester.pumpWidget(const SizedBox());
         await _pumpFrames(tester);
@@ -6168,7 +6171,7 @@ void main() {
       for (final fullscreen in [false, true]) {
         if (fullscreen) {
           await _showControls(tester);
-          await tester.tap(find.byTooltip('全屏'));
+          await tester.tap(findMaterialTooltip('全屏'));
           await _pumpFrames(tester);
         }
         final point = tester.getCenter(
@@ -6202,7 +6205,7 @@ void main() {
         }
       }
       await _showControls(tester);
-      await tester.tap(find.byTooltip('退出全屏'));
+      await tester.tap(findMaterialTooltip('退出全屏'));
       await _pumpFrames(tester);
       await tester.pumpWidget(const SizedBox());
       await _pumpFrames(tester);
@@ -6410,12 +6413,12 @@ void main() {
     await _pumpFrames(tester);
     await _showControls(tester);
     expect(find.text('房间草稿'), findsOneWidget);
-    await tester.tap(find.byTooltip('全屏（F）'));
+    await tester.tap(findMaterialTooltip('全屏（F）'));
     await _pumpFrames(tester);
     expect(find.text('房间草稿'), findsOneWidget);
     expect(find.text('root'), findsNothing);
     expect(engine.maxSurfaces, 1);
-    await tester.tap(find.byTooltip('退出全屏（Esc）'));
+    await tester.tap(findMaterialTooltip('退出全屏（Esc）'));
     await _pumpFrames(tester);
     expect(find.text('房间草稿'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
@@ -6481,7 +6484,7 @@ void main() {
       );
       await tester.tapAt(_surfacePoint(tester));
       await tester.pump(const Duration(milliseconds: 400));
-      await tester.tap(find.byTooltip('全屏（F）'));
+      await tester.tap(findMaterialTooltip('全屏（F）'));
       await _pumpFrames(tester);
       await tester.tapAt(_surfacePoint(tester));
       await tester.pump(const Duration(milliseconds: 400));
@@ -6497,7 +6500,7 @@ void main() {
       expect(engine.maxSurfaces, 1);
       await tester.tapAt(_surfacePoint(tester));
       await tester.pump(const Duration(milliseconds: 400));
-      await tester.tap(find.byTooltip('退出全屏（Esc）'));
+      await tester.tap(findMaterialTooltip('退出全屏（Esc）'));
       await _pumpFrames(tester);
       await tester.tapAt(_surfacePoint(tester));
       await tester.pump(const Duration(milliseconds: 400));
@@ -6548,12 +6551,12 @@ void main() {
       await _showControls(tester);
       expect(find.text('实时弹幕覆盖层'), findsOneWidget);
       final generation = engine.currentSnapshot.generation;
-      await tester.tap(find.byTooltip('全屏（F）'));
+      await tester.tap(findMaterialTooltip('全屏（F）'));
       await _pumpFrames(tester);
       expect(find.text('实时弹幕覆盖层'), findsOneWidget);
       expect(engine.maxSurfaces, 1);
       expect(engine.currentSnapshot.generation, generation);
-      await tester.tap(find.byTooltip('退出全屏（Esc）'));
+      await tester.tap(findMaterialTooltip('退出全屏（Esc）'));
       await _pumpFrames(tester);
       expect(find.text('实时弹幕覆盖层'), findsOneWidget);
       await tester.pumpWidget(
@@ -6956,15 +6959,15 @@ void main() {
       );
       expect(tester.getSize(field).width, lessThan(largeWidth));
       expect(tester.getSize(field).width, greaterThanOrEqualTo(200));
-      final baseline = tester.getCenter(find.byTooltip('全屏（F）')).dy;
+      final baseline = tester.getCenter(findMaterialTooltip('全屏（F）')).dy;
       for (final tooltip in ['播放（空格）', '关闭弹幕', '清晰度', '音量']) {
         expect(
-          tester.getCenter(find.byTooltip(tooltip)).dy,
+          tester.getCenter(findMaterialTooltip(tooltip)).dy,
           closeTo(baseline, .1),
         );
       }
       expect(
-        tester.getCenter(find.byTooltip('播放速度')).dy,
+        tester.getCenter(findMaterialTooltip('播放速度')).dy,
         closeTo(baseline, .1),
       );
       expect(tester.getCenter(field).dy, closeTo(baseline, .1));
@@ -6983,7 +6986,7 @@ void main() {
       );
       expect(tester.getSize(field).width, greaterThanOrEqualTo(200));
       expect(find.byIcon(Icons.airplanemode_active), findsNothing);
-      await tester.tap(find.byTooltip('播放配置'));
+      await tester.tap(findMaterialTooltip('播放配置'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(Tab, '空降助手'));
       await tester.pumpAndSettle();
@@ -6991,7 +6994,7 @@ void main() {
         DefaultTabController.of(tester.element(find.byType(TabBar))).index,
         3,
       );
-      await tester.tap(find.byTooltip('关闭'));
+      await tester.tap(findMaterialTooltip('关闭'));
       await tester.pumpAndSettle();
       for (final width in [640.0, 480.0, 320.0]) {
         await resize(width);
@@ -7008,13 +7011,13 @@ void main() {
           tester.getSize(find.byKey(const ValueKey('player-controls'))).height,
           lessThan(140),
         );
-        expect(find.byTooltip('全屏（F）').hitTestable(), findsOneWidget);
+        expect(findMaterialTooltip('全屏（F）').hitTestable(), findsOneWidget);
       }
-      expect(find.byTooltip('发送弹幕').hitTestable(), findsOneWidget);
-      await tester.tap(find.byTooltip('播放（空格）'));
+      expect(findMaterialTooltip('发送弹幕').hitTestable(), findsOneWidget);
+      await tester.tap(findMaterialTooltip('播放（空格）'));
       await _pumpFrames(tester);
       expect(engine.currentSnapshot.desiredPlaying, isTrue);
-      await tester.tap(find.byTooltip('暂停（空格）'));
+      await tester.tap(findMaterialTooltip('暂停（空格）'));
       await _pumpFrames(tester);
       expect(engine.currentSnapshot.desiredPlaying, isFalse);
       await resize(1200);
@@ -7075,11 +7078,11 @@ void main() {
         );
         expect(find.byIcon(Icons.airplanemode_active), findsNothing);
         expect(
-          find.byTooltip('投屏'),
+          findMaterialTooltip('投屏'),
           content != 'offline' ? findsOneWidget : findsNothing,
         );
         void expectCastingInTopBar() {
-          final casting = find.byTooltip('投屏').hitTestable();
+          final casting = findMaterialTooltip('投屏').hitTestable();
           expect(casting, content != 'offline' ? findsOneWidget : findsNothing);
           expect(
             find.descendant(
@@ -7108,9 +7111,9 @@ void main() {
           findsOneWidget,
         );
         expectCastingInTopBar();
-        expect(find.byTooltip('更多播放选项'), findsOneWidget);
+        expect(findMaterialTooltip('更多播放选项'), findsOneWidget);
         expect(find.byIcon(Icons.more_horiz), findsOneWidget);
-        await tester.tap(find.byTooltip('全屏（F）'));
+        await tester.tap(findMaterialTooltip('全屏（F）'));
         await _pumpFrames(tester);
         expect(
           find.byKey(const ValueKey('standard-control-row')),
@@ -7158,13 +7161,13 @@ void main() {
           await _pumpFrames(tester);
           await _showControls(tester);
           if (fullScreen) {
-            await tester.tap(find.byTooltip('全屏（F）'));
+            await tester.tap(findMaterialTooltip('全屏（F）'));
             await _pumpFrames(tester);
           }
           final next = find.byKey(const ValueKey('player-next-episode'));
           final bar = find.byKey(const ValueKey('compact-control-row'));
           void expectTransportInBar() {
-            final pause = find.byTooltip('暂停（空格）');
+            final pause = findMaterialTooltip('暂停（空格）');
             expect(pause.hitTestable(), findsOneWidget);
             expect(find.descendant(of: bar, matching: pause), findsOneWidget);
             expect(find.descendant(of: bar, matching: next), findsOneWidget);
@@ -7174,11 +7177,11 @@ void main() {
           }
 
           expectTransportInBar();
-          expect(find.byTooltip('暂停（空格）').hitTestable(), findsOneWidget);
+          expect(findMaterialTooltip('暂停（空格）').hitTestable(), findsOneWidget);
           expect(next, findsOneWidget);
           final generation = session.sourceGeneration;
           final opens = engine.opens;
-          await tester.tap(find.byTooltip('发送弹幕'));
+          await tester.tap(findMaterialTooltip('发送弹幕'));
           await _pumpFrames(tester);
           await tester.enterText(
             find.byKey(const Key('compact-transport-draft')),
@@ -7200,16 +7203,16 @@ void main() {
                   .didExceedMaxLines,
               isFalse,
             );
-            await tester.tap(find.byTooltip('暂停（空格）'));
+            await tester.tap(findMaterialTooltip('暂停（空格）'));
             await _pumpFrames(tester);
             expect(session.snapshots.value.desiredPlaying, isFalse);
-            await tester.tap(find.byTooltip('播放（空格）'));
+            await tester.tap(findMaterialTooltip('播放（空格）'));
             await _pumpFrames(tester);
             expect(session.snapshots.value.desiredPlaying, isTrue);
             expect(find.text('保留草稿'), findsOneWidget);
             expect(tester.takeException(), isNull);
           }
-          await tester.tap(find.byTooltip('收起弹幕输入'));
+          await tester.tap(findMaterialTooltip('收起弹幕输入'));
           await _pumpFrames(tester);
           expectTransportInBar();
           expect(next, findsOneWidget);
@@ -7267,7 +7270,7 @@ void main() {
           await session.pause();
           await _showControls(tester);
           if (fullscreen) {
-            await tester.tap(find.byTooltip('全屏（F）'));
+            await tester.tap(findMaterialTooltip('全屏（F）'));
             await _pumpFrames(tester);
           }
           final mouse = await tester.createGesture(
@@ -7275,13 +7278,13 @@ void main() {
           );
           await mouse.addPointer(location: _surfacePoint(tester));
           await tester.pump();
-          await tester.tap(find.byTooltip('发送弹幕样式'));
+          await tester.tap(findMaterialTooltip('发送弹幕样式'));
           await tester.pumpAndSettle();
           await mouse.moveTo(const Offset(-10, -10));
           await tester.pump(const Duration(seconds: 6));
           await tester.pumpAndSettle();
           await tester.tap(find.widgetWithText(ChoiceChip, '顶部'));
-          await tester.tap(find.byTooltip('粉色'));
+          await tester.tap(findMaterialTooltip('粉色'));
           await tester.tap(find.text('完成'));
           await tester.pumpAndSettle();
           expect(session.danmakuSendStyle.value, (
@@ -7294,10 +7297,10 @@ void main() {
             isEmpty,
           );
           await _showControls(tester);
-          await tester.tap(find.byTooltip('发送弹幕样式'));
+          await tester.tap(findMaterialTooltip('发送弹幕样式'));
           await tester.pumpAndSettle();
           expect(find.text('预览 · 顶部 · #FF6699'), findsOneWidget);
-          await tester.tap(find.byTooltip('蓝色'));
+          await tester.tap(findMaterialTooltip('蓝色'));
           await tester.tap(find.text('取消'));
           await tester.pumpAndSettle();
           final editor = find.descendant(
@@ -7349,7 +7352,7 @@ void main() {
     final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await mouse.addPointer(location: _surfacePoint(tester));
     await tester.pump();
-    await tester.tap(find.byTooltip('播放速度'));
+    await tester.tap(findMaterialTooltip('播放速度'));
     await tester.pump(const Duration(milliseconds: 300));
     await mouse.moveTo(const Offset(-10, -10));
     await tester.pump(const Duration(seconds: 6));
@@ -7380,19 +7383,19 @@ void main() {
         await _pumpFrames(tester);
         await _showControls(tester);
         if (fullscreen) {
-          await tester.tap(find.byTooltip('全屏（F）'));
+          await tester.tap(findMaterialTooltip('全屏（F）'));
           await _pumpFrames(tester);
         }
         await session.pause();
         if (fullscreen) {
-          await tester.tap(find.byTooltip('更多播放选项'));
+          await tester.tap(findMaterialTooltip('更多播放选项'));
           await tester.pumpAndSettle();
           expect(find.text('清晰度 720P'), findsOneWidget);
           expect(find.text('清晰度 1080P'), findsOneWidget);
           expect(find.text('播放速度 3.0x'), findsNothing);
         } else {
-          expect(find.byTooltip('更多播放选项'), findsOneWidget);
-          await tester.tap(find.byTooltip('更多播放选项'));
+          expect(findMaterialTooltip('更多播放选项'), findsOneWidget);
+          await tester.tap(findMaterialTooltip('更多播放选项'));
           await tester.pumpAndSettle();
           await tester.tap(find.widgetWithText(ExpansionTile, '清晰度'));
           await tester.pumpAndSettle();
@@ -7402,11 +7405,11 @@ void main() {
         await tester.tapAt(const Offset(1, 1));
         await tester.pumpAndSettle();
         if (fullscreen) {
-          await tester.ensureVisible(find.byTooltip('播放速度'));
+          await tester.ensureVisible(findMaterialTooltip('播放速度'));
           await tester.pumpAndSettle();
-          await tester.tap(find.byTooltip('播放速度'));
+          await tester.tap(findMaterialTooltip('播放速度'));
         } else {
-          await tester.tap(find.byTooltip('更多播放选项'));
+          await tester.tap(findMaterialTooltip('更多播放选项'));
           await tester.pumpAndSettle();
           await tester.tap(find.widgetWithText(ExpansionTile, '播放速度'));
         }
@@ -7460,7 +7463,7 @@ void main() {
       await _pumpFrames(tester);
       await _showControls(tester);
       await session.pause();
-      await tester.tap(find.byTooltip('清晰度'));
+      await tester.tap(findMaterialTooltip('清晰度'));
       await tester.pumpAndSettle();
       final videoText = find.text('720P');
       final videoParagraph = tester.renderObject<RenderParagraph>(
@@ -7480,7 +7483,7 @@ void main() {
         ),
       );
       await _pumpFrames(tester);
-      await tester.tap(find.byTooltip('直播清晰度与线路'));
+      await tester.tap(findMaterialTooltip('直播清晰度与线路'));
       await tester.pumpAndSettle();
       final liveText = find.text('720P 超清');
       final liveParagraph = tester.renderObject<RenderParagraph>(
@@ -7525,7 +7528,7 @@ void main() {
           await session.pause();
           await session.setVolume(32);
           if (fullscreen) {
-            await tester.tap(find.byTooltip('全屏（F）'));
+            await tester.tap(findMaterialTooltip('全屏（F）'));
             await _pumpFrames(tester);
           }
           final useCompactMenu = compact && fullscreen;
@@ -7535,7 +7538,9 @@ void main() {
             );
             await mouse.addPointer(location: _surfacePoint(tester));
             await tester.pump();
-            await tester.tap(find.byTooltip(compact ? '更多播放选项' : '直播清晰度与线路'));
+            await tester.tap(
+              findMaterialTooltip(compact ? '更多播放选项' : '直播清晰度与线路'),
+            );
             if (compact && !fullscreen) {
               await tester.pumpAndSettle();
               final stream = find.widgetWithText(ListTile, '直播流与线路');
@@ -7715,7 +7720,7 @@ void main() {
       );
       await _pumpFrames(tester);
       await _showControls(tester);
-      await tester.tap(find.byTooltip('直播清晰度与线路'));
+      await tester.tap(findMaterialTooltip('直播清晰度与线路'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(ChoiceChip, 'HLS · fMP4 · HEVC'));
       await tester.tap(find.text('应用'));
@@ -7758,7 +7763,7 @@ void main() {
             await _pumpFrames(tester);
             await session.pause();
             if (fullscreen) {
-              await tester.tap(find.byTooltip('全屏（F）'));
+              await tester.tap(findMaterialTooltip('全屏（F）'));
               await _pumpFrames(tester);
             }
             final mouse = await tester.createGesture(
@@ -7774,9 +7779,9 @@ void main() {
                     'subtitle' => '字幕',
                     _ => '语音翻译',
                   };
-            await tester.ensureVisible(find.byTooltip(tooltip));
+            await tester.ensureVisible(findMaterialTooltip(tooltip));
             await tester.pumpAndSettle();
-            await tester.tap(find.byTooltip(tooltip));
+            await tester.tap(findMaterialTooltip(tooltip));
             await tester.pump(const Duration(milliseconds: 300));
             await mouse.moveTo(const Offset(-10, -10));
             await tester.pump(const Duration(seconds: 6));
@@ -7845,7 +7850,7 @@ void main() {
     await _pumpFrames(tester);
     await _showControls(tester);
     await session.pause();
-    await tester.tap(find.byTooltip('播放速度'));
+    await tester.tap(findMaterialTooltip('播放速度'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(PopupMenuItem<double>, '3.0x'));
     await tester.pumpAndSettle();
@@ -7972,7 +7977,7 @@ void main() {
           await session.setRate(1.5);
           await session.seek(const Duration(seconds: 12));
           if (fullscreen) {
-            await tester.tap(find.byTooltip('全屏'));
+            await tester.tap(findMaterialTooltip('全屏'));
             await _pumpFrames(tester);
           }
           if (!visible) {
@@ -8030,7 +8035,7 @@ void main() {
           await session.setRate(1.5);
           await session.seek(const Duration(seconds: 12));
           if (fullscreen) {
-            await tester.tap(find.byTooltip('全屏（F）'));
+            await tester.tap(findMaterialTooltip('全屏（F）'));
             await _pumpFrames(tester);
           }
           if (!visible) {
@@ -8155,7 +8160,7 @@ void main() {
           await hold.cancel();
         case 'fullscreen':
           await _showControls(tester);
-          await tester.tap(find.byTooltip('全屏（F）'));
+          await tester.tap(findMaterialTooltip('全屏（F）'));
         case 'source':
           await session.retry();
         case 'manual rate':
@@ -8481,7 +8486,7 @@ void main() {
       await _showControls(tester);
       final gesture = await tester.startGesture(
         action == 'button'
-            ? tester.getCenter(find.byTooltip('暂停（空格）'))
+            ? tester.getCenter(findMaterialTooltip('暂停（空格）'))
             : _surfacePoint(tester),
         kind: action == 'mouse'
             ? PointerDeviceKind.mouse
@@ -8532,7 +8537,7 @@ void main() {
               await _pumpFrames(tester);
               await _showControls(tester);
               if (fullscreen) {
-                await tester.tap(find.byTooltip('全屏（F）'));
+                await tester.tap(findMaterialTooltip('全屏（F）'));
                 await _pumpFrames(tester);
               }
               await session.pause();
@@ -8740,7 +8745,7 @@ void main() {
           );
           await _pumpFrames(tester);
           if (fullscreen) {
-            await tester.tap(find.byTooltip('全屏（F）'));
+            await tester.tap(findMaterialTooltip('全屏（F）'));
             await _pumpFrames(tester);
           }
           final controls = find.byKey(const ValueKey('player-controls'));
@@ -8835,7 +8840,7 @@ void main() {
             );
             await _pumpFrames(tester);
             if (fullscreen) {
-              await tester.tap(find.byTooltip('全屏（F）'));
+              await tester.tap(findMaterialTooltip('全屏（F）'));
               await _pumpFrames(tester);
             }
             final controls = find.byKey(const ValueKey('player-controls'));
@@ -8907,7 +8912,7 @@ void main() {
       await _pumpFrames(tester);
       final controls = find.byKey(const ValueKey('player-controls'));
       final gesture = await tester.startGesture(
-        tester.getCenter(find.byTooltip('音量')),
+        tester.getCenter(findMaterialTooltip('音量')),
         kind: PointerDeviceKind.mouse,
       );
       await tester.pump(const Duration(seconds: 4));
@@ -8950,7 +8955,7 @@ void main() {
             );
             await _pumpFrames(tester);
             if (fullscreen) {
-              await tester.tap(find.byTooltip('全屏（F）'));
+              await tester.tap(findMaterialTooltip('全屏（F）'));
               await _pumpFrames(tester);
             }
             final controls = find.byKey(const ValueKey('player-controls'));
@@ -9202,7 +9207,7 @@ void main() {
           await _showControls(tester);
           await session.pause();
           if (fullscreen) {
-            await tester.tap(find.byTooltip('全屏（F）'));
+            await tester.tap(findMaterialTooltip('全屏（F）'));
             await _pumpFrames(tester);
           }
           final controls = find.byKey(const ValueKey('player-controls'));
@@ -9286,7 +9291,7 @@ void main() {
           await _pumpFrames(tester);
           await _showControls(tester);
           if (fullscreen) {
-            await tester.tap(find.byTooltip('全屏（F）'));
+            await tester.tap(findMaterialTooltip('全屏（F）'));
             await _pumpFrames(tester);
           }
           final controls = find.byKey(const ValueKey('player-controls'));
@@ -9348,7 +9353,7 @@ void main() {
               await _pumpFrames(tester);
               await _showControls(tester);
               if (fullscreen) {
-                await tester.tap(find.byTooltip('全屏（F）'));
+                await tester.tap(findMaterialTooltip('全屏（F）'));
                 await _pumpFrames(tester);
               }
               final controls = find.byKey(const ValueKey('player-controls'));
@@ -9431,7 +9436,7 @@ void main() {
         final controls = find.byKey(const ValueKey('player-controls'));
         final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
         await mouse.addPointer(location: const Offset(-10, -10));
-        await mouse.moveTo(tester.getCenter(find.byTooltip('暂停（空格）')));
+        await mouse.moveTo(tester.getCenter(findMaterialTooltip('暂停（空格）')));
         await tester.pump(const Duration(seconds: 6));
         expect(controls.hitTestable(), findsOneWidget);
         await tester.pumpWidget(_app(session, window, settings, width: 1200));
@@ -9460,13 +9465,13 @@ void main() {
       final controls = find.byKey(const ValueKey('player-controls'));
       await tester.pump(const Duration(seconds: 4));
       final gesture = await tester.startGesture(
-        tester.getCenter(find.byTooltip('音量')),
+        tester.getCenter(findMaterialTooltip('音量')),
       );
       await tester.pump(const Duration(seconds: 6));
       expect(controls, findsOneWidget);
       await gesture.up();
       await _pumpFrames(tester);
-      await tester.tap(find.byTooltip('音量'));
+      await tester.tap(findMaterialTooltip('音量'));
       await _pumpFrames(tester);
       expect(
         find.byKey(const ValueKey('player-volume-slider')),
@@ -9526,11 +9531,11 @@ void main() {
             );
             await _pumpFrames(tester);
             if (fullScreen) {
-              await tester.tap(find.byTooltip('全屏（F）'));
+              await tester.tap(findMaterialTooltip('全屏（F）'));
               await _pumpFrames(tester);
             }
             if (compact) {
-              await tester.tap(find.byTooltip('发送弹幕'));
+              await tester.tap(findMaterialTooltip('发送弹幕'));
               await _pumpFrames(tester);
             }
             final controls = find.byKey(const ValueKey('player-controls'));
@@ -9825,7 +9830,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
     await _pumpFrames(tester);
     expect(engine.pauses, pauses);
-    expect(find.byTooltip('退出全屏（Esc）'), findsNothing);
+    expect(findMaterialTooltip('退出全屏（Esc）'), findsNothing);
     Navigator.of(context).pop();
     await _pumpFrames(tester);
     await _pumpSurfaceTap(tester);
@@ -9862,13 +9867,13 @@ void main() {
       );
       await _pumpFrames(tester);
       expect(find.byKey(const ValueKey('player-controls')), findsOneWidget);
-      expect(find.byTooltip('音量').hitTestable(), findsOneWidget);
+      expect(findMaterialTooltip('音量').hitTestable(), findsOneWidget);
       expect(find.byKey(const ValueKey('player-back')), findsNothing);
       expect(find.byKey(const ValueKey('player-home')), findsNothing);
-      expect(find.byTooltip('全屏（F）').hitTestable(), findsOneWidget);
+      expect(findMaterialTooltip('全屏（F）').hitTestable(), findsOneWidget);
       expect(tester.takeException(), isNull);
       expect(find.text('重新加载'), findsNothing);
-      await tester.tap(find.byTooltip('播放错误选项'));
+      await tester.tap(findMaterialTooltip('播放错误选项'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('重新加载'));
       await _pumpFrames(tester);
@@ -9894,7 +9899,7 @@ void main() {
     await _showControls(tester);
     await session.seek(const Duration(seconds: 12));
     await session.pause();
-    await tester.tap(find.byTooltip('全屏（F）'));
+    await tester.tap(findMaterialTooltip('全屏（F）'));
     await _pumpFrames(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.f5);
     await _pumpFrames(tester);
@@ -9920,7 +9925,7 @@ void main() {
     );
     await _pumpFrames(tester);
     await _showControls(tester);
-    await tester.tap(find.byTooltip('全屏（F）'));
+    await tester.tap(findMaterialTooltip('全屏（F）'));
     await _pumpFrames(tester);
     engine._failures.add(
       PlayerFailure(
@@ -9931,14 +9936,14 @@ void main() {
     );
     await _pumpFrames(tester);
     expect(find.byKey(const ValueKey('player-controls')), findsOneWidget);
-    await tester.tap(find.byTooltip('播放配置'));
+    await tester.tap(findMaterialTooltip('播放配置'));
     await _pumpFrames(tester);
     await _pumpSurfaceTap(tester);
     expect(find.byType(Dialog), findsWidgets);
     Navigator.of(tester.element(find.byType(TabBar))).pop();
     await _pumpFrames(tester);
     await _pumpSurfaceTap(tester);
-    await tester.tap(find.byTooltip('退出全屏（Esc）'));
+    await tester.tap(findMaterialTooltip('退出全屏（Esc）'));
     await _pumpFrames(tester);
     expect(window.fullScreen, isFalse);
     expect(engine.maxSurfaces, 1);
@@ -9978,10 +9983,10 @@ void main() {
         await _showControls(tester);
         expect(tester.takeException(), isNull);
         tester.view.physicalSize = Size(width, 1000);
-        await tester.tap(find.byTooltip('全屏（F）'));
+        await tester.tap(findMaterialTooltip('全屏（F）'));
         await _pumpFrames(tester);
-        if (find.byTooltip('发送弹幕').evaluate().isNotEmpty) {
-          await tester.tap(find.byTooltip('发送弹幕'));
+        if (findMaterialTooltip('发送弹幕').evaluate().isNotEmpty) {
+          await tester.tap(findMaterialTooltip('发送弹幕'));
           await tester.pump();
         }
         final playerRect = tester.getRect(find.byType(PlaybackPanel));
@@ -9993,7 +9998,7 @@ void main() {
         await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
         await _pumpFrames(tester);
         expect(engine.pauses, pauses);
-        expect(find.byTooltip('退出全屏（Esc）'), findsOneWidget);
+        expect(findMaterialTooltip('退出全屏（Esc）'), findsOneWidget);
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox());
         await _pumpFrames(tester);
@@ -10022,9 +10027,9 @@ void main() {
     );
     await _pumpFrames(tester);
     await _showControls(tester);
-    await tester.tap(find.byTooltip('全屏（F）'));
+    await tester.tap(findMaterialTooltip('全屏（F）'));
     await _pumpFrames(tester);
-    await tester.tap(find.byTooltip('更多播放选项'));
+    await tester.tap(findMaterialTooltip('更多播放选项'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(find.text('播放配置'));
@@ -10074,13 +10079,13 @@ void main() {
       await tester.pumpWidget(app(0));
       await _pumpFrames(tester);
       await _showControls(tester);
-      await tester.tap(find.byTooltip('全屏（F）'));
+      await tester.tap(findMaterialTooltip('全屏（F）'));
       await _pumpFrames(tester);
       await tester.pumpWidget(app(1));
       await _pumpFrames(tester);
       expect(engine.maxSurfaces, 1);
       expect(engine.activeSurfaces, 1);
-      expect(find.byTooltip('退出全屏（Esc）'), findsNothing);
+      expect(findMaterialTooltip('退出全屏（Esc）'), findsNothing);
       expect(window.fullScreen, isFalse);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
@@ -10105,7 +10110,7 @@ void main() {
     );
     await _pumpFrames(tester);
     await _showControls(tester);
-    await tester.tap(find.byTooltip('全屏（F）'));
+    await tester.tap(findMaterialTooltip('全屏（F）'));
     await _pumpFrames(tester);
     await tester.pumpWidget(
       _app(
@@ -10120,7 +10125,7 @@ void main() {
     expect(observer.popCount, 0);
     window.gate.complete();
     await _pumpFrames(tester);
-    expect(find.byTooltip('退出全屏（Esc）'), findsNothing);
+    expect(findMaterialTooltip('退出全屏（Esc）'), findsNothing);
     expect(engine.activeSurfaces, 0);
     expect(window.fullScreen, isFalse);
     expect(tester.takeException(), isNull);
@@ -10140,13 +10145,13 @@ void main() {
       await _pumpFrames(tester);
       await _showControls(tester);
       await _pumpFrames(tester);
-      await tester.tap(find.byTooltip('全屏（F）'));
+      await tester.tap(findMaterialTooltip('全屏（F）'));
       await _pumpFrames(tester);
       await tester.pumpWidget(
         _app(session, window, const AppSettings.defaults(), active: false),
       );
       await _pumpFrames(tester);
-      expect(find.byTooltip('退出全屏（Esc）'), findsNothing);
+      expect(findMaterialTooltip('退出全屏（Esc）'), findsNothing);
       expect(window.fullScreen, isFalse);
       expect(engine.activeSurfaces, 0);
       expect(tester.takeException(), isNull);
@@ -10174,14 +10179,14 @@ void main() {
     await _pumpFrames(tester);
     await _showControls(tester);
     expect(tester.takeException(), isNull);
-    expect(find.byTooltip('全屏（F）'), findsOneWidget);
+    expect(findMaterialTooltip('全屏（F）'), findsOneWidget);
     expect(engine.maxSurfaces, 1);
 
-    await tester.tap(find.byTooltip('全屏（F）'));
+    await tester.tap(findMaterialTooltip('全屏（F）'));
     await _pumpFrames(tester);
     expect(tester.takeException(), isNull);
     expect(window.fullScreen, isTrue);
-    expect(find.byTooltip('退出全屏（Esc）'), findsOneWidget);
+    expect(findMaterialTooltip('退出全屏（Esc）'), findsOneWidget);
     expect(engine.maxSurfaces, 1);
     expect(engine.opens, 1);
 
@@ -10189,16 +10194,16 @@ void main() {
       _app(session, window, AppSettings(danmakuEnabled: false), textScale: 2),
     );
     await _pumpFrames(tester);
-    expect(find.byTooltip('开启弹幕'), findsOneWidget);
+    expect(findMaterialTooltip('开启弹幕'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('退出全屏（Esc）'));
+    await tester.tap(findMaterialTooltip('退出全屏（Esc）'));
     await _pumpFrames(tester);
     expect(window.fullScreen, isFalse);
     expect(engine.maxSurfaces, 1);
     expect(engine.opens, 1);
     expect(tester.takeException(), isNull);
 
-    await tester.tap(find.byTooltip('全屏（F）'));
+    await tester.tap(findMaterialTooltip('全屏（F）'));
     await _pumpFrames(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await _pumpFrames(tester);
@@ -10261,7 +10266,7 @@ void main() {
     );
     await _pumpFrames(tester);
     await _showControls(tester);
-    await tester.tap(find.byTooltip('全屏（F）'));
+    await tester.tap(findMaterialTooltip('全屏（F）'));
     await _pumpFrames(tester);
     expect(FocusManager.instance.primaryFocus?.debugLabel, 'video player');
 
@@ -10269,7 +10274,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     expect(observer.popCount, 0);
     expect(window.fullScreen, isTrue);
-    expect(find.byTooltip('退出全屏（Esc）'), findsOneWidget);
+    expect(findMaterialTooltip('退出全屏（Esc）'), findsOneWidget);
 
     await _pumpFrames(tester);
     expect(observer.popCount, 1);
@@ -10297,7 +10302,7 @@ void main() {
     );
     await _pumpFrames(tester);
     await _showControls(tester);
-    await tester.tap(find.byTooltip('全屏（F）'));
+    await tester.tap(findMaterialTooltip('全屏（F）'));
     await _pumpFrames(tester);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
@@ -10345,7 +10350,7 @@ void main() {
           await _pumpFrames(tester);
           if (fullscreen || controlsVisible) await _showControls(tester);
           if (fullscreen) {
-            await tester.tap(find.byTooltip('全屏（F）'));
+            await tester.tap(findMaterialTooltip('全屏（F）'));
             await _pumpFrames(tester);
             if (!controlsVisible) {
               await tester.tapAt(_surfacePoint(tester));
@@ -10543,7 +10548,7 @@ void main() {
       await _pumpFrames(tester);
       await _showControls(tester);
       if (fullscreen) {
-        await tester.tap(find.byTooltip('全屏（F）'));
+        await tester.tap(findMaterialTooltip('全屏（F）'));
         await _pumpFrames(tester);
       }
 
@@ -10569,7 +10574,7 @@ void main() {
       await _pumpFrames(tester);
       expect(find.text('播放缓冲中…'), findsNothing);
       expect(find.byType(CircularProgressIndicator), findsNothing);
-      expect(find.byTooltip('播放（空格）'), findsOneWidget);
+      expect(findMaterialTooltip('播放（空格）'), findsOneWidget);
 
       // A later position sample must not bring the completion spinner back.
       engine._emit(engine.currentSnapshot);
@@ -10613,7 +10618,7 @@ void main() {
     await _showControls(tester);
     _expectPlayerSemantics(tester, '全屏（F）', focused: true);
 
-    await tester.tap(find.byTooltip('全屏（F）'));
+    await tester.tap(findMaterialTooltip('全屏（F）'));
     await _pumpFrames(tester);
     expect(window.fullScreen, isTrue);
     _expectPlayerSemantics(tester, '退出全屏（Esc）', focused: true);
@@ -10652,7 +10657,7 @@ void main() {
         );
         await _pumpFrames(tester);
         await _showControls(tester);
-        await tester.tap(find.byTooltip('全屏（F）'));
+        await tester.tap(findMaterialTooltip('全屏（F）'));
         await _pumpFrames(tester);
         final mouse = await tester.createGesture(
           kind: PointerDeviceKind.mouse,
@@ -10699,7 +10704,7 @@ void main() {
           await tester.tapAt(point);
           await _pumpSurfaceTap(tester);
         }
-        await mouse.moveTo(tester.getCenter(find.byTooltip('音量')));
+        await mouse.moveTo(tester.getCenter(findMaterialTooltip('音量')));
         await tester.pump();
         await tester.pump(const Duration(seconds: 6));
         expect(
@@ -10742,7 +10747,7 @@ void _expectPlayerSemantics(
     groupNode.flagsCollection.isFocused,
     focused ? Tristate.isTrue : Tristate.isFalse,
   );
-  final fullscreenButton = find.byTooltip(fullscreenLabel);
+  final fullscreenButton = findMaterialTooltip(fullscreenLabel);
   expect(fullscreenButton, findsOneWidget);
   expect(tester.getSemantics(fullscreenButton).tooltip, fullscreenLabel);
 }

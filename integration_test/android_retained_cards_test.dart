@@ -4,7 +4,7 @@ import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/features/feed/domain/home_repository.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 

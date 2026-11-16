@@ -1,3 +1,5 @@
+import '../support/material_tooltip_finder.dart';
+
 import '../support/input_test_app.dart';
 
 import 'package:bilisail/app/shell.dart';
@@ -15,7 +17,7 @@ import 'package:bilisail/features/search/application/search_controller.dart'
 import 'package:bilisail/features/search/domain/search_repository.dart';
 import 'package:bilisail/features/search/domain/search_result.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/gestures.dart';
 import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
 import 'package:flutter/services.dart';
@@ -215,7 +217,7 @@ void main() {
             WorkspaceNavigationMode.singlePage => find.byKey(
               const ValueKey('workspace-back'),
             ),
-            WorkspaceNavigationMode.dualTabs => find.byTooltip('返回上一视频'),
+            WorkspaceNavigationMode.dualTabs => findMaterialTooltip('返回上一视频'),
             WorkspaceNavigationMode.multipleTabs => find.byKey(
               const ValueKey('test-player-back'),
             ),
@@ -348,7 +350,7 @@ void main() {
               tester.widget<IconButton>(returnToPlayback).onPressed,
               isNotNull,
             );
-            expect(find.byTooltip('回到播放页'), findsOneWidget);
+            expect(findMaterialTooltip('回到播放页'), findsOneWidget);
             expect(tester.getTopLeft(returnToPlayback).dy, lessThan(44));
             expect(find.byType(FloatingActionButton), findsNothing);
             await tester.tap(returnToPlayback);
@@ -411,8 +413,8 @@ void main() {
       router.go('/');
       await tester.pumpAndSettle();
       expect(returnToPlayback, findsNothing);
-      expect(find.byTooltip('返回播放'), findsOneWidget);
-      await tester.tap(find.byTooltip('返回播放'));
+      expect(findMaterialTooltip('返回播放'), findsOneWidget);
+      await tester.tap(findMaterialTooltip('返回播放'));
       await tester.pumpAndSettle();
       expect(router.routeInformationProvider.value.uri.path, '/video/A');
       expect(tester.takeException(), isNull);
@@ -766,11 +768,11 @@ void main() {
               findsNothing,
             );
             expect(
-              find.byTooltip('返回上一视频'),
+              findMaterialTooltip('返回上一视频'),
               playbackHeader ? findsOneWidget : findsNothing,
             );
             expect(
-              find.byTooltip('关闭播放'),
+              findMaterialTooltip('关闭播放'),
               playbackHeader ? findsOneWidget : findsNothing,
             );
             expect(
@@ -786,7 +788,7 @@ void main() {
               );
             }
             expect(
-              find.byTooltip('返回播放'),
+              findMaterialTooltip('返回播放'),
               dual && playbackCreated && !playback && width < 600
                   ? findsOneWidget
                   : findsNothing,
@@ -1017,8 +1019,8 @@ void main() {
       router.go('/video/BV1234567890');
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('workspace-tab-strip')), findsNothing);
-      expect(find.byTooltip('返回上一视频'), findsNothing);
-      expect(find.byTooltip('关闭播放'), findsNothing);
+      expect(findMaterialTooltip('返回上一视频'), findsNothing);
+      expect(findMaterialTooltip('关闭播放'), findsNothing);
       await tester.tap(find.text('count 0'));
       await tester.pump();
       final playback = tester.element(find.byType(_CounterPage));
@@ -1036,8 +1038,8 @@ void main() {
         );
         expect(tester.element(find.byType(_CounterPage)), same(playback));
         expect(find.byKey(const ValueKey('workspace-tab-strip')), findsNothing);
-        expect(find.byTooltip('返回上一视频'), findsNothing);
-        expect(find.byTooltip('关闭播放'), findsNothing);
+        expect(findMaterialTooltip('返回上一视频'), findsNothing);
+        expect(findMaterialTooltip('关闭播放'), findsNothing);
         expect(tester.takeException(), isNull);
       }
       tester.view.physicalSize = const Size(390, 844);
@@ -1045,8 +1047,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.element(find.byType(_CounterPage)), same(browse));
       expect(find.text('count 1'), findsOneWidget);
-      expect(find.byTooltip('返回上一视频'), findsNothing);
-      await tester.tap(find.byTooltip('返回播放'));
+      expect(findMaterialTooltip('返回上一视频'), findsNothing);
+      await tester.tap(findMaterialTooltip('返回播放'));
       await tester.pumpAndSettle();
       expect(tester.element(find.byType(_CounterPage)), same(playback));
       expect(find.text('count 1'), findsOneWidget);
@@ -1054,8 +1056,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.element(find.byType(_CounterPage)), same(browse));
       expect(disposed, ['tab-1']);
-      expect(find.byTooltip('返回播放'), findsNothing);
-      expect(find.byTooltip('关闭播放'), findsNothing);
+      expect(findMaterialTooltip('返回播放'), findsNothing);
+      expect(findMaterialTooltip('关闭播放'), findsNothing);
       expect(tester.takeException(), isNull);
     },
     variant: TargetPlatformVariant.only(TargetPlatform.android),
@@ -1134,7 +1136,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       if (workspaceHeaderVisible) {
-        expect(find.byTooltip('新建标签页（⌘ Command+T）'), findsOneWidget);
+        expect(findMaterialTooltip('新建标签页（⌘ Command+T）'), findsOneWidget);
       }
       for (var i = 0; i < 2; i++) {
         await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);

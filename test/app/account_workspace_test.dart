@@ -1,3 +1,5 @@
+import '../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/app/router.dart';
@@ -30,7 +32,7 @@ import 'package:bilisail/features/settings/application/settings_controller.dart'
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/domain/settings_repository.dart';
 import 'package:bilisail/shared/ui/paging_tab_strip.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -114,7 +116,7 @@ void main() {
     WidgetTester tester,
     AccountContentTab tab,
   ) async {
-    if (find.byTooltip('我的账号').evaluate().isEmpty) {
+    if (findMaterialTooltip('我的账号').evaluate().isEmpty) {
       await tester.tap(
         find.byKey(const ValueKey('workspace-nav-home')).evaluate().isNotEmpty
             ? find.byKey(const ValueKey('workspace-nav-home'))
@@ -122,7 +124,7 @@ void main() {
       );
       await tester.pumpAndSettle();
     }
-    await tester.tap(find.byTooltip('我的账号'));
+    await tester.tap(findMaterialTooltip('我的账号'));
     await tester.pumpAndSettle();
     final item = find.descendant(
       of: find.byType(AccountMenu),

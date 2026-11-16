@@ -1,10 +1,12 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:bili_api/bili_api.dart';
 import 'package:bilisail/core/network/api_requests.dart';
 import 'package:bilisail/features/video/data/api_video_actions_repository.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'video_actions_bar_test.dart' show testPart;
@@ -97,7 +99,7 @@ void main() {
       addTearDown(session.dispose);
       await pumpComposer(tester, _repository(transport), session: session);
       await tester.enterText(find.byType(TextField), 'custom draft');
-      await tester.tap(find.byTooltip('发送弹幕样式'));
+      await tester.tap(findMaterialTooltip('发送弹幕样式'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('自定义颜色'));
       await tester.pumpAndSettle();
@@ -173,9 +175,9 @@ ApiVideoActionsRepository _repository(_SendTransport transport) {
 }
 
 Future<void> _choose(WidgetTester tester, String label) async {
-  await tester.tap(find.byTooltip('发送弹幕样式'));
+  await tester.tap(findMaterialTooltip('发送弹幕样式'));
   await tester.pumpAndSettle();
-  final color = find.byTooltip(label);
+  final color = findMaterialTooltip(label);
   await tester.tap(
     color.evaluate().isNotEmpty
         ? color

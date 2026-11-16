@@ -1,0 +1,16 @@
+name: flutter_markdown_plus
+description: Repository-local Flutter 3.50 migration of flutter_markdown_plus.
+version: 1.0.12+bilisail.1
+publish_to: none
+repository: https://github.com/foresightmobile/flutter_markdown_plus
+environment:
+  sdk: '>=3.14.0 <4.0.0'
+  flutter: '>=3.50.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_ui: 1.1.6
+  material_ui: 1.11.0
+  markdown: 7.3.1
+  meta: 1.19.0
+  path: 1.9.1

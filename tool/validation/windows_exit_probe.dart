@@ -9,7 +9,7 @@ import 'package:bilisail/core/presentation/bili_widgets_binding.dart';
 import 'package:bilisail/core/storage/app_database.dart';
 import 'package:bilisail/core/storage/credential_store.dart';
 import 'package:drift/native.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// AOT exit probe: empty credentials, in-memory database and local DASH only.
 Future<void> main() async {

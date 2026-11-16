@@ -8,7 +8,7 @@ import 'package:bilisail/features/settings/data/sqlite_settings_repository.dart'
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:drift/native.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 

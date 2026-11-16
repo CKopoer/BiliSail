@@ -12,7 +12,7 @@ import 'package:bilisail/features/search/domain/search_result.dart';
 import 'package:bilisail/features/search/presentation/search_screen.dart';
 import 'package:bilisail/features/search/presentation/search_results.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 

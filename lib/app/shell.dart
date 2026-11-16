@@ -1,6 +1,8 @@
+import '../core/presentation/motion_preferences.dart';
+
 import 'dart:ui' show ViewFocusEvent, ViewFocusState;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -887,9 +889,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
                         ),
                         Expanded(
                           child: AnimatedPadding(
-                            duration:
-                                compact ||
-                                    MediaQuery.disableAnimationsOf(context)
+                            duration: compact || shouldReduceMotion(context)
                                 ? Duration.zero
                                 : const Duration(milliseconds: 240),
                             curve: Curves.easeInOutCubic,
@@ -1380,7 +1380,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
         onPressed: _toggleSidebar,
         icon: AnimatedRotation(
           turns: _sidebarCollapsed ? .5 : 0,
-          duration: MediaQuery.disableAnimationsOf(context)
+          duration: shouldReduceMotion(context)
               ? Duration.zero
               : const Duration(milliseconds: 240),
           curve: Curves.easeInOutCubic,
@@ -1432,7 +1432,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
     final visible = !compact && !_sidebarCollapsed;
     final width = extended ? 164.0 : 76.0;
     final target = visible ? width : 0.0;
-    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final reduceMotion = shouldReduceMotion(context);
     final region = TweenAnimationBuilder<double>(
       tween: Tween(begin: target, end: target),
       duration: compact || reduceMotion
@@ -1713,7 +1713,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
     // Scaffold clears MediaQuery's body insets. Read this view's inset to
     // hide immediately on keyboard opening and animate only the return.
     final visible = View.of(context).viewInsets.bottom == 0;
-    final disableAnimations = MediaQuery.disableAnimationsOf(context);
+    final disableAnimations = shouldReduceMotion(context);
     final target = visible ? 1.0 : 0.0;
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: target, end: target),
@@ -1766,7 +1766,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
     };
     return NavigationBar(
       key: const ValueKey('workspace-bottom-navigation'),
-      animationDuration: MediaQuery.disableAnimationsOf(context)
+      animationDuration: shouldReduceMotion(context)
           ? Duration.zero
           : const Duration(milliseconds: 220),
       height: _bottomNavigationHeight,

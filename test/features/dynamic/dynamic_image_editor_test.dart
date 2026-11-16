@@ -4,7 +4,7 @@ import 'dart:ui' as ui;
 import 'package:bilisail/domain/local_image.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:bilisail/shared/ui/dynamic_image_editor.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

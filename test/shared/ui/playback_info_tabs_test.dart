@@ -2,7 +2,7 @@ import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/shared/ui/paging_tab_strip.dart';
 import 'package:bilisail/shared/ui/playback_info_tabs.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

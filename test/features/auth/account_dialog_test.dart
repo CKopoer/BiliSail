@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'package:bilisail/domain/user.dart';
 
 import 'dart:async';
@@ -8,7 +10,7 @@ import 'package:bilisail/features/auth/presentation/account_button.dart';
 import 'package:bilisail/features/auth/presentation/account_menu.dart';
 import 'package:bilisail/features/auth/application/account_overview_controller.dart';
 import 'package:bilisail/features/auth/domain/account_overview.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -37,7 +39,7 @@ void main() {
         ),
       ),
     );
-    await tester.tap(find.byTooltip('我的账号'));
+    await tester.tap(findMaterialTooltip('我的账号'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('个人中心'));
     await tester.pumpAndSettle();
@@ -49,13 +51,13 @@ void main() {
     final repository = _FakeAuthRepository();
     addTearDown(repository.dispose);
     await tester.pumpWidget(_app(repository));
-    await tester.tap(find.byTooltip('登录'));
+    await tester.tap(findMaterialTooltip('登录'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('获取登录二维码'));
     await tester.pumpAndSettle();
     expect(find.text('使用哔哩哔哩手机客户端扫一扫'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('关闭'));
+    await tester.tap(findMaterialTooltip('关闭'));
     await tester.pumpAndSettle();
     expect(find.byType(AccountDialog), findsNothing);
     expect(repository.cancelCalls, greaterThanOrEqualTo(1));
@@ -67,7 +69,7 @@ void main() {
     final repository = _FakeAuthRepository();
     addTearDown(repository.dispose);
     await tester.pumpWidget(_app(repository));
-    await tester.tap(find.byTooltip('登录'));
+    await tester.tap(findMaterialTooltip('登录'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('获取登录二维码'));
     await tester.pumpAndSettle();
@@ -89,7 +91,7 @@ void main() {
     final repository = _FakeAuthRepository();
     addTearDown(repository.dispose);
     await tester.pumpWidget(_app(repository, textScale: 2));
-    await tester.tap(find.byTooltip('登录'));
+    await tester.tap(findMaterialTooltip('登录'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     await tester.tap(find.text('获取登录二维码'));

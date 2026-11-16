@@ -1,6 +1,6 @@
 import 'dart:ui' show FlutterView;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
 import '../platform/window_size_policy.dart';

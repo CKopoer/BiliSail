@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/domain/app_failure.dart';
@@ -8,7 +10,7 @@ import 'package:bilisail/features/feed/domain/home_repository.dart';
 import 'package:bilisail/features/feed/presentation/home_content.dart';
 import 'package:bilisail/features/feed/presentation/home_feed_cards.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -290,7 +292,7 @@ void main() {
       expect(find.byType(FavoriteFolderCard), findsNWidgets(2));
       final card = find.byKey(ValueKey((entry.kind, entry.id)));
       await tester.tap(
-        find.descendant(of: card, matching: find.byTooltip('更多操作')),
+        find.descendant(of: card, matching: findMaterialTooltip('更多操作')),
       );
       await tester.pumpAndSettle();
       expect(find.text('取消订阅'), findsOneWidget);
@@ -304,7 +306,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       expect(repo.writes.single.entry, entry);
-      expect(find.byTooltip('取消订阅中'), findsOneWidget);
+      expect(findMaterialTooltip('取消订阅中'), findsOneWidget);
       expect(find.text(entry.title), findsOneWidget);
       repo.writes.single.result.complete();
       await tester.pumpAndSettle();
@@ -322,7 +324,7 @@ void main() {
     final repo = _Repository(automaticReads: true);
     await tester.pumpWidget(_app(repo));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('更多操作').last);
+    await tester.tap(findMaterialTooltip('更多操作').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('取消订阅'));
     await tester.pumpAndSettle();
@@ -346,7 +348,7 @@ void main() {
         final repo = _Repository(automaticReads: true);
         await tester.pumpWidget(_app(repo));
         await tester.pumpAndSettle();
-        await tester.tap(find.byTooltip('更多操作').last);
+        await tester.tap(findMaterialTooltip('更多操作').last);
         await tester.pumpAndSettle();
         await tester.tap(find.text('取消订阅'));
         await tester.pumpAndSettle();
@@ -372,7 +374,7 @@ void main() {
     final repo = _Repository(automaticReads: true);
     await tester.pumpWidget(_app(repo));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('更多操作').last);
+    await tester.tap(findMaterialTooltip('更多操作').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('取消订阅'));
     await tester.pumpAndSettle();
@@ -393,7 +395,7 @@ void main() {
         final repo = _Repository(automaticReads: true);
         await tester.pumpWidget(_app(repo, textScale: 2));
         await tester.pumpAndSettle();
-        await tester.tap(find.byTooltip('更多操作').first);
+        await tester.tap(findMaterialTooltip('更多操作').first);
         await tester.pumpAndSettle();
         final rect = tester.getRect(find.text('取消订阅'));
         expect(rect.left, greaterThanOrEqualTo(0));
@@ -412,7 +414,7 @@ void main() {
         await tester.tap(find.text('流行'));
         await tester.pumpAndSettle();
         expect(repo.reads.last.query.folderId, 'ugc:42');
-        expect(find.byTooltip('更多操作'), findsNothing);
+        expect(findMaterialTooltip('更多操作'), findsNothing);
         expect(repo.writes, isEmpty);
         expect(tester.takeException(), isNull);
       },

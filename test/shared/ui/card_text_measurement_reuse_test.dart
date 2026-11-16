@@ -1,10 +1,12 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/shared/ui/responsive_card_grid.dart';
 import 'package:bilisail/shared/ui/text_measurement_cache.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -196,7 +198,7 @@ void _expectCorrectTooltips(WidgetTester tester) {
     final video = (element.widget as VideoCard).video;
     final tooltip = find.descendant(
       of: find.byWidget(element.widget),
-      matching: find.byTooltip(video.title),
+      matching: findMaterialTooltip(video.title),
     );
     expect(
       tooltip,

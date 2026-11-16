@@ -2,7 +2,7 @@ import 'package:bilisail/core/input/input_stroke.dart';
 import 'package:bilisail/core/input/shortcut_dispatcher.dart';
 import 'package:bilisail/core/presentation/input_scope.dart';
 import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 

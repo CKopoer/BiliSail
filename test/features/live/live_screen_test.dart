@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/domain/app_failure.dart';
@@ -16,7 +18,7 @@ import 'package:bilisail/features/live/presentation/live_super_chat_card.dart';
 import 'package:bilisail/shared/ui/smooth_scroll_behavior.dart';
 import 'package:bilisail/shared/ui/paging_tab_strip.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -132,27 +134,27 @@ void main() {
     await showPage(tester, width: 390);
     await tester.pumpAndSettle();
     final player = tester.state(find.byType(_PlayerProbe));
-    expect(find.byTooltip('收起直播信息'), findsNothing);
+    expect(findMaterialTooltip('收起直播信息'), findsNothing);
     expect(find.byKey(const ValueKey('live-chat-list')), findsOneWidget);
     for (final width in [899.0, 900.0, 1280.0, 390.0, 900.0]) {
       await tester.binding.setSurfaceSize(Size(width, 800));
       await tester.pumpAndSettle();
       expect(
-        find.byTooltip('收起直播信息'),
+        findMaterialTooltip('收起直播信息'),
         width >= 900 ? findsOneWidget : findsNothing,
       );
       expect(find.byKey(const ValueKey('live-chat-list')), findsOneWidget);
       expect(tester.state(find.byType(_PlayerProbe)), same(player));
     }
-    await tester.tap(find.byTooltip('收起直播信息'));
+    await tester.tap(findMaterialTooltip('收起直播信息'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('live-chat-list')), findsNothing);
     await tester.binding.setSurfaceSize(const Size(899, 800));
     await tester.pumpAndSettle();
-    expect(find.byTooltip('展开直播信息'), findsNothing);
+    expect(findMaterialTooltip('展开直播信息'), findsNothing);
     await tester.binding.setSurfaceSize(const Size(900, 800));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('展开直播信息'));
+    await tester.tap(findMaterialTooltip('展开直播信息'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('live-chat-list')), findsOneWidget);
     expect(tester.state(find.byType(_PlayerProbe)), same(player));
@@ -219,7 +221,7 @@ void main() {
     expect(realtime.opens, opens);
     expect(realtime.reads.single.isCancelled, false);
 
-    await tester.tap(find.byTooltip('收起直播信息'));
+    await tester.tap(findMaterialTooltip('收起直播信息'));
     await tester.pumpAndSettle();
     receiveMessages(30, 1);
     await tester.pumpAndSettle();
@@ -228,7 +230,7 @@ void main() {
     expect(playerBuilds, 0);
     expect(realtime.opens, opens);
     expect(realtime.reads.single.isCancelled, false);
-    await tester.tap(find.byTooltip('展开直播信息'));
+    await tester.tap(findMaterialTooltip('展开直播信息'));
     await tester.pumpAndSettle();
     expect(chatPosition(tester).extentAfter, lessThanOrEqualTo(1));
     expect(playerBuilds, 0);
@@ -743,10 +745,10 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(position.extentAfter, 0);
-    await tester.tap(find.byTooltip('收起直播信息'));
+    await tester.tap(findMaterialTooltip('收起直播信息'));
     receiveMessages(12, 12);
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('展开直播信息'));
+    await tester.tap(findMaterialTooltip('展开直播信息'));
     await tester.pumpAndSettle();
     expect(position.extentAfter, 0);
     await tester.binding.setSurfaceSize(const Size(1024, 520));
@@ -791,10 +793,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('live-tab-0')));
     await tester.pumpAndSettle();
     expect(position.pixels, before);
-    await tester.tap(find.byTooltip('收起直播信息'));
+    await tester.tap(findMaterialTooltip('收起直播信息'));
     receiveMessages(8, 8);
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('展开直播信息'));
+    await tester.tap(findMaterialTooltip('展开直播信息'));
     await tester.pumpAndSettle();
     expect(position.pixels, before);
     await tester.binding.setSurfaceSize(const Size(1024, 520));
@@ -985,7 +987,7 @@ void main() {
       expect(find.text('展开简介'), findsNothing);
       expect(find.text('收起简介'), findsNothing);
       expect(find.text(room.description), findsNothing);
-      expect(find.byTooltip('查看主播主页'), findsNothing);
+      expect(findMaterialTooltip('查看主播主页'), findsNothing);
       await tester.tap(find.byKey(const ValueKey('live-anchor-avatar')));
       await tester.tap(find.byKey(const ValueKey('live-anchor-name')));
       await tester.tap(find.text('可点击观众'));
@@ -1087,10 +1089,10 @@ void main() {
     expect(find.text('第二条完整的 SC 内容'), findsOneWidget);
     expect(tester.state(find.byType(_PlayerProbe)), same(player));
 
-    await tester.tap(find.byTooltip('收起直播信息'));
+    await tester.tap(findMaterialTooltip('收起直播信息'));
     await tester.pump();
     expect(tester.state(find.byType(_PlayerProbe)), same(player));
-    await tester.tap(find.byTooltip('展开直播信息'));
+    await tester.tap(findMaterialTooltip('展开直播信息'));
     await tester.pump();
     expect(find.text('共 2 条 SC'), findsOneWidget);
     expect(tester.state(find.byType(_PlayerProbe)), same(player));
@@ -1241,9 +1243,9 @@ void main() {
         await tester.pumpAndSettle();
         expect(position.pixels, greaterThan(120));
         final before = position.pixels;
-        await tester.tap(find.byTooltip('收起直播信息'));
+        await tester.tap(findMaterialTooltip('收起直播信息'));
         await tester.pump();
-        await tester.tap(find.byTooltip('展开直播信息'));
+        await tester.tap(findMaterialTooltip('展开直播信息'));
         await tester.pump();
         expect(position.pixels, before);
         expect(tester.state(find.byType(_PlayerProbe)), same(player));
@@ -1356,9 +1358,9 @@ void main() {
     final before = tester.state<ScrollableState>(scrollable).position.pixels;
     expect(before, greaterThan(0));
 
-    await tester.tap(find.byTooltip('收起直播信息'));
+    await tester.tap(findMaterialTooltip('收起直播信息'));
     await tester.pump();
-    await tester.tap(find.byTooltip('展开直播信息'));
+    await tester.tap(findMaterialTooltip('展开直播信息'));
     await tester.pump();
     final after = tester.state<ScrollableState>(scrollable).position.pixels;
     expect(after, before);
@@ -1450,7 +1452,7 @@ void main() {
     ]);
     await tester.pump();
     expect(find.text('连接测试失败'), findsOneWidget);
-    await tester.tap(find.byTooltip('重新连接弹幕'));
+    await tester.tap(findMaterialTooltip('重新连接弹幕'));
     await tester.pump();
     expect(realtime.opens, 2);
     expect(realtime.reads.first.isCancelled, isTrue);

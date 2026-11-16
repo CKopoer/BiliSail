@@ -1,6 +1,6 @@
 import '../../domain/user.dart';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../domain/video.dart';
 import 'responsive_card_grid.dart';

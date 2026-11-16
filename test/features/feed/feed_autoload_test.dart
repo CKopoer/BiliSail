@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/core/presentation/workspace_activity.dart';
@@ -10,7 +12,7 @@ import 'package:bilisail/features/feed/domain/feed_repository.dart';
 import 'package:bilisail/features/feed/domain/home_channel.dart';
 import 'package:bilisail/features/feed/presentation/feed_screen.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -26,8 +28,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(repository.calls, ['${channel.name}:1', '${channel.name}:2']);
       expect(_position(tester).pixels, 0);
-      expect(find.byTooltip('刷新视频'), findsOneWidget);
-      expect(find.byTooltip('回到顶部'), findsNothing);
+      expect(findMaterialTooltip('刷新视频'), findsOneWidget);
+      expect(findMaterialTooltip('回到顶部'), findsNothing);
       expect(tester.takeException(), isNull);
     });
   }
@@ -136,7 +138,7 @@ void main() {
       await tester.pumpWidget(_app(repository));
       await tester.pumpAndSettle();
       await _wheelNearBottom(tester);
-      await tester.tap(find.byTooltip('刷新视频'));
+      await tester.tap(findMaterialTooltip('刷新视频'));
       await tester.pumpAndSettle();
       expect(repository.pageCancellation?.isCancelled, isTrue);
       repository.nextPage.complete(_page(2));

@@ -1,8 +1,10 @@
+import '../support/material_tooltip_finder.dart';
+
 import 'package:bilisail/app/shell.dart';
 import 'package:bilisail/app/workspace_navigation.dart';
 import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -1044,7 +1046,7 @@ void main() {
           );
           expect(find.byIcon(Icons.account_circle), findsNothing);
           expect(find.byKey(const ValueKey('workspace-search')), findsNothing);
-          expect(find.byTooltip('观看历史'), findsNothing);
+          expect(findMaterialTooltip('观看历史'), findsNothing);
           expect(
             find.byKey(const ValueKey('workspace-bottom-navigation')),
             width < 600 ? findsOneWidget : findsNothing,

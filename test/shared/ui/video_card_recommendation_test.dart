@@ -1,7 +1,9 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 VideoSummary _video({String? reason, bool? followed, DateTime? publishedAt}) =>
@@ -74,7 +76,7 @@ void main() {
   ) async {
     await tester.pumpWidget(_app(video: _video(followed: true)));
     expect(find.text('已关注'), findsOneWidget);
-    expect(find.byTooltip('已关注'), findsOneWidget);
+    expect(findMaterialTooltip('已关注'), findsOneWidget);
 
     for (final followed in [null, false]) {
       await tester.pumpWidget(_app(video: _video(followed: followed)));
@@ -127,7 +129,7 @@ void main() {
           await tester.pumpAndSettle();
           expect(find.text(reason), findsOneWidget);
           expect(find.text('已关注'), findsOneWidget);
-          expect(find.byTooltip(reason), findsOneWidget);
+          expect(findMaterialTooltip(reason), findsOneWidget);
           final card = tester.getRect(find.byType(VideoCard));
           for (final label in [reason, '已关注', '推荐UP', '10-31']) {
             final rect = tester.getRect(find.text(label));

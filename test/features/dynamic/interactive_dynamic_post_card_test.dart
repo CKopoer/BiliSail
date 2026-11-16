@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/domain/comment_target.dart';
@@ -16,7 +18,7 @@ import 'package:bilisail/features/dynamic/domain/dynamic_repository.dart';
 import 'package:bilisail/shared/ui/dynamic_post_interactions.dart';
 import 'package:bilisail/shared/ui/dynamic_detail_layout.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -106,7 +108,7 @@ void main() {
         ),
       ];
       await show(tester, width: width);
-      await tester.tap(find.byTooltip('查看评论'));
+      await tester.tap(findMaterialTooltip('查看评论'));
       await tester.pumpAndSettle();
       final panel = find.byType(CommentsPanel);
       final avatar = tester.getRect(
@@ -136,7 +138,7 @@ void main() {
     ];
     final videos = <VideoId>[];
     await show(tester, onOpenCommentVideo: videos.add);
-    await tester.tap(find.byTooltip('查看评论'));
+    await tester.tap(findMaterialTooltip('查看评论'));
     await tester.pumpAndSettle();
     expect(find.byType(CommentsPanel), findsOneWidget);
     await tester.tapOnText(find.textRange.ofSubstring(url));
@@ -151,17 +153,17 @@ void main() {
     'card likes and cancels, opens typed comments, and sends directed replies',
     (tester) async {
       await show(tester);
-      await tester.tap(find.byTooltip('点赞动态'));
+      await tester.tap(findMaterialTooltip('点赞动态'));
       await tester.pumpAndSettle();
       expect(repository.likes, [('100', true)]);
-      expect(find.byTooltip('取消点赞动态'), findsOneWidget);
-      await tester.tap(find.byTooltip('取消点赞动态'));
+      expect(findMaterialTooltip('取消点赞动态'), findsOneWidget);
+      await tester.tap(findMaterialTooltip('取消点赞动态'));
       await tester.pumpAndSettle();
       expect(repository.likes.last, ('100', false));
-      await tester.tap(find.byTooltip('查看评论'));
+      await tester.tap(findMaterialTooltip('查看评论'));
       await tester.pumpAndSettle();
       expect(find.byType(CommentsPanel), findsOneWidget);
-      expect(find.byTooltip('选择表情'), findsNothing);
+      expect(findMaterialTooltip('选择表情'), findsNothing);
       expect(find.text('发布'), findsNothing);
       expect(types, [CommentTargetType.album]);
       expect(comments.reads, ['11']);
@@ -177,7 +179,7 @@ void main() {
       await tester.tap(find.text('发布'));
       await tester.pumpAndSettle();
       expect(comments.writes.single, ('11', '回复内容', '50', '50'));
-      await tester.tap(find.byTooltip('关闭'));
+      await tester.tap(findMaterialTooltip('关闭'));
       await tester.pumpAndSettle();
       expect(find.byType(CommentsPanel), findsNothing);
       expect(tester.takeException(), isNull);
@@ -205,7 +207,7 @@ void main() {
       ),
     );
     await show(tester);
-    await tester.tap(find.byTooltip('分享动态'));
+    await tester.tap(findMaterialTooltip('分享动态'));
     await tester.pumpAndSettle();
     expect(repository.reposts, isEmpty);
     await tester.tap(find.text('复制动态链接'));
@@ -221,7 +223,7 @@ void main() {
     'repost submits the retained draft only on Publish and keeps uncertain draft',
     (tester) async {
       await show(tester);
-      await tester.tap(find.byTooltip('分享动态'));
+      await tester.tap(findMaterialTooltip('分享动态'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), '保留转发草稿');
       repository.error = const DynamicWriteUncertain();
@@ -247,7 +249,7 @@ void main() {
     tester,
   ) async {
     await show(tester);
-    await tester.tap(find.byTooltip('查看评论'));
+    await tester.tap(findMaterialTooltip('查看评论'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), '账号七的草稿');
     comments.accountScope = 'user:8';
@@ -268,12 +270,12 @@ void main() {
       tester,
     ) async {
       await show(tester, width: width, scale: 2);
-      await tester.tap(find.byTooltip('分享动态'));
+      await tester.tap(findMaterialTooltip('分享动态'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      await tester.tap(find.byTooltip('关闭'));
+      await tester.tap(findMaterialTooltip('关闭'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('查看评论'));
+      await tester.tap(findMaterialTooltip('查看评论'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     });
@@ -287,7 +289,7 @@ void main() {
       tester,
       value: DynamicPost(id: '100', text: '无目标'),
     );
-    await tester.tap(find.byTooltip('查看评论'));
+    await tester.tap(findMaterialTooltip('查看评论'));
     await tester.pumpAndSettle();
     expect(comments.reads, ['11']);
     expect(types, [CommentTargetType.album]);
@@ -298,7 +300,7 @@ void main() {
     'wide detail places post left and comments right, resizing retains the draft and replies',
     (tester) async {
       await show(tester, width: 1280);
-      await tester.tap(find.byTooltip('查看动态详情'));
+      await tester.tap(findMaterialTooltip('查看动态详情'));
       await tester.pumpAndSettle();
       final dialog = find.byType(Dialog);
       final content = find.descendant(of: dialog, matching: find.text('动态正文'));
@@ -345,7 +347,7 @@ void main() {
           commentTarget: post.commentTarget,
         ),
       );
-      await tester.tap(find.byTooltip('查看动态详情'));
+      await tester.tap(findMaterialTooltip('查看动态详情'));
       await tester.pumpAndSettle();
       final nested = find.descendant(
         of: find.byType(DynamicDetailLayout),
@@ -368,7 +370,7 @@ void main() {
       tester,
       value: DynamicPost(id: 'closed', text: '仅展示正文', commentForbidden: true),
     );
-    await tester.tap(find.byTooltip('查看动态详情'));
+    await tester.tap(findMaterialTooltip('查看动态详情'));
     await tester.pumpAndSettle();
     expect(find.text('该动态已关闭评论'), findsOneWidget);
     expect(find.byType(CommentsPanel), findsNothing);
@@ -383,7 +385,7 @@ void main() {
   ) async {
     await show(tester);
     repository.pendingLike = Completer<void>();
-    await tester.tap(find.byTooltip('点赞动态'));
+    await tester.tap(findMaterialTooltip('点赞动态'));
     await tester.pumpWidget(const SizedBox());
     repository.pendingLike!.complete();
     await tester.pump();
@@ -393,7 +395,7 @@ void main() {
     'comment composer remains usable above a keyboard with enlarged text',
     (tester) async {
       await show(tester, width: 375, height: 700, scale: 2, keyboardInset: 300);
-      await tester.tap(find.byTooltip('查看评论'));
+      await tester.tap(findMaterialTooltip('查看评论'));
       await tester.pumpAndSettle();
       await tester.tap(find.byType(TextField));
       await tester.pumpAndSettle();

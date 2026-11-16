@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bili_player/bili_player.dart';
@@ -7,7 +9,7 @@ import 'package:bilisail/features/playback/presentation/playback_panel.dart';
 import 'package:bilisail/features/settings/application/settings_controller.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -106,7 +108,7 @@ void main() {
         await _frames(tester);
         expect(window.isFullScreen, isFalse);
         await _showControls(tester);
-        await tester.tap(find.byTooltip('全屏（F）'));
+        await tester.tap(findMaterialTooltip('全屏（F）'));
         await _frames(tester);
         expect(window.isFullScreen, isTrue);
         expect(applied.last, locked);
@@ -120,7 +122,7 @@ void main() {
         await _frames(tester);
         expect(window.isFullScreen, isTrue);
         await _showControls(tester);
-        await tester.tap(find.byTooltip('退出全屏（Esc）'));
+        await tester.tap(findMaterialTooltip('退出全屏（Esc）'));
         await _frames(tester);
         expect(window.isFullScreen, isFalse);
         expect(applied.last, locked);

@@ -1,6 +1,6 @@
 import 'dart:ui' show ImageFilter;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 final class VideoCardFeedback {
   const VideoCardFeedback({this.onUndo, this.busy = false});

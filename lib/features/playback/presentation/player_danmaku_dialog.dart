@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class PlayerDanmakuDialog extends StatelessWidget {
   const PlayerDanmakuDialog({super.key, required this.composer});

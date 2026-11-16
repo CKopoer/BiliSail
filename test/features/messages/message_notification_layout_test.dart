@@ -1,10 +1,12 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/messages/application/messages_controller.dart';
 import 'package:bilisail/features/messages/domain/message_repository.dart';
 import 'package:bilisail/features/messages/presentation/messages_screen.dart';
 import 'package:bilisail/shared/ui/network_avatar.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -51,9 +53,9 @@ void main() {
   void expectHomeToolbar(bool visible) {
     final matcher = visible ? findsOneWidget : findsNothing;
     expect(find.text('我的消息'), matcher);
-    expect(find.byTooltip('新增粉丝'), matcher);
-    expect(find.byTooltip('已加载私信一键已读'), matcher);
-    expect(find.byTooltip('更多消息操作'), matcher);
+    expect(findMaterialTooltip('新增粉丝'), matcher);
+    expect(findMaterialTooltip('已加载私信一键已读'), matcher);
+    expect(findMaterialTooltip('更多消息操作'), matcher);
   }
 
   for (final section in [
@@ -119,7 +121,7 @@ void main() {
           );
           await tester.pumpAndSettle();
           expectHomeToolbar(false);
-          final back = find.byTooltip('返回消息首页');
+          final back = findMaterialTooltip('返回消息首页');
           expect(back.hitTestable(), findsOneWidget);
           expect(tester.getTopLeft(back).dy, lessThan(12));
           expect(find.text(section.label), findsOneWidget);

@@ -1,3 +1,5 @@
+import '../support/material_tooltip_finder.dart';
+
 import 'dart:ui' show ViewFocusDirection, ViewFocusEvent, ViewFocusState;
 
 import 'package:bilisail/app/shell.dart';
@@ -7,7 +9,7 @@ import 'package:bilisail/core/presentation/window_input_focus.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -56,7 +58,7 @@ void main() {
         await tester.tap(toggle, kind: PointerDeviceKind.mouse);
         await tester.pumpAndSettle();
         expect(tester.getSize(sidebar).width, 0);
-        expect(find.byTooltip('展开侧栏（Ctrl+B）'), findsOneWidget);
+        expect(findMaterialTooltip('展开侧栏（Ctrl+B）'), findsOneWidget);
         await tester.sendKeyUpEvent(LogicalKeyboardKey.keyW);
         await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
         await tester.tap(toggle, kind: PointerDeviceKind.mouse);

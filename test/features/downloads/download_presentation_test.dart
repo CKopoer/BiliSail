@@ -11,7 +11,7 @@ import 'package:bilisail/features/downloads/domain/download_repository.dart';
 import 'package:bilisail/features/downloads/presentation/download_dialog.dart';
 import 'package:bilisail/features/downloads/presentation/downloads_screen.dart';
 import 'package:bilisail/features/downloads/presentation/offline_screen.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:bilisail/features/downloads/domain/public_download_storage.dart';
 import 'package:bilisail/features/downloads/data/android_public_download_storage.dart';

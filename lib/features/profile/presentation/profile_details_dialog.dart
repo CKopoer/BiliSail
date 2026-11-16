@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../shared/ui/app_dialog.dart';
 import '../domain/profile_repository.dart';

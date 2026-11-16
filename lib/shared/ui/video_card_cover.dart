@@ -1,6 +1,8 @@
+import '../../core/presentation/motion_preferences.dart';
+
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../core/presentation/workspace_activity.dart';
 import '../../domain/video.dart';
@@ -166,7 +168,7 @@ class _VideoCardCoverState extends State<VideoCardCover> {
         scope != null &&
         (hovered || widget.focused) &&
         widget.video.id.isValid;
-    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final reduceMotion = shouldReduceMotion(context);
     final configuration = (
       widget.child,
       widget.video,

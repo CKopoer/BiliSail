@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import '../../support/input_test_app.dart';
 import '../../support/playback_layout_session_fake.dart';
 
@@ -26,7 +28,7 @@ import 'package:bilisail/features/settings/application/settings_controller.dart'
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/domain/settings_repository.dart';
 import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -106,18 +108,18 @@ void main() {
     );
     await tester.pumpAndSettle();
     final state = tester.state(find.byType(_TrackedPlayer));
-    expect(find.byTooltip('收起影视信息'), findsNothing);
+    expect(findMaterialTooltip('收起影视信息'), findsNothing);
     layout.value = ResponsiveLayoutSettings(playbackSideBySideWidth: 900);
     await tester.pumpAndSettle();
-    expect(find.byTooltip('收起影视信息'), findsOneWidget);
+    expect(findMaterialTooltip('收起影视信息'), findsOneWidget);
     expect(tester.getSize(find.byType(_TrackedPlayer)).width, 520);
     tester.view.physicalSize = const Size(899, 800);
     await tester.pumpAndSettle();
-    expect(find.byTooltip('收起影视信息'), findsNothing);
+    expect(findMaterialTooltip('收起影视信息'), findsNothing);
     layout.value = const ResponsiveLayoutSettings.defaults();
     tester.view.physicalSize = const Size(900, 800);
     await tester.pumpAndSettle();
-    expect(find.byTooltip('收起影视信息'), findsNothing);
+    expect(findMaterialTooltip('收起影视信息'), findsNothing);
     expect(tester.state(find.byType(_TrackedPlayer)), same(state));
     expect(created, 1);
     expect(disposed, 0);
@@ -453,7 +455,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(
-        find.byTooltip('收起影视信息'),
+        findMaterialTooltip('收起影视信息'),
         width >= 1000 ? findsOneWidget : findsNothing,
       );
       final tiles = find.byWidgetPredicate(
@@ -481,9 +483,9 @@ void main() {
       expect(find.text('收起'), findsOneWidget);
       expect(playerBuilds, before);
       if (width >= 1000) {
-        await tester.tap(find.byTooltip('收起影视信息'));
+        await tester.tap(findMaterialTooltip('收起影视信息'));
         await tester.pumpAndSettle();
-        await tester.tap(find.byTooltip('展开影视信息'));
+        await tester.tap(findMaterialTooltip('展开影视信息'));
         await tester.pumpAndSettle();
       }
       expect(playerBuilds, before);
@@ -602,7 +604,7 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(
-          find.byTooltip('收起影视信息'),
+          findMaterialTooltip('收起影视信息'),
           width >= 1000 ? findsOneWidget : findsNothing,
         );
         final player = tester.state(find.byType(_TrackedPlayer));
@@ -671,7 +673,7 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(find.byTooltip('收起影视信息'), findsNothing);
+        expect(findMaterialTooltip('收起影视信息'), findsNothing);
         await tester.tap(find.byKey(const Key('keyboard-editor')));
         await tester.pumpAndSettle();
         final focus = FocusManager.instance.primaryFocus;
@@ -741,7 +743,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(
-        find.byTooltip('收起影视信息'),
+        findMaterialTooltip('收起影视信息'),
         width >= 1000 ? findsOneWidget : findsNothing,
       );
       expect(commentBuilds, 0);
@@ -1229,7 +1231,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('pgc-episode-order')));
     await tester.pumpAndSettle();
-    expect(find.byTooltip('切换为正序'), findsOneWidget);
+    expect(findMaterialTooltip('切换为正序'), findsOneWidget);
     final introScroll = tester
         .widget<CustomScrollView>(find.byKey(const ValueKey('pgc-intro')))
         .controller;
@@ -1248,7 +1250,7 @@ void main() {
       tester.view.physicalSize = Size(width, 800);
       await tester.pumpAndSettle();
       expect(
-        find.byTooltip('收起影视信息'),
+        findMaterialTooltip('收起影视信息'),
         width >= 1000 ? findsOneWidget : findsNothing,
       );
       expect(find.text('评论区已接入'), findsOneWidget);
@@ -1257,30 +1259,30 @@ void main() {
     }
     tester.view.physicalSize = const Size(480, 800);
     await tester.pumpAndSettle();
-    expect(find.byTooltip('收起影视信息'), findsNothing);
+    expect(findMaterialTooltip('收起影视信息'), findsNothing);
     expect(created, 1);
     expect(disposed, 0);
     expect(find.text('评论区已接入'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('pgc-tab-简介')));
     await tester.pumpAndSettle();
-    expect(find.byTooltip('切换为正序'), findsOneWidget);
+    expect(findMaterialTooltip('切换为正序'), findsOneWidget);
     expect(introScroll?.offset, 40);
     tester.view.physicalSize = const Size(1200, 450);
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('收起影视信息'));
+    await tester.tap(findMaterialTooltip('收起影视信息'));
     await tester.pumpAndSettle();
-    expect(find.byTooltip('展开影视信息'), findsOneWidget);
+    expect(findMaterialTooltip('展开影视信息'), findsOneWidget);
     tester.view.physicalSize = const Size(999, 450);
     await tester.pumpAndSettle();
-    expect(find.byTooltip('展开影视信息'), findsNothing);
+    expect(findMaterialTooltip('展开影视信息'), findsNothing);
     tester.view.physicalSize = const Size(1000, 450);
     await tester.pumpAndSettle();
-    expect(find.byTooltip('展开影视信息'), findsOneWidget);
+    expect(findMaterialTooltip('展开影视信息'), findsOneWidget);
     expect(created, 1);
     expect(disposed, 0);
-    await tester.tap(find.byTooltip('展开影视信息'));
+    await tester.tap(findMaterialTooltip('展开影视信息'));
     await tester.pumpAndSettle();
-    expect(find.byTooltip('切换为正序'), findsOneWidget);
+    expect(findMaterialTooltip('切换为正序'), findsOneWidget);
     expect(introScroll?.offset, 40);
     expect(tester.takeException(), isNull);
   });

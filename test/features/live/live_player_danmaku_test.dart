@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bili_danmaku/bili_danmaku.dart';
@@ -17,7 +19,7 @@ import 'package:bilisail/features/playback/domain/content_playback.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/features/playback/presentation/playback_panel.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -205,7 +207,7 @@ void main() {
         if (cycle == 1) {
           await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
         } else {
-          await tester.tap(find.byTooltip('全屏（F）'));
+          await tester.tap(findMaterialTooltip('全屏（F）'));
         }
         await pumpFrames(tester);
         expect(window.fullScreen, isTrue);
@@ -213,7 +215,7 @@ void main() {
         if (cycle == 1) {
           await tester.sendKeyEvent(LogicalKeyboardKey.escape);
         } else {
-          await tester.tap(find.byTooltip('退出全屏（Esc）'));
+          await tester.tap(findMaterialTooltip('退出全屏（Esc）'));
         }
         await pumpFrames(tester);
         expect(window.fullScreen, isFalse);
@@ -258,7 +260,7 @@ void main() {
       final original = drawing(tester);
       final entering = Completer<void>();
       window.transition = entering;
-      await tester.tap(find.byTooltip('全屏（F）'));
+      await tester.tap(findMaterialTooltip('全屏（F）'));
       await pumpFrames(tester);
       expect(find.byType(LiveDanmakuOverlay), findsNothing);
       realtime.events.add(const [
@@ -275,7 +277,7 @@ void main() {
 
       final leaving = Completer<void>();
       window.transition = leaving;
-      await tester.tap(find.byTooltip('退出全屏（Esc）'));
+      await tester.tap(findMaterialTooltip('退出全屏（Esc）'));
       await pumpFrames(tester);
       expect(find.byType(LiveDanmakuOverlay), findsNothing);
       realtime.events.add(const [

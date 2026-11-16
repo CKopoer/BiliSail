@@ -1,3 +1,5 @@
+import '../support/material_tooltip_finder.dart';
+
 // Exercise the pinned SDK's native-dialog path used by desktop playback.
 // ignore_for_file: implementation_imports, invalid_use_of_internal_member
 
@@ -13,10 +15,9 @@ import 'package:bilisail/features/image_viewer/domain/original_image.dart';
 import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
 import 'package:bilisail/shared/ui/comment_rich_content.dart';
 import 'package:bilisail/shared/ui/image_viewer.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/src/foundation/_features.dart' as flutter_features;
-import 'package:flutter/src/widgets/_window.dart' as flutter_window;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -112,7 +113,7 @@ void main() {
           final browserNavigator = Navigator.of(
             tester.element(find.text('browser')),
           );
-          final registry = flutter_window.WindowRegistry.of(content);
+          final nativeViewCount = ui.PlatformDispatcher.instance.views.length;
           final playback = windows.windows.single;
           // A fake window has no embedder to report activation. Keyboard input
           // must belong to the native focused view, even when a tap focused UI.
@@ -125,7 +126,10 @@ void main() {
           );
           await tester.pumpAndSettle();
           expect(View.of(content).viewId, playback.viewId);
-          expect(registry.windows, isEmpty);
+          expect(
+            ui.PlatformDispatcher.instance.views,
+            hasLength(nativeViewCount),
+          );
 
           await tester.tap(
             find
@@ -141,7 +145,10 @@ void main() {
           expect(View.of(viewer).viewId, playback.viewId);
           expect(Navigator.of(viewer), same(playbackNavigator));
           expect(browserNavigator.canPop(), isFalse);
-          expect(registry.windows, isEmpty);
+          expect(
+            ui.PlatformDispatcher.instance.views,
+            hasLength(nativeViewCount),
+          );
           expect(find.text('$imageCount / $imageCount'), findsOneWidget);
           expect(repository.sources, [previews[initialIndex]]);
           expect(find.text('正在加载预览图…'), findsOneWidget);
@@ -169,7 +176,7 @@ void main() {
           await sendNativeWindowBack(tester, playback.viewId);
           expect(backs, 0);
           expect(find.byType(ImageViewer), findsOneWidget);
-          await tester.tap(find.byTooltip('放大'));
+          await tester.tap(findMaterialTooltip('放大'));
           await tester.pump();
           expect(find.text('125%'), findsOneWidget);
           ModalRoute.of(viewer)!.changedExternalState();

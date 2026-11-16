@@ -15,7 +15,7 @@ import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:bilisail/shared/ui/video_card_cover.dart';
 import 'package:bilisail/shared/ui/video_card_interaction_scope.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';

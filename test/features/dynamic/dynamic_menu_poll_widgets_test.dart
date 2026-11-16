@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:typed_data';
 
 import 'package:bilisail/app/theme.dart';
@@ -16,7 +18,7 @@ import 'package:bilisail/shared/ui/dynamic_compose_dialog.dart';
 import 'package:bilisail/shared/ui/dynamic_post_menu.dart';
 import 'package:bilisail/shared/ui/dynamic_poll_dialog.dart';
 import 'package:bilisail/shared/ui/sliver_dynamic_post_list.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -138,7 +140,7 @@ void main() {
   }
 
   Future<void> menu(WidgetTester tester, {bool own = true}) async {
-    await tester.tap(find.byTooltip('更多动态操作').at(own ? 0 : 1));
+    await tester.tap(findMaterialTooltip('更多动态操作').at(own ? 0 : 1));
     await tester.pumpAndSettle();
   }
 
@@ -168,7 +170,7 @@ void main() {
     await menu(tester);
     expect(find.text('置顶动态'), findsOneWidget);
     expect(find.text('举报动态'), findsNothing);
-    await tester.tap(find.byTooltip('关闭'));
+    await tester.tap(findMaterialTooltip('关闭'));
     await tester.pumpAndSettle();
     await tester.longPress(find.text('原正文'));
     await tester.pumpAndSettle();
@@ -241,11 +243,11 @@ void main() {
       await menu(tester, own: false);
       await action(tester, '临时屏蔽该UP主');
       expect(find.text('另一位UP主'), findsNothing);
-      await tester.tap(find.byTooltip('临时屏蔽的UP主'));
+      await tester.tap(findMaterialTooltip('临时屏蔽的UP主'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('恢复显示'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('关闭'));
+      await tester.tap(findMaterialTooltip('关闭'));
       await tester.pumpAndSettle();
       expect(find.text('另一位UP主'), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -320,7 +322,7 @@ void main() {
         await action(tester, '检查动态公开可见性');
         await tester.tap(find.text('关闭'));
         await tester.pumpAndSettle();
-        await tester.tap(find.byTooltip('关闭'));
+        await tester.tap(findMaterialTooltip('关闭'));
         await tester.pumpAndSettle();
         await tester.scrollUntilVisible(
           find.text('周末去哪儿'),

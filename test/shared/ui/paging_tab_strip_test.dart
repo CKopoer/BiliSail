@@ -2,7 +2,7 @@ import 'dart:ui' as ui;
 
 import 'package:bilisail/shared/ui/paging_tab_strip.dart';
 import 'package:bilisail/shared/ui/retained_tab_view.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -121,21 +121,27 @@ void main() {
     }
   }
 
-  testWidgets(
-    'reduced motion moves the tab and underline directly to the target',
-    (tester) async {
-      await _mount(tester, disableAnimations: true);
-      final last = tester.getRect(find.byKey(const ValueKey('tab-2')));
-      await tester.tap(find.byKey(const ValueKey('tab-2')));
-      await tester.pump();
-      await tester.pump();
-      expect(
-        (await _line(tester, false)).center.dx,
-        closeTo(last.center.dx, 1),
-      );
-      expect(tester.takeException(), isNull);
-    },
-  );
+  for (final reduceMotion in [false, true]) {
+    testWidgets(
+      '${reduceMotion ? 'reduceMotion' : 'disableAnimations'} moves the tab and underline directly to the target',
+      (tester) async {
+        await _mount(
+          tester,
+          disableAnimations: !reduceMotion,
+          reduceMotion: reduceMotion,
+        );
+        final last = tester.getRect(find.byKey(const ValueKey('tab-2')));
+        await tester.tap(find.byKey(const ValueKey('tab-2')));
+        await tester.pump();
+        await tester.pump();
+        expect(
+          (await _line(tester, false)).center.dx,
+          closeTo(last.center.dx, 1),
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
   for (final fullWidth in [false, true]) {
     for (final rtl in [false, true]) {
       testWidgets(
@@ -547,6 +553,7 @@ Future<ValueNotifier<int>> _mount(
   double scale = 1,
   double pixelRatio = 1,
   bool disableAnimations = false,
+  bool reduceMotion = false,
   int tabCount = 3,
   int initialIndex = 0,
   bool connectProgress = true,
@@ -570,6 +577,7 @@ Future<ValueNotifier<int>> _mount(
         data: MediaQuery.of(context).copyWith(
           textScaler: TextScaler.linear(scale),
           disableAnimations: disableAnimations,
+          reduceMotion: reduceMotion,
         ),
         child: Directionality(
           textDirection: rtl ? TextDirection.rtl : TextDirection.ltr,

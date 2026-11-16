@@ -7,7 +7,7 @@ import 'package:bilisail/features/downloads/application/download_controller.dart
 import 'package:bilisail/features/downloads/domain/download_repository.dart';
 import 'package:bilisail/features/downloads/presentation/downloads_screen.dart';
 import 'package:bilisail/features/downloads/presentation/offline_screen.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 

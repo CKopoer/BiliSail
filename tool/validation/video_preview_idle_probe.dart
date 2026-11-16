@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:bili_player/bili_player.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 // Run with flutter run -d windows -t tool/validation/video_preview_idle_probe.dart.
 // A production binding is essential: integration tests pump frames themselves.

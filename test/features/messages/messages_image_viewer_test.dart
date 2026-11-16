@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 import 'dart:ui' as ui;
 
@@ -10,7 +12,7 @@ import 'package:bilisail/features/messages/application/messages_controller.dart'
 import 'package:bilisail/features/messages/domain/message_repository.dart';
 import 'package:bilisail/features/messages/presentation/messages_screen.dart';
 import 'package:bilisail/shared/ui/image_viewer.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -107,10 +109,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(InteractiveViewer), findsOneWidget);
       expect(find.text('1 / 1'), findsOneWidget);
-      await tester.tap(find.byTooltip('放大'));
+      await tester.tap(findMaterialTooltip('放大'));
       await tester.pump();
       expect(find.text('125%'), findsOneWidget);
-      await tester.tap(find.byTooltip('关闭图片'));
+      await tester.tap(findMaterialTooltip('关闭图片'));
       await tester.pumpAndSettle();
       expectConversation(tester);
     });
@@ -123,7 +125,7 @@ void main() {
       if (image == null) throw StateError('Original image missing');
       await openConversation(tester, 390);
       await openImage(tester);
-      await tester.tap(find.byTooltip('关闭图片'));
+      await tester.tap(findMaterialTooltip('关闭图片'));
       await tester.pumpAndSettle();
       expect(originals.reads.single.isCancelled, isTrue);
       originals.pending.single.complete(image);
@@ -148,7 +150,7 @@ void main() {
       originals.sources,
       List.filled(2, Uri.parse('$source@1280w_1280h_0e.webp')),
     );
-    await tester.tap(find.byTooltip('关闭图片'));
+    await tester.tap(findMaterialTooltip('关闭图片'));
     await tester.pumpAndSettle();
     expect(originals.reads.last.isCancelled, isTrue);
     expectConversation(tester);

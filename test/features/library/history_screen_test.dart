@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/core/network/api_requests.dart';
@@ -11,7 +13,7 @@ import 'package:bilisail/features/library/domain/library_repository.dart';
 import 'package:bilisail/features/library/presentation/history_screen.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/gestures.dart';
@@ -88,7 +90,7 @@ void main() {
         await tester.tap(find.text('专栏历史'));
         await tester.pumpAndSettle();
         expect(browser.single.toString(), 'https://www.bilibili.com/read/cv12');
-        await tester.tap(find.byTooltip('历史记录操作').last);
+        await tester.tap(findMaterialTooltip('历史记录操作').last);
         await tester.pumpAndSettle();
         await tester.tap(find.text('删除记录'));
         await tester.pumpAndSettle();
@@ -174,14 +176,14 @@ void main() {
         await tester.pumpAndSettle();
         expect(repository.keywords.last, 'Flutter');
         expect(tester.widget<TextField>(field).controller!.text, 'Flutter');
-        await tester.tap(find.byTooltip('清除搜索'));
+        await tester.tap(findMaterialTooltip('清除搜索'));
         await tester.pumpAndSettle();
         expect(repository.keywords.last, '');
         expect(find.byType(VideoCard), findsNWidgets(2));
         expect(tester.widget<TextField>(field).controller!.text, '');
         await tester.enterText(field, '不存在');
         await tester.pump();
-        await tester.tap(find.byTooltip('搜索观看历史'));
+        await tester.tap(findMaterialTooltip('搜索观看历史'));
         await tester.pumpAndSettle();
         expect(repository.keywords.last, '不存在');
         expect(find.text('未找到相关观看记录，试试其他关键词'), findsOneWidget);

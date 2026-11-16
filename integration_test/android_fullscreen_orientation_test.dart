@@ -1,3 +1,5 @@
+import '../test/support/material_tooltip_finder.dart';
+
 import 'dart:async';
 import 'dart:io';
 
@@ -14,7 +16,7 @@ import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/features/playback/presentation/playback_panel.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/playback/presentation/player_picture_controls.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -202,16 +204,16 @@ void main() {
         );
         await _until(
           tester,
-          () => find.byTooltip('全屏（F）').evaluate().isNotEmpty,
+          () => findMaterialTooltip('全屏（F）').evaluate().isNotEmpty,
         );
         engine.publish(
           engine.currentSnapshot.copyWith(
             videoDimensions: const VideoDimensions(1920, 1080),
           ),
         );
-        await tester.tap(find.byTooltip('全屏（F）'));
+        await tester.tap(findMaterialTooltip('全屏（F）'));
         await _until(tester, () => window.isFullScreen && _isLandscape(tester));
-        expect(find.byTooltip('退出全屏（Esc）'), findsOneWidget);
+        expect(findMaterialTooltip('退出全屏（Esc）'), findsOneWidget);
         final brightness = WindowBrightnessService();
         final originalBrightness = await brightness.read();
         final surface = tester.getRect(
@@ -247,14 +249,14 @@ void main() {
           ),
         );
         await _until(tester, () => !_isLandscape(tester));
-        await tester.tap(find.byTooltip('退出全屏（Esc）'));
+        await tester.tap(findMaterialTooltip('退出全屏（Esc）'));
         await _until(tester, () => !window.isFullScreen);
         expect(await brightness.read(), closeTo(originalBrightness, .01));
         // A portrait source also enters fullscreen without changing to landscape.
-        await tester.tap(find.byTooltip('全屏（F）'));
+        await tester.tap(findMaterialTooltip('全屏（F）'));
         await _until(tester, () => window.isFullScreen);
         expect(_isLandscape(tester), isFalse);
-        await tester.tap(find.byTooltip('退出全屏（Esc）'));
+        await tester.tap(findMaterialTooltip('退出全屏（Esc）'));
         await _until(tester, () => !window.isFullScreen);
         expect(engine.opens, opens);
         expect(engine.currentSnapshot.generation, generation);
@@ -329,9 +331,9 @@ void main() {
           );
           await _until(
             tester,
-            () => find.byTooltip('全屏（F）').evaluate().isNotEmpty,
+            () => findMaterialTooltip('全屏（F）').evaluate().isNotEmpty,
           );
-          await tester.tap(find.byTooltip('全屏（F）'));
+          await tester.tap(findMaterialTooltip('全屏（F）'));
           await _until(
             tester,
             () => window.isFullScreen && _isLandscape(tester),
@@ -342,7 +344,7 @@ void main() {
           if (systemBack) {
             await tester.binding.handlePopRoute();
           } else {
-            await tester.tap(find.byTooltip('退出全屏（Esc）'));
+            await tester.tap(findMaterialTooltip('退出全屏（Esc）'));
           }
           await _until(
             tester,

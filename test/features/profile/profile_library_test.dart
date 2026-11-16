@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/app/theme.dart';
@@ -16,7 +18,7 @@ import 'package:bilisail/features/profile/presentation/profile_screen.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:bilisail/shared/ui/image_viewer.dart';
 import 'package:bilisail/shared/ui/season_card.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -135,7 +137,7 @@ void main() {
           controller().select(ProfileSection.collections);
           await tester.pumpAndSettle();
           expect(find.text('合集中的投稿'), findsOneWidget);
-          await tester.tap(find.byTooltip('返回合集'));
+          await tester.tap(findMaterialTooltip('返回合集'));
           await tester.pumpAndSettle();
           expect(find.text('自然观察合集'), findsOneWidget);
           expect(container.read(profileControllerProvider(_id)).folderId, '55');
@@ -265,7 +267,7 @@ void main() {
         expect(images.sources, [
           Uri.parse('https://i0.hdslb.com/$target.png@1280w_1280h_0e.webp'),
         ]);
-        await tester.tap(find.byTooltip('关闭图片'));
+        await tester.tap(findMaterialTooltip('关闭图片'));
         await tester.pumpAndSettle();
         expect(find.byType(ImageViewer), findsNothing);
         expect(find.text('自然观察合集'), findsOneWidget);

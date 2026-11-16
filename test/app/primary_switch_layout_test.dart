@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 

@@ -1,8 +1,10 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/core/platform/passport_web_login.dart';
 import 'package:bilisail/core/presentation/app_input_host.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:webview_all/webview_all.dart';
 
 import 'fake_passport_webview.dart';
@@ -277,7 +279,7 @@ void main() {
     final pending = Completer<List<WebViewCookie>>();
     platform.cookies.pending = pending;
     _error(view, _controller(view), WebResourceErrorType.connect);
-    await tester.tap(find.byTooltip('关闭网页登录'));
+    await tester.tap(findMaterialTooltip('关闭网页登录'));
     pending.complete([_sessionCookie()]);
     await tester.pumpAndSettle();
     expect(await result.value, isNull);
@@ -358,7 +360,7 @@ Future<({Future<List<BrowserLoginCookie>?> value})> _open(
 }
 
 Future<void> _close(WidgetTester tester) async {
-  await tester.tap(find.byTooltip('关闭网页登录'));
+  await tester.tap(findMaterialTooltip('关闭网页登录'));
   await tester.pumpAndSettle();
   await tester.runAsync(() => Future<void>.delayed(Duration.zero));
 }

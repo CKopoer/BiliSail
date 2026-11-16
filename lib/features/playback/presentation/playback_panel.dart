@@ -7,7 +7,7 @@ import 'package:bili_danmaku/bili_danmaku.dart';
 import 'package:bili_player/bili_player.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/platform/window_service.dart';

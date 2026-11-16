@@ -25,7 +25,7 @@ import 'package:bilisail/features/search/presentation/search_screen.dart';
 import 'package:bilisail/features/search/presentation/search_category_bar.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:bilisail/shared/ui/bili_badges.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';

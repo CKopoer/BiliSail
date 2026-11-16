@@ -6,7 +6,7 @@ import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/video/application/video_extras_controller.dart';
 import 'package:bilisail/features/video/domain/video_extras_repository.dart';
 import 'package:bilisail/features/video/presentation/video_tags_panel.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 

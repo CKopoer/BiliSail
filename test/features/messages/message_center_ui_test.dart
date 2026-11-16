@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -15,7 +17,7 @@ import 'package:bilisail/features/messages/presentation/message_rich_text.dart';
 import 'package:bilisail/features/messages/presentation/messages_screen.dart';
 import 'package:bilisail/features/messages/presentation/private_message_image.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -82,9 +84,9 @@ void main() {
   ) async {
     final center = _CenterFake();
     await mount(tester, _RichMessages(), center);
-    expect(find.byTooltip('刷新消息'), findsNothing);
-    expect(find.byTooltip('官方消息页'), findsNothing);
-    await tester.tap(find.byTooltip('更多消息操作'));
+    expect(findMaterialTooltip('刷新消息'), findsNothing);
+    expect(findMaterialTooltip('官方消息页'), findsNothing);
+    await tester.tap(findMaterialTooltip('更多消息操作'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('消息设置'));
     await tester.pumpAndSettle();
@@ -92,7 +94,7 @@ void main() {
     expect(find.text('消息提醒'), findsOneWidget);
     await tester.tap(find.text('关闭').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('更多消息操作'));
+    await tester.tap(findMaterialTooltip('更多消息操作'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('通讯录'));
     await tester.pumpAndSettle();
@@ -108,7 +110,7 @@ void main() {
       await mount(tester, _RichMessages(), center, workspaceScope: true);
       await tester.tap(find.text('测试会话'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('聊天设置'));
+      await tester.tap(findMaterialTooltip('聊天设置'));
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('举报会话'));
       await tester.tap(find.text('举报会话'));
@@ -146,7 +148,7 @@ void main() {
     (tester) async {
       final center = _CenterFake();
       await mount(tester, _RichMessages(), center);
-      await tester.tap(find.byTooltip('已加载私信一键已读'));
+      await tester.tap(findMaterialTooltip('已加载私信一键已读'));
       await tester.pumpAndSettle();
       expect(center.acknowledgements, isEmpty);
       expect(find.textContaining('1 个已加载会话'), findsOneWidget);
@@ -173,10 +175,10 @@ void main() {
       await tester.tap(find.text('测试会话'));
       await tester.pumpAndSettle();
       expect(find.text('我的消息'), findsNothing);
-      expect(find.byTooltip('新增粉丝'), findsNothing);
-      expect(find.byTooltip('刷新会话'), findsNothing);
-      expect(find.byTooltip('标为已读'), findsNothing);
-      await tester.tap(find.byTooltip('聊天设置'));
+      expect(findMaterialTooltip('新增粉丝'), findsNothing);
+      expect(findMaterialTooltip('刷新会话'), findsNothing);
+      expect(findMaterialTooltip('标为已读'), findsNothing);
+      await tester.tap(findMaterialTooltip('聊天设置'));
       await tester.pumpAndSettle();
       expect(find.text('UID 2'), findsOneWidget);
       await tester.tap(find.widgetWithText(SwitchListTile, '置顶会话'));
@@ -220,7 +222,7 @@ void main() {
           .read(messagesControllerProvider.notifier)
           .loadThread();
       await tester.pump();
-      await tester.tap(find.byTooltip('聊天设置'));
+      await tester.tap(findMaterialTooltip('聊天设置'));
       await tester.pump(const Duration(milliseconds: 350));
       await tester.pump();
       final tile = tester.widget<ListTile>(
@@ -250,7 +252,7 @@ void main() {
       );
       await tester.tap(find.text('测试会话'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('聊天设置'));
+      await tester.tap(findMaterialTooltip('聊天设置'));
       await tester.pumpAndSettle();
 
       for (final value in [true, false]) {
@@ -331,7 +333,7 @@ void main() {
     );
     await tester.tap(find.text('测试会话'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('聊天设置'));
+    await tester.tap(findMaterialTooltip('聊天设置'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(SwitchListTile, '置顶会话'));
     await tester.pumpAndSettle();
@@ -393,7 +395,7 @@ void main() {
           );
           await tester.tap(find.text('测试会话'));
           await tester.pumpAndSettle();
-          await tester.tap(find.byTooltip('聊天设置'));
+          await tester.tap(findMaterialTooltip('聊天设置'));
           await tester.pumpAndSettle();
           final target = block ? '加入黑名单' : '移除当前会话';
           await tester.ensureVisible(find.text(target));
@@ -426,7 +428,7 @@ void main() {
     await tester.tap(find.text('测试会话'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), '你好');
-    await tester.tap(find.byTooltip('私信表情'));
+    await tester.tap(findMaterialTooltip('私信表情'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('[微笑]'));
     await tester.pumpAndSettle();
@@ -448,7 +450,7 @@ void main() {
       await tester.tap(find.text('测试会话'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), '仍保留的文字草稿');
-      await tester.tap(find.byTooltip('选择私信图片'));
+      await tester.tap(findMaterialTooltip('选择私信图片'));
       await tester.pumpAndSettle();
       expect(messages.imageSends, 0);
       expect(find.text('图片将单独发送'), findsOneWidget);

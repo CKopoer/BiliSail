@@ -1,10 +1,12 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'package:bilisail/app/shell.dart';
 import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/core/platform/desktop_window_chrome.dart';
 import 'package:bilisail/core/platform/playback_window_chrome.dart';
 import 'package:bilisail/core/platform/window_service.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:window_manager/window_manager.dart';
@@ -84,11 +86,11 @@ void main() {
             ]) {
               final mainButton = find.descendant(
                 of: main,
-                matching: find.byTooltip(mainTooltip),
+                matching: findMaterialTooltip(mainTooltip),
               );
               final playbackButton = find.descendant(
                 of: playback,
-                matching: find.byTooltip(playbackTooltip),
+                matching: findMaterialTooltip(playbackTooltip),
               );
               expect(tester.getSize(mainButton), const Size(46, 44));
               expect(
@@ -162,10 +164,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('最小化'));
+    await tester.tap(findMaterialTooltip('最小化'));
     await tester.pumpAndSettle();
     expect(calls, contains('minimize'));
-    await tester.tap(find.byTooltip('最大化'));
+    await tester.tap(findMaterialTooltip('最大化'));
     await tester.pumpAndSettle();
     expect(calls, contains('maximize'));
     Future<void> sendMaximized(bool value) async {
@@ -183,13 +185,13 @@ void main() {
     }
 
     await sendMaximized(true);
-    expect(find.byTooltip('还原'), findsOneWidget);
-    await tester.tap(find.byTooltip('还原'));
+    expect(findMaterialTooltip('还原'), findsOneWidget);
+    await tester.tap(findMaterialTooltip('还原'));
     await tester.pumpAndSettle();
     expect(calls, contains('unmaximize'));
     await sendMaximized(false);
-    expect(find.byTooltip('最大化'), findsOneWidget);
-    await tester.tap(find.byTooltip('关闭窗口'));
+    expect(findMaterialTooltip('最大化'), findsOneWidget);
+    await tester.tap(findMaterialTooltip('关闭窗口'));
     await tester.pumpAndSettle();
     expect(calls, contains('close'));
     await tester.pumpWidget(const SizedBox.shrink());
@@ -226,8 +228,8 @@ void main() {
       44,
     );
     for (final tooltip in ['返回上一视频', '回到主页', '最小化', '最大化', '关闭播放']) {
-      expect(tester.getSize(find.byTooltip(tooltip)).height, 44);
-      await tester.tap(find.byTooltip(tooltip));
+      expect(tester.getSize(findMaterialTooltip(tooltip)).height, 44);
+      await tester.tap(findMaterialTooltip(tooltip));
     }
     expect(backs, 1);
     expect(homes, 1);
@@ -240,7 +242,7 @@ void main() {
       fullScreen: false,
     );
     await tester.pump();
-    expect(find.byTooltip('还原'), findsOneWidget);
+    expect(findMaterialTooltip('还原'), findsOneWidget);
     final drag = find.byKey(const ValueKey('playback-window-drag-region'));
     await tester.drag(drag, const Offset(50, 0));
     await tester.pumpAndSettle();

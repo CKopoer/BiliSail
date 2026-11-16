@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import '../../support/input_test_app.dart';
 
 import 'dart:async';
@@ -11,7 +13,7 @@ import 'package:bilisail/features/image_viewer/data/network_original_image_repos
 import 'package:bilisail/features/image_viewer/domain/original_image.dart';
 import 'package:bilisail/shared/ui/image_viewer.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -208,7 +210,7 @@ void main() {
           addTearDown(mouse.removePointer);
           for (final tooltip in ['保存图片', '复制图片', '适应窗口', '实际大小', '缩小', '放大']) {
             paints.clear();
-            await mouse.moveTo(tester.getCenter(find.byTooltip(tooltip)));
+            await mouse.moveTo(tester.getCenter(findMaterialTooltip(tooltip)));
             await tester.pump();
             await tester.pump(const Duration(milliseconds: 80));
             await tester.pump(const Duration(milliseconds: 600));
@@ -228,14 +230,14 @@ void main() {
           expect(repository.sources, [preview(sources[1]), sources[1]]);
           expect(find.text('2 / 3'), findsOneWidget);
           paints.clear();
-          await tester.tap(find.byTooltip('放大'));
+          await tester.tap(findMaterialTooltip('放大'));
           await tester.pumpAndSettle();
           expect(
             transform.value.getMaxScaleOnAxis(),
             greaterThan(fitted.getMaxScaleOnAxis()),
           );
           expect(paints.where(renderedImages.contains), isNotEmpty);
-          await tester.tap(find.byTooltip('下一张'));
+          await tester.tap(findMaterialTooltip('下一张'));
           await tester.pump();
           repository.reads.last.result.complete(previewImage);
           await tester.pumpAndSettle();
@@ -266,8 +268,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(repository.sources, [preview(sources[1])]);
       expect(find.text('查看原图'), findsOneWidget);
-      expect(find.byTooltip('保存预览图'), findsOneWidget);
-      expect(find.byTooltip('复制预览图'), findsOneWidget);
+      expect(findMaterialTooltip('保存预览图'), findsOneWidget);
+      expect(findMaterialTooltip('复制预览图'), findsOneWidget);
       await tester.tap(find.text('查看原图'));
       await tester.pump();
       expect(repository.sources, [preview(sources[1]), sources[1]]);
@@ -284,14 +286,14 @@ void main() {
       await tester.pumpAndSettle();
       expect(repository.sources, [preview(sources[1]), sources[1], sources[1]]);
       expect(find.text('查看原图'), findsNothing);
-      expect(find.byTooltip('保存图片'), findsOneWidget);
-      expect(find.byTooltip('复制图片'), findsOneWidget);
+      expect(findMaterialTooltip('保存图片'), findsOneWidget);
+      expect(findMaterialTooltip('复制图片'), findsOneWidget);
       expect(find.text('原图加载超时，请重试'), findsNothing);
-      await tester.tap(find.byTooltip('下一张'));
+      await tester.tap(findMaterialTooltip('下一张'));
       await tester.pump();
       expect(repository.sources.last, preview(sources[2]));
       expect(find.text('查看原图'), findsOneWidget);
-      await tester.tap(find.byTooltip('关闭图片'));
+      await tester.tap(findMaterialTooltip('关闭图片'));
       await tester.pumpAndSettle();
       expect(repository.reads.last.cancellation.isCancelled, isTrue);
       repository.reads.last.result.complete(image);
@@ -368,7 +370,7 @@ void main() {
             .transformationController!;
         final fitted = transform.value.clone();
 
-        await tester.tap(find.byTooltip('放大'));
+        await tester.tap(findMaterialTooltip('放大'));
         await tester.pump();
         final enlarged = transform.value.clone();
         await tester.drag(viewport, const Offset(-120, 0));
@@ -382,7 +384,7 @@ void main() {
           transform.value.getMaxScaleOnAxis(),
           closeTo(enlarged.getMaxScaleOnAxis(), .000001),
         );
-        await tester.tap(find.byTooltip('适应窗口'));
+        await tester.tap(findMaterialTooltip('适应窗口'));
         await tester.pumpAndSettle();
 
         final center = tester.getCenter(viewport);
@@ -461,10 +463,10 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text('1 / 2'), findsOneWidget);
         expect(find.text('100%'), findsOneWidget);
-        await tester.tap(find.byTooltip('保存预览图'));
+        await tester.tap(findMaterialTooltip('保存预览图'));
         await tester.pumpAndSettle();
         expect(find.text('已保存到 Pictures/BiliSail/test.png'), findsOneWidget);
-        await tester.tap(find.byTooltip('复制预览图'));
+        await tester.tap(findMaterialTooltip('复制预览图'));
         await tester.pumpAndSettle();
         expect(find.text('图片已复制到剪贴板'), findsOneWidget);
         expect(exporter.saved, [bytes]);
@@ -478,15 +480,15 @@ void main() {
         await tester.dragFrom(viewport.center, const Offset(40, 20));
         await tester.pumpAndSettle();
         expect(find.byType(Dialog), findsOneWidget);
-        await tester.tap(find.byTooltip('适应窗口'));
+        await tester.tap(findMaterialTooltip('适应窗口'));
         await tester.pumpAndSettle();
-        await tester.tap(find.byTooltip('放大'));
+        await tester.tap(findMaterialTooltip('放大'));
         await tester.pump();
         expect(find.text('125%'), findsOneWidget);
-        await tester.tap(find.byTooltip('缩小'));
+        await tester.tap(findMaterialTooltip('缩小'));
         await tester.pump();
         expect(find.text('100%'), findsOneWidget);
-        await tester.tap(find.byTooltip('下一张'));
+        await tester.tap(findMaterialTooltip('下一张'));
         await tester.pumpAndSettle();
         expect(find.text('2 / 2'), findsOneWidget);
         expect(repository.sources, sources.map(preview));

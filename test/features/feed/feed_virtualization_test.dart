@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/domain/app_failure.dart';
@@ -9,7 +11,7 @@ import 'package:bilisail/features/feed/domain/feed_repository.dart';
 import 'package:bilisail/features/feed/domain/home_channel.dart';
 import 'package:bilisail/features/feed/presentation/feed_screen.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -48,7 +50,7 @@ void main() {
       final first = tester.widget<VideoCard>(find.byType(VideoCard).first);
       _position(tester).jumpTo(12);
       await tester.pumpAndSettle();
-      expect(find.byTooltip('回到顶部'), findsOneWidget);
+      expect(findMaterialTooltip('回到顶部'), findsOneWidget);
       expect(tester.widget(find.byKey(first.key!)), same(first));
       var rebuilt = 0;
       debugOnRebuildDirtyWidget = (element, builtOnce) {
@@ -109,7 +111,7 @@ void main() {
     await tester.pumpAndSettle();
     _position(tester).jumpTo(4000);
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('刷新视频'));
+    await tester.tap(findMaterialTooltip('刷新视频'));
     await tester.pumpAndSettle();
     expect(_position(tester).pixels, 0);
     expect(repository.firstCalls, 2);

@@ -12,7 +12,7 @@ import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/main.dart' as production;
 import 'package:bilisail/shared/ui/app_network_image.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:go_router/go_router.dart';
 import 'package:window_manager/window_manager.dart';
 

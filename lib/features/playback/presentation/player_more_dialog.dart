@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:bili_player/bili_player.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../application/playback_session.dart';
 import '../domain/playback_repository.dart';

@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/page_result.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
@@ -8,7 +10,7 @@ import 'package:bilisail/features/feed/domain/home_repository.dart';
 import 'package:bilisail/features/feed/domain/feed_repository.dart';
 import 'package:bilisail/features/feed/domain/home_channel.dart';
 import 'package:bilisail/features/feed/presentation/feed_screen.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -170,7 +172,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('夹内视频'), findsOneWidget);
       expect(find.byType(VideoCard), findsOneWidget);
-      await tester.tap(find.byTooltip('返回列表'));
+      await tester.tap(findMaterialTooltip('返回列表'));
       await tester.pumpAndSettle();
       expect(find.text('收藏夹A'), findsOneWidget);
       await tester.tap(find.text('收藏夹A'));
@@ -225,7 +227,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('home-section-我的收藏与订阅')));
     await tester.pumpAndSettle();
     expect(find.text('夹内视频'), findsOneWidget);
-    await tester.tap(find.byTooltip('返回列表'));
+    await tester.tap(findMaterialTooltip('返回列表'));
     await tester.pumpAndSettle();
     expect(find.text('订阅合集'), findsOneWidget);
     expect(repository.calls.where((e) => e.contains('ugc:42')), hasLength(1));
@@ -280,7 +282,7 @@ void main() {
     expect(find.byType(BiliUpBadge), findsNothing);
     expect(find.text('热门精选'), findsNothing);
     expect(repository.calls, ['recommended:1', 'recommended:1']);
-    await tester.tap(find.byTooltip('刷新视频'));
+    await tester.tap(findMaterialTooltip('刷新视频'));
     await tester.pumpAndSettle();
     expect(repository.calls.length, 3);
   });
@@ -341,13 +343,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('排行1003视频'), findsOneWidget);
     expect(repository.calls.length, calls);
-    await tester.tap(find.byTooltip('刷新视频'));
+    await tester.tap(findMaterialTooltip('刷新视频'));
     await tester.pumpAndSettle();
     expect(repository.calls.last, 'ranking:1003');
     repository.rankingCategories = const [
       VideoCategory(id: '7777', name: '新增分区'),
     ];
-    await tester.tap(find.byTooltip('刷新视频'));
+    await tester.tap(findMaterialTooltip('刷新视频'));
     await tester.pumpAndSettle();
     expect(find.text('音乐'), findsNothing);
     expect(repository.calls.last, 'ranking:0');

@@ -1,6 +1,8 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'package:bilisail/shared/ui/paged_scroll_viewport.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -50,11 +52,11 @@ void main() {
     expect(refreshCalls, 1);
     await _wheel(tester, 200);
     await tester.pumpAndSettle();
-    expect(find.byTooltip('回到顶部'), findsOneWidget);
+    expect(findMaterialTooltip('回到顶部'), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
-    expect(find.byTooltip('回到顶部'), findsNothing);
+    expect(findMaterialTooltip('回到顶部'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

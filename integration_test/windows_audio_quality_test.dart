@@ -5,7 +5,7 @@ import 'package:bili_player/bili_player.dart';
 import 'package:bilisail/domain/audio_quality.dart';
 import 'package:bilisail/features/playback/data/dash_media_selection.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 

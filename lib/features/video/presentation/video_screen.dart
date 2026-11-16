@@ -1,10 +1,12 @@
+import '../../../core/presentation/motion_preferences.dart';
+
 import 'dart:async';
 
 import 'package:bili_player/bili_player.dart';
 
 import '../../../domain/user.dart';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/app_failure.dart';
@@ -357,10 +359,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                                     Text(_descriptionExpanded ? '收起' : '展开'),
                                     AnimatedRotation(
                                       turns: _descriptionExpanded ? .5 : 0,
-                                      duration:
-                                          MediaQuery.disableAnimationsOf(
-                                            context,
-                                          )
+                                      duration: shouldReduceMotion(context)
                                           ? Duration.zero
                                           : _descriptionTransitionDuration,
                                       curve: Curves.easeInOutCubic,
@@ -1140,7 +1139,7 @@ final class _VideoDescriptionTransitionState
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _controller.duration = MediaQuery.disableAnimationsOf(context)
+    _controller.duration = shouldReduceMotion(context)
         ? Duration.zero
         : _descriptionTransitionDuration;
     if (_controller.duration == Duration.zero) {

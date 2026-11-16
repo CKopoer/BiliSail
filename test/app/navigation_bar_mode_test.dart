@@ -1,3 +1,5 @@
+import '../support/material_tooltip_finder.dart';
+
 import 'package:bilisail/app/router.dart';
 import 'package:bilisail/app/shell.dart';
 import 'package:bilisail/app/theme.dart';
@@ -6,7 +8,7 @@ import 'package:bilisail/features/settings/application/settings_controller.dart'
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/domain/settings_repository.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -203,11 +205,11 @@ void main() {
             bottom,
           );
           expect(
-            find.byTooltip('返回播放'),
+            findMaterialTooltip('返回播放'),
             bottom ? findsOneWidget : findsNothing,
           );
           expect(
-            find.byTooltip('回到播放页'),
+            findMaterialTooltip('回到播放页'),
             bottom ? findsNothing : findsOneWidget,
           );
           expect(tester.takeException(), isNull);
@@ -354,7 +356,13 @@ void main() {
             ('侧边栏', NavigationBarMode.sidebar),
             ('自动', NavigationBarMode.automatic),
           ]) {
-            final choice = find.widgetWithText(ChoiceChip, label);
+            final group = find
+                .ancestor(of: find.text('导航栏模式'), matching: find.byType(Column))
+                .first;
+            final choice = find.descendant(
+              of: group,
+              matching: find.widgetWithText(ChoiceChip, label),
+            );
             await tester.ensureVisible(choice);
             await tester.pumpAndSettle();
             await tester.tap(choice);

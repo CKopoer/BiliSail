@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/domain/app_failure.dart';
@@ -8,7 +10,7 @@ import 'package:bilisail/features/settings/domain/settings_category.dart';
 import 'package:bilisail/features/settings/presentation/log_export_button.dart';
 import 'package:bilisail/features/settings/presentation/settings_screen.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -49,7 +51,7 @@ void main() {
           await tester.pump();
           final export = find.byKey(const ValueKey('export-logs'));
           if (width < 600) {
-            expect(find.byTooltip('正在导出…'), findsOneWidget);
+            expect(findMaterialTooltip('正在导出…'), findsOneWidget);
             expect(tester.widget<IconButton>(export).onPressed, isNull);
           } else {
             expect(find.text('正在导出…'), findsOneWidget);
@@ -70,7 +72,7 @@ void main() {
         expect(find.text('日志已导出'), findsOneWidget);
         await tester.tap(find.text('完成'));
         await tester.pumpAndSettle();
-        expect(find.byTooltip('导出日志').hitTestable(), findsOneWidget);
+        expect(findMaterialTooltip('导出日志').hitTestable(), findsOneWidget);
         expect(tester.takeException(), isNull);
       },
     );

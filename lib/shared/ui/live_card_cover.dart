@@ -1,4 +1,6 @@
-import 'package:flutter/material.dart';
+import '../../core/presentation/motion_preferences.dart';
+
+import 'package:material_ui/material_ui.dart';
 
 import '../../core/presentation/workspace_activity.dart';
 import '../../features/live/domain/live_room.dart';
@@ -55,7 +57,7 @@ class _LiveCardCoverState extends State<LiveCardCover> {
     return AnimatedScale(
       key: const ValueKey('live-card-cover-scale'),
       scale: active && widget.hovered ? 1.05 : 1,
-      duration: _snapBack || MediaQuery.disableAnimationsOf(context)
+      duration: _snapBack || shouldReduceMotion(context)
           ? Duration.zero
           : const Duration(milliseconds: 200),
       curve: Curves.easeOutCubic,

@@ -1,7 +1,9 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'package:bilisail/domain/dynamic_post.dart';
 import 'package:bilisail/shared/ui/dynamic_post_card.dart';
 import 'package:bilisail/shared/ui/dynamic_post_text.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -182,13 +184,13 @@ void main() {
           ),
         ),
       );
-      final button = find.byTooltip('查看动态详情');
+      final button = findMaterialTooltip('查看动态详情');
       expect(
         tester.getRect(button).right,
         greaterThan(tester.getRect(find.text('作者')).right),
       );
       expect(tester.getRect(button).top, lessThan(30));
-      expect(find.byTooltip('在浏览器打开动态'), findsNothing);
+      expect(findMaterialTooltip('在浏览器打开动态'), findsNothing);
       await tester.tap(button);
       expect(details, 1);
     },

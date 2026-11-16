@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/features/playback/presentation/player_settings_dialog.dart';
 import 'package:bilisail/features/settings/application/settings_controller.dart';
@@ -8,7 +10,7 @@ import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
 import 'package:bilisail/features/settings/presentation/settings_screen.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -243,7 +245,7 @@ void main() {
         }
         await tester.pumpAndSettle();
         expect(repository.settings.defaultPlaybackRate, 1.75);
-        final remove = find.byTooltip('删除 1.75x');
+        final remove = findMaterialTooltip('删除 1.75x');
         await tester.ensureVisible(remove);
         await tester.pumpAndSettle();
         await tester.tap(remove);
@@ -672,8 +674,8 @@ void main() {
       expect(resetRect.center.dy, tester.getCenter(title).dy);
       expect(resetRect.left, greaterThan(tester.getRect(title).right));
       if (width < 600) {
-        expect(find.byTooltip('恢复默认设置'), findsOneWidget);
-        expect(find.byTooltip('导出日志'), findsOneWidget);
+        expect(findMaterialTooltip('恢复默认设置'), findsOneWidget);
+        expect(findMaterialTooltip('导出日志'), findsOneWidget);
         expect(resetRect.size, const Size(48, 48));
         expect(exportRect.size, const Size(48, 48));
       } else {
@@ -1428,8 +1430,18 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    final barModeGroup = find
+        .ancestor(of: find.text('导航栏模式'), matching: find.byType(Column))
+        .first;
     expect(
-      tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '自动')).selected,
+      tester
+          .widget<ChoiceChip>(
+            find.descendant(
+              of: barModeGroup,
+              matching: find.widgetWithText(ChoiceChip, '自动'),
+            ),
+          )
+          .selected,
       isTrue,
     );
     for (final (label, mode) in [
@@ -1560,7 +1572,7 @@ void main() {
         final saved = repository.settings.danmakuLineSpacing;
         expect(saved, inExclusiveRange(0, 100));
         if (inPlayer) {
-          await tester.tap(find.byTooltip('关闭'));
+          await tester.tap(findMaterialTooltip('关闭'));
           await tester.pumpAndSettle();
           await tester.tap(find.text('弹幕配置'));
           await tester.pumpAndSettle();
@@ -1629,7 +1641,7 @@ void main() {
         repository.settings.danmakuTopMargin,
       );
       if (inPlayer) {
-        await tester.tap(find.byTooltip('关闭'));
+        await tester.tap(findMaterialTooltip('关闭'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('弹幕配置'));
         await tester.pumpAndSettle();
@@ -1858,8 +1870,8 @@ void main() {
       expect(tester.getCenter(reset).dy, tester.getCenter(title).dy);
       expect(tester.getCenter(export).dy, tester.getCenter(title).dy);
       if (width < 1200) {
-        expect(find.byTooltip('恢复默认设置'), findsOneWidget);
-        expect(find.byTooltip('导出日志'), findsOneWidget);
+        expect(findMaterialTooltip('恢复默认设置'), findsOneWidget);
+        expect(findMaterialTooltip('导出日志'), findsOneWidget);
       }
       expect(tester.takeException(), isNull);
     }

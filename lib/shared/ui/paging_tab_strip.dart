@@ -1,4 +1,6 @@
-import 'package:flutter/material.dart';
+import '../../core/presentation/motion_preferences.dart';
+
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 
@@ -153,7 +155,7 @@ final class _PagingTabStripState<T extends Object>
       } else {
         _fallback.animateTo(
           target,
-          duration: MediaQuery.disableAnimationsOf(context)
+          duration: shouldReduceMotion(context)
               ? Duration.zero
               : TabPagingMotion.duration,
           curve: Curves.ease,

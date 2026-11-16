@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/domain/video.dart';
@@ -5,7 +7,7 @@ import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/video/application/video_controller.dart';
 import 'package:bilisail/features/video/presentation/video_collection_panel.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -102,7 +104,7 @@ ScrollController _controller(WidgetTester tester) => tester
     .controller!;
 
 Future<void> _tap(WidgetTester tester, String tooltip) async {
-  await tester.tap(find.byTooltip(tooltip));
+  await tester.tap(findMaterialTooltip(tooltip));
   await tester.pumpAndSettle();
 }
 
@@ -182,7 +184,7 @@ void main() {
           )
           .first;
       await tester.tap(
-        find.descendant(of: entry, matching: find.byTooltip('展开分 P')),
+        find.descendant(of: entry, matching: findMaterialTooltip('展开分 P')),
       );
       await tester.pumpAndSettle();
       await _tap(tester, '跳至底部');
@@ -212,7 +214,7 @@ void main() {
         .ancestor(of: find.text('合集视频 0'), matching: find.byType(Material))
         .first;
     await tester.tap(
-      find.descendant(of: first, matching: find.byTooltip('展开分 P')),
+      find.descendant(of: first, matching: findMaterialTooltip('展开分 P')),
     );
     await tester.pump();
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
@@ -231,7 +233,7 @@ void main() {
     final video = _video();
     await _pump(tester, video, width: 240, textScale: 2);
     for (final tooltip in ['跳至顶部', '跳至底部', '跳至当前', '倒序播放', '倒序']) {
-      expect(find.byTooltip(tooltip), findsOneWidget);
+      expect(findMaterialTooltip(tooltip), findsOneWidget);
     }
     await _tap(tester, '跳至底部');
     _expectVisible(tester, '合集视频 79');
@@ -250,7 +252,7 @@ void main() {
         tester
             .widget<IconButton>(
               find.ancestor(
-                of: find.byTooltip(tooltip),
+                of: findMaterialTooltip(tooltip),
                 matching: find.byType(IconButton),
               ),
             )

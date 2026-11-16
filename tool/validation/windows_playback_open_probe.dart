@@ -11,7 +11,7 @@ import 'package:bilisail/core/platform/window_service.dart';
 import 'package:bilisail/core/presentation/bili_widgets_binding.dart';
 import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
 import 'package:bilisail/shared/ui/state_view.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/scheduler.dart';
 
 /// Profile/AOT window latency probe; no account, API or media is needed to show

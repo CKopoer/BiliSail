@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/domain/app_failure.dart';
@@ -8,7 +10,7 @@ import 'package:bilisail/features/dynamic/application/dynamic_poll_controller.da
 import 'package:bilisail/shared/ui/app_network_image.dart';
 import 'package:bilisail/shared/ui/dynamic_poll_dialog.dart';
 import 'package:bilisail/shared/ui/dynamic_post_interactions.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -114,7 +116,7 @@ void main() {
         expect(find.text('已投票'), findsOneWidget);
         expect(find.text('2票 · 66.7%'), findsOneWidget);
         expect(find.widgetWithText(FilledButton, '投票'), findsNothing);
-        await tester.tap(find.byTooltip('关闭投票'));
+        await tester.tap(findMaterialTooltip('关闭投票'));
         await tester.pumpAndSettle();
       },
     );
@@ -141,7 +143,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(DynamicPollDialog), findsOneWidget);
       expect(repository.reads, 1);
-      await tester.tap(find.byTooltip('关闭投票'));
+      await tester.tap(findMaterialTooltip('关闭投票'));
       await tester.pumpAndSettle();
     },
   );
@@ -183,7 +185,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      await tester.tap(find.byTooltip('关闭投票'));
+      await tester.tap(findMaterialTooltip('关闭投票'));
       await tester.pumpAndSettle();
     },
   );
@@ -205,7 +207,7 @@ void main() {
     expect(find.text('0票 · 0.0%'), findsOneWidget);
     expect(find.byIcon(Icons.check_circle), findsNothing);
     expect(repository.votes, isEmpty);
-    await tester.tap(find.byTooltip('关闭投票'));
+    await tester.tap(findMaterialTooltip('关闭投票'));
     await tester.pumpAndSettle();
   });
 
@@ -223,7 +225,7 @@ void main() {
     await tester.pump();
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
     final cancellation = repository.lastCancellation!;
-    await tester.tap(find.byTooltip('关闭投票'));
+    await tester.tap(findMaterialTooltip('关闭投票'));
     await tester.pumpAndSettle();
     expect(cancellation.isCancelled, true);
     repository.pendingRead!.complete(pollFixture());

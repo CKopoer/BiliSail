@@ -1,10 +1,12 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/shared/ui/bili_badges.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:bilisail/shared/ui/video_card_cover.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -293,7 +295,7 @@ void main() {
         );
         expect(titleParagraph.maxLines, 2);
         expect(titleParagraph.overflow, TextOverflow.ellipsis);
-        expect(find.byTooltip(video.title), findsOneWidget);
+        expect(findMaterialTooltip(video.title), findsOneWidget);
         expect(authorParagraph.didExceedMaxLines, isTrue);
         expect(authorParagraph.maxLines, 1);
         expect(authorParagraph.overflow, TextOverflow.ellipsis);
@@ -356,7 +358,7 @@ void main() {
         );
         expect(paragraph.didExceedMaxLines, overflowing);
         expect(
-          find.byTooltip(video.title),
+          findMaterialTooltip(video.title),
           overflowing ? findsOneWidget : findsNothing,
         );
         await mouse.moveTo(tester.getCenter(title));

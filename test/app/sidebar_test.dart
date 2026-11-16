@@ -1,3 +1,5 @@
+import '../support/material_tooltip_finder.dart';
+
 import '../support/input_test_app.dart';
 
 import 'package:bilisail/app/router.dart';
@@ -8,7 +10,7 @@ import 'package:bilisail/features/settings/application/settings_controller.dart'
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/domain/settings_repository.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -205,7 +207,7 @@ void main() {
       await tester.tap(_toggle);
       await tester.pumpAndSettle();
       expect(tester.getSize(_region).width, 0);
-      expect(find.byTooltip('展开侧栏（Ctrl+B）'), findsOneWidget);
+      expect(findMaterialTooltip('展开侧栏（Ctrl+B）'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('workspace-nav-home')).hitTestable(),
         findsNothing,

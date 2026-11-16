@@ -8,7 +8,7 @@ import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/core/storage/image_byte_cache.dart';
 import 'package:bilisail/shared/ui/app_cover_image.dart';
 import 'package:bilisail/shared/ui/app_network_image.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _url = 'https://i0.hdslb.com/retry-cover.jpg';

@@ -5,13 +5,62 @@ import 'package:bilisail/domain/wheel_scroll_animation.dart';
 import 'package:bilisail/shared/ui/paged_scroll_viewport.dart';
 import 'package:bilisail/shared/ui/smooth_scroll_behavior.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/input_test_app.dart';
 
 void main() {
+  for (final animation in WheelScrollAnimation.values) {
+    testWidgets('reduceMotion cancels ${animation.name} and preserves its '
+        'position and preference', (tester) async {
+      final controller = ScrollController();
+      addTearDown(controller.dispose);
+      var reduceMotion = false;
+      late StateSetter update;
+      await tester.pumpWidget(
+        StatefulBuilder(
+          builder: (_, setState) {
+            update = setState;
+            return _app(
+              _list(controller),
+              animation: animation,
+              reduceMotion: reduceMotion,
+            );
+          },
+        ),
+      );
+      final position = controller.position;
+      await _wheel(tester, find.byType(ListView), 120);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(controller.offset, greaterThan(0));
+      update(() => reduceMotion = true);
+      await tester.pump();
+      expect(controller.position, same(position));
+      expect(position.isScrollingNotifier.value, isFalse);
+      final stopped = controller.offset;
+      final immediateDistance = animation == WheelScrollAnimation.multiplatform
+          ? 240.0
+          : 120.0;
+      await tester.pump(const Duration(seconds: 1));
+      expect(controller.offset, stopped);
+      await _wheel(tester, find.byType(ListView), 120);
+      expect(controller.offset, closeTo(stopped + immediateDistance, .000001));
+      await tester.pumpAndSettle();
+      expect(controller.offset, closeTo(stopped + immediateDistance, .000001));
+      update(() => reduceMotion = false);
+      await tester.pump();
+      final before = controller.offset;
+      await _wheel(tester, find.byType(ListView), 120);
+      expect(controller.offset, before);
+      await tester.pumpAndSettle();
+      expect(controller.offset, greaterThan(before));
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   for (final horizontal in [false, true]) {
     testWidgets('changing damping stops old motion and updates retained '
         '${horizontal ? 'local horizontal' : 'global vertical'} scrolling', (
@@ -1016,15 +1065,22 @@ void main() {
   });
 }
 
-Widget _app(Widget child, {bool disableAnimations = false}) => MaterialApp(
+Widget _app(
+  Widget child, {
+  bool disableAnimations = false,
+  bool reduceMotion = false,
+  WheelScrollAnimation animation = WheelScrollAnimation.spring,
+}) => MaterialApp(
   theme: ThemeData(platform: TargetPlatform.windows),
   scrollBehavior: const SmoothScrollBehavior(),
   builder: (context, child) => SmoothScrollScope(
-    animation: WheelScrollAnimation.spring,
+    animation: animation,
     dampingRatio: SmoothScrollScope.dampingRatioOf(context),
     child: MediaQuery(
-      data: MediaQuery.of(context)
-          .copyWith(disableAnimations: disableAnimations),
+      data: MediaQuery.of(context).copyWith(
+        disableAnimations: disableAnimations,
+        reduceMotion: reduceMotion,
+      ),
       child: child ?? const SizedBox(),
     ),
   ),

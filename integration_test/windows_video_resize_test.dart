@@ -1,8 +1,10 @@
+import '../test/support/material_tooltip_finder.dart';
+
 import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:bili_player/bili_player.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -147,7 +149,7 @@ void main() {
               () => Future<void>.delayed(const Duration(seconds: 15)),
             );
           }
-          await tester.tap(find.byTooltip('切换视频信息'));
+          await tester.tap(findMaterialTooltip('切换视频信息'));
           await checkLayoutTransition();
           expect(engine.currentSnapshot.desiredPlaying, playing);
         }

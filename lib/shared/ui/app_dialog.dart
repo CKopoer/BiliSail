@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Shows a Material dialog inside the caller's window, including desktop views.
 Future<T?> showAppDialog<T>({

@@ -1,6 +1,8 @@
+import 'motion_preferences.dart';
+
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
 typedef PredictiveBackRegionBuilder = Widget Function(
@@ -153,7 +155,7 @@ class _PredictiveBackRegionState extends State<PredictiveBackRegion>
     _tracking = false;
     final generation = _generation;
     try {
-      final duration = MediaQuery.disableAnimationsOf(context)
+      final duration = shouldReduceMotion(context)
           ? Duration.zero
           : const Duration(milliseconds: 180);
       await _progress
@@ -224,7 +226,7 @@ class PredictiveBackPageTransition extends StatelessWidget {
     child: child,
     builder: (context, child) {
       final value = progress.value;
-      final reduced = MediaQuery.disableAnimationsOf(context);
+      final reduced = shouldReduceMotion(context);
       final direction = edge == SwipeEdge.left ? 1.0 : -1.0;
       // Adjacent full-size pages share a moving edge. Fractional translation
       // follows the viewport width without relayout or resizing video surfaces.

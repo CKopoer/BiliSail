@@ -4,7 +4,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:bili_danmaku/bili_danmaku.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 // Use a native Profile build. This probe uses synthetic text, no account/video.
 Future<void> main() async {

@@ -1,7 +1,9 @@
+import '../../core/presentation/motion_preferences.dart';
+
 import 'dart:async';
 
 import 'package:bili_player/bili_player.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/scheduler.dart';
 
 import '../../domain/app_failure.dart';
@@ -156,7 +158,7 @@ class _CardHoverPreviewState extends State<CardHoverPreview>
       child: TweenAnimationBuilder<double>(
         key: ObjectKey(preview),
         tween: Tween(begin: 0, end: 1),
-        duration: MediaQuery.disableAnimationsOf(context)
+        duration: shouldReduceMotion(context)
             ? Duration.zero
             : const Duration(milliseconds: 200),
         curve: Curves.linear,

@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/core/network/api_requests.dart';
@@ -9,7 +11,7 @@ import 'package:bilisail/features/feed/presentation/home_content.dart';
 import 'package:bilisail/features/feed/presentation/home_feed_cards.dart';
 import 'package:bilisail/features/video/application/watch_later_queue_registry.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -175,7 +177,7 @@ void main() {
       );
       expect(button.onPressed, isNull);
       final cancellation = repository.lastCancellation!;
-      await tester.tap(find.byTooltip('返回列表'));
+      await tester.tap(findMaterialTooltip('返回列表'));
       await tester.pumpAndSettle();
       expect(cancellation.isCancelled, isTrue);
       repository.pending!.complete(const HomePage([], hasMore: false));
@@ -211,7 +213,7 @@ void main() {
     await tester.tap(find.text('视频 2'));
     await tester.pump();
     final cancellation = repository.lastCancellation!;
-    await tester.tap(find.byTooltip('返回列表'));
+    await tester.tap(findMaterialTooltip('返回列表'));
     await tester.pumpAndSettle();
     expect(cancellation.isCancelled, true);
     repository.pending!.complete(const HomePage([], hasMore: true));

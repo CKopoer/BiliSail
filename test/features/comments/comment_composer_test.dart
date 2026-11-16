@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -13,7 +15,7 @@ import 'package:bilisail/features/comments/domain/comment_composer.dart';
 import 'package:bilisail/features/comments/domain/comments_repository.dart';
 import 'package:bilisail/shared/ui/comments_panel.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -125,8 +127,8 @@ void main() {
           await tester.enterText(find.byType(TextField), '文' * length);
           await tester.pumpAndSettle();
         }
-        final firstTool = tester.getRect(find.byTooltip('选择表情'));
-        final lastTool = tester.getRect(find.byTooltip('同步到动态'));
+        final firstTool = tester.getRect(findMaterialTooltip('选择表情'));
+        final lastTool = tester.getRect(findMaterialTooltip('同步到动态'));
         final submit = tester.getRect(find.widgetWithText(FilledButton, '发布'));
         final counter = tester.getRect(find.text('$length/1000'));
         expect(submit.center.dy, closeTo(firstTool.center.dy, 1));
@@ -144,7 +146,7 @@ void main() {
     tester,
   ) async {
     await show(tester, width: 320, scale: 2, keyboard: 300);
-    final lastTool = tester.getRect(find.byTooltip('同步到动态'));
+    final lastTool = tester.getRect(findMaterialTooltip('同步到动态'));
     final submit = tester.getRect(find.widgetWithText(FilledButton, '发布'));
     expect(submit.top, greaterThan(lastTool.bottom));
     expect(submit.right, closeTo(308, 1));
@@ -160,7 +162,7 @@ void main() {
       width: 320,
       target: const CommentTarget('42', CommentTargetType.album),
     );
-    final tools = find.byTooltip('同步到动态');
+    final tools = findMaterialTooltip('同步到动态');
     final submit = find.widgetWithText(FilledButton, '发布');
     expect(tester.getCenter(submit).dy, closeTo(tester.getCenter(tools).dy, 1));
     await tester.enterText(find.byType(TextField), '文' * 1000);
@@ -237,14 +239,14 @@ void main() {
   ) async {
     pendingPick = Completer<List<CommentLocalImage>>();
     await show(tester);
-    await tester.tap(find.byTooltip('添加图片（最多9张，每张10MB）'));
+    await tester.tap(findMaterialTooltip('添加图片（最多9张，每张10MB）'));
     await tester.pump();
     repo.sessionEpoch++;
     auth.change(const AuthState());
     await tester.pump();
     pendingPick!.complete([_image]);
     await tester.pumpAndSettle();
-    expect(find.byTooltip('移除图片 1'), findsNothing);
+    expect(findMaterialTooltip('移除图片 1'), findsNothing);
     expect(repo.uploads, 0);
     expect(repo.posts, 0);
     expect(tester.takeException(), isNull);
@@ -254,20 +256,20 @@ void main() {
     'image-only draft previews, removes, and submits after explicit Publish',
     (tester) async {
       await show(tester);
-      await tester.tap(find.byTooltip('添加图片（最多9张，每张10MB）'));
+      await tester.tap(findMaterialTooltip('添加图片（最多9张，每张10MB）'));
       await tester.pumpAndSettle();
-      expect(find.byTooltip('移除图片 1'), findsOneWidget);
+      expect(findMaterialTooltip('移除图片 1'), findsOneWidget);
       expect(repo.uploads, 0);
-      await tester.tap(find.byTooltip('移除图片 1'));
+      await tester.tap(findMaterialTooltip('移除图片 1'));
       await tester.pumpAndSettle();
-      expect(find.byTooltip('移除图片 1'), findsNothing);
-      await tester.tap(find.byTooltip('添加图片（最多9张，每张10MB）'));
+      expect(findMaterialTooltip('移除图片 1'), findsNothing);
+      await tester.tap(findMaterialTooltip('添加图片（最多9张，每张10MB）'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('发布'));
       await tester.pumpAndSettle();
       expect(repo.uploads, 1);
       expect(repo.posts, 1);
-      expect(find.byTooltip('移除图片 1'), findsNothing);
+      expect(findMaterialTooltip('移除图片 1'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
@@ -280,16 +282,16 @@ void main() {
       'tools and attachments fit $width pixels at $scale scale with keyboard',
       (tester) async {
         await show(tester, width: width, scale: scale, keyboard: keyboard);
-        await tester.tap(find.byTooltip('插入当前播放时间'));
+        await tester.tap(findMaterialTooltip('插入当前播放时间'));
         await tester.pumpAndSettle();
         expect(
           tester.widget<TextField>(find.byType(TextField)).controller!.text,
           '1:02:03 ',
         );
-        await tester.tap(find.byTooltip('同步到动态'));
+        await tester.tap(findMaterialTooltip('同步到动态'));
         await tester.pumpAndSettle();
         expect(find.text('发布时同步到动态'), findsOneWidget);
-        await tester.tap(find.byTooltip('添加图片（最多9张，每张10MB）'));
+        await tester.tap(findMaterialTooltip('添加图片（最多9张，每张10MB）'));
         await tester.pumpAndSettle();
         await tester.ensureVisible(find.text('发布'));
         await tester.tap(find.text('发布'));
@@ -308,12 +310,12 @@ void main() {
       tester,
       target: const CommentTarget('42', CommentTargetType.album),
     );
-    expect(find.byTooltip('插入当前播放时间'), findsNothing);
+    expect(findMaterialTooltip('插入当前播放时间'), findsNothing);
     await tester.enterText(find.byType(TextField), '替换');
     final input = tester.widget<TextField>(find.byType(TextField)).controller!;
     input.selection = const TextSelection(baseOffset: 0, extentOffset: 2);
     await tester.pump();
-    await tester.tap(find.byTooltip('@用户'));
+    await tester.tap(findMaterialTooltip('@用户'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('读者'));
     await tester.pumpAndSettle();

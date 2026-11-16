@@ -3,7 +3,8 @@ description: Generic playback contracts and native playback adapters for BiliSai
 version: 0.1.0
 publish_to: none
 environment:
-  sdk: '>=3.13.0 <4.0.0'
+  sdk: '>=3.14.0 <4.0.0'
+  flutter: '>=3.50.0'
 dependencies:
   flutter:
     sdk: flutter
@@ -69,6 +70,7 @@ dependency_overrides:
       ref: 302d60eedc55ca677e911e529569b1e14d8c2e7e
 
 dev_dependencies:
+  material_ui: 1.11.0
   flutter_test:
     sdk: flutter
   flutter_lints: 6.0.0

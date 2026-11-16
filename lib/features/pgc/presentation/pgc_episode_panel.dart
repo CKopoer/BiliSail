@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../shared/ui/smooth_scroll_behavior.dart';
 import '../../../shared/ui/scroll_boundary_handoff.dart';

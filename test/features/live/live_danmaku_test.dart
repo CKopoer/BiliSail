@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/domain/app_failure.dart';
@@ -11,7 +13,7 @@ import 'package:bilisail/features/live/domain/live_room.dart';
 import 'package:bilisail/features/live/presentation/live_danmaku_composer.dart';
 import 'package:bilisail/features/live/presentation/live_screen.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -203,7 +205,7 @@ void main() {
       await tester.enterText(player, 'hello');
       await tester.pump();
       expect(tester.widget<TextField>(sidebar).controller?.text, 'hello');
-      await tester.tap(find.byTooltip('直播表情包').last);
+      await tester.tap(findMaterialTooltip('直播表情包').last);
       await tester.pumpAndSettle();
       expect(find.text('房间表情'), findsOneWidget);
       expect(find.byType(AlertDialog), findsOneWidget);
@@ -221,7 +223,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.widget<TextField>(player).controller?.text, 'hello[笑]');
       expect(tester.widget<TextField>(sidebar).controller?.text, 'hello[笑]');
-      await tester.tap(find.byTooltip('直播表情包').first);
+      await tester.tap(findMaterialTooltip('直播表情包').first);
       await tester.pumpAndSettle();
       expect(h.repository.posts, 0);
       await tester.tap(

@@ -5,7 +5,7 @@ import 'package:bilisail/shared/ui/scroll_boundary_handoff.dart';
 import 'package:bilisail/shared/ui/smooth_scroll_behavior.dart';
 import 'package:bili_player/bili_player.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

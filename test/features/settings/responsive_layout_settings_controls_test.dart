@@ -1,6 +1,6 @@
 import 'package:bilisail/domain/responsive_layout_settings.dart';
 import 'package:bilisail/features/settings/presentation/responsive_layout_settings_controls.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

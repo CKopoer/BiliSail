@@ -2,7 +2,7 @@ import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:bilisail/shared/ui/video_grid.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 VideoSummary _video(int index, {String? title}) => VideoSummary(

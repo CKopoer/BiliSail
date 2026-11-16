@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import '../../support/input_test_app.dart';
 import '../../support/playback_layout_session_fake.dart';
 import '../../support/text_selection.dart';
@@ -46,7 +48,7 @@ import 'package:bilisail/shared/ui/video_card_interaction_scope.dart';
 import 'package:bilisail/shared/ui/smooth_scroll_behavior.dart';
 import 'package:bilisail/shared/ui/paging_tab_strip.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -121,7 +123,7 @@ void main() {
       await tester.pump();
       expect(repository.reads, 1);
       expect(repository.cancellation?.isCancelled, isFalse);
-      await tester.tap(find.byTooltip('关闭播放列表'));
+      await tester.tap(findMaterialTooltip('关闭播放列表'));
       await tester.pump(const Duration(milliseconds: 300));
       await tester.tap(find.widgetWithText(FilledButton, '关闭'));
       await tester.pumpAndSettle();
@@ -259,10 +261,10 @@ void main() {
     final player = tester.state(find.byType(_TrackedPlayer));
     final builds = (playerBuilds, actionBuilds, menuBuilds);
     for (var i = 0; i < 3; i++) {
-      await tester.tap(find.byTooltip('收起视频信息'));
+      await tester.tap(findMaterialTooltip('收起视频信息'));
       await tester.pumpAndSettle();
       expect(tester.getSize(find.byType(_TrackedPlayer)).width, 1100);
-      await tester.tap(find.byTooltip('展开视频信息'));
+      await tester.tap(findMaterialTooltip('展开视频信息'));
       await tester.pumpAndSettle();
       expect(tester.getSize(find.byType(_TrackedPlayer)).width, 720);
     }
@@ -754,8 +756,8 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        if (find.byTooltip('展开视频信息').evaluate().isNotEmpty) {
-          await tester.tap(find.byTooltip('展开视频信息'));
+        if (findMaterialTooltip('展开视频信息').evaluate().isNotEmpty) {
+          await tester.tap(findMaterialTooltip('展开视频信息'));
           await tester.pumpAndSettle();
         }
         final player = tester.state(find.byType(_TrackedPlayer));
@@ -1156,7 +1158,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(
-        find.byTooltip('收起视频信息'),
+        findMaterialTooltip('收起视频信息'),
         width >= 1000 ? findsOneWidget : findsNothing,
       );
       if (folded) {
@@ -1514,7 +1516,7 @@ void main() {
         tester.view.physicalSize = Size(width >= 1000 ? 360 : 1100, 800);
         await tester.pumpAndSettle();
         expect(
-          find.byTooltip('收起视频信息'),
+          findMaterialTooltip('收起视频信息'),
           width >= 1000 ? findsNothing : findsOneWidget,
         );
         expect(find.text('测试简介'), findsNothing);
@@ -1890,7 +1892,7 @@ void main() {
         expect(find.text('简介'), findsOneWidget);
         expect(find.text('评论'), findsOneWidget);
         expect(
-          find.byTooltip('收起视频信息'),
+          findMaterialTooltip('收起视频信息'),
           initialSize.width >= 1000 ? findsOneWidget : findsNothing,
         );
         expect(
@@ -1906,7 +1908,7 @@ void main() {
           await tester.pumpAndSettle();
           expect(find.text('暂无评论信息'), findsOneWidget);
           expect(
-            find.byTooltip('收起视频信息'),
+            findMaterialTooltip('收起视频信息'),
             width >= 1000 ? findsOneWidget : findsNothing,
           );
           expect(
@@ -1916,7 +1918,7 @@ void main() {
         }
         tester.view.physicalSize = const Size(1000, 660);
         await tester.pumpAndSettle();
-        await tester.tap(find.byTooltip('收起视频信息'));
+        await tester.tap(findMaterialTooltip('收起视频信息'));
         await tester.pumpAndSettle();
         expect(
           tester.getSize(find.byType(_TrackedPlayer)),
@@ -1927,7 +1929,7 @@ void main() {
           await tester.pumpAndSettle();
           expect(find.text('评论'), findsNothing);
           expect(
-            find.byTooltip('展开视频信息'),
+            findMaterialTooltip('展开视频信息'),
             width >= 1000 ? findsOneWidget : findsNothing,
           );
           expect(tester.getSize(find.byType(_TrackedPlayer)), Size(width, 660));
@@ -1938,7 +1940,7 @@ void main() {
         commands.toggleInfo();
         await tester.pumpAndSettle();
         expect(find.text('暂无评论信息'), findsOneWidget);
-        expect(find.byTooltip('收起视频信息'), findsNothing);
+        expect(findMaterialTooltip('收起视频信息'), findsNothing);
         expect(tester.getSize(find.byType(_TrackedPlayer)).height, 270);
         expect(created, 1);
         expect(disposed, 0);
@@ -2006,7 +2008,7 @@ void main() {
           .ancestor(of: find.text('合集第10集'), matching: find.byType(Material))
           .first;
       await tester.tap(
-        find.descendant(of: tile, matching: find.byTooltip('展开分 P')),
+        find.descendant(of: tile, matching: findMaterialTooltip('展开分 P')),
       );
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('P2 第二集'));
@@ -2483,7 +2485,7 @@ void main() {
       );
       expect(paragraph.didExceedMaxLines, overflowing);
       expect(
-        find.byTooltip(video.title),
+        findMaterialTooltip(video.title),
         overflowing ? findsOneWidget : findsNothing,
       );
       await mouse.moveTo(tester.getCenter(title));
@@ -2546,7 +2548,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 150));
       expect(operations.reads, 0);
-      expect(find.byTooltip('添加稍后再看'), findsOneWidget);
+      expect(findMaterialTooltip('添加稍后再看'), findsOneWidget);
       expect(
         tester
             .widget<AnimatedScale>(
@@ -2585,7 +2587,7 @@ void main() {
       expect(operations.writtenIds, [const VideoId('BV1xyz123456')]);
       expect(opened, 0);
       expect(notices, ['已加入稍后再看']);
-      expect(find.byTooltip('已加入稍后再看'), findsOneWidget);
+      expect(findMaterialTooltip('已加入稍后再看'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('video-card-watch-later')));
       expect(operations.writtenIds, hasLength(1));
       await mouse.moveTo(const Offset(100, 100));
@@ -2620,13 +2622,13 @@ void main() {
     await tester.ensureVisible(find.text('相关推荐视频'));
     for (
       var i = 0;
-      i < 20 && find.byTooltip('添加稍后再看').evaluate().isEmpty;
+      i < 20 && findMaterialTooltip('添加稍后再看').evaluate().isEmpty;
       i++
     ) {
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pump();
     }
-    expect(find.byTooltip('添加稍后再看'), findsOneWidget);
+    expect(findMaterialTooltip('添加稍后再看'), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.pump();
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
@@ -2656,7 +2658,7 @@ void main() {
     await tester.tap(find.text('简介'));
     await tester.pumpAndSettle();
     await hoverRelated();
-    await tester.tap(find.byTooltip('收起视频信息'));
+    await tester.tap(findMaterialTooltip('收起视频信息'));
     await tester.pump();
     expect(operations.token?.isCancelled, true);
     await tester.runAsync(() => Future<void>.delayed(Duration.zero));
@@ -2692,8 +2694,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byTooltip('展开分 P'));
-    await tester.tap(find.byTooltip('展开分 P'));
+    await tester.ensureVisible(findMaterialTooltip('展开分 P'));
+    await tester.tap(findMaterialTooltip('展开分 P'));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('P2 合集第二 P'));
     await tester.tap(find.text('P2 合集第二 P'));
@@ -2826,11 +2828,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(created, 1);
     final infoElement = tester.element(find.byType(Material).first);
-    await tester.tap(find.byTooltip('收起视频信息'));
+    await tester.tap(findMaterialTooltip('收起视频信息'));
     await tester.pumpAndSettle();
     expect(created, 1);
     expect(disposed, 0);
-    await tester.tap(find.byTooltip('展开视频信息'));
+    await tester.tap(findMaterialTooltip('展开视频信息'));
     await tester.pumpAndSettle();
     expect(created, 1);
     expect(disposed, 0);

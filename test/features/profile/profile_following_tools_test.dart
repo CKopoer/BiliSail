@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/domain/user.dart';
@@ -10,7 +12,7 @@ import 'package:bilisail/features/profile/presentation/profile_screen.dart';
 import 'package:bilisail/features/profile/presentation/profile_user_card.dart';
 import 'package:bilisail/features/video/application/video_author_controller.dart';
 import 'package:bilisail/features/video/domain/video_author_repository.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -80,7 +82,7 @@ void main() {
   }
 
   Future<void> action(WidgetTester tester, String title) async {
-    await tester.tap(find.byTooltip('关注管理'));
+    await tester.tap(findMaterialTooltip('关注管理'));
     await tester.pumpAndSettle();
     await tester.tap(find.text(title));
     await tester.pumpAndSettle();
@@ -149,7 +151,7 @@ void main() {
     expect(repo.queries.any((query) => query.$1 == '名字'), true);
     expect(find.text('全部关注的搜索结果'), findsOneWidget);
     expect(find.text('名字-1'), findsOneWidget);
-    await tester.tap(find.byTooltip('清除搜索'));
+    await tester.tap(findMaterialTooltip('清除搜索'));
     await tester.pumpAndSettle();
     expect(container.read(profileControllerProvider(_id)).followingKeyword, '');
     expect(find.text('全部关注的搜索结果'), findsNothing);
@@ -193,7 +195,7 @@ void main() {
     (tester) async {
       await mount(tester);
       expect(authorRepo.reads, 0);
-      await tester.tap(find.byTooltip('管理 关注-1'));
+      await tester.tap(findMaterialTooltip('管理 关注-1'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('关注与分组设置'));
       await tester.pumpAndSettle();
@@ -224,7 +226,7 @@ void main() {
     await action(tester, '加入黑名单');
     await submit(tester, '9007199254740993123');
     expect(repo.blocks.last, (const UserId('9007199254740993123'), true));
-    await tester.tap(find.byTooltip('管理 黑名单-1'));
+    await tester.tap(findMaterialTooltip('管理 黑名单-1'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('移出黑名单'));
     await tester.pumpAndSettle();
@@ -232,7 +234,7 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '确认'));
     await tester.pumpAndSettle();
     expect(repo.blocks.last, (const UserId('9'), false));
-    await tester.tap(find.byTooltip('返回关注'));
+    await tester.tap(findMaterialTooltip('返回关注'));
     await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('profile-following-search')),
