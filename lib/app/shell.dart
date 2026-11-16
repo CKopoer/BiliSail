@@ -196,6 +196,8 @@ final class _BiliAppShellState extends State<BiliAppShell>
   final _tabKeys = <(String, String, String), GlobalKey>{};
   final _pageKeys = <String, GlobalKey>{};
   final _viewStorage = <(String, String), PageStorageBucket>{};
+  final _viewIds = <(String, String), String>{};
+  int _nextViewId = 0;
   final _searchDrafts = <String, String>{};
   final _pageBack = <String, PageBackController>{};
   final _pagingProgress = <(String, bool), TabPagingProgress>{};
@@ -346,6 +348,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
     if (widget.accountIdentity != oldWidget.accountIdentity) {
       _tabKeys.clear();
       _viewStorage.clear();
+      _viewIds.clear();
       _workspace.clearPlaybackHistory();
     }
     if (widget.navigationMode != oldWidget.navigationMode) {
@@ -398,6 +401,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
       (key, _) => !liveIds.contains(key.$1) || !liveIds.contains(key.$3),
     );
     _pageKeys.removeWhere((id, _) => !liveIds.contains(id));
+    _viewIds.removeWhere((location, _) => !liveIds.contains(location.$1));
     _searchDrafts.removeWhere((id, _) => !liveIds.contains(id));
     _searchControllers.removeWhere((id, controller) {
       if (liveIds.contains(id)) return false;
@@ -500,6 +504,18 @@ final class _BiliAppShellState extends State<BiliAppShell>
           expectedLocation: tab.location,
         )) {
       return;
+    }
+    if (_android) {
+      final next = WorkspaceTab(id: tab.id, location: location);
+      final previousLocation = _viewLocation(tab);
+      final nextLocation = _viewLocation(next);
+      if (previousLocation != nextLocation) {
+        // Advancement replaces content in the mounted player. Retain its
+        // owner/fullscreen route while ordinary navigation keeps separate
+        // history views. A historical path can receive a fresh identity.
+        final viewId = _viewIds.remove(previousLocation);
+        if (viewId != null) _viewIds[nextLocation] = viewId;
+      }
     }
     setState(() {});
     if (tab.id == _workspace.activeId) _commitWorkspace();
@@ -1094,13 +1110,17 @@ final class _BiliAppShellState extends State<BiliAppShell>
     );
   }
 
+  (String, String) _viewLocation(WorkspaceTab tab) =>
+      (tab.id, tab.isRoot ? 'root' : tab.location.path);
+
   (String, String) _viewKey(WorkspaceTab tab) => (
     tab.id,
     !_android
         ? 'slot'
-        : tab.isRoot
-        ? 'root'
-        : tab.location.path,
+        : _viewIds.putIfAbsent(
+            _viewLocation(tab),
+            () => 'view-${_nextViewId++}',
+          ),
   );
 
   List<WorkspaceTab> _viewsForTab(WorkspaceTab tab) {
@@ -1136,6 +1156,11 @@ final class _BiliAppShellState extends State<BiliAppShell>
               child: widget.child,
             );
     }
+    final liveLocations = {
+      for (final tab in _workspace.tabs)
+        for (final view in _viewsForTab(tab)) _viewLocation(view),
+    };
+    _viewIds.removeWhere((location, _) => !liveLocations.contains(location));
     final liveViews = {
       for (final tab in _workspace.tabs)
         for (final view in _viewsForTab(tab)) _viewKey(view),
