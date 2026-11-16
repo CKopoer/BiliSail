@@ -2,62 +2,85 @@ import '../api_client.dart';
 import '../models.dart';
 import '../models/app_recommendation_models.dart';
 import '../video_identifiers.dart';
+import '../app_profile.dart';
 
 final class AppRecommendationClient {
   AppRecommendationClient(this.api);
   final BiliApiClient api;
 
   Future<ApiPage<ApiAppRecommendation>> load({
-    required int page,
+    String cursor = '0',
+    ApiAppRecommendationLoadReason reason =
+        ApiAppRecommendationLoadReason.initial,
     required String buvid,
     String? accessToken,
     String? appAccountMid,
     ApiRequestContext? context,
   }) async {
-    if (page < 1) throw ArgumentError.value(page, 'page');
+    if (!RegExp(r'^-?[0-9]{1,19}$').hasMatch(cursor) ||
+        BigInt.parse(cursor) < -(BigInt.one << 63) ||
+        BigInt.parse(cursor) >= (BigInt.one << 63)) {
+      throw ArgumentError.value(cursor, 'cursor');
+    }
+    final active = api.boundedReadContext(context);
+    final device = await api.appDeviceInfo(context: active);
     final data = await api.requestAppJson(
       '/x/v2/feed/index',
       {
-        'build': '8430300',
-        'mobi_app': 'android_i',
+        'build': AppProfile.build,
+        'mobi_app': AppProfile.mobiApp,
         'platform': 'android',
         'c_locale': 'zh_CN',
         's_locale': 'zh_CN',
         'splash_id': '',
         'channel': 'master',
         'column': '2',
-        'device': 'phone',
-        'device_name': 'android',
+        'device': 'pad',
+        'device_name': device.model,
         'device_type': '0',
         'disable_rcmd': '0',
-        'flush': '8',
-        'idx': '${page - 1}',
-        'pull': page == 1 ? 'true' : 'false',
+        'flush': '${reason.flush}',
+        'idx': cursor,
+        'pull': '${reason.pull}',
         'fnval': '976',
         'fnver': '0',
         'force_host': '2',
         'fourk': '1',
-        'guidance': '1',
+        'guidance': '0',
         'https_url_req': '1',
-        'network': 'wifi',
+        'network': device.network,
         'player_net': '1',
         'qn': '32',
         'recsys_mode': '0',
         'voice_balance': '0',
-        'statistics': '{"appId":1,"platform":3,"version":"8.43.0","abtest":""}',
+        'statistics': AppProfile.statistics,
       },
       endpoint: 'app_recommended',
       buvid: buvid,
       accessToken: accessToken,
       appAccountMid: appAccountMid,
-      context: context,
+      deviceInfo: device,
+      context: active,
     );
     final entries = data['items'];
     if (entries is! List || entries.length > 100) {
       throw const ApiFailure(ApiFailureCategory.protocol, 'app_recommended');
     }
     final items = <ApiAppRecommendation>[];
+    String? anchor;
     for (final entry in entries) {
+      // Capture server context before card support, ads and user filtering.
+      if (anchor == null && entry is Map<String, Object?>) {
+        final value = entry['idx'];
+        final text = value is int || value is String ? '$value' : '';
+        final number = BigInt.tryParse(text);
+        if (RegExp(r'^-?[0-9]{1,19}$').hasMatch(text) &&
+            number != null &&
+            number >= -(BigInt.one << 63) &&
+            number < (BigInt.one << 63)) {
+          anchor = text;
+        }
+      }
       if (entry is! Map<String, Object?> ||
           entry['card_goto'] == 'ad_av' ||
           entry['card_goto'] == 'ad_web_s' ||
@@ -71,7 +94,7 @@ final class AppRecommendationClient {
     return ApiPage(
       List.unmodifiable(items),
       hasMore: entries.isNotEmpty,
-      nextCursor: entries.isEmpty ? null : '${page + 1}',
+      nextCursor: anchor,
     );
   }
 
@@ -170,13 +193,25 @@ final class AppRecommendationClient {
       }
     }
     final seconds = _integer(player['duration']);
+    final navigation = entry['uri'] is String
+        ? Uri.tryParse(entry['uri'] as String)
+        : null;
+    String? track(Object? value) =>
+        value is String &&
+            value.isNotEmpty &&
+            value.length <= 2048 &&
+            !RegExp(r'[\x00-\x1f\x7f]').hasMatch(value)
+        ? value
+        : null;
+    final trackValues = navigation?.queryParametersAll['trackid'];
     return ApiAppRecommendation(
       aid: aid,
       cardGoto: cardGoto,
       param: param,
-      navigationUri: entry['uri'] is String
-          ? Uri.tryParse(entry['uri'] as String)
-          : null,
+      navigationUri: navigation,
+      trackId:
+          (trackValues?.length == 1 ? track(trackValues?.single) : null) ??
+          track(entry['track_id']),
       reasons: List.unmodifiable(reasons),
       video: ApiVideoSummary(
         bvid: bvid,

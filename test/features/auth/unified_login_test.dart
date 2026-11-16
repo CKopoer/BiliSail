@@ -1,3 +1,5 @@
+import 'package:bilisail/features/feed/domain/feed_repository.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -265,7 +267,10 @@ void main() {
           session.api,
           session.requests,
           appIdentity: identity,
-        ).loadAppRecommendations(page: 1, cancellation: RequestCancellation());
+        ).loadAppRecommendations(
+          request: const AppRecommendationRequest(),
+          cancellation: RequestCancellation(),
+        );
       },
     );
   }
@@ -384,11 +389,15 @@ void main() {
     expect(secure.writes, 1);
     transport.feedAccessToken = 'fixture-app';
     transport.feedAccountMid = '42';
-    final page = await ApiFeedRepository(
-      session.api,
-      session.requests,
-      appIdentity: identity,
-    ).loadAppRecommendations(page: 1, cancellation: RequestCancellation());
+    final page =
+        await ApiFeedRepository(
+          session.api,
+          session.requests,
+          appIdentity: identity,
+        ).loadAppRecommendations(
+          request: const AppRecommendationRequest(),
+          cancellation: RequestCancellation(),
+        );
     expect(page.items.single.id.value, 'BV17x411w7KC');
     final rows = await database
         .customSelect('SELECT value FROM settings')
@@ -481,11 +490,15 @@ void main() {
     expect(session.current.isSignedIn, isTrue);
     expect(session.current.appSessionAvailable, isFalse);
     expect(secure.value, saved);
-    final page = await ApiFeedRepository(
-      session.api,
-      session.requests,
-      appIdentity: identity,
-    ).loadAppRecommendations(page: 1, cancellation: RequestCancellation());
+    final page =
+        await ApiFeedRepository(
+          session.api,
+          session.requests,
+          appIdentity: identity,
+        ).loadAppRecommendations(
+          request: const AppRecommendationRequest(),
+          cancellation: RequestCancellation(),
+        );
     expect(page.items.single.id.value, 'BV17x411w7KC');
     expect(transport.paths, [
       '/x/web-interface/nav',

@@ -1,5 +1,7 @@
 # App 推荐有效性与第三方实现对照
 
+2026-11-16 补充：新的[官方 APK 对照](app-recommendation-official-audit-2026-11-16.md)确认 `flush` 场景和 `idx` 响应游标存在偏差；本文与 PiliPlus 一致的结论不代表官方协议同步。11 月 15 日密码／短信已改为取得 App/Web 双凭据，本文对应旧实现的登录矩阵保留历史事实。
+
 日期：2026-11-10。关联 [issue #107](https://github.com/CKopoer/BiliSail/issues/107)：Android、originOS 7、`1.2.8+5`，反馈切到 App 来源后仍像 Web 推荐；issue 没有可用截图、日志、登录方式或 App 身份状态。
 
 调查阶段仅核对和验证；随后按用户要求同步 PiliPlus 的空参数签名修复，实施结果见文末。未修改登录流程、设置、凭据或依赖，未提交 issue 评论。工作区基线 `b78f7b809548b86eec1f840b64047e86f91dd48f`，开始时干净。发布标签 `v1.2.8+5` 指向 `5703519f5aefb62282604f8106767982ee50d188`；来源设置、推荐控制器、推荐仓储、身份仓储、统一登录、App profile 和 App 推荐客户端与该修复前基线没有差异。通用 `api_client.dart` 另有评论等无关更新，本次涉及的 App 请求及首页推荐方法未变。

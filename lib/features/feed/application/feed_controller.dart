@@ -137,7 +137,9 @@ final class FeedController extends Notifier<FeedState> {
   final _rejected = <VideoId, RecommendationFeedback>{};
   final _uncertainRejections = <VideoId>{};
   final _uncertainRestorations = <VideoId>{};
-  Object? _recommendationKey;
+  ({RecommendationSource source, int identity})? _recommendationKey;
+  String _appRecommendationCursor = '0';
+  AppRecommendationRequest? _failedAppRefresh;
 
   /// Keep cached content visible during the widget's deferred channel change.
   /// A temporary short loading page would clamp the restored scroll offset.
@@ -233,7 +235,12 @@ final class FeedController extends Notifier<FeedState> {
     _recommendationKey = ref.read(recommendationQueryKeyProvider);
     ref.listen(recommendationQueryKeyProvider, (_, next) {
       if (_recommendationKey == next) return;
+      final identityChanged =
+          next.source == RecommendationSource.app &&
+          _recommendationKey?.source == next.source;
       _recommendationKey = next;
+      _appRecommendationCursor = '0';
+      _failedAppRefresh = null;
       _savedChannels.remove(HomeChannel.recommended);
       _unloadedChannels.remove(HomeChannel.recommended);
       _itemIndices.remove(HomeChannel.recommended);
@@ -250,7 +257,13 @@ final class FeedController extends Notifier<FeedState> {
         _page = 0;
         _pagesWithoutNewItems = 0;
         state = const FeedState();
-        unawaited(refresh());
+        unawaited(
+          refresh(
+            appReason: identityChanged
+                ? AppRecommendationLoadReason.identityChanged
+                : AppRecommendationLoadReason.initial,
+          ),
+        );
       } else {
         // Notify retained recommendation selectors without replacing other data.
         state = state.copyWith();
@@ -280,6 +293,8 @@ final class FeedController extends Notifier<FeedState> {
       _page = 0;
       _pagesWithoutNewItems = 0;
       _cancellation = null;
+      _appRecommendationCursor = '0';
+      _failedAppRefresh = null;
     });
     return const FeedState();
   }
@@ -468,7 +483,12 @@ final class FeedController extends Notifier<FeedState> {
             : null,
       ),
     );
-    await refresh(reloadRankingRegions: channel != HomeChannel.ranking);
+    await refresh(
+      reloadRankingRegions: channel != HomeChannel.ranking,
+      appReason: channel == HomeChannel.recommended
+          ? AppRecommendationLoadReason.tabClick
+          : null,
+    );
   }
 
   Future<void> selectPopularSection(PopularSection section) async {
@@ -531,7 +551,19 @@ final class FeedController extends Notifier<FeedState> {
   Future<void> refresh({
     bool reloadWeeklyIndex = true,
     bool reloadRankingRegions = true,
+    AppRecommendationLoadReason? appReason,
   }) async {
+    final failedAppRefresh = _failedAppRefresh;
+    final appRequest = appReason == null && failedAppRefresh != null
+        ? failedAppRefresh
+        : AppRecommendationRequest(
+            cursor: _appRecommendationCursor,
+            reason:
+                appReason ??
+                (_page == 0
+                    ? AppRecommendationLoadReason.initial
+                    : AppRecommendationLoadReason.refreshButton),
+          );
     if (reloadRankingRegions &&
         (state.channel == HomeChannel.ranking ||
             state.popular && state.popularSection == PopularSection.ranking)) {
@@ -569,6 +601,7 @@ final class FeedController extends Notifier<FeedState> {
         1,
         cancellation,
         reloadWeeklyIndex: reloadWeeklyIndex,
+        appRequest: appRequest,
       );
       if (!ref.mounted ||
           generation != _generation ||
@@ -592,6 +625,12 @@ final class FeedController extends Notifier<FeedState> {
       final items = _boundedItems(index.items);
       _itemIndices[_indexKey(state)] = index;
       _page = 1;
+      if (state.channel == HomeChannel.recommended &&
+          ref.read(recommendationQueryKeyProvider).source ==
+              RecommendationSource.app) {
+        _appRecommendationCursor = result.nextCursor ?? appRequest.cursor;
+        _failedAppRefresh = null;
+      }
       _pagesWithoutNewItems = freshCount == 0 ? 1 : 0;
       state = state.copyWith(
         items: AsyncData(items),
@@ -606,6 +645,11 @@ final class FeedController extends Notifier<FeedState> {
           cancellation.isCancelled ||
           error is AppFailure && error.kind == AppFailureKind.cancelled) {
         return;
+      }
+      if (state.channel == HomeChannel.recommended &&
+          ref.read(recommendationQueryKeyProvider).source ==
+              RecommendationSource.app) {
+        _failedAppRefresh = appRequest;
       }
       state = keepPrevious
           ? state.copyWith(refreshing: false, pageError: error)
@@ -644,6 +688,8 @@ final class FeedController extends Notifier<FeedState> {
           ? _pagesWithoutNewItems + 1
           : 0;
       _page++;
+      // Official LoadMoreAction keeps the first card's batch anchor. A refresh
+      // replaces it; appended pages must not turn it into a page counter/tail.
       state = state.copyWith(
         items: AsyncData(items),
         hasMore: result.hasMore && _underLimit(items),
@@ -685,6 +731,7 @@ final class FeedController extends Notifier<FeedState> {
     int page,
     RequestCancellation cancellation, {
     bool reloadWeeklyIndex = false,
+    AppRecommendationRequest? appRequest,
   }) async {
     final repository = ref.read(feedRepositoryProvider);
     if (state.channel == HomeChannel.recommended &&
@@ -703,7 +750,15 @@ final class FeedController extends Notifier<FeedState> {
         throw const AppFailure(AppFailureKind.protocol, '当前推荐服务暂不支持 App 来源');
       }
       return (repository as AppRecommendationFeedRepository)
-          .loadAppRecommendations(page: page, cancellation: cancellation);
+          .loadAppRecommendations(
+            request:
+                appRequest ??
+                AppRecommendationRequest(
+                  cursor: _appRecommendationCursor,
+                  reason: AppRecommendationLoadReason.loadMore,
+                ),
+            cancellation: cancellation,
+          );
     }
     if (state.channel == HomeChannel.ranking ||
         state.popular && state.popularSection == PopularSection.ranking) {

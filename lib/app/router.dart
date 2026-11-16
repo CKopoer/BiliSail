@@ -1,5 +1,9 @@
 import 'dart:async';
 
+import '../features/playback/application/recommendation_playback_registry.dart';
+import '../shared/ui/recommendation_playback_scope.dart';
+import '../domain/recommendation_playback_context.dart';
+
 import 'package:flutter/material.dart' hide SearchController;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -667,6 +671,20 @@ final class _WorkspacePage extends ConsumerWidget {
     return Builder(
       builder: (context) => _PageCommandTarget(
         link: ContentLink.fromUri(tab.location),
+        recommendation:
+            tab.isVideo ||
+                (tab.isPgc && tab.location.pathSegments[1] == 'episode')
+            ? ref
+                  .read(recommendationPlaybackRegistryProvider)
+                  .resolve(
+                    tab.location.queryParameters['recommendation'],
+                    VideoId(tab.location.pathSegments.last),
+                    ref.read(sessionEpochProvider)(),
+                    episodeId: tab.isPgc
+                        ? tab.location.pathSegments.last
+                        : null,
+                  )
+            : null,
         commands: {
           if (!tab.isRoot &&
               !tab.isPgc &&
@@ -1066,8 +1084,10 @@ class _PageCommandTarget extends StatelessWidget {
     required this.commands,
     required this.child,
     this.link = const ContentLink(),
+    this.recommendation,
   });
   final ContentLink link;
+  final RecommendationPlaybackContext? recommendation;
   final Map<Object, InputCommand> commands;
   final Widget child;
 
@@ -1077,6 +1097,9 @@ class _PageCommandTarget extends StatelessWidget {
     active: WorkspaceActivity.isActive(context),
     merge: const {ShortcutAction.refresh},
     commands: commands,
-    child: ContentLinkScope(link: link, child: child),
+    child: ContentLinkScope(
+      link: link,
+      child: RecommendationPlaybackScope(value: recommendation, child: child),
+    ),
   );
 }

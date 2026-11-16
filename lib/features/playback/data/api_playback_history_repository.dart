@@ -50,6 +50,16 @@ final class ApiPlaybackHistoryRepository implements PlaybackHistoryRepository {
   }) => requests.run((context) async {
     _check(scope);
     final target = record.target;
+    final recommendation = record.recommendation;
+    final validRecommendation =
+        recommendation?.matches(
+              target.video.value,
+              requests.sessionEpoch,
+              episode: target.episodeId,
+            ) ==
+            true
+        ? recommendation
+        : null;
     await client.report(
       target.video.value,
       target.cid,
@@ -58,6 +68,8 @@ final class ApiPlaybackHistoryRepository implements PlaybackHistoryRepository {
       completed: record.completed,
       episodeId: target.episodeId,
       seasonId: target.seasonId,
+      trackId: validRecommendation?.trackId,
+      fromSpmid: validRecommendation?.fromSpmid,
       context: context,
     );
     _check(scope);

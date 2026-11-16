@@ -1,6 +1,7 @@
 import 'user.dart';
 import 'recommendation_source.dart';
 import 'video_access.dart';
+import 'recommendation_playback_context.dart';
 export 'video_access.dart';
 
 final class VideoId {
@@ -38,6 +39,7 @@ final class VideoSummary {
     this.recommendationReason,
     this.recommendationFeedback,
     this.recommendationTarget,
+    this.recommendationPlayback,
     this.previewCid,
     this.access = const VideoAccess(),
   });
@@ -58,6 +60,7 @@ final class VideoSummary {
   final String? recommendationReason;
   final RecommendationFeedback? recommendationFeedback;
   final RecommendationTarget? recommendationTarget;
+  final RecommendationPlaybackContext? recommendationPlayback;
 
   /// Optional page ID already supplied by a list, avoiding a detail read.
   final String? previewCid;

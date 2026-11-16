@@ -2,6 +2,10 @@
 
 日期：2026-10-27。承接[推荐流设置](recommendation-settings-design.md)，本轮接入 App 来源、独立 buvid、可选 App 授权和服务端反馈，保留原 Web 来源及已保存设置。
 
+2026-11-16 后续实施：flush 与官方首卡锚点一起传递，统一与 HD 凭据匹配的 profile；Android 读取公开设备事实，其他平台使用固定参考。推荐 trackid 经有界内存引用和播放会话传到既有 Web 心跳，无新增曝光上报。见[请求与播放归因修正](validation/app-recommendation-alignment-2026-11-16.md)。
+
+2026-11-16：对官网当前 Android 9.19.0 APK 做 JADX 分析，确认固定 `flush=8` 和 `idx=page-1` 与官方场景／响应游标不一致；当前 profile 与 PiliPlus 一致不等于与官方 App 同步。本轮仅调查并完成游客只读抽样，未修改协议或验证账号个性化，见[官方 App 对照](validation/app-recommendation-official-audit-2026-11-16.md)。
+
 2026-11-15：密码／短信入口现已使用 App Passport 双凭据流程；明确的“官网登录”和旧 Web 会话仍可只有 Cookie。推荐设置的来源说明、游客／账号／失效提示已删除，来源与过滤设置不变。见[密码／短信 App 登录](validation/password-sms-app-login-2026-11-15.md)。
 
 2026-11-10 对照 #107 同步 PiliPlus 空参数签名修复：排序编码的签名原文对空字符串也保留 `=`，修复推荐固定空 `splash_id` 与上游规则不同的问题，并为真实首页 query 的首屏和翻页补充固定签名向量。游客接口可达性、账号个性化及设置说明分别核对；接口可达不能证明账号验收，也尚未复现反馈者设备上的来源错误。源码对照、修复及验证边界见 [App 推荐有效性调查](validation/app-recommendation-investigation-2026-11-10.md)。

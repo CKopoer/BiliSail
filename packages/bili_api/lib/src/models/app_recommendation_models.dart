@@ -1,5 +1,18 @@
 import '../models.dart';
 
+enum ApiAppRecommendationLoadReason {
+  initial(0),
+  tabClick(5),
+  pullDown(6),
+  refreshButton(7),
+  loadMore(8),
+  identityChanged(21);
+
+  const ApiAppRecommendationLoadReason(this.flush);
+  final int flush;
+  bool get pull => this != loadMore;
+}
+
 enum ApiAppFeedbackKind { dislike, feedback }
 
 final class ApiAppFeedbackReason {
@@ -20,11 +33,13 @@ final class ApiAppRecommendation {
     required this.cardGoto,
     required this.param,
     this.navigationUri,
+    this.trackId,
   });
   final ApiVideoSummary video;
   final String? aid;
   final String cardGoto, param;
   final Uri? navigationUri;
+  final String? trackId;
   final List<ApiAppFeedbackReason> reasons;
 }
 

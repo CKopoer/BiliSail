@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import '../../../shared/ui/recommendation_playback_scope.dart';
+import '../../../domain/recommendation_playback_context.dart';
+
 import 'package:bili_danmaku/bili_danmaku.dart';
 import 'package:bili_player/bili_player.dart';
 import 'package:flutter/foundation.dart';
@@ -83,6 +86,7 @@ class PlaybackPanel extends ConsumerStatefulWidget {
 class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     with WidgetsBindingObserver {
   late final PlaybackSession _session;
+  RecommendationPlaybackContext? _recommendation;
   late FlutterView _view;
   late final PlaybackShortcutController _shortcuts;
   late final ValueNotifier<AppSettings> _settings;
@@ -172,6 +176,9 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final recommendation = RecommendationPlaybackScope.of(context);
+    final recommendationChanged = recommendation != _recommendation;
+    _recommendation = recommendation;
     _view = View.of(context);
     _viewLandscape ??= _isRotationLandscape;
     _rotationCompact ??= _usesCompactRotation;
@@ -193,7 +200,9 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     }
     if (active) widget.window.onMiniPlayerRequested = _requestMiniPlayer;
     if (_active == active) {
-      if (active && linkChanged && _linkPosition != null) {
+      if (active &&
+          ((linkChanged && _linkPosition != null) ||
+              (recommendationChanged && recommendation != null))) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted && _active && _contentLink == link) {
             unawaited(
@@ -201,6 +210,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
                 this,
                 widget.detail,
                 widget.part,
+                recommendation: _recommendation,
                 target: widget.target,
                 title: widget.title,
                 position: _takeLinkPosition(),
@@ -230,6 +240,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
             this,
             widget.detail,
             widget.part,
+            recommendation: _recommendation,
             target: widget.target,
             title: widget.title,
             visible: _active,
@@ -333,6 +344,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
             this,
             widget.detail,
             widget.part,
+            recommendation: _recommendation,
             target: widget.target,
             title: widget.title,
             visible: _active,
