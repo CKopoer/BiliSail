@@ -44,6 +44,7 @@ void main() {
       await repository.save(
         defaults.copyWith(
           theme: AppThemePreference.dark,
+          orientation: AppOrientationPreference.landscape,
           defaultDynamicTab: DynamicPageTab.videoDynamic,
           navigationMode: WorkspaceNavigationMode.multipleTabs,
           closeTabOnMiddleClick: true,

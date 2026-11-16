@@ -3,6 +3,7 @@ import 'dart:ui' show FlutterView;
 
 import 'package:flutter/widgets.dart';
 
+import '../../domain/app_orientation.dart';
 import '../platform/window_service.dart';
 import '../platform/window_size_policy.dart';
 
@@ -10,10 +11,12 @@ class WindowOrientationHost extends StatefulWidget {
   const WindowOrientationHost({
     super.key,
     required this.window,
+    this.orientation = AppOrientationPreference.automatic,
     required this.child,
   });
 
   final WindowService window;
+  final AppOrientationPreference orientation;
   final Widget child;
 
   @override
@@ -50,7 +53,9 @@ class _WindowOrientationHostState extends State<WindowOrientationHost>
     if (view == null) return;
     final size = WindowSizePolicy.displaySize(view);
     if (size.isEmpty || !size.isFinite) return;
-    unawaited(widget.window.updateDisplaySize(size));
+    unawaited(
+      widget.window.updateDisplaySize(size, orientation: widget.orientation),
+    );
   }
 
   @override
@@ -58,6 +63,9 @@ class _WindowOrientationHostState extends State<WindowOrientationHost>
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.window, widget.window)) {
       unawaited(oldWidget.window.clearDisplayOrientationPolicy());
+    }
+    if (!identical(oldWidget.window, widget.window) ||
+        oldWidget.orientation != widget.orientation) {
       _updateDisplay();
     }
   }

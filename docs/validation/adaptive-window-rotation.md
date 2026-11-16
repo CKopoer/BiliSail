@@ -6,9 +6,13 @@
 
 ## 当前行为
 
+2026-11-16 增加“设置 → 外观 → 应用方向”，Android／iOS 可选择“自动、竖屏、横屏”，保存后立即应用并跨启动保留。默认“自动”沿用下表规则；“竖屏”和“横屏”在普通页面及播放全屏时均优先采用固定方向，并停用旋转触发的进入／退出全屏，手动全屏与退出继续可用。桌面不显示此移动端选项，保留原生窗口行为。
+
+固定方向通过系统方向接口请求，实际生效仍受系统限制：当前 Flutter `SystemChrome.setPreferredOrientations` 说明 Android 16／API 36 起，显示宽度至少 600 dp 的设备不能通过该接口固定方向；iPad 启用多任务时也可能忽略方向请求。本次不修改平台的多窗口／多任务能力或系统兼容策略，组件测试仅证明方向命令正确，不能证明系统接受了方向锁定。
+
 主窗口与播放器共用 [WindowSizePolicy](../../lib/core/platform/window_size_policy.dart) 的 600 逻辑像素边界，同时分别检查完整显示屏和当前可用窗口宽度。可用宽度扣除横向系统安全区；不使用设备型号，也不把旋转后的长边当作大屏依据。
 
-| 当前条件 | 普通页面 | 自动导航 | 播放器旋转 |
+| 自动方向模式下的条件 | 普通页面 | 自动导航 | 播放器旋转 |
 | --- | --- | --- | --- |
 | 移动端完整显示屏最短边小于 600 | 竖屏 | 底栏，横放也不变成侧栏 | 窄屏横向视频有播放意图时，物理横拿进入全屏，回转竖拿退出 |
 | 移动端完整显示屏最短边至少 600，可用窗口宽度小于 600 | 跟随系统方向，不安装方向限制 | 底栏 | 随显示屏实际旋转进入／退出全屏，保留窄窗约束，不强制大屏方向 |
@@ -23,9 +27,11 @@
 
 ## 方向所有权
 
-[WindowOrientationHost](../../lib/core/presentation/window_orientation_host.dart) 位于主应用的 `MaterialApp.builder`，监听所属 Flutter view 的显示屏变化和应用恢复，将完整显示屏尺寸交给同一个 [WindowService](../../lib/core/platform/window_service.dart)。手机普通页面申请竖屏，进入播放器全屏时暂时由该 owner 的画面方向覆盖；退出恢复普通页面的竖屏策略。主窗口销毁后释放自己安装的限制。
+应用方向是纯 Dart [AppOrientationPreference](../../lib/domain/app_orientation.dart)，由 `AppSettings.orientation` 持有；[设置控制器](../../lib/features/settings/application/settings_controller.dart) 沿用串行写入、即时应用及保存失败回退。[SQLite 设置仓储](../../lib/features/settings/data/sqlite_settings_repository.dart) 将它保存在 `preferences.v1.orientation`，快照版本增至 53，数据库表和数据库版本 3 不变。旧快照缺失该字段或字段非法时回退“自动”，有效旧设置保留；全局恢复默认也回到“自动”。方向宿主接收组合根注入的当前设置，更新方向不替换页面或播放会话；所有系统方向请求继续经过同一串行队列，执行时读取最新选择。
 
-大屏不安装方向限制，避免 Android 的兼容居中窗口；即使分屏或过渡窗口还很窄，也以完整 display 判断是否释放旧手机限制。方向命令统一串行执行，并在执行时读取最新显示屏和全屏意图，设置 2 秒超时；迟到的手机命令不能在展开后的大屏重新加锁。大屏未加锁时不会无条件发送空方向列表覆盖其他系统策略。
+[WindowOrientationHost](../../lib/core/presentation/window_orientation_host.dart) 位于主应用的 `MaterialApp.builder`，监听所属 Flutter view 的显示屏变化和应用恢复，将完整显示屏尺寸交给同一个 [WindowService](../../lib/core/platform/window_service.dart)。自动模式下，手机普通页面申请竖屏，进入播放器全屏时暂时由该 owner 的画面方向覆盖；退出恢复普通页面的竖屏策略。主窗口销毁后释放自己安装的限制。
+
+自动模式下大屏不安装方向限制，避免 Android 的兼容居中窗口；即使分屏或过渡窗口还很窄，也以完整 display 判断是否释放旧手机限制。方向命令统一串行执行，并在执行时读取最新显示屏和全屏意图，设置 2 秒超时；迟到的手机命令不能在展开后的大屏重新加锁。大屏未加锁时不会无条件发送空方向列表覆盖其他系统策略。
 
 普通手机页面已锁竖屏，因此 Android 上 [PlaybackPanel](../../lib/features/playback/presentation/playback_panel.dart) 在当前 owner 可见、前台且有横向视频播放意图时也订阅物理方向；全屏内继续共用该订阅。原生侧监听系统自动旋转设置并在关闭时停止传感器；设置变化时清除待执行操作。暂停普通播放、隐藏、后台及销毁取消订阅，旧回调以订阅 owner 隔离。手动退出时仍横拿不会立即再次进入，竖拿后下一次横拿才重新进入。竖屏点全屏按钮不会因最初的竖拿姿势立即退出，须先实际横拿后再回转。
 
@@ -41,6 +47,16 @@
 - 真实 Android 厂商的折叠动画、多窗口／兼容模式和 iOS 方向行为仍需设备验收，组件测试不替代这些系统行为。
 
 ## 本轮验证
+
+### 应用方向设置（2026-11-16）
+
+- 方向宿主、应用方向设置、完整恢复默认、预测式返回、响应式布局设置和 SQLite 设置仓储共 93 项测试通过，日志：`build/app-orientation-targeted.log`。覆盖手机／平板固定方向优先于全屏、运行中切换及保留子树、回到自动、完整显示尺寸变化、迟到命令采用最新选择、销毁释放、Android／iOS 窄屏设置入口、保存失败回退、重载、恢复默认与旧／非法快照兼容。测试使用本机实际 Flutter 3.50.0／Dart 3.14.0，不代表固定 SDK 3.47.6 下已验证。
+- 本次 16 个 Dart 文件定向分析无错误或警告，保留 8 项由新 SDK 引入的 Material 导入弃用提示，`--no-fatal-infos` 下通过；日志：`build/app-orientation-changed-analysis.log`。根应用 `lib/test/integration_test` 及现有平滑滚动源码共 974 个文件格式检查通过，`git diff --check` 通过。
+- 已执行 `tool/check.ps1 -SkipPub`，打包边界检查完成后被 SDK 版本约束阻止：本机为 Flutter 3.50.0，仓库要求 3.47.6；日志：`build/app-orientation-check.log`。独立全量分析也未通过，已有独立窗口 `RegularWindowController`／`RegularWindow` 接口及包分析环境与新 SDK 不匹配，日志：`build/app-orientation-analysis.log`。未修改这些无关实现或升级仓库 SDK 约束。
+- [独立播放方向测试](../../test/features/playback/app_orientation_playback_test.dart) 另外 4 项通过，覆盖手机／平板两种固定方向不触发自动全屏、手动全屏及返回遵循固定方向、播放源／进度和单一 surface 保留；日志：`build/app-orientation-player-policy.log`。与上述 93 项合计 97 项通过。既有完整 `playback_panel_test.dart` 仍因独立窗口接口编译错误未能运行，日志：`build/app-orientation-playback.log`，未将完整播放面板回归记为通过。
+- 本轮未构建安装包、连接设备或测量性能；移动平台实际旋转、固定方向与系统限制仍待实机验收。当前工具集中没有可用的 Dart DTD／热重载工具，未执行热重载。根检查未进入包测试或 mux 原生测试，不计为原生验证通过。
+
+### 原有自动方向规则（2026-10-28）
 
 - 播放面板、窗口服务、方向宿主、导航布局／模式与 DPI 共 487 项专项通过，日志：[最终专项](../../build/validation/adaptive-window-final-targeted.log)。覆盖手机普通页面竖屏、物理旋转全屏与恢复、大屏宽屏旋转不改变全屏、窄分屏实际旋转、599／600 边界、折叠／展开、三倍密度及运行中密度变化、横向安全区，以及导航／页面／单一 surface 保留。已有 DPI 用例同步设置完整 display 与实际窗口，避免模拟屏幕小于测试窗口造成虚假布局变化；导航模式用例同时验证 Android/iOS 的窄屏回退与 Windows 的明确选择。
 - `tool/check.ps1 -SkipPub` 最终完整通过：根应用 3343、`bili_api` 492、`bili_player` 96、`bili_danmaku` 116、`bili_mux` 5，共 4052 项；格式、静态分析、打包边界通过。13 项 Windows 符号链接用例因权限不足、10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，未计入通过数。日志：[最终根检查](../../build/validation/adaptive-window-final-check.log)。工作区包含并行播放恢复改动；本任务提交只包含窗口布局、方向策略、文档和对应回归。

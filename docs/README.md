@@ -10,6 +10,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [应用方向与自适应旋转](validation/adaptive-window-rotation.md) | 自动／竖屏／横屏设置、全屏方向优先级、手机／平板与折叠边界、系统限制和验证 |
 | [App 推荐请求与播放归因修正](validation/app-recommendation-alignment-2026-11-16.md) | flush／首卡锚点一起修正、HD 凭据匹配、Android 设备参数及 trackid 贯穿现有心跳 |
 | [App 推荐与官方 Android 对照](validation/app-recommendation-official-audit-2026-11-16.md) | 9.19.0 APK 的 JADX 证据、flush 场景／idx 游标偏差、账号与来源归因边界及游客只读抽样 |
 | [PGC 空降与官方片头片尾](validation/pgc-skip-segments-2026-11-15.md) | 修复番剧／国创／剧集的空降加载和入口，官方区间独立自动跳过、按类别优先与回退 |

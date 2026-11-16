@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../../domain/app_orientation.dart';
 import 'window_size_policy.dart';
 
 enum FullScreenOrientation { portrait, landscape }
@@ -415,22 +416,35 @@ class WindowService {
   bool get hasCustomTitleBar => Platform.isWindows && viewId == null;
   bool _fullScreen = false;
   bool? _browsePortrait;
+  AppOrientationPreference _orientationPreference =
+      AppOrientationPreference.automatic;
   bool _mobileFullScreenRequested = false;
   FullScreenOrientation? _mobileFullScreenOrientation;
   FullScreenOrientation? _appliedMobileOrientation;
   Future<void> _orientationCommands = Future<void>.value();
   bool get isFullScreen => _fullScreen;
-  bool get keepsBrowsePortrait => _browsePortrait == true;
+  bool get allowsAutomaticRotation =>
+      _orientationPreference == AppOrientationPreference.automatic;
+  bool get keepsBrowsePortrait => switch (_orientationPreference) {
+    AppOrientationPreference.automatic => _browsePortrait == true,
+    AppOrientationPreference.portrait => true,
+    AppOrientationPreference.landscape => false,
+  };
 
-  Future<void> updateDisplaySize(Size logicalDisplaySize) {
+  Future<void> updateDisplaySize(
+    Size logicalDisplaySize, {
+    AppOrientationPreference orientation = AppOrientationPreference.automatic,
+  }) {
     if (hasDesktopWindow || viewId != null) return Future<void>.value();
     _browsePortrait = WindowSizePolicy.compactDisplay(logicalDisplaySize);
+    _orientationPreference = orientation;
     return _applyMobileOrientation();
   }
 
   Future<void> clearDisplayOrientationPolicy() {
     if (_browsePortrait == null) return Future<void>.value();
     _browsePortrait = null;
+    _orientationPreference = AppOrientationPreference.automatic;
     return _applyMobileOrientation();
   }
 
@@ -438,13 +452,20 @@ class WindowService {
     final operation = _orientationCommands.then((_) async {
       // Read the latest display and owner intent when the command runs, so a
       // late phone request cannot re-lock an unfolded display.
-      final orientation = _browsePortrait == false
+      final automaticOrientation = _browsePortrait == false
           ? null
           : _mobileFullScreenRequested
           ? _mobileFullScreenOrientation
           : _browsePortrait == true
           ? FullScreenOrientation.portrait
           : null;
+      // Explicit app direction also applies to fullscreen, on every mobile
+      // display size. Only automatic mode delegates direction to playback.
+      final orientation = switch (_orientationPreference) {
+        AppOrientationPreference.automatic => automaticOrientation,
+        AppOrientationPreference.portrait => FullScreenOrientation.portrait,
+        AppOrientationPreference.landscape => FullScreenOrientation.landscape,
+      };
       if (orientation == _appliedMobileOrientation) return;
       await SystemChrome.setPreferredOrientations(switch (orientation) {
         FullScreenOrientation.landscape => const [
