@@ -10,8 +10,7 @@ import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:bilisail/shared/ui/video_card_interaction_scope.dart';
 import 'package:bilisail/shared/ui/video_grid.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show ScrollCacheExtent;
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/video_card_fake_engine.dart';

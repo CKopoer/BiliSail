@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 import 'dart:ui' show ViewFocusDirection, ViewFocusEvent, ViewFocusState;
 
@@ -5,7 +7,7 @@ import 'package:bilisail/core/input/input_stroke.dart';
 import 'package:bilisail/core/input/shortcut_dispatcher.dart';
 import 'package:bilisail/core/presentation/app_input_host.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -122,7 +124,7 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        final button = find.byTooltip('toggle');
+        final button = findMaterialTooltip('toggle');
         final interrupted = await tester.startGesture(
           tester.getCenter(button),
           pointer: 73,

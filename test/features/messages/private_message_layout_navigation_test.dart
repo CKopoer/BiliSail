@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/domain/request_cancellation.dart';
@@ -11,7 +13,7 @@ import 'package:bilisail/features/messages/domain/message_repository.dart';
 import 'package:bilisail/features/messages/presentation/message_content_view.dart';
 import 'package:bilisail/features/messages/presentation/messages_screen.dart';
 import 'package:bilisail/shared/ui/network_avatar.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -116,7 +118,10 @@ void main() {
       await tester.pumpAndSettle();
       final chat = tester.getRect(
         find
-            .ancestor(of: find.byTooltip('聊天设置'), matching: find.byType(Column))
+            .ancestor(
+              of: findMaterialTooltip('聊天设置'),
+              matching: find.byType(Column),
+            )
             .first,
       );
       final received = tester.getRect(
@@ -173,7 +178,7 @@ void main() {
           width: width,
           center: _AssistantRepository(),
         );
-        await tester.tap(find.byTooltip('更多消息操作'));
+        await tester.tap(findMaterialTooltip('更多消息操作'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('UP 助手'));
         await tester.pumpAndSettle();
@@ -206,7 +211,7 @@ void main() {
       final center = _AssistantRepository()
         ..pending = Completer<MessagePage<InboxEntry>>();
       final page = await mount(tester, messages, width: 390, center: center);
-      await tester.tap(find.byTooltip('更多消息操作'));
+      await tester.tap(findMaterialTooltip('更多消息操作'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('UP 助手'));
       await tester.pump(const Duration(milliseconds: 400));
@@ -238,7 +243,7 @@ void main() {
       width: 390,
       center: _AssistantRepository(),
     );
-    await tester.tap(find.byTooltip('更多消息操作'));
+    await tester.tap(findMaterialTooltip('更多消息操作'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('UP 助手'));
     await tester.pumpAndSettle();
@@ -264,7 +269,7 @@ void main() {
       center: _AssistantRepository(),
       pageVisible: pageVisible,
     );
-    await tester.tap(find.byTooltip('更多消息操作'));
+    await tester.tap(findMaterialTooltip('更多消息操作'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('UP 助手'));
     await tester.pumpAndSettle();

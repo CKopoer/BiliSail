@@ -9,7 +9,7 @@ import 'package:bilisail/core/platform/window_service.dart';
 import 'package:bilisail/core/presentation/app_input_host.dart';
 import 'package:bilisail/shared/ui/app_dialog.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:webview_all/webview_all.dart';

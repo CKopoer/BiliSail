@@ -1,3 +1,5 @@
+import '../support/material_tooltip_finder.dart';
+
 import 'dart:ui' show ViewFocusDirection, ViewFocusEvent, ViewFocusState;
 
 import 'package:bilisail/app/shell.dart';
@@ -6,7 +8,7 @@ import 'package:bilisail/core/platform/detached_playback_window.dart';
 import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/shared/ui/playback_navigation.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -232,14 +234,14 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.element(_page('tab-1')), same(playback));
       expect(fixture.tab(tester, 'tab-1').location.path, '/pgc/42');
-      await tester.tap(find.byTooltip('返回上一视频'));
+      await tester.tap(findMaterialTooltip('返回上一视频'));
       await tester.pumpAndSettle();
       expect(fixture.tab(tester, 'tab-1').location.path, '/video/BV1234567890');
       expect(tester.element(_page('tab-1')), same(playback));
       expect(_scope(playback), same(playbackScope));
       expect(playbackScope.read(_counterProvider), 1);
 
-      await tester.tap(find.byTooltip('关闭播放'));
+      await tester.tap(findMaterialTooltip('关闭播放'));
       await tester.pumpAndSettle();
       expect(tester.element(_page('home')), same(browser));
       expect(_scope(browser), same(browserScope));

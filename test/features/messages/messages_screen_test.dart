@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/domain/app_failure.dart';
@@ -12,7 +14,7 @@ import 'package:bilisail/features/messages/domain/message_repository.dart';
 import 'package:bilisail/features/messages/presentation/messages_screen.dart';
 import 'package:bilisail/shared/ui/paging_tab_strip.dart';
 import 'package:bilisail/shared/ui/retained_tab_view.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -103,7 +105,7 @@ void main() {
         if (section != InboxSection.private) {
           await tester.tap(
             width < 600
-                ? find.byTooltip('返回消息首页')
+                ? findMaterialTooltip('返回消息首页')
                 : find.byKey(const ValueKey('message-section-private')),
           );
           await tester.pumpAndSettle();
@@ -523,7 +525,7 @@ void main() {
     await tester.pumpAndSettle();
     expect((accountBadge(tester).label as Text).data, '3');
     repo.counts = {InboxSection.private: 1, InboxSection.likes: 0};
-    await tester.tap(find.byTooltip('更多消息操作'));
+    await tester.tap(findMaterialTooltip('更多消息操作'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('重新加载消息'));
     await tester.pumpAndSettle();
@@ -674,7 +676,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(repo.marks, 1);
       repo.writeFailure = null;
-      await tester.tap(find.byTooltip('聊天设置'));
+      await tester.tap(findMaterialTooltip('聊天设置'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('重新加载会话'));
       await tester.pumpAndSettle();
@@ -763,7 +765,7 @@ void main() {
         scope.read(messagesControllerProvider).section,
         InboxSection.system,
       );
-      await tester.tap(find.byTooltip('返回消息首页'));
+      await tester.tap(findMaterialTooltip('返回消息首页'));
       await tester.pumpAndSettle();
       expect(
         scope.read(messagesControllerProvider).section,
@@ -806,7 +808,7 @@ void main() {
       expect(find.text('测试私信正文'), findsOneWidget);
       expect(find.text('另一会话'), findsOneWidget);
       expect(repo.marks, 1);
-      await tester.tap(find.byTooltip('聊天设置'));
+      await tester.tap(findMaterialTooltip('聊天设置'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('标为已读'));
       await tester.pumpAndSettle();
@@ -826,7 +828,7 @@ void main() {
       await tester.tap(find.text('测试会话'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      await tester.tap(find.byTooltip('返回会话列表'));
+      await tester.tap(findMaterialTooltip('返回会话列表'));
       await tester.pumpAndSettle();
       expect(find.text('另一会话'), findsOneWidget);
       expect(tester.takeException(), isNull);

@@ -1,3 +1,5 @@
+import '../test/support/material_tooltip_finder.dart';
+
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' show PointerDeviceKind;
@@ -15,7 +17,7 @@ import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/features/playback/presentation/playback_panel.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/video/data/api_video_repository.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -270,7 +272,7 @@ Future<void> _nativeProbe(
     hover += 2;
     await mouse.moveTo(bounds.topLeft + Offset(30 + hover, 30));
     await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.byTooltip(tooltip));
+    await tester.tap(findMaterialTooltip(tooltip));
     await tester.pump(const Duration(milliseconds: 300));
     await mouse.moveTo(const Offset(-10, -10));
     await tester.pump(const Duration(seconds: 2));

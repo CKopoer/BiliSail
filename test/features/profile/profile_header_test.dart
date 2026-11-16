@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/features/live/domain/live_room.dart';
@@ -6,7 +8,7 @@ import 'package:bilisail/features/profile/presentation/profile_header.dart';
 import 'package:bilisail/shared/ui/app_cover_image.dart';
 import 'package:bilisail/shared/ui/bili_badges.dart';
 import 'package:bilisail/shared/ui/user_decoration_image.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/input_test_app.dart';
@@ -382,7 +384,7 @@ void main() {
         await tester.testTextInput.receiveAction(TextInputAction.search);
         expect(searched, '测试投稿');
         searched = null;
-        await tester.tap(find.byTooltip('搜索投稿'));
+        await tester.tap(findMaterialTooltip('搜索投稿'));
         expect(searched, '测试投稿');
       },
     );

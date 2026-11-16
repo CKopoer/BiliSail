@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:bili_player/bili_player.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../core/presentation/workspace_activity.dart';
 import 'playback_sidebar_toggle.dart';

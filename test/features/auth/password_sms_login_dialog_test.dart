@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/features/auth/application/auth_controller.dart';
@@ -5,7 +7,7 @@ import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/auth/domain/password_sms_auth_repository.dart';
 import 'package:bilisail/features/auth/presentation/account_dialog.dart';
 import 'package:bilisail/features/auth/presentation/password_sms_login_dialog.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -231,7 +233,7 @@ void main() {
     );
     await tester.tap(find.widgetWithText(FilledButton, '登录'));
     await tester.pump();
-    await tester.tap(find.byTooltip('关闭密码短信登录'));
+    await tester.tap(findMaterialTooltip('关闭密码短信登录'));
     await tester.pumpAndSettle();
     repository.pending!.complete(
       const PasswordSmsLoginStep(PasswordSmsLoginStage.completed),

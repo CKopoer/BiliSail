@@ -1,3 +1,5 @@
+import '../test/support/material_tooltip_finder.dart';
+
 import 'dart:io';
 
 import 'package:bili_player/bili_player.dart';
@@ -18,7 +20,7 @@ import 'package:bilisail/features/video/domain/video_extras_repository.dart';
 import 'package:bilisail/features/video/domain/video_repository.dart';
 import 'package:bilisail/features/video/domain/watch_later_queue.dart';
 import 'package:bilisail/features/video/presentation/video_screen.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -116,7 +118,7 @@ void main() {
               engine.currentSnapshot.phase == PlaybackPhase.paused,
         );
         if (find.text('稍后再看').hitTestable().evaluate().isEmpty) {
-          await tester.tap(find.byTooltip('展开视频信息'));
+          await tester.tap(findMaterialTooltip('展开视频信息'));
           await tester.pump();
         }
         await tester.tap(find.text(_details.last.summary.title).hitTestable());

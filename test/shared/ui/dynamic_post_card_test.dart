@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -12,7 +14,7 @@ import 'package:bilisail/features/image_viewer/application/image_viewer_controll
 import 'package:bilisail/features/image_viewer/domain/original_image.dart';
 import 'package:bilisail/shared/ui/dynamic_post_card.dart';
 import 'package:bilisail/shared/ui/app_network_image.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -98,7 +100,7 @@ void main() {
       expect(find.byType(Dialog), findsOneWidget);
       expect(find.byIcon(Icons.image_not_supported_outlined), findsNothing);
       expect(tester.takeException(), isNull);
-      await tester.tap(find.byTooltip('关闭图片'));
+      await tester.tap(findMaterialTooltip('关闭图片'));
       await tester.pumpAndSettle();
       await tester.pumpWidget(const SizedBox());
       await cache.close();
@@ -216,7 +218,7 @@ void main() {
     expect(find.byType(Dialog), findsOneWidget);
     final dialog = tester.getRect(find.byType(Dialog));
     expect(dialog.width, lessThanOrEqualTo(375));
-    expect(find.byTooltip('关闭图片'), findsOneWidget);
+    expect(findMaterialTooltip('关闭图片'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.tapAt(dialog.topLeft + const Offset(12, 12));
     await tester.pumpAndSettle();
@@ -379,8 +381,8 @@ void main() {
       expect(find.byType(Image), findsNWidgets(9));
       await tester.tap(find.text('视频标题'));
       expect(opened, video);
-      expect(find.byTooltip('在浏览器打开原动态'), findsNothing);
-      expect(find.byTooltip('在浏览器打开动态'), findsNothing);
+      expect(findMaterialTooltip('在浏览器打开原动态'), findsNothing);
+      expect(findMaterialTooltip('在浏览器打开动态'), findsNothing);
       expect(links, isEmpty);
       expect(tester.takeException(), isNull);
     },

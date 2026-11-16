@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/domain/request_cancellation.dart';
@@ -8,7 +10,7 @@ import 'package:bilisail/features/video/application/video_actions_controller.dar
 import 'package:bilisail/features/video/domain/video_actions_repository.dart';
 import 'package:bilisail/features/video/presentation/video_actions_bar.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -62,13 +64,13 @@ void main() {
     );
     expect(find.text('稍后再看'), findsNothing);
     expect(find.text('重新加载'), findsNothing);
-    await tester.tap(find.byTooltip('更多'));
+    await tester.tap(findMaterialTooltip('更多'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('稍后再看'));
     await tester.pumpAndSettle();
     expect(logins, 1);
     expect(repo.calls, isEmpty);
-    await tester.tap(find.byTooltip('更多'));
+    await tester.tap(findMaterialTooltip('更多'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('重新加载'));
     await tester.pumpAndSettle();
@@ -81,7 +83,7 @@ void main() {
     var logins = 0;
     await pumpActions(tester, repo, onLogin: () => logins++);
     for (final label in ['点赞 0', '投币 0', '收藏 0']) {
-      final button = find.byTooltip(label);
+      final button = findMaterialTooltip(label);
       await tester.ensureVisible(button);
       await tester.tap(button);
       await tester.pump();
@@ -95,7 +97,7 @@ void main() {
       enableDesktopWindowing(tester);
       final repo = FakeActions()..pending = Completer<void>();
       await pumpActions(tester, repo, signedIn: true);
-      await tester.tap(find.byTooltip('投币 0'));
+      await tester.tap(findMaterialTooltip('投币 0'));
       await tester.pumpAndSettle();
       expect(find.text('为视频投币'), findsOneWidget);
       expect(repo.calls, ['load']);
@@ -114,16 +116,16 @@ void main() {
       );
       repo.pending!.complete();
       await tester.pumpAndSettle();
-      expect(find.byTooltip('已投 2 枚'), findsOneWidget);
+      expect(findMaterialTooltip('已投 2 枚'), findsOneWidget);
     },
   );
   testWidgets('like feedback uses a transient notice', (tester) async {
     final repo = FakeActions();
     await pumpActions(tester, repo, signedIn: true);
-    await tester.tap(find.byTooltip('点赞 0'));
+    await tester.tap(findMaterialTooltip('点赞 0'));
     await tester.pump();
     expect(repo.calls, ['load', 'like:true']);
-    expect(find.byTooltip('已点赞'), findsOneWidget);
+    expect(findMaterialTooltip('已点赞'), findsOneWidget);
     expect(find.text('操作成功'), findsOneWidget);
     expect(find.byType(SnackBar), findsNothing);
     await tester.pump(const Duration(milliseconds: 1500));
@@ -135,7 +137,7 @@ void main() {
     enableDesktopWindowing(tester);
     final repo = FakeActions();
     await pumpActions(tester, repo, signedIn: true);
-    await tester.tap(find.byTooltip('收藏 0'));
+    await tester.tap(findMaterialTooltip('收藏 0'));
     await tester.pumpAndSettle();
     expect(repo.calls, ['load', 'folders']);
     await tester.tap(find.text('测试收藏夹'));
@@ -144,7 +146,7 @@ void main() {
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();
     expect(repo.calls, ['load', 'folders', 'favorite:33:']);
-    expect(find.byTooltip('已收藏'), findsOneWidget);
+    expect(findMaterialTooltip('已收藏'), findsOneWidget);
   });
 }
 

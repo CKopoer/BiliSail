@@ -254,7 +254,7 @@ async function makeAssets(t, targets = allTargets) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'bilisail-release-reuse-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const expected = { directory, version, targets, sourceRevision: context.sha,
-    flutterVersion: '3.47.6', pubspecLockSha256s: ['c'.repeat(64), 'f'.repeat(64)] };
+    flutterVersion: '3.50.0', pubspecLockSha256s: ['c'.repeat(64), 'f'.repeat(64)] };
   const suffixes = [['.apk'], ['.msix', '.msi', '.exe', '.cer'], ['.msix', '.msi', '.exe', '.cer'], ['.dmg'], ['.dmg'],
     ['-unsigned.ipa'], ['.AppImage', '.flatpak']];
   for (const target of targets) {

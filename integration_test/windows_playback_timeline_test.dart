@@ -1,3 +1,5 @@
+import '../test/support/material_tooltip_finder.dart';
+
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -16,7 +18,7 @@ import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/video/data/api_video_repository.dart';
 import 'package:bilisail/shared/ui/app_network_image.dart';
 import 'package:bili_player/bili_player.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -198,7 +200,7 @@ void main() {
         width.value = 900;
         await mouse.moveTo(Offset.zero);
         await tester.pump(const Duration(milliseconds: 300));
-        await tester.tap(find.byTooltip('全屏（F）'));
+        await tester.tap(findMaterialTooltip('全屏（F）'));
         await tester.pump(const Duration(milliseconds: 400));
         await mouse.moveTo(tester.getCenter(slider));
         await tester.pump(const Duration(milliseconds: 200));

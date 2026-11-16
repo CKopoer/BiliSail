@@ -17,7 +17,7 @@ import 'package:bilisail/shared/ui/responsive_card_grid.dart';
 import 'package:bilisail/shared/ui/scroll_collapsing_header.dart';
 import 'package:bilisail/shared/ui/text_measurement_cache.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:window_manager/window_manager.dart';
 
 final _content = ValueNotifier<Widget>(const SizedBox());

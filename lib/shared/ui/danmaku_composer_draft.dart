@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Keeps the player's draft when its inline editor is replaced by a dialog.
 class DanmakuComposerDraft extends InheritedWidget {

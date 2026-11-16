@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Shows one transient notice above the app's routes without blocking input.
 void showAppNotice(BuildContext context, String message) {

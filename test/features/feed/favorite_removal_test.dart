@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/core/network/api_requests.dart';
@@ -10,7 +12,7 @@ import 'package:bilisail/features/feed/presentation/home_content.dart';
 import 'package:bilisail/features/feed/presentation/home_feed_cards.dart';
 import 'package:bilisail/features/video/domain/video_actions_repository.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -288,7 +290,7 @@ void main() {
           if (longPress) {
             await tester.longPress(card);
           } else if (deleteFolder) {
-            await tester.tap(find.byTooltip('更多操作').first);
+            await tester.tap(findMaterialTooltip('更多操作').first);
           } else {
             final mouse = await tester.createGesture(
               kind: PointerDeviceKind.mouse,

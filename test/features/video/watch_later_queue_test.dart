@@ -9,7 +9,7 @@ import 'package:bilisail/features/video/domain/watch_later_queue.dart';
 import 'package:bilisail/features/video/presentation/watch_later_queue_panel.dart';
 import 'package:bilisail/shared/ui/horizontal_video_card.dart';
 import 'package:bilisail/shared/ui/video_card_cover.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';

@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:ui' as ui;
 
 import 'package:bilisail/domain/user.dart';
@@ -5,7 +7,7 @@ import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/messages/application/messages_controller.dart';
 import 'package:bilisail/features/messages/domain/message_repository.dart';
 import 'package:bilisail/features/messages/presentation/messages_screen.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -123,7 +125,7 @@ void main() {
     controller.pagination(loading: true);
     await tester.pump();
     expect(find.byType(LinearProgressIndicator), findsNWidgets(2));
-    expect(find.byTooltip('聊天设置'), findsOneWidget);
+    expect(findMaterialTooltip('聊天设置'), findsOneWidget);
     controller.pagination(error: '分页失败');
     await tester.pumpAndSettle();
     expect(find.text('分页失败'), findsNWidgets(2));

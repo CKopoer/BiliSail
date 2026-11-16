@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:bili_danmaku/bili_danmaku.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'app_dialog.dart';
 import 'app_notice.dart';

@@ -34,7 +34,7 @@ try {
   $buildArgs = @('build', 'apk', "--$buildMode", '--target-platform', 'android-arm64', '--split-per-abi',
     '--target', 'lib/main.dart', $AndroidDevelopmentBuildArgument,
     "--dart-define=BILISAIL_RELEASE_VERSION=$version")
-  # Flutter 3.47.6 also skips plugin-registrant regeneration with --no-pub.
+  # Flutter 3.50.0 also skips plugin-registrant regeneration with --no-pub.
   # Switching Profile/Debug to Release must remove dev-only native plugins.
   & flutter @buildArgs
   if ($LASTEXITCODE -ne 0) { throw 'Development APK build failed.' }

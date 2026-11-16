@@ -1,7 +1,9 @@
+import '../../../core/presentation/motion_preferences.dart';
+
 import 'dart:async';
 
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 
 import '../application/playback_session.dart';
@@ -149,7 +151,7 @@ class _AudioSubtitleLyricsState extends State<AudioSubtitleLyrics>
           !_scroll.hasClients) {
         return;
       }
-      if (animate && !MediaQuery.disableAnimationsOf(context)) {
+      if (animate && !shouldReduceMotion(context)) {
         await _scroll.animateToItem(
           _center,
           duration: const Duration(milliseconds: 220),

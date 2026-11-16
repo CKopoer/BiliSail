@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Shared presentation only; each caller owns loading and selecting its items.
 final class EmoticonPickerDialog extends StatelessWidget {

@@ -14,7 +14,7 @@ import 'package:bilisail/features/auth/data/session_repository.dart';
 import 'package:bilisail/features/feed/application/feed_controller.dart';
 import 'package:bilisail/features/feed/domain/feed_repository.dart';
 import 'package:bilisail/features/feed/presentation/feed_screen.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 

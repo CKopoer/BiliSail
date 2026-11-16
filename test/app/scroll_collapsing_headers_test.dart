@@ -7,7 +7,7 @@ import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/auth/presentation/account_screen.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/shared/ui/paged_scroll_viewport.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 

@@ -1,5 +1,7 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'package:bilisail/shared/ui/page_toolbar.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -69,7 +71,7 @@ void main() {
           await tester.pumpAndSettle();
           final title = tester.getRect(find.text('我的消息'));
           for (final label in ['返回', '刷新', '官方消息页', '更多']) {
-            final action = find.byTooltip(label);
+            final action = findMaterialTooltip(label);
             final rect = tester.getRect(action);
             expect(rect.center.dy, closeTo(title.center.dy, .01));
             expect(rect.size, const Size.square(48));

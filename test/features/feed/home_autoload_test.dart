@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/core/presentation/workspace_activity.dart';
@@ -14,7 +16,7 @@ import 'package:bilisail/features/feed/domain/home_repository.dart';
 import 'package:bilisail/features/feed/presentation/feed_screen.dart';
 import 'package:bilisail/features/feed/presentation/home_content.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -34,9 +36,9 @@ void main() {
         await tester.pumpWidget(_app(repository, channel, section));
         await tester.pumpAndSettle();
         expect(repository.pages(section), [1, 2]);
-        expect(find.byTooltip('刷新列表'), findsOneWidget);
+        expect(findMaterialTooltip('刷新列表'), findsOneWidget);
         expect(find.text('刷新列表'), findsNothing);
-        expect(find.byTooltip('回到顶部'), findsNothing);
+        expect(findMaterialTooltip('回到顶部'), findsNothing);
         expect(find.text('$section-2-0'), findsOneWidget);
         expect(tester.takeException(), isNull);
       });
@@ -116,7 +118,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('home-section-全部')));
     await tester.pumpAndSettle();
     expect(repository.pages('全部'), [1, 2, 3]);
-    expect(find.byTooltip('刷新列表'), findsOneWidget);
+    expect(findMaterialTooltip('刷新列表'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -172,7 +174,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('home-section-视频')));
       await tester.pumpAndSettle();
       expect(_position(tester).pixels, closeTo(videoOffset, 1));
-      await tester.tap(find.byTooltip('刷新列表'));
+      await tester.tap(findMaterialTooltip('刷新列表'));
       await tester.pumpAndSettle();
       expect(_position(tester).pixels, 0);
       expect(repository.pages('视频'), [1, 1]);
@@ -197,29 +199,29 @@ void main() {
         final repository = _HomeRepository(itemCount: 30, hasMore: false);
         await tester.pumpWidget(_app(repository, channel, section));
         await tester.pumpAndSettle();
-        expect(find.byTooltip('回到顶部'), findsNothing);
+        expect(findMaterialTooltip('回到顶部'), findsNothing);
         await _wheel(tester, 200);
         await tester.pumpAndSettle();
-        expect(find.byTooltip('回到顶部'), findsOneWidget);
-        final refreshRect = tester.getRect(find.byTooltip('刷新列表'));
-        final topRect = tester.getRect(find.byTooltip('回到顶部'));
+        expect(findMaterialTooltip('回到顶部'), findsOneWidget);
+        final refreshRect = tester.getRect(findMaterialTooltip('刷新列表'));
+        final topRect = tester.getRect(findMaterialTooltip('回到顶部'));
         expect(refreshRect.width, 48);
         expect(refreshRect.height, 48);
         expect(refreshRect.right, 340);
         expect(topRect.bottom, 580);
         expect(topRect.top, greaterThan(refreshRect.bottom));
-        await tester.tap(find.byTooltip('回到顶部'));
+        await tester.tap(findMaterialTooltip('回到顶部'));
         await tester.pumpAndSettle();
         expect(_position(tester).pixels, 0);
-        expect(find.byTooltip('回到顶部'), findsNothing);
+        expect(findMaterialTooltip('回到顶部'), findsNothing);
         await _wheel(tester, 200);
         await tester.pumpAndSettle();
-        await tester.tap(find.byTooltip('刷新列表'));
+        await tester.tap(findMaterialTooltip('刷新列表'));
         await tester.pumpAndSettle();
         expect(repository.pages(section), [1, 1]);
         expect(_position(tester).pixels, 0);
         expect(find.text('刷新列表'), findsNothing);
-        expect(find.byTooltip('回到顶部'), findsNothing);
+        expect(findMaterialTooltip('回到顶部'), findsNothing);
         expect(tester.takeException(), isNull);
       },
     );

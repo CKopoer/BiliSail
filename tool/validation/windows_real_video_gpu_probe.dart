@@ -19,7 +19,7 @@ import 'package:bilisail/features/settings/application/settings_controller.dart'
 import 'package:bilisail/shared/ui/bili_icons.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:drift/native.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';

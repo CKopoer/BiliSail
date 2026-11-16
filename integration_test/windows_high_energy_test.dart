@@ -1,3 +1,5 @@
+import '../test/support/material_tooltip_finder.dart';
+
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -15,7 +17,7 @@ import 'package:bilisail/features/playback/presentation/playback_panel.dart';
 import 'package:bilisail/features/playback/presentation/high_energy_curve.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/video/data/api_video_repository.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -136,27 +138,27 @@ void main() {
         );
         expect(session.chapters, isEmpty);
         // Keep controls visible by hovering an ordinary control, avoiding preview reads.
-        await mouse.moveTo(tester.getCenter(find.byTooltip('暂停（空格）')));
+        await mouse.moveTo(tester.getCenter(findMaterialTooltip('暂停（空格）')));
         await tester.pump(const Duration(milliseconds: 400));
         expect(find.byType(HighEnergyCurve), findsOneWidget);
         await screenshot('window');
         final generation = engine.currentSnapshot.generation;
-        await tester.tap(find.byTooltip('全屏（F）'));
+        await tester.tap(findMaterialTooltip('全屏（F）'));
         await tester.pump(const Duration(milliseconds: 400));
-        await mouse.moveTo(tester.getCenter(find.byTooltip('暂停（空格）')));
+        await mouse.moveTo(tester.getCenter(findMaterialTooltip('暂停（空格）')));
         expect(engine.currentSnapshot.generation, generation);
         expect(find.byType(HighEnergyCurve), findsOneWidget);
-        await tester.tap(find.byTooltip('退出全屏（Esc）'));
+        await tester.tap(findMaterialTooltip('退出全屏（Esc）'));
         await tester.pump(const Duration(milliseconds: 400));
         expect(find.byType(Dialog), findsNothing);
         width.value = 320;
         await tester.pump(const Duration(milliseconds: 400));
-        await mouse.moveTo(tester.getCenter(find.byTooltip('暂停（空格）')));
+        await mouse.moveTo(tester.getCenter(findMaterialTooltip('暂停（空格）')));
         await screenshot('compact');
         expect(find.byType(HighEnergyCurve), findsOneWidget);
         width.value = 960;
         await tester.pump(const Duration(milliseconds: 400));
-        await mouse.moveTo(tester.getCenter(find.byTooltip('暂停（空格）')));
+        await mouse.moveTo(tester.getCenter(findMaterialTooltip('暂停（空格）')));
         // Warm geometry/shaders and native decoder before alternating six segments.
         await tester.pump(const Duration(seconds: 3));
         final samples = <Map<String, Object>>[];
@@ -251,7 +253,7 @@ void main() {
           () => session.chapters.isNotEmpty,
           const Duration(seconds: 90),
         );
-        await mouse.moveTo(tester.getCenter(find.byTooltip('暂停（空格）')));
+        await mouse.moveTo(tester.getCenter(findMaterialTooltip('暂停（空格）')));
         await tester.pump(const Duration(milliseconds: 400));
         expect(session.highEnergy.value, isNull);
         expect(find.byType(HighEnergyCurve), findsNothing);

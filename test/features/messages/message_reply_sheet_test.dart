@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'package:bilisail/domain/comment_target.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/user.dart';
@@ -9,7 +11,7 @@ import 'package:bilisail/features/messages/application/messages_controller.dart'
 import 'package:bilisail/features/messages/domain/message_repository.dart';
 import 'package:bilisail/features/messages/presentation/message_reply_sheet.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -83,7 +85,7 @@ void main() {
     (tester) async {
       await mount(tester);
       expect(comments.loads, 0);
-      expect(find.byTooltip('取消回复'), findsNothing);
+      expect(findMaterialTooltip('取消回复'), findsNothing);
       await tester.enterText(find.byType(TextField), '[微笑]收到');
       await tester.pumpAndSettle();
       await tester.tap(find.text('发布'));

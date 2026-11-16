@@ -1,5 +1,5 @@
 import 'package:bili_player/bili_player.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 final class _Output implements FlutterVideoOutput {

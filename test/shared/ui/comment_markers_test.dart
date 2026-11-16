@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/domain/comment_target.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
@@ -10,7 +12,7 @@ import 'package:bilisail/shared/ui/app_network_image.dart';
 import 'package:bilisail/shared/ui/comment_badge.dart';
 import 'package:bilisail/shared/ui/comment_rich_content.dart';
 import 'package:bilisail/shared/ui/comments_panel.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -215,7 +217,7 @@ void main() {
         expect(find.text('UP 主回复过'), findsOneWidget);
         expect(find.text('作者'), findsOneWidget);
         _expectUpAfterAuthor(tester, find.text('作者'));
-        await tester.tap(find.byTooltip('返回评论'));
+        await tester.tap(findMaterialTooltip('返回评论'));
         await tester.pumpAndSettle();
         expect(find.text('作者'), findsOneWidget);
         _expectUpAfterAuthor(tester, find.text('作者'));

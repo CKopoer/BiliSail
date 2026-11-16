@@ -4,7 +4,7 @@ import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/domain/settings_category.dart';
 import 'package:bilisail/features/settings/domain/settings_repository.dart';
 import 'package:bilisail/features/settings/presentation/settings_screen.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -94,7 +94,8 @@ void main() {
           'danmaku-area': 1.0,
           'danmaku-font-scale': 0.0,
           'danmaku-density': 0.0,
-          'danmaku-on-screen': .1,
+          // The midpoint is independent of Material thumb/track padding.
+          'danmaku-on-screen': .5,
           'danmaku-weight': .5,
         }.entries) {
           final slider = find.descendant(
@@ -115,7 +116,7 @@ void main() {
         expect(repository.value.danmakuArea, 1);
         expect(repository.value.danmakuFontScale, .2);
         expect(repository.value.danmakuMaxPerSecond, 0);
-        expect(repository.value.danmakuMaxOnScreen, 12);
+        expect(repository.value.danmakuMaxOnScreen, 60);
         expect(repository.value.danmakuMinimumWeight, 5);
         final word = find.byKey(const ValueKey('danmaku-blocked-word'));
         await tester.ensureVisible(word);

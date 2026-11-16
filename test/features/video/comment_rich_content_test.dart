@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import '../../support/input_test_app.dart';
 
 import 'dart:async';
@@ -15,7 +17,7 @@ import 'package:bilisail/features/image_viewer/domain/original_image.dart';
 import 'package:bilisail/shared/ui/app_network_image.dart';
 import 'package:bilisail/shared/ui/bili_badges.dart';
 import 'package:bilisail/shared/ui/image_viewer.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -358,7 +360,7 @@ void main() {
           await tester.pump();
           expect(originals.sources.last, source);
           expect(downloaded, hasLength(1));
-          await tester.tap(find.byTooltip('关闭图片'));
+          await tester.tap(findMaterialTooltip('关闭图片'));
           await tester.pump();
           await tester.pump(const Duration(milliseconds: 300));
           expect(tester.takeException(), isNull);
@@ -801,8 +803,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(ImageViewer), findsOneWidget);
     expect(find.text('预览图无法读取，请重试'), findsOneWidget);
-    expect(find.byTooltip('适应窗口'), findsOneWidget);
-    await tester.tap(find.byTooltip('关闭图片'));
+    expect(findMaterialTooltip('适应窗口'), findsOneWidget);
+    await tester.tap(findMaterialTooltip('关闭图片'));
     await tester.pumpAndSettle();
     expect(find.byType(ImageViewer), findsNothing);
   });
@@ -866,10 +868,10 @@ void main() {
       expect(originals.sources, [
         Uri.parse('${sources[1]}@1280w_1280h_0e.webp'),
       ]);
-      await tester.tap(find.byTooltip('放大'));
+      await tester.tap(findMaterialTooltip('放大'));
       await tester.pump();
       expect(find.text('125%'), findsOneWidget);
-      await tester.tap(find.byTooltip('下一张'));
+      await tester.tap(findMaterialTooltip('下一张'));
       await tester.pumpAndSettle();
       expect(find.text('3 / 3'), findsOneWidget);
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);

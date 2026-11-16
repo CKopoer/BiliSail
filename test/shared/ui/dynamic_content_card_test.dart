@@ -1,7 +1,7 @@
 import 'package:bilisail/domain/dynamic_post.dart';
 import 'package:bilisail/shared/ui/dynamic_content_card.dart';
 import 'package:bilisail/shared/ui/dynamic_post_card.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

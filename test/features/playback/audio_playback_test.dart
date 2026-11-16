@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -15,7 +17,7 @@ import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/features/playback/presentation/audio_playback_view.dart';
 import 'package:bilisail/features/playback/presentation/playback_panel.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -276,7 +278,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('播放速度'));
+    await tester.tap(findMaterialTooltip('播放速度'));
     await tester.pumpAndSettle();
     expect(find.text('1.25x'), findsNothing);
     await tester.tap(
@@ -806,7 +808,7 @@ void main() {
         await tester.tap(find.byKey(const ValueKey('audio-toggle-playing')));
         await tester.pump();
         expect(engine.currentSnapshot.desiredPlaying, isFalse);
-        await tester.tap(find.byTooltip('前进 10 秒'));
+        await tester.tap(findMaterialTooltip('前进 10 秒'));
         await tester.pump();
         expect(engine.currentSnapshot.position, const Duration(seconds: 10));
         if (scale == 1 && (size.width == 390 || size.width == 900)) {
@@ -865,7 +867,7 @@ void main() {
       engine.nextSeek?.complete();
       await tester.pumpAndSettle();
       expect(engine.currentSnapshot.position.inMilliseconds, preview.round());
-      await tester.tap(find.byTooltip('播放速度'));
+      await tester.tap(findMaterialTooltip('播放速度'));
       await tester.pumpAndSettle();
       await tester.tap(
         find.ancestor(
@@ -875,7 +877,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(engine.currentSnapshot.rate, 2);
-      await tester.tap(find.byTooltip('听视频选项'));
+      await tester.tap(findMaterialTooltip('听视频选项'));
       await tester.pumpAndSettle();
       final volume = find.byType(Slider).last;
       await tester.drag(volume, const Offset(-40, 0));
@@ -913,23 +915,23 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip(RegExp('^全屏')));
+      await tester.tap(findMaterialTooltip(RegExp('^全屏')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('听视频'));
+      await tester.tap(findMaterialTooltip('听视频'));
       await tester.pumpAndSettle();
       expect(find.byType(AudioPlaybackView), findsOneWidget);
       expect(find.byType(VideoSurface), findsNothing);
       expect(engine.sources.last, isA<ProgressiveSource>());
       final opens = engine.sources.length;
-      await tester.tap(find.byTooltip('退出全屏'));
+      await tester.tap(findMaterialTooltip('退出全屏'));
       await tester.pumpAndSettle();
       expect(session.audioOnly, isTrue);
       expect(engine.sources.length, opens);
-      await tester.tap(find.byTooltip('全屏'));
+      await tester.tap(findMaterialTooltip('全屏'));
       await tester.pumpAndSettle();
       expect(find.byType(AudioPlaybackView), findsOneWidget);
       expect(engine.sources.length, opens);
-      await tester.tap(find.byTooltip('退出全屏'));
+      await tester.tap(findMaterialTooltip('退出全屏'));
       await tester.pumpAndSettle();
       expect(session.audioOnly, isTrue);
       expect(engine.sources.length, opens);

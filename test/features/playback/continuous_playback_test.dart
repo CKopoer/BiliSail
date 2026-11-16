@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bili_player/bili_player.dart';
@@ -29,7 +31,7 @@ import 'package:bilisail/features/video/presentation/video_screen.dart';
 import 'package:bilisail/features/video/presentation/watch_later_queue_panel.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:bilisail/shared/ui/playback_page_commands.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -185,7 +187,7 @@ void main() {
               await tester.tap(find.text('测试收藏夹'));
               await tester.pumpAndSettle();
             }
-            await tester.tap(find.byTooltip('关闭播放列表'));
+            await tester.tap(findMaterialTooltip('关闭播放列表'));
             await tester.pumpAndSettle();
             expect(find.text('关闭播放列表？'), findsOneWidget);
             await tester.tap(find.text('取消'));
@@ -200,12 +202,12 @@ void main() {
                   .expanded,
               !favorite,
             );
-            await tester.tap(find.byTooltip('关闭播放列表'));
+            await tester.tap(findMaterialTooltip('关闭播放列表'));
             await tester.pumpAndSettle();
             await tester.tap(find.widgetWithText(FilledButton, '关闭'));
             await tester.pumpAndSettle();
             expect(find.byType(WatchLaterQueuePanel), findsNothing);
-            expect(find.byTooltip('关闭播放列表'), findsNothing);
+            expect(findMaterialTooltip('关闭播放列表'), findsNothing);
             expect(tester.state(find.byType(PlaybackPanel)), same(player));
             expect(engine.opens, opens);
             expect(engine.disposals, 0);
@@ -348,8 +350,8 @@ void main() {
           find.byType(PlaybackPageCommands),
         );
         final opens = engine.opens;
-        await tester.ensureVisible(find.byTooltip(control));
-        await tester.tap(find.byTooltip(control));
+        await tester.ensureVisible(findMaterialTooltip(control));
+        await tester.tap(findMaterialTooltip(control));
         await _frames(tester);
         expect(engine.opens, opens);
         expect(session.detail?.summary.id, _b);
@@ -357,7 +359,7 @@ void main() {
         await _frames(tester);
         expect(engine.opens, opens);
         if (control == '倒序播放') {
-          await tester.tap(find.byTooltip('倒序'));
+          await tester.tap(findMaterialTooltip('倒序'));
           await _frames(tester);
         } else {
           expect(
@@ -366,7 +368,7 @@ void main() {
                 .hasNext,
             isTrue,
           );
-          await tester.tap(find.byTooltip('顺序'));
+          await tester.tap(findMaterialTooltip('顺序'));
           await _frames(tester);
           expect(
             tester
@@ -374,8 +376,8 @@ void main() {
                 .hasNext,
             isFalse,
           );
-          expect(find.byTooltip('倒序播放'), findsOneWidget);
-          await tester.tap(find.byTooltip('倒序'));
+          expect(findMaterialTooltip('倒序播放'), findsOneWidget);
+          await tester.tap(findMaterialTooltip('倒序'));
           await _frames(tester);
           expect(engine.opens, opens);
         }
@@ -383,8 +385,8 @@ void main() {
         await _frames(tester);
         expect(session.detail?.summary.id, _a);
         expect(session.part?.cid, '101');
-        expect(find.byTooltip('正序播放'), findsOneWidget);
-        expect(find.byTooltip('顺序'), findsOneWidget);
+        expect(findMaterialTooltip('正序播放'), findsOneWidget);
+        expect(findMaterialTooltip('顺序'), findsOneWidget);
         engine.end();
         await _frames(tester);
         expect(session.part?.cid, '102');
@@ -922,7 +924,7 @@ void main() {
           await tester.pump(const Duration(milliseconds: 350));
           await tester.pump(const Duration(milliseconds: 216));
           if (fullscreen) {
-            await tester.tap(find.byTooltip('全屏（F）'));
+            await tester.tap(findMaterialTooltip('全屏（F）'));
             await _frames(tester);
           }
           engine.end();

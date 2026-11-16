@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/domain/page_result.dart';
@@ -19,7 +21,7 @@ import 'package:bilisail/shared/ui/video_card_interaction_scope.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -94,7 +96,7 @@ void main() {
       await mouse.moveTo(tester.getCenter(find.byType(AspectRatio)));
       await tester.pumpAndSettle();
       expect(find.byIcon(Icons.check_rounded), findsOneWidget);
-      expect(find.byTooltip('取消稍后再看'), findsOneWidget);
+      expect(findMaterialTooltip('取消稍后再看'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('video-card-watch-later')));
       await tester.pumpAndSettle();
       expect(operations.removals, 1);

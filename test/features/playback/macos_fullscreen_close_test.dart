@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 import 'dart:ui' show ViewFocusDirection, ViewFocusEvent, ViewFocusState;
 
@@ -13,7 +15,7 @@ import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/features/playback/presentation/playback_panel.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -184,7 +186,7 @@ void main() {
           if (mini) {
             window.windowService.onMiniPlayerRequested!();
           } else {
-            await tester.tap(find.byTooltip('全屏（F）'));
+            await tester.tap(findMaterialTooltip('全屏（F）'));
           }
           await tester.pumpAndSettle();
           final presentation = tester.element(
@@ -201,7 +203,7 @@ void main() {
 
           engine.releasing = Completer<void>();
           if (mini && round == 0) {
-            await tester.tap(find.byTooltip('关闭小窗'));
+            await tester.tap(findMaterialTooltip('关闭小窗'));
           } else {
             await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
             await tester.sendKeyDownEvent(LogicalKeyboardKey.keyW);

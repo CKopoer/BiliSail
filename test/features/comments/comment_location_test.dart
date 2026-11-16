@@ -15,7 +15,7 @@ import 'package:bilisail/features/comments/data/api_comments_repository.dart';
 import 'package:bilisail/features/comments/domain/comments_repository.dart';
 import 'package:bilisail/shared/ui/comments_panel.dart';
 import 'package:bilisail/shared/ui/content_link_scope.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 

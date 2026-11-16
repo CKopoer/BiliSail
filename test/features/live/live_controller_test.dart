@@ -9,7 +9,7 @@ import 'package:bilisail/features/live/application/live_controller.dart';
 import 'package:bilisail/features/live/domain/live_repository.dart';
 import 'package:bilisail/features/live/domain/live_room.dart';
 import 'package:bilisail/features/live/presentation/live_screen.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 

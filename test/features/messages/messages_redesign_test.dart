@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
@@ -7,7 +9,7 @@ import 'package:bilisail/features/messages/domain/message_management.dart';
 import 'package:bilisail/features/messages/domain/message_repository.dart';
 import 'package:bilisail/features/messages/presentation/message_content_view.dart';
 import 'package:bilisail/features/messages/presentation/messages_screen.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -59,12 +61,12 @@ void main() {
         expect(find.text('测试会话'), findsOneWidget);
         await tester.tap(find.byKey(const ValueKey('message-section-replies')));
         await tester.pumpAndSettle();
-        expect(find.byTooltip('返回消息首页'), findsOneWidget);
+        expect(findMaterialTooltip('返回消息首页'), findsOneWidget);
         expect(
           container.read(messagesControllerProvider).section,
           InboxSection.replies,
         );
-        await tester.tap(find.byTooltip('返回消息首页'));
+        await tester.tap(findMaterialTooltip('返回消息首页'));
         await tester.pumpAndSettle();
         expect(find.byKey(const ValueKey('message-shortcuts')), findsOneWidget);
         expect(
@@ -136,7 +138,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('message-section-system')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('返回消息首页'));
+    await tester.tap(findMaterialTooltip('返回消息首页'));
     await tester.pumpAndSettle();
     expect(find.text('另一会话'), findsOneWidget);
     expect(find.text('测试会话'), findsNothing);

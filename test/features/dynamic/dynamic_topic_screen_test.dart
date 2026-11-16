@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'package:bilisail/app/router.dart';
 import 'package:bilisail/app/shell.dart';
 import 'package:bilisail/app/workspace_tabs.dart';
@@ -13,7 +15,7 @@ import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/domain/settings_repository.dart';
 import 'package:bilisail/shared/ui/content_section_tabs.dart';
 import 'package:bilisail/shared/ui/dynamic_compose_dialog.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -327,8 +329,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.pumpWidget(app('/topic/12'));
       await tester.pumpAndSettle();
-      expect(find.byTooltip('参与话题').hitTestable(), findsOneWidget);
-      expect(find.byTooltip('返回播放').hitTestable(), findsNothing);
+      expect(findMaterialTooltip('参与话题').hitTestable(), findsOneWidget);
+      expect(findMaterialTooltip('返回播放').hitTestable(), findsNothing);
       expect(
         find.byKey(const ValueKey('topic-back')).hitTestable(),
         findsOneWidget,

@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/core/network/api_requests.dart';
@@ -13,7 +15,7 @@ import 'package:bilisail/features/feed/presentation/home_feed_cards.dart';
 import 'package:bilisail/features/video/application/watch_later_queue_registry.dart';
 import 'package:bilisail/shared/ui/dynamic_post_interactions.dart';
 import 'package:bilisail/shared/ui/responsive_card_grid.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -282,7 +284,7 @@ void main() {
     await tester.pumpAndSettle();
     _position(tester).jumpTo(0);
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('返回列表'));
+    await tester.tap(findMaterialTooltip('返回列表'));
     await tester.pumpAndSettle();
     expect(_position(tester).pixels, closeTo(savedOffset, 1));
     expect(repository.calls, hasLength(2));

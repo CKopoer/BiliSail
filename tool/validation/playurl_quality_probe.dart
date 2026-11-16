@@ -6,7 +6,7 @@ import 'package:bilisail/core/storage/credential_store.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/playback/data/api_playback_repository.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Explicit local read probe; never prints cookies, media URLs or response text.
 Future<void> main() async {

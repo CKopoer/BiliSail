@@ -1,6 +1,8 @@
+import '../../core/presentation/motion_preferences.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 
@@ -123,9 +125,8 @@ final class _RetainedTabViewState<T extends Object>
   _pagesConfiguration;
   List<Widget> _pages = const [];
 
-  Duration get _duration => MediaQuery.disableAnimationsOf(context)
-      ? Duration.zero
-      : TabPagingMotion.duration;
+  Duration get _duration =>
+      shouldReduceMotion(context) ? Duration.zero : TabPagingMotion.duration;
 
   void _replaceController() {
     _generation++;

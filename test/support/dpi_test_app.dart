@@ -18,7 +18,7 @@ import 'package:bilisail/features/video/presentation/video_screen.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:bilisail/shared/ui/video_grid.dart';
 import 'package:bilisail/shared/ui/responsive_card_grid.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

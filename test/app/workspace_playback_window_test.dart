@@ -1,3 +1,5 @@
+import '../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 import 'dart:io';
 
@@ -6,7 +8,7 @@ import 'package:bilisail/core/platform/window_service.dart';
 import 'package:bilisail/domain/responsive_layout_settings.dart';
 import 'package:bilisail/shared/ui/responsive_layout_scope.dart';
 import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -228,9 +230,9 @@ void main() {
               .height,
           44,
         );
-        await tester.tap(find.byTooltip('返回上一视频'));
+        await tester.tap(findMaterialTooltip('返回上一视频'));
         expect(backs, 3);
-        await tester.tap(find.byTooltip('回到主页'));
+        await tester.tap(findMaterialTooltip('回到主页'));
         expect(homes, 2);
       }
       await tester.pumpWidget(const SizedBox());

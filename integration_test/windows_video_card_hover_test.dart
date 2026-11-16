@@ -18,7 +18,7 @@ import 'package:bilisail/shared/ui/app_network_image.dart';
 import 'package:bilisail/features/video/application/video_card_preview_playback.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:bilisail/shared/ui/video_card_interaction_scope.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';

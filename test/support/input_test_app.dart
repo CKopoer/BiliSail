@@ -1,7 +1,7 @@
 import 'package:bilisail/app/shortcut_coordinator.dart';
 import 'package:bilisail/core/presentation/app_input_host.dart';
 import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:go_router/go_router.dart';
 
 /// Mounts the same root host/observer as BiliApp, including isolated UI tests.

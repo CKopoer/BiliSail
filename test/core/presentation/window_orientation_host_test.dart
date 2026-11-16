@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:bilisail/core/platform/window_service.dart';
 import 'package:bilisail/core/presentation/window_orientation_host.dart';
 import 'package:bilisail/domain/app_orientation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 

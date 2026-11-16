@@ -6,7 +6,7 @@ import 'package:bilisail/app/release_smoke.dart';
 import 'package:bilisail/core/platform/detached_playback_window.dart';
 import 'package:bilisail/core/platform/macos_application_window.dart';
 import 'package:bilisail/core/platform/window_service.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/multi_view_binding.dart';
@@ -115,7 +115,10 @@ Future<void> main() async {
         expect(_getClientRect(handle, client), isNot(0));
         final decorations =
             frame.ref.bottom - frame.ref.top - client.ref.bottom;
-        expect(decorations, greaterThanOrEqualTo(24 * _getDpi(handle) / 96));
+        // The app draws its caption in the client area. A maximized window
+        // retains system resize insets, not a system caption's fixed height.
+        // Fullscreen below must remove these insets entirely.
+        expect(decorations, greaterThan(0));
       } finally {
         _heapFree(heap, 0, frame.cast());
         _heapFree(heap, 0, client.cast());
@@ -175,6 +178,18 @@ Future<void> main() async {
 
     await tester.pumpWidget(build(open: false));
     await tester.pumpAndSettle();
+    // Native view removal is asynchronous; drain actual platform messages as
+    // well as the widget test's frame clock before checking for leaked views.
+    for (
+      var attempt = 0;
+      PlatformDispatcher.instance.views.length != baseline && attempt < 100;
+      attempt++
+    ) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+    }
     expect(PlatformDispatcher.instance.views.length, baseline);
     expect(find.text('Main browser probe'), findsOneWidget);
     debugPrint(
@@ -204,9 +219,6 @@ external int _getWindowRect(Pointer<Void> window, Pointer<_Rect> rect);
 
 @Native<Int32 Function(Pointer<Void>, Pointer<_Rect>)>(symbol: 'GetClientRect')
 external int _getClientRect(Pointer<Void> window, Pointer<_Rect> rect);
-
-@Native<Uint32 Function(Pointer<Void>)>(symbol: 'GetDpiForWindow')
-external int _getDpi(Pointer<Void> window);
 
 @Native<Int32 Function(Pointer<Void>, Uint32, IntPtr, IntPtr)>(
   symbol: 'PostMessageW',

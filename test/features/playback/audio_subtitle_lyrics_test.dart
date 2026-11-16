@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -12,7 +14,7 @@ import 'package:bilisail/features/playback/presentation/audio_playback_view.dart
 import 'package:bilisail/features/playback/presentation/audio_subtitle_lyrics.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -421,7 +423,7 @@ void main() {
       await mount(tester);
       expect(find.text('字幕加载失败，请重新选择重试'), findsOneWidget);
       repository.failCues = false;
-      await tester.tap(find.byTooltip('听视频选项'));
+      await tester.tap(findMaterialTooltip('听视频选项'));
       await tester.pumpAndSettle();
       await tester.tap(
         find.widgetWithText(CheckedPopupMenuItem<VoidCallback>, '中文'),

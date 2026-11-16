@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'package:bilisail/features/comments/domain/comment_composer.dart';
 import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/domain/comment_target.dart';
@@ -28,7 +30,7 @@ import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/video/application/video_comments_controller.dart';
 import 'package:bilisail/features/video/domain/video_comments_repository.dart';
 import 'package:bilisail/features/video/presentation/video_comments_panel.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -695,7 +697,7 @@ void main() {
       isEmpty,
     );
     repo.items = state().items;
-    await tester.tap(find.byTooltip('刷新评论'));
+    await tester.tap(findMaterialTooltip('刷新评论'));
     await tester.pumpAndSettle();
     expect(find.text('尚未公开的评论'), findsOneWidget);
     expect(find.text('暂未公开'), findsOneWidget);
@@ -854,7 +856,7 @@ void main() {
         14,
       );
       expect(tester.widget<TextField>(input).maxLines, 1);
-      expect(find.byTooltip('选择表情'), findsNothing);
+      expect(findMaterialTooltip('选择表情'), findsNothing);
       expect(find.text('发布'), findsNothing);
 
       await tester.tap(input);
@@ -865,7 +867,7 @@ void main() {
       final expandedTop = tester.getTopLeft(input).dy;
       expect(transitioningTop, lessThan(collapsedRect.top));
       expect(transitioningTop, greaterThan(expandedTop));
-      expect(find.byTooltip('选择表情').hitTestable(), findsOneWidget);
+      expect(findMaterialTooltip('选择表情').hitTestable(), findsOneWidget);
       expect(find.text('发布').hitTestable(), findsOneWidget);
       expect(tester.widget<TextField>(input).maxLines, 4);
       expect(tester.widget<ListView>(find.byType(ListView)), same(list));
@@ -875,7 +877,7 @@ void main() {
       expect(tester.getSize(input).height, greaterThan(collapsedRect.height));
       await tester.tap(find.text('4 条'));
       await tester.pumpAndSettle();
-      expect(find.byTooltip('选择表情'), findsNothing);
+      expect(findMaterialTooltip('选择表情'), findsNothing);
       expect(find.text('发布'), findsNothing);
       expect(tester.getRect(input), collapsedRect);
       expect(tester.widget<TextField>(input).controller!.text, '第一行\n第二行\n第三行');
@@ -886,7 +888,7 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pumpAndSettle();
       expect(tester.widget<TextField>(input).focusNode!.hasFocus, isFalse);
-      expect(find.byTooltip('选择表情').hitTestable(), findsOneWidget);
+      expect(findMaterialTooltip('选择表情').hitTestable(), findsOneWidget);
       expect(find.text('发布').hitTestable(), findsOneWidget);
       expect(repo.writes, 0);
       expect(tester.takeException(), isNull);
@@ -1018,7 +1020,7 @@ void main() {
     final text = tester.widget<TextField>(find.byType(TextField)).controller!;
     text.selection = const TextSelection(baseOffset: 1, extentOffset: 3);
     final inputRect = tester.getRect(find.byType(TextField));
-    await tester.tap(find.byTooltip('选择表情'));
+    await tester.tap(findMaterialTooltip('选择表情'));
     await tester.pumpAndSettle();
     expect(find.byType(AlertDialog), findsOneWidget);
     expect(
@@ -1049,7 +1051,7 @@ void main() {
     expect(text.selection.baseOffset, 4);
     expect(repo.writes, 0);
     expect(tester.takeException(), isNull);
-    await tester.tap(find.byTooltip('选择表情'));
+    await tester.tap(findMaterialTooltip('选择表情'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('关闭'));
     await tester.pumpAndSettle();
@@ -1105,8 +1107,8 @@ void main() {
     await tester.tap(find.text('共 3 条回复 ›'));
     await tester.pumpAndSettle();
     expect(find.text('评论详情'), findsOneWidget);
-    expect(find.byTooltip('关闭评论详情'), findsNothing);
-    expect(find.byTooltip('返回评论'), findsOneWidget);
+    expect(findMaterialTooltip('关闭评论详情'), findsNothing);
+    expect(findMaterialTooltip('返回评论'), findsOneWidget);
     expect(
       find.descendant(
         of: find.byType(CommentRichContent),
@@ -1126,7 +1128,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('保留这条回复'), findsOneWidget);
     expect(find.text('我已核对结果，允许再次发送'), findsOneWidget);
-    await tester.tap(find.byTooltip('返回评论'));
+    await tester.tap(findMaterialTooltip('返回评论'));
     await tester.pumpAndSettle();
     expect(find.text('最热'), findsOneWidget);
     expect(find.text('评论详情'), findsNothing);
@@ -1202,7 +1204,7 @@ void main() {
     expect(before, greaterThan(0));
     await controller.openReplies(state().items[3]);
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('返回评论'));
+    await tester.tap(findMaterialTooltip('返回评论'));
     await tester.pumpAndSettle();
     final after = tester
         .state<ScrollableState>(find.byType(Scrollable).first)

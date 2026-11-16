@@ -17,7 +17,7 @@ import 'package:bilisail/features/video/domain/video_repository.dart';
 import 'package:bilisail/features/video/presentation/video_author_header.dart';
 import 'package:bilisail/features/video/presentation/video_screen.dart';
 import 'package:bilisail/shared/ui/user_follow_button.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

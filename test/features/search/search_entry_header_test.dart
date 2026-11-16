@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/features/search/application/search_discovery_controller.dart';
 import 'package:bilisail/features/search/domain/search_discovery_repository.dart';
@@ -6,7 +8,7 @@ import 'package:bilisail/features/search/presentation/search_history_chip.dart';
 import 'package:bilisail/shared/ui/paged_scroll_viewport.dart';
 import 'package:bilisail/shared/ui/scroll_collapsing_header.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
@@ -336,7 +338,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('workspace-search')));
       await tester.pumpAndSettle();
       final first = find.byKey(const ValueKey(('search-history', '历史0')));
-      final remove = find.byTooltip('删除历史记录：历史0');
+      final remove = findMaterialTooltip('删除历史记录：历史0');
       expect(remove, findsNothing);
       final rect = tester.getRect(first);
       final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
@@ -424,7 +426,7 @@ void main() {
         TextSelection.collapsed(offset: '键盘搜索'.length),
       );
       await tester.enterText(field, '键盘搜索 教程');
-      await tester.tap(find.byTooltip('搜索'));
+      await tester.tap(findMaterialTooltip('搜索'));
       await tester.pumpAndSettle();
       expect(calls, ['键盘搜索', '键盘搜索 教程']);
       expect(tester.widget<TextField>(field).controller!.text, '键盘搜索 教程');

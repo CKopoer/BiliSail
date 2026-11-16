@@ -2,7 +2,7 @@ import '../../support/input_test_app.dart';
 
 import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
 import 'package:bilisail/features/settings/presentation/shortcut_settings_section.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';

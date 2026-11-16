@@ -1,6 +1,6 @@
 import 'package:bilisail/shared/ui/content_section_tabs.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _entries = [(0, '综合热门'), (1, '每周必看'), (2, '入站必刷'), (3, '排行榜')];

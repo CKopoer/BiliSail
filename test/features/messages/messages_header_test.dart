@@ -1,9 +1,11 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'package:bilisail/app/shell.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/messages/application/messages_controller.dart';
 import 'package:bilisail/features/messages/presentation/messages_screen.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -69,9 +71,9 @@ void main() {
         await tester.pumpAndSettle();
         router.go('/messages');
         await tester.pumpAndSettle();
-        final fans = find.byTooltip('新增粉丝');
-        final readAll = find.byTooltip('已加载私信一键已读');
-        final more = find.byTooltip('更多消息操作');
+        final fans = findMaterialTooltip('新增粉丝');
+        final readAll = findMaterialTooltip('已加载私信一键已读');
+        final more = findMaterialTooltip('更多消息操作');
         final title = find.descendant(
           of: find.byType(MessagesScreen),
           matching: find.text('我的消息'),
@@ -113,8 +115,8 @@ void main() {
           }
         }
         final reads = repo.reads;
-        expect(find.byTooltip('刷新消息'), findsNothing);
-        expect(find.byTooltip('官方消息页'), findsNothing);
+        expect(findMaterialTooltip('刷新消息'), findsNothing);
+        expect(findMaterialTooltip('官方消息页'), findsNothing);
         await tester.tap(more);
         await tester.pumpAndSettle();
         await tester.tap(find.text('重新加载消息'));
@@ -124,17 +126,17 @@ void main() {
           await tester.tap(find.text('测试会话'));
           await tester.pumpAndSettle();
           expect(title, findsNothing);
-          expect(find.byTooltip('聊天设置'), findsOneWidget);
+          expect(findMaterialTooltip('聊天设置'), findsOneWidget);
           expect(find.byType(TextField), findsOneWidget);
           await tester.enterText(find.byType(TextField), '顶栏返回后保留草稿');
-          await tester.tap(find.byTooltip('返回会话列表'));
+          await tester.tap(findMaterialTooltip('返回会话列表'));
           await tester.pumpAndSettle();
           expect(router.routeInformationProvider.value.uri.path, '/messages');
           expect(find.text('测试会话'), findsOneWidget);
           await tester.tap(find.text('测试会话'));
           await tester.pumpAndSettle();
           expect(find.text('顶栏返回后保留草稿'), findsOneWidget);
-          await tester.tap(find.byTooltip('返回会话列表'));
+          await tester.tap(findMaterialTooltip('返回会话列表'));
           await tester.pumpAndSettle();
           if (android) {
             await auth.signOut();

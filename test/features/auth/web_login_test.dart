@@ -11,7 +11,7 @@ import 'package:bilisail/features/auth/data/session_repository.dart';
 import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/auth/presentation/account_dialog.dart';
 import 'package:bilisail/features/auth/presentation/web_login_presenter.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 

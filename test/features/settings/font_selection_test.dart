@@ -9,7 +9,7 @@ import 'package:bilisail/features/settings/domain/settings_category.dart';
 import 'package:bilisail/features/settings/domain/settings_repository.dart';
 import 'package:bilisail/features/settings/presentation/settings_screen.dart';
 import 'package:bilisail/shared/ui/system_font_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

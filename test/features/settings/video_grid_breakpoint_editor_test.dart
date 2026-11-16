@@ -1,7 +1,7 @@
 import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/domain/responsive_layout_settings.dart';
 import 'package:bilisail/features/settings/presentation/video_grid_breakpoint_editor.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 

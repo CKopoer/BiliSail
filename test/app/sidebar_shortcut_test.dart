@@ -1,3 +1,5 @@
+import '../support/material_tooltip_finder.dart';
+
 import '../support/input_test_app.dart';
 
 import 'package:bilisail/app/platform_defaults.dart';
@@ -6,7 +8,7 @@ import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -37,7 +39,7 @@ void main() {
         final page = tester.element(find.text('retained page'));
         expect(tester.getSize(_region).width, 76);
         expect(
-          find.byTooltip(
+          findMaterialTooltip(
             settings.useAppleDefaults ? '收起侧栏（⌘ Command+B）' : '收起侧栏（Ctrl+B）',
           ),
           findsOneWidget,

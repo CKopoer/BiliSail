@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -12,7 +14,7 @@ import 'package:bilisail/features/auth/domain/account_overview.dart';
 import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/auth/presentation/account_screen.dart';
 import 'package:bilisail/shared/ui/network_avatar.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -555,7 +557,7 @@ void main() {
         throw const AppFailure(AppFailureKind.network, '账号资料暂时不可用');
     await mount(tester);
     expect(find.text('等级 —'), findsOneWidget);
-    final retry = find.byTooltip('账号资料暂时不可用，重试账号资料');
+    final retry = findMaterialTooltip('账号资料暂时不可用，重试账号资料');
     expect(retry, findsOneWidget);
     await select(tester, AccountContentTab.downloads);
     expect(find.text('downloads version 1 count 0'), findsOneWidget);
@@ -638,7 +640,7 @@ void main() {
       );
       await mount(tester, scale: 2);
       expectBalanceAlignment(tester);
-      expect(find.byTooltip(auth.current.userName ?? ''), findsOneWidget);
+      expect(findMaterialTooltip(auth.current.userName ?? ''), findsOneWidget);
       expect(
         tester.widget<Text>(find.text(auth.current.userName ?? '')).maxLines,
         1,

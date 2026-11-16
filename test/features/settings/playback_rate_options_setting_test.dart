@@ -1,7 +1,9 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'package:bilisail/domain/playback_rates.dart';
 import 'package:bilisail/features/settings/application/settings_controller.dart';
 import 'package:bilisail/shared/ui/playback_rate_options_setting.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -75,7 +77,7 @@ void main() {
             .onPressed,
         isNull,
       );
-      await tester.tap(find.byTooltip('删除 1.75x'));
+      await tester.tap(findMaterialTooltip('删除 1.75x'));
       await tester.pumpAndSettle();
       expect(repository.value.playbackRates, isNot(contains(1.75)));
       expect(find.text('倍速选项（8/9）'), findsOneWidget);
@@ -89,7 +91,7 @@ void main() {
     final repository = MemorySettingsRepository()..failWrites = true;
     await tester.pumpWidget(_app(repository));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('删除 1.25x'));
+    await tester.tap(findMaterialTooltip('删除 1.25x'));
     await tester.pumpAndSettle();
     expect(find.widgetWithText(InputChip, '1.25x'), findsOneWidget);
     expect(find.text('设置保存失败，请重试'), findsOneWidget);
@@ -101,7 +103,7 @@ void main() {
     expect(find.widgetWithText(InputChip, '1.75x'), findsNothing);
     expect(repository.value.playbackRates, PlaybackRates.values);
     repository.failWrites = false;
-    await tester.tap(find.byTooltip('删除 1.25x'));
+    await tester.tap(findMaterialTooltip('删除 1.25x'));
     await tester.pumpAndSettle();
     expect(find.widgetWithText(InputChip, '1.25x'), findsNothing);
     expect(find.text('设置保存失败，请重试'), findsNothing);

@@ -1,3 +1,5 @@
+import '../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/app/shell.dart';
@@ -8,7 +10,7 @@ import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/auth/presentation/account_button.dart';
 import 'package:bilisail/features/auth/presentation/account_menu.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -26,15 +28,15 @@ void main() {
         for (final width in [1200.0, 760.0, 759.0, 400.0, 320.0, 1200.0]) {
           tester.view.physicalSize = Size(width, 800);
           await tester.pumpAndSettle();
-          expect(find.byTooltip('登录'), findsOneWidget);
-          expect(find.byTooltip('账号'), findsNothing);
-          await tester.tap(find.byTooltip('登录'));
+          expect(findMaterialTooltip('登录'), findsOneWidget);
+          expect(findMaterialTooltip('账号'), findsNothing);
+          await tester.tap(findMaterialTooltip('登录'));
           await tester.pumpAndSettle();
           expect(find.byType(AccountDialog), findsOneWidget);
           expect(find.text('登录哔哩哔哩'), findsOneWidget);
           expect(find.byType(BottomSheet), findsNothing);
           expect(find.byType(AccountMenu), findsNothing);
-          await tester.tap(find.byTooltip('关闭'));
+          await tester.tap(findMaterialTooltip('关闭'));
           await tester.pumpAndSettle();
           expect(find.byType(AccountDialog), findsNothing);
           expect(find.byType(BottomSheet), findsNothing);
@@ -60,12 +62,12 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(find.byTooltip('登录'), findsOneWidget);
-        await tester.tap(find.byTooltip('登录'));
+        expect(findMaterialTooltip('登录'), findsOneWidget);
+        await tester.tap(findMaterialTooltip('登录'));
         await tester.pumpAndSettle();
         expect(find.byType(AccountDialog), findsOneWidget);
         expect(find.byType(BottomSheet), findsNothing);
-        await tester.tap(find.byTooltip('关闭'));
+        await tester.tap(findMaterialTooltip('关闭'));
         await tester.pumpAndSettle();
 
         auth.emit(
@@ -76,10 +78,10 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(find.byTooltip('登录'), findsNothing);
-        expect(find.byTooltip('我的账号'), findsOneWidget);
+        expect(findMaterialTooltip('登录'), findsNothing);
+        expect(findMaterialTooltip('我的账号'), findsOneWidget);
         expect(find.text('3'), findsOneWidget);
-        await tester.tap(find.byTooltip('我的账号'));
+        await tester.tap(findMaterialTooltip('我的账号'));
         await tester.pumpAndSettle();
         expect(refreshCalls, 1);
         expect(find.byType(AccountMenu), findsOneWidget);
@@ -89,8 +91,8 @@ void main() {
         auth.emit(const AuthState());
         await tester.pumpAndSettle();
         expect(find.byType(AccountMenu), findsNothing);
-        expect(find.byTooltip('登录'), findsOneWidget);
-        await tester.tap(find.byTooltip('登录'));
+        expect(findMaterialTooltip('登录'), findsOneWidget);
+        await tester.tap(findMaterialTooltip('登录'));
         await tester.pumpAndSettle();
         expect(find.byType(AccountDialog), findsOneWidget);
         expect(find.byType(BottomSheet), findsNothing);

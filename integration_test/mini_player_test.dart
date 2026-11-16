@@ -1,3 +1,5 @@
+import '../test/support/material_tooltip_finder.dart';
+
 import 'dart:io';
 
 import 'package:bili_player/bili_player.dart';
@@ -10,7 +12,7 @@ import 'package:bilisail/features/playback/application/playback_session.dart';
 import 'package:bilisail/features/playback/presentation/playback_panel.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -141,8 +143,8 @@ void main() {
             expect(session.sourceGeneration, generation);
             expect(session.snapshots.value.desiredPlaying, isFalse);
             await tester.tapAt(
-              tester.getCenter(find.byTooltip('播放')),
-              view: View.of(tester.element(find.byTooltip('播放'))),
+              tester.getCenter(findMaterialTooltip('播放')),
+              view: View.of(tester.element(findMaterialTooltip('播放'))),
             );
             await _until(
               tester,
@@ -151,8 +153,8 @@ void main() {
                   const Duration(milliseconds: 2500),
             );
             await tester.tapAt(
-              tester.getCenter(find.byTooltip('还原播放页')),
-              view: View.of(tester.element(find.byTooltip('还原播放页'))),
+              tester.getCenter(findMaterialTooltip('还原播放页')),
+              view: View.of(tester.element(findMaterialTooltip('还原播放页'))),
             );
             await _until(
               tester,
@@ -166,8 +168,8 @@ void main() {
               native.resize(320, 180);
               await tester.pump(const Duration(milliseconds: 100));
               await tester.tapAt(
-                tester.getCenter(find.byTooltip('关闭小窗')),
-                view: View.of(tester.element(find.byTooltip('关闭小窗'))),
+                tester.getCenter(findMaterialTooltip('关闭小窗')),
+                view: View.of(tester.element(findMaterialTooltip('关闭小窗'))),
               );
               await _until(tester, () => !nativeWindow!.isOpen);
               expect(find.byKey(const ValueKey('mini-player')), findsNothing);

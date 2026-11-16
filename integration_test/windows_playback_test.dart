@@ -1,3 +1,5 @@
+import '../test/support/material_tooltip_finder.dart';
+
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui' show PlatformDispatcher, PointerDeviceKind;
@@ -26,7 +28,7 @@ import 'package:bilisail/features/playback/presentation/playback_panel.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/video/data/api_video_repository.dart';
 import 'package:bili_player/bili_player.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -943,13 +945,13 @@ void main() {
           );
           expect(tester.takeException(), isNull);
         }
-        await tester.tap(find.byTooltip('播放（空格）'));
+        await tester.tap(findMaterialTooltip('播放（空格）'));
         await _until(
           tester,
           () => engine.currentSnapshot.phase == PlaybackPhase.playing,
         );
         await tester.pump();
-        await tester.tap(find.byTooltip('暂停（空格）'));
+        await tester.tap(findMaterialTooltip('暂停（空格）'));
         await _until(
           tester,
           () => engine.currentSnapshot.phase == PlaybackPhase.paused,
@@ -1138,15 +1140,15 @@ void main() {
           if (cycle.isEven) {
             await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
           } else {
-            await tester.tap(find.byTooltip('全屏（F）'));
+            await tester.tap(findMaterialTooltip('全屏（F）'));
           }
           await _until(
             tester,
             () =>
                 window.isFullScreen &&
-                find.byTooltip('退出全屏（Esc）').evaluate().length == 1,
+                findMaterialTooltip('退出全屏（Esc）').evaluate().length == 1,
           );
-          expect(find.byTooltip('退出全屏（Esc）'), findsOneWidget);
+          expect(findMaterialTooltip('退出全屏（Esc）'), findsOneWidget);
           if (cycle == 0) {
             await touchHold(cancel: false);
             await touchHold(cancel: true);
@@ -1160,9 +1162,9 @@ void main() {
             tester,
             () =>
                 !window.isFullScreen &&
-                find.byTooltip('全屏（F）').evaluate().length == 1,
+                findMaterialTooltip('全屏（F）').evaluate().length == 1,
           );
-          expect(find.byTooltip('全屏（F）'), findsOneWidget);
+          expect(findMaterialTooltip('全屏（F）'), findsOneWidget);
           expectDanmakuPreserved();
           expect(engine.currentSnapshot.generation, generation);
           expect(engine.inspectDiagnostics().generation, generation);
@@ -1597,7 +1599,7 @@ void main() {
         );
         await _until(
           tester,
-          () => find.byTooltip('全屏（F）').evaluate().isNotEmpty,
+          () => findMaterialTooltip('全屏（F）').evaluate().isNotEmpty,
         );
         final nativeWindow = NativePlaybackWindow(playbackView.viewId);
         // Saved geometry can reopen this fixture maximized. Establish the
@@ -1615,7 +1617,7 @@ void main() {
         expect(playbackWindow, isNotNull);
         Future<void> verifyDetachedFullscreen({required bool maximized}) async {
           final generation = engine.currentSnapshot.generation;
-          await tester.tap(find.byTooltip('全屏（F）'));
+          await tester.tap(findMaterialTooltip('全屏（F）'));
           await _until(
             tester,
             () =>
@@ -1634,7 +1636,7 @@ void main() {
           expect(nativeWindow.outerSize, playbackView.display.size);
           expect(engine.currentSnapshot.generation, generation);
           expect(find.byType(VideoSurface), findsOneWidget);
-          await tester.tap(find.byTooltip('退出全屏（Esc）'));
+          await tester.tap(findMaterialTooltip('退出全屏（Esc）'));
           await _until(tester, () => !playbackWindow!.isFullScreen);
           expect(nativeWindow.isMaximized, maximized);
         }

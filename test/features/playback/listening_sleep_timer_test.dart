@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bili_player/bili_player.dart';
@@ -12,7 +14,7 @@ import 'package:bilisail/features/playback/presentation/audio_playback_view.dart
 import 'package:bilisail/features/playback/presentation/playback_panel.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/shared/ui/playback_page_commands.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -482,10 +484,10 @@ void main() {
     expect(engine.currentSnapshot.desiredPlaying, isTrue);
     final left = session.sleepTimer.remaining!;
     expect(left, lessThan(const Duration(seconds: 56)));
-    await tester.tap(find.byTooltip('全屏'));
+    await tester.tap(findMaterialTooltip('全屏'));
     await tester.pumpAndSettle();
     expect(session.sleepTimer.remaining, lessThanOrEqualTo(left));
-    await tester.tap(find.byTooltip('退出全屏'));
+    await tester.tap(findMaterialTooltip('退出全屏'));
     await tester.pumpAndSettle();
     await tester.pump(const Duration(minutes: 1));
     expect(engine.currentSnapshot.desiredPlaying, isFalse);
@@ -600,7 +602,7 @@ void main() {
         expect(session.sleepTimer.remaining!.inMinutes, 1439);
         expect(find.byType(AlertDialog), findsNothing);
         await tester.pump(const Duration(seconds: 1));
-        expect(find.byTooltip(RegExp('定时关闭：')), findsOneWidget);
+        expect(findMaterialTooltip(RegExp('定时关闭：')), findsOneWidget);
         expect(tester.takeException(), isNull);
         await tester.tap(find.byKey(const ValueKey('listening-sleep-timer')));
         await tester.pumpAndSettle();
@@ -658,7 +660,7 @@ void main() {
           find.byKey(const ValueKey('listening-sleep-timer')),
           findsNothing,
         );
-        await tester.tap(find.byTooltip('更多播放选项'));
+        await tester.tap(findMaterialTooltip('更多播放选项'));
         await tester.pumpAndSettle();
         await tester.tap(find.byKey(const ValueKey('player-sleep-timer-menu')));
       } else {
@@ -689,7 +691,7 @@ void main() {
         );
         expect(find.textContaining('后暂停'), findsOneWidget);
       } else {
-        expect(find.byTooltip(RegExp('定时关闭：')), findsOneWidget);
+        expect(findMaterialTooltip(RegExp('定时关闭：')), findsOneWidget);
       }
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());

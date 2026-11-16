@@ -1,5 +1,7 @@
+import 'motion_preferences.dart';
+
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'input_scope.dart';
 import 'window_input_focus.dart';
@@ -126,7 +128,7 @@ class _HistoryBackRegionState extends State<HistoryBackRegion>
       _progress.stop();
       return;
     }
-    if (MediaQuery.disableAnimationsOf(context)) {
+    if (shouldReduceMotion(context)) {
       _progress.value = 0;
     } else {
       _progress.animateBack(

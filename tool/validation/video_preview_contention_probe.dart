@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:bili_player/bili_player.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 // Use a production binding and Profile build: native texture updates are not
 // represented by Flutter FrameTiming or the backend's playback position alone.

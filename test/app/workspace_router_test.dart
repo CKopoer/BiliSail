@@ -1,3 +1,5 @@
+import '../support/material_tooltip_finder.dart';
+
 import 'package:bilisail/features/video/application/video_author_controller.dart';
 import 'package:bilisail/features/video/presentation/video_author_header.dart';
 import 'package:bilisail/shared/ui/network_avatar.dart';
@@ -72,7 +74,7 @@ import 'package:bilisail/features/video/domain/video_repository.dart';
 import 'package:bilisail/features/settings/application/settings_controller.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/domain/settings_repository.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
@@ -155,7 +157,7 @@ void main() {
         final tab =
             router.routeInformationProvider.value.uri.queryParameters['tab'] ??
             'tab-1';
-        await tester.tap(find.byTooltip('关闭播放列表'));
+        await tester.tap(findMaterialTooltip('关闭播放列表'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('取消'));
         await tester.pumpAndSettle();
@@ -163,7 +165,7 @@ void main() {
           router.routeInformationProvider.value.uri.queryParameters['queue'],
           queue.id,
         );
-        await tester.tap(find.byTooltip('关闭播放列表'));
+        await tester.tap(findMaterialTooltip('关闭播放列表'));
         await tester.pumpAndSettle();
         await tester.tap(find.widgetWithText(FilledButton, '关闭'));
         await tester.pumpAndSettle();
@@ -312,7 +314,7 @@ void main() {
           router.go('/video/${first.value}?tab=tab-1&cid=2');
           await tester.pumpAndSettle();
           expect(tabTitle('tab-1', shortTitle), findsOneWidget);
-          expect(find.byTooltip('关闭$shortTitle'), findsOneWidget);
+          expect(findMaterialTooltip('关闭$shortTitle'), findsOneWidget);
           expect(loads, [first, second]);
           expect(tester.takeException(), isNull);
         },
@@ -822,7 +824,7 @@ void main() {
           await dialog;
           expect(inbox.read(messagesControllerProvider).selected, isNotNull);
           if (mode == WorkspaceNavigationMode.dualTabs) {
-            final chatBack = find.byTooltip('返回会话列表');
+            final chatBack = findMaterialTooltip('返回会话列表');
             await tester.tap(
               chatBack.evaluate().isNotEmpty
                   ? chatBack
@@ -1119,7 +1121,7 @@ void main() {
         } else if (platform == TargetPlatform.android) {
           await tester.binding.handlePopRoute();
         } else {
-          await tester.tap(find.byTooltip('返回上一视频'));
+          await tester.tap(findMaterialTooltip('返回上一视频'));
         }
         await tester.pumpAndSettle();
         expect(
@@ -1149,7 +1151,7 @@ void main() {
         } else if (platform == TargetPlatform.android) {
           await tester.binding.handlePopRoute();
         } else {
-          await tester.tap(find.byTooltip('关闭播放'));
+          await tester.tap(findMaterialTooltip('关闭播放'));
         }
         await tester.pumpAndSettle();
         expect(tester.state(find.byType(FeedScreen)), same(feedState));
@@ -1477,7 +1479,7 @@ void main() {
         await tester.tap(find.byKey(const ValueKey('profile-message')));
         await tester.pumpAndSettle();
         expect(find.byType(MessagesScreen), findsOneWidget);
-        expect(find.byTooltip('聊天设置'), findsOneWidget);
+        expect(findMaterialTooltip('聊天设置'), findsOneWidget);
         final inbox = ProviderScope.containerOf(
           tester.element(find.byType(MessagesScreen)),
         );

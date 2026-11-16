@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/features/auth/application/auth_controller.dart';
@@ -13,7 +15,7 @@ import 'package:bilisail/features/video/presentation/video_danmaku_composer.dart
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:bili_player/bili_player.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -34,10 +36,10 @@ void main() {
         session: session,
         settings: settings,
       );
-      await tester.tap(find.byTooltip('发送弹幕样式'));
+      await tester.tap(findMaterialTooltip('发送弹幕样式'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('顶部'));
-      await tester.tap(find.byTooltip('粉色'));
+      await tester.tap(findMaterialTooltip('粉色'));
       await tester.tap(find.text('完成'));
       await tester.pumpAndSettle();
       final container = ProviderScope.containerOf(
@@ -69,10 +71,10 @@ void main() {
       );
       await tester.enterText(find.byType(TextField), '保留草稿');
       Future<void> choose() async {
-        await tester.tap(find.byTooltip('发送弹幕样式'));
+        await tester.tap(findMaterialTooltip('发送弹幕样式'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('顶部'));
-        await tester.tap(find.byTooltip('粉色'));
+        await tester.tap(findMaterialTooltip('粉色'));
         await tester.tap(find.text('完成'));
         await tester.pumpAndSettle();
       }
@@ -112,10 +114,10 @@ void main() {
       final session = FakeComposerSession();
       addTearDown(session.dispose);
       await pumpComposer(tester, repo, session: session);
-      await tester.tap(find.byTooltip('发送弹幕样式'));
+      await tester.tap(findMaterialTooltip('发送弹幕样式'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('顶部'));
-      await tester.tap(find.byTooltip('粉色'));
+      await tester.tap(findMaterialTooltip('粉色'));
       await tester.tap(find.text('完成'));
       await tester.pumpAndSettle();
       await pumpComposer(
@@ -124,7 +126,7 @@ void main() {
         session: session,
         composerKey: const ValueKey('fullscreen'),
       );
-      await tester.tap(find.byTooltip('发送弹幕样式'));
+      await tester.tap(findMaterialTooltip('发送弹幕样式'));
       await tester.pumpAndSettle();
       expect(
         tester

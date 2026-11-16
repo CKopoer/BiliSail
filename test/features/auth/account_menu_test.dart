@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -8,7 +10,7 @@ import 'package:bilisail/features/auth/domain/account_overview.dart';
 import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/auth/presentation/account_button.dart';
 import 'package:bilisail/features/auth/presentation/account_menu.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -141,7 +143,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('我的账号'));
+    await tester.tap(findMaterialTooltip('我的账号'));
     if (settleOpen) await tester.pumpAndSettle();
   }
 
@@ -199,14 +201,14 @@ void main() {
     final panel = tester.getRect(find.byType(Drawer));
     expect(panel, const Rect.fromLTWH(72, 0, 288, 600));
     expect(
-      tester.getTopLeft(find.byTooltip('关闭')).dy,
+      tester.getTopLeft(findMaterialTooltip('关闭')).dy,
       greaterThanOrEqualTo(24),
     );
     await tester.ensureVisible(find.text('退出登录'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     expect(tester.getBottomLeft(find.text('退出登录')).dy, lessThanOrEqualTo(580));
-    expect(find.byTooltip('关闭').hitTestable(), findsOneWidget);
+    expect(findMaterialTooltip('关闭').hitTestable(), findsOneWidget);
     await tester.tap(find.text('退出登录'));
     await tester.pumpAndSettle();
     expect(auth.current.isSignedIn, false);
@@ -231,7 +233,7 @@ void main() {
       await mount(tester, routes.add);
       switch (action) {
         case 'close':
-          await tester.tap(find.byTooltip('关闭'));
+          await tester.tap(findMaterialTooltip('关闭'));
         case 'barrier':
           await tester.tapAt(const Offset(20, 300));
         case 'escape':
@@ -260,7 +262,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       expect(find.text('退出登录').hitTestable(), findsOneWidget);
-      await tester.tap(find.byTooltip('关闭'));
+      await tester.tap(findMaterialTooltip('关闭'));
       await tester.pumpAndSettle();
       expect(find.byType(AccountMenu), findsNothing);
     });
@@ -270,7 +272,7 @@ void main() {
     auth.emit(const AuthState());
     await tester.pumpAndSettle();
     expect(find.byType(AccountMenu), findsNothing);
-    expect(find.byTooltip('登录'), findsOneWidget);
+    expect(findMaterialTooltip('登录'), findsOneWidget);
   });
   for (final size in [const Size(900, 720), const Size(390, 844)]) {
     testWidgets('account panel visual preview at $size', (tester) async {

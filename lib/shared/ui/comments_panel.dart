@@ -1,6 +1,8 @@
+import '../../core/presentation/motion_preferences.dart';
+
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart' show OverflowBoxFit;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -555,7 +557,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
               widget.composerOnly ||
               _composerFocus.hasFocus ||
               _emotePickerOpen.value,
-          duration: MediaQuery.disableAnimationsOf(context)
+          duration: shouldReduceMotion(context)
               ? Duration.zero
               : const Duration(milliseconds: 200),
         ),

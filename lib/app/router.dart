@@ -4,7 +4,7 @@ import '../features/playback/application/recommendation_playback_registry.dart';
 import '../shared/ui/recommendation_playback_scope.dart';
 import '../domain/recommendation_playback_context.dart';
 
-import 'package:flutter/material.dart' hide SearchController;
+import 'package:material_ui/material_ui.dart' hide SearchController;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';

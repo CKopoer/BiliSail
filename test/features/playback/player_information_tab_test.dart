@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bili_player/bili_player.dart';
@@ -7,7 +9,7 @@ import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/features/playback/presentation/player_settings_dialog.dart';
 import 'package:bilisail/features/settings/application/settings_controller.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -285,7 +287,7 @@ void main() {
       await tester.tap(find.text('实时播放信息'));
       await tester.pumpAndSettle();
       expect(engine.samples, greaterThan(stopped));
-      await tester.tap(find.byTooltip('关闭'));
+      await tester.tap(findMaterialTooltip('关闭'));
       await tester.pumpAndSettle();
       final closed = engine.samples;
       await tester.pump(const Duration(seconds: 3));

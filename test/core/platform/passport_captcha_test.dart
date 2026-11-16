@@ -1,8 +1,10 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:convert';
 import 'dart:async';
 
 import 'package:bilisail/core/platform/passport_captcha.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:webview_all/webview_all.dart';
 
@@ -105,7 +107,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.byType(CircularProgressIndicator), findsNothing);
-      await tester.tap(find.byTooltip('关闭安全验证'));
+      await tester.tap(findMaterialTooltip('关闭安全验证'));
       await tester.pumpAndSettle();
       expect(native.closes, 1);
     });
@@ -293,7 +295,7 @@ void main() {
         if (complete) {
           channel.onMessageReceived(const JavaScriptMessage(message: proof));
         } else {
-          await tester.tap(find.byTooltip('关闭安全验证'));
+          await tester.tap(findMaterialTooltip('关闭安全验证'));
         }
         channel.onMessageReceived(const JavaScriptMessage(message: proof));
         await tester.pumpAndSettle();

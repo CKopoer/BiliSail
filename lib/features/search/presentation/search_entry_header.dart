@@ -1,8 +1,10 @@
+import '../../../core/presentation/motion_preferences.dart';
+
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -122,7 +124,7 @@ final class _SearchEntryHeaderState extends State<SearchEntryHeader> {
         });
       }
       final inline = widget.inlineNavigation;
-      final duration = MediaQuery.disableAnimationsOf(context)
+      final duration = shouldReduceMotion(context)
           ? Duration.zero
           : const Duration(milliseconds: 260);
       final toolWidth = inline

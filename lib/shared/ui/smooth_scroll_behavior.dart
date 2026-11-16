@@ -1,7 +1,9 @@
+import '../../core/presentation/motion_preferences.dart';
+
 import 'dart:collection';
 
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -209,7 +211,7 @@ final class _SmoothWheelScrollState extends State<_SmoothWheelScroll> {
     _active =
         WorkspaceActivity.isActive(context) &&
         TickerMode.valuesOf(context).enabled;
-    final enabled = _active && !MediaQuery.disableAnimationsOf(context);
+    final enabled = _active && !shouldReduceMotion(context);
     if (_enabled && !enabled) _stopMotion();
     _enabled = enabled;
   }

@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -12,7 +14,7 @@ import 'package:bilisail/features/feed/presentation/home_content.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/comments/application/comments_controller.dart';
 import 'package:bilisail/shared/data/dynamic_post_mapper.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -128,7 +130,7 @@ void main() {
             );
             await tester.pumpAndSettle();
             if (detail) {
-              await tester.tap(find.byTooltip('查看动态详情'));
+              await tester.tap(findMaterialTooltip('查看动态详情'));
               await tester.pumpAndSettle();
             }
             if (rich) {

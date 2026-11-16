@@ -1,7 +1,7 @@
 import '../../../shared/ui/bili_icons.dart';
 import '../../../shared/ui/bili_coin_icon.dart';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

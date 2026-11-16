@@ -1,7 +1,9 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'package:bilisail/shared/ui/danmaku_send_style_button.dart';
 import 'package:bilisail/shared/ui/danmaku_send_style_panel.dart';
 import 'package:bilisail/shared/ui/player_controls_menu_scope.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -19,7 +21,7 @@ void main() {
       expect(state.style.value, (mode: 5, color: 0xffffff, colorful: true));
       await _open(tester);
       expect(find.text('预览 · 顶部 · 会员彩色'), findsOneWidget);
-      await tester.tap(find.byTooltip('红色'));
+      await tester.tap(findMaterialTooltip('红色'));
       await tester.ensureVisible(find.text('完成'));
       await tester.tap(find.text('完成'));
       await tester.pumpAndSettle();
@@ -50,7 +52,7 @@ void main() {
             .onPressed,
         isNull,
       );
-      await tester.tap(find.byTooltip('白色'));
+      await tester.tap(findMaterialTooltip('白色'));
       await tester.pump();
       await tester.ensureVisible(find.text('完成'));
       await tester.tap(find.text('完成'));
@@ -82,11 +84,11 @@ void main() {
       '金色',
       '蓝色',
     ]) {
-      expect(find.byTooltip(name), findsOneWidget);
-      expect(tester.getSize(find.byTooltip(name)), const Size(44, 44));
+      expect(findMaterialTooltip(name), findsOneWidget);
+      expect(tester.getSize(findMaterialTooltip(name)), const Size(44, 44));
     }
     await tester.tap(find.text('底部'));
-    await tester.tap(find.byTooltip('红色'));
+    await tester.tap(findMaterialTooltip('红色'));
     expect(state.style.value, (mode: 1, color: 0xffffff, colorful: false));
     expect(state.menuChanges, [true]);
     await tester.tap(find.text('完成'));
@@ -102,11 +104,11 @@ void main() {
     ) async {
       final state = await _pump(tester);
       await _open(tester);
-      await tester.tap(find.byTooltip('绿色'));
+      await tester.tap(findMaterialTooltip('绿色'));
       if (dismiss == '取消') {
         await tester.tap(find.text('取消'));
       } else if (dismiss == '关闭') {
-        await tester.tap(find.byTooltip('关闭样式面板'));
+        await tester.tap(findMaterialTooltip('关闭样式面板'));
       } else if (dismiss == 'Escape') {
         await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       } else {
@@ -225,7 +227,7 @@ void main() {
 }
 
 Future<void> _open(WidgetTester tester) async {
-  await tester.tap(find.byTooltip('发送弹幕样式'));
+  await tester.tap(findMaterialTooltip('发送弹幕样式'));
   await tester.pumpAndSettle();
 }
 

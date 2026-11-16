@@ -1,4 +1,6 @@
-import 'package:flutter/material.dart';
+import '../../../core/presentation/motion_preferences.dart';
+
+import 'package:material_ui/material_ui.dart';
 
 import '../../../domain/video.dart';
 import '../../../domain/user.dart';
@@ -155,7 +157,7 @@ final class _WatchLaterQueuePanelState extends State<WatchLaterQueuePanel> {
                         children: [
                           AnimatedRotation(
                             turns: widget.expanded ? .5 : 0,
-                            duration: MediaQuery.disableAnimationsOf(context)
+                            duration: shouldReduceMotion(context)
                                 ? Duration.zero
                                 : const Duration(milliseconds: 180),
                             curve: Curves.easeOutCubic,
@@ -443,7 +445,7 @@ final class _QueueBodyTransitionState extends State<_QueueBodyTransition>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _controller.duration = MediaQuery.disableAnimationsOf(context)
+    _controller.duration = shouldReduceMotion(context)
         ? Duration.zero
         : const Duration(milliseconds: 180);
   }

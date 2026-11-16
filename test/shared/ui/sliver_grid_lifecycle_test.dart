@@ -1,3 +1,5 @@
+import '../../support/material_tooltip_finder.dart';
+
 import 'dart:async';
 
 import 'package:bilisail/domain/video.dart';
@@ -5,7 +7,7 @@ import 'package:bilisail/shared/ui/paged_scroll_viewport.dart';
 import 'package:bilisail/shared/ui/responsive_card_grid.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:bilisail/shared/ui/video_grid.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 enum _GridKind { responsive, video, indexedVideo }
@@ -118,10 +120,10 @@ void main() {
         final initialBuilds = Map<String, int>.of(builtItems);
         expect(originals.length, inInclusiveRange(2, 30));
         expect(viewportBuilds, 1);
-        expect(find.byTooltip('回到顶部'), findsNothing);
+        expect(findMaterialTooltip('回到顶部'), findsNothing);
         controller.jumpTo(20);
         await tester.pumpAndSettle();
-        expect(find.byTooltip('回到顶部'), findsOneWidget);
+        expect(findMaterialTooltip('回到顶部'), findsOneWidget);
         expect(viewportBuilds, 1);
         final mounted = tester.widgetList(cards).toList();
         final retained = originals.where(mounted.contains).toList();
@@ -139,10 +141,10 @@ void main() {
         for (final card in retained) {
           expect(find.byWidget(card), findsOneWidget);
         }
-        await tester.tap(find.byTooltip('回到顶部'));
+        await tester.tap(findMaterialTooltip('回到顶部'));
         await tester.pumpAndSettle();
         expect(controller.offset, 0);
-        expect(find.byTooltip('回到顶部'), findsNothing);
+        expect(findMaterialTooltip('回到顶部'), findsNothing);
         expect(viewportBuilds, 1);
         for (final card in retained) {
           expect(find.byWidget(card), findsOneWidget);
