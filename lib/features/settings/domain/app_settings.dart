@@ -1,4 +1,6 @@
 import '../../../domain/playback_rates.dart';
+import '../../../domain/app_orientation.dart';
+export '../../../domain/app_orientation.dart';
 import '../../../domain/app_icon.dart';
 export '../../../domain/app_icon.dart';
 import '../../../domain/audio_normalization.dart';
@@ -70,6 +72,7 @@ final class AppSettings {
     this.recommendations = const RecommendationSettings.defaults(),
     this.shortcuts = const ShortcutSettings.defaults(),
     this.theme = AppThemePreference.system,
+    this.orientation = AppOrientationPreference.automatic,
     this.appIcon = AppIconPreference.bilisail,
     this.navigationMode = WorkspaceNavigationMode.dualTabs,
     this.predictiveBackEnabled = true,
@@ -166,6 +169,7 @@ final class AppSettings {
 
   /// Constant defaults have no caller-owned collection inputs.
   const AppSettings.defaults({
+    this.orientation = AppOrientationPreference.automatic,
     this.recommendations = const RecommendationSettings.defaults(),
     this.shortcuts = const ShortcutSettings.defaults(),
     this.navigationMode = WorkspaceNavigationMode.dualTabs,
@@ -256,6 +260,7 @@ final class AppSettings {
   final ShortcutSettings shortcuts;
   final RecommendationSettings recommendations;
   final AppThemePreference theme;
+  final AppOrientationPreference orientation;
   final AppIconPreference appIcon;
   final WorkspaceNavigationMode navigationMode;
   final bool predictiveBackEnabled;
@@ -365,6 +370,7 @@ final class AppSettings {
     RecommendationSettings? recommendations,
     ShortcutSettings? shortcuts,
     AppThemePreference? theme,
+    AppOrientationPreference? orientation,
     AppIconPreference? appIcon,
     WorkspaceNavigationMode? navigationMode,
     bool? predictiveBackEnabled,
@@ -452,6 +458,7 @@ final class AppSettings {
     shortcuts: shortcuts ?? this.shortcuts,
     recommendations: recommendations ?? this.recommendations,
     theme: theme ?? this.theme,
+    orientation: orientation ?? this.orientation,
     appIcon: appIcon ?? this.appIcon,
     navigationMode: navigationMode ?? this.navigationMode,
     predictiveBackEnabled: predictiveBackEnabled ?? this.predictiveBackEnabled,

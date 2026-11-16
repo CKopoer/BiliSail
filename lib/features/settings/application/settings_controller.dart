@@ -79,6 +79,8 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
 
   Future<void> setTheme(AppThemePreference value) =>
       update((current) => current.copyWith(theme: value));
+  Future<void> setOrientation(AppOrientationPreference value) =>
+      update((current) => current.copyWith(orientation: value));
   Future<void> setAppIcon(AppIconPreference value) async {
     await _updateSettings((current) => current, appIcon: value);
   }

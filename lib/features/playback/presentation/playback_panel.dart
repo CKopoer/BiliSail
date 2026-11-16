@@ -551,7 +551,10 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   }
 
   bool get _usesCompactRotation {
-    if (widget.window.hasDesktopWindow) return false;
+    if (widget.window.hasDesktopWindow ||
+        !widget.window.allowsAutomaticRotation) {
+      return false;
+    }
     final view = _view;
     return WindowSizePolicy.compactLayout(
       mobile: true,
@@ -689,6 +692,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
         _active &&
         _appResumed &&
         _isPhoneDisplay &&
+        widget.window.allowsAutomaticRotation &&
         widget.window.supportsPhoneRotationActions &&
         (_fullScreen
             ? _fullScreenRequest != null
