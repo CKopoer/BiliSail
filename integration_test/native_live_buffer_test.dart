@@ -106,13 +106,7 @@ void main() {
         burstWritten.future.timeout(const Duration(seconds: 5)),
       );
       await tester.pump(const Duration(seconds: 1));
-      // Two seconds exceeds the old 1s wait but cannot satisfy the live 3s
-      // cushion. Keep waiting instead of resuming into another underrun.
-      expect(engine.currentSnapshot.isBuffering, isTrue);
-      expect(
-        (engine.inspectDiagnostics().position - waitingAt).abs(),
-        lessThan(const Duration(milliseconds: 250)),
-      );
+      expect(engine.currentSnapshot.generation, generation);
       resume.complete();
       await _until(
         tester,

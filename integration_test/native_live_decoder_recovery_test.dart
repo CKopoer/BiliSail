@@ -4,6 +4,9 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:bili_player/bili_player.dart';
+import 'package:bili_player/src/native_player_properties.dart';
+// ignore: depend_on_referenced_packages
+import 'package:media_kit_video/media_kit_video.dart' as mkv;
 import 'package:bilisail/core/logging/playback_diagnostic_log.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
@@ -17,9 +20,7 @@ import 'package:integration_test/integration_test.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
       LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
-  testWidgets('corrupt live video automatically reopens a healthy fresh stream', (
-    tester,
-  ) async {
+  testWidgets('live decoder logs preserve the open connection', (tester) async {
     initializePlayerBackend();
     final directory = Platform.environment['BILI_CONTENT_MEDIA_DIR'];
     expect(directory, isNotNull, reason: 'Use tool/test-windows-content.ps1');
@@ -109,10 +110,12 @@ void main() {
       );
       final generation = engine.currentSnapshot.generation;
       final watch = Stopwatch()..start();
-      while ((engine.currentSnapshot.generation == generation ||
-              engine.currentSnapshot.phase != PlaybackPhase.playing ||
-              engine.currentSnapshot.position < const Duration(seconds: 2)) &&
-          watch.elapsed < const Duration(seconds: 45)) {
+      while (!events.any(
+            (e) =>
+                e.nativeError?.component == 'ffmpeg/video' &&
+                e.severity == NativeLogSeverity.error,
+          ) &&
+          watch.elapsed < const Duration(seconds: 15)) {
         await tester.pump(const Duration(milliseconds: 100));
       }
       expect(
@@ -124,19 +127,36 @@ void main() {
         isTrue,
         reason: 'Exercise the real SDK log path',
       );
-      expect(failures, hasLength(1));
-      expect(repository.resolutions, 2);
+      await tester.pump(const Duration(seconds: 4));
+      expect(failures, isEmpty);
+      expect(repository.resolutions, 1);
       expect(badRequests, 1);
-      expect(goodRequests, 1);
+      expect(goodRequests, 0);
+      expect(engine.currentSnapshot.generation, generation);
+      expect(session.error, isNull);
+      final player = tester
+          .widget<mkv.Video>(find.byType(mkv.Video))
+          .controller
+          .player;
+      expect(await player.getPropertyAsync('demuxer-max-bytes'), '8388608');
+      expect(await player.getPropertyAsync('demuxer-max-back-bytes'), '0');
+      for (var n = 0; n < 2; n++) {
+        // ignore: invalid_use_of_protected_member
+        player.native.errorController.add(
+          'tcp: ffurl_read returned 0xffffff99',
+        );
+      }
+      watch.reset();
+      while ((badRequests < 2 || session.isRecovering) &&
+          watch.elapsed < const Duration(seconds: 12)) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(failures.map((e) => e.kind), [PlayerFailureKind.networkRead]);
+      expect(repository.resolutions, 1);
+      expect(goodRequests, 0);
+      expect(badRequests, 2);
       expect(engine.currentSnapshot.generation, greaterThan(generation));
       expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
-      expect(
-        engine.currentSnapshot.position,
-        greaterThanOrEqualTo(const Duration(seconds: 2)),
-      );
-      expect(engine.inspectDiagnostics().hasDecodedVideo, isTrue);
-      expect(engine.inspectDiagnostics().hasDecodedAudio, isTrue);
-      expect(session.error, isNull);
       final text = jsonEncode(events.map((e) => e.toJson()).toList());
       expect(text, isNot(contains('synthetic-secret')));
       expect(text, isNot(contains('127.0.0.1')));

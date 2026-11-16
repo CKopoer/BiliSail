@@ -9837,6 +9837,43 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await _pumpFrames(tester);
   });
+  testWidgets('a buffering online source can be manually reloaded from More', (
+    tester,
+  ) async {
+    final engine = _FakeEngine();
+    final session = _session(engine);
+    addTearDown(session.close);
+    await tester.pumpWidget(
+      _app(
+        session,
+        _FakeWindowService(),
+        const AppSettings.defaults(),
+        width: 320,
+      ),
+    );
+    await _pumpFrames(tester);
+    await _showControls(tester);
+    engine._emit(
+      engine.currentSnapshot.copyWith(
+        position: const Duration(seconds: 12),
+        phase: PlaybackPhase.buffering,
+        desiredPlaying: true,
+        isBuffering: true,
+      ),
+    );
+    await tester.pump();
+    await tester.tap(findMaterialTooltip('更多播放选项'));
+    await _pumpFrames(tester);
+    final reload = find.widgetWithText(ListTile, '重新加载');
+    await tester.ensureVisible(reload);
+    await tester.tap(reload);
+    await _pumpFrames(tester);
+    expect(engine.opens, 2);
+    expect(engine.currentSnapshot.position, const Duration(seconds: 12));
+    expect(session.error, isNull);
+    await tester.pumpWidget(const SizedBox());
+    await _pumpFrames(tester);
+  });
   testWidgets(
     'failed playback reloads from its overflow menu and keeps pause',
     (tester) async {
@@ -10318,7 +10355,7 @@ void main() {
   ]) {
     for (final controlsVisible in [false, true]) {
       testWidgets(
-        'central loading spans buffering and retry backoff width=$width fullscreen=$fullscreen controls=$controlsVisible',
+        'central loading spans buffering and network retry width=$width fullscreen=$fullscreen controls=$controlsVisible',
         (tester) async {
           tester.view.devicePixelRatio = 1;
           tester.view.physicalSize = const Size(1400, 1000);
@@ -10328,10 +10365,8 @@ void main() {
           final repository = _FakePlaybackRepository();
           final session = _session(engine, repository: repository);
           final window = _FakeWindowService();
-          final resolving = Completer<void>();
           final playing = Completer<void>();
           addTearDown(() async {
-            if (!resolving.isCompleted) resolving.complete();
             if (!playing.isCompleted) playing.complete();
             await session.close();
           });
@@ -10380,7 +10415,9 @@ void main() {
             );
           }
 
-          void interrupt() {
+          void interrupt([
+            PlayerFailureKind kind = PlayerFailureKind.networkOpen,
+          ]) {
             engine._emit(
               engine.currentSnapshot.copyWith(
                 phase: PlaybackPhase.failed,
@@ -10390,7 +10427,7 @@ void main() {
             );
             engine._failures.add(
               PlayerFailure(
-                PlayerFailureKind.nativePlayback,
+                kind,
                 'fixture stream interrupted',
                 engine.currentSnapshot.generation,
               ),
@@ -10428,29 +10465,14 @@ void main() {
           expect(find.text('播放缓冲中…'), findsNothing);
           expect(message, findsNothing);
 
-          // The first automatic reload succeeds immediately. The next failure
-          // waits a full second while native phase remains failed.
           interrupt();
           await tester.pump();
-          expect(engine.opens, 2);
-          expect(message, findsNothing);
-          interrupt();
-          await tester.pump();
-          expect(session.isResolving, false);
           expectLoading();
-          await tester.pump(const Duration(milliseconds: 999));
-          expectLoading();
-          expect(engine.opens, 2);
-
-          repository.nextResolve = resolving;
+          await tester.pump(const Duration(milliseconds: 2999));
+          expect(engine.opens, 1);
           engine.nextPlay = playing;
           await tester.pump(const Duration(milliseconds: 1));
-          expect(session.isResolving, true);
-          expectLoading();
-          resolving.complete();
-          await tester.pump();
-          expect(engine.opens, 3);
-          expect(session.isResolving, false);
+          expect(engine.opens, 2);
           expectLoading();
           // A native playing event can precede initial audio validation.
           engine._emit(
@@ -10465,7 +10487,7 @@ void main() {
           await tester.pump();
           expect(message, findsNothing);
 
-          interrupt();
+          interrupt(PlayerFailureKind.nativePlayback);
           await tester.pump();
           expect(session.error, 'fixture stream interrupted');
           expect(message, findsNothing);
@@ -10501,15 +10523,13 @@ void main() {
         );
         engine._failures.add(
           PlayerFailure(
-            PlayerFailureKind.videoInterrupted,
+            PlayerFailureKind.networkOpen,
             'fixture stream interrupted',
             engine.currentSnapshot.generation,
           ),
         );
       }
 
-      interrupt();
-      await tester.pump();
       interrupt();
       await tester.pump();
       expect(find.text('正在恢复播放…'), findsOneWidget);
@@ -10525,8 +10545,8 @@ void main() {
       }
       await tester.pump();
       expect(find.text('正在恢复播放…'), findsNothing);
-      await tester.pump(const Duration(seconds: 2));
-      expect(engine.opens, action == 'replace' ? 3 : 2);
+      await tester.pump(const Duration(seconds: 4));
+      expect(engine.opens, action == 'replace' ? 2 : 1);
       expect(find.text('正在恢复播放…'), findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());

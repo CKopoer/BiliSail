@@ -95,9 +95,9 @@ final class OpenOptions {
     this.videoDecoding = VideoDecodingMode.automatic,
     this.androidVideoOutput = AndroidVideoOutputMode.renderedTexture,
     this.openTimeout = const Duration(seconds: 35),
-    this.maxBufferAhead = maximumBufferAhead,
+    Duration? maxBufferAhead,
     this.retainPresentation = false,
-  });
+  }) : requestedBufferAhead = maxBufferAhead;
   final Duration startPosition;
   final bool play;
   final double rate;
@@ -109,10 +109,14 @@ final class OpenOptions {
   final AndroidVideoOutputMode androidVideoOutput;
   final Duration openTimeout;
 
-  /// Rolling forward demuxer window in media time, at most two minutes.
-  /// Must be positive. Memory capacity may stop buffering earlier, and
-  /// packet/I/O boundaries may slightly overshoot the time window.
-  final Duration maxBufferAhead;
+  /// Explicit media-time windows are limited to two minutes. With no override,
+  /// VOD uses 16 seconds scaled by the initial rate and live uses mpv's default.
+  /// The packet byte limit can stop prefetching before the time limit.
+  Duration get maxBufferAhead =>
+      requestedBufferAhead ?? const Duration(seconds: 16);
+
+  /// An unset live window leaves the time policy to mpv.
+  final Duration? requestedBufferAhead;
 
   /// Reopening the same content after interruption keeps its last frame and
   /// timeline until both replacement tracks are ready. Never use for new media.
@@ -246,6 +250,8 @@ enum PlayerFailureKind {
   unsupportedHeaders,
   unsupportedVideoColor,
   nativePlayback,
+  networkOpen,
+  networkRead,
   videoInterrupted,
   disposed,
 }

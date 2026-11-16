@@ -10,6 +10,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [点播与直播的原生缓存和网络重试](validation/piliplus-network-retry-2026-11-17.md) | PiliPlus 对照、点播缓存门槛、直播重连和 Windows 实测 |
 | [Flutter 3.50 适配](validation/flutter-3.50-upgrade-2026-11-16.md) | SDK／CI 固定、多窗口新 API、独立设计库、直接移植 Markdown、减少动态效果与滚动回归 |
 | [密集视频弹幕分段不可用](validation/danmaku-large-segment-2026-11-16.md) | 登录态超过 2 MiB 的合法响应误判、8 MiB 接收／解码预算与单元回归 |
 | [应用方向与自适应旋转](validation/adaptive-window-rotation.md) | 自动／竖屏／横屏设置、全屏方向优先级、手机／平板与折叠边界、系统限制和验证 |

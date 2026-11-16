@@ -140,7 +140,7 @@ final class ValidatedSource {
             retainPresentation: options.retainPresentation,
             maxBufferAhead: source is DashVideoSource
                 ? previewWindow
-                : options.maxBufferAhead,
+                : options.requestedBufferAhead,
           )
         : options;
     return ValidatedSource(

@@ -16,7 +16,7 @@ import 'package:integration_test/integration_test.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
       LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
-  testWidgets('repeated DASH underruns switch to the healthy backup at 2x', (
+  testWidgets('repeated DASH underruns keep the selected connection at 2x', (
     tester,
   ) async {
     initializePlayerBackend();
@@ -134,6 +134,7 @@ void main() {
             engine.currentSnapshot.isBuffering &&
             engine.currentSnapshot.position > const Duration(seconds: 1),
       );
+      final generation = engine.currentSnapshot.generation;
       final firstPosition = engine.currentSnapshot.position;
       await tester.pump(const Duration(seconds: 7));
       expect(
@@ -160,10 +161,12 @@ void main() {
                 firstPosition + const Duration(seconds: 2),
       );
       final secondPosition = engine.currentSnapshot.position;
+      await tester.pump(const Duration(seconds: 7));
+      expect(engine.currentSnapshot.generation, generation);
+      finish.complete();
       await _until(
         tester,
         () =>
-            repository.resolutions == 2 &&
             !engine.currentSnapshot.isBuffering &&
             engine.currentSnapshot.position >
                 secondPosition + const Duration(seconds: 4),
@@ -174,17 +177,13 @@ void main() {
       expect(engine.inspectDiagnostics().hasDecodedAudio, true);
       expect(engine.inspectDiagnostics().hasDecodedVideo, true);
       expect(
-        diagnostics.where(
-          (e) => e.stallReason == PlaybackStallReason.repeatedCacheUnderrun,
-        ),
-        hasLength(1),
-      );
-      expect(
         diagnostics.where((e) => e.kind == PlayerDiagnosticKind.failed),
-        hasLength(1),
+        isEmpty,
       );
+      expect(engine.currentSnapshot.generation, generation);
+      expect(repository.resolutions, 1);
       expect(badRequests, 2);
-      expect(goodRequests, 2);
+      expect(goodRequests, 0);
       debugPrint(
         'REBUFFER_RECOVERED firstMs=${firstPosition.inMilliseconds} '
         'secondMs=${secondPosition.inMilliseconds} '

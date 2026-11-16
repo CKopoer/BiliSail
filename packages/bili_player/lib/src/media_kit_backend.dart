@@ -13,12 +13,7 @@ import 'playback_backend.dart';
 import 'validated_source.dart';
 import 'native_media_options.dart';
 import 'native_player_properties.dart';
-import 'native_error_monitor.dart';
-import 'native_audio_error_monitor.dart';
-import 'native_video_error_monitor.dart';
 import 'native_buffering_diagnostics.dart';
-import 'native_buffer_recovery.dart';
-import 'native_rebuffer_monitor.dart';
 import 'native_load_observer.dart';
 import 'native_audio_gain.dart';
 import 'native_rate_audio.dart';
@@ -78,10 +73,8 @@ final class MediaKitBackend
   int _seekRevision = 0;
   NativeReadinessStage? _readinessStage;
   Timer? _colorDeadline;
-  NativeBufferRecovery? _bufferRecovery;
-  NativeRebufferMonitor? _rebuffers;
-  NativeAudioErrorMonitor? _audioErrors;
-  NativeVideoErrorMonitor? _videoErrors;
+  bool _networkOpenError = false;
+  Map<String, String> _fileOptions = const {};
   NativeBufferingDiagnostics? _bufferDiagnostics;
   DiagnosticSourceKind? diagnosticSourceKind;
   NativeReadinessStage? get readinessStage => _readinessStage;
@@ -101,21 +94,15 @@ final class MediaKitBackend
   void _diagnose(
     PlayerDiagnosticKind kind, {
     NativeErrorSummary? nativeError,
-    PlayerFailureKind? failureKind,
     NativeLogSeverity? severity,
     int? nativeErrorCode,
-    PlaybackStallReason? stallReason,
-    Duration? stalledFor,
   }) => onDiagnostic?.call(
     PlayerDiagnosticEvent(
       kind: kind,
       snapshot: _snapshot,
       nativeError: nativeError,
-      failureKind: failureKind,
       severity: severity,
       nativeErrorCode: nativeErrorCode,
-      stallReason: stallReason,
-      stalledFor: stalledFor,
       readinessStage: _readinessStage,
       // openStarted precedes releasing the previous native player.
       diagnostics: kind == PlayerDiagnosticKind.openStarted
@@ -370,72 +357,6 @@ final class MediaKitBackend
   bool _hasRealTrack(List<mk.VideoTrack> tracks) =>
       tracks.any((track) => track.id != 'auto' && track.id != 'no');
 
-  Future<void> _configureBufferAhead(
-    mk.Player player,
-    ResolvedMediaSource source,
-    Duration window,
-    int generation,
-    Stopwatch watch,
-    Duration budget,
-  ) async {
-    final platform = player;
-
-    final seconds = window.inMicroseconds / Duration.microsecondsPerSecond;
-    final live = switch (source) {
-      ManifestSource(:final isLive) ||
-      ProgressiveSource(:final isLive) => isLive,
-      _ => false,
-    };
-    final preview = source is DashVideoSource;
-    final properties = {
-      // media_kit enables disk caching by default. Keep a transient bounded
-      // window in memory instead of accumulating an append-only cache file.
-      'cache-on-disk': 'no',
-      'cache': 'yes',
-      'cache-pause': 'yes',
-      // Allow transient network stalls to refill using native cache events.
-      // Open/seek still have their own shared cancellation and deadlines.
-      'network-timeout': NativeErrorMonitor.bufferingTimeout.inSeconds
-          .toString(),
-      // Avoid resuming on the first small burst after an underrun. Live also
-      // builds a short cushion before starting; previews keep quick startup.
-      'cache-pause-wait': live ? '3' : (preview ? '1' : '2'),
-      'cache-pause-initial': live ? 'yes' : 'no',
-      // A live stream cannot seek back. Use the existing 64 MiB total packet
-      // allowance for forward data instead of retaining consumed packets.
-      'demuxer-max-bytes': (live ? 64 * 1024 * 1024 : 32 * 1024 * 1024)
-          .toString(),
-      'demuxer-max-back-bytes': (live ? 0 : 32 * 1024 * 1024).toString(),
-      // mpv uses the larger of these two windows when network cache is enabled.
-      'cache-secs': seconds.toString(),
-      'demuxer-readahead-secs': seconds.toString(),
-    };
-    for (final entry in properties.entries) {
-      if (generation != _generation || _disposed) {
-        throw const SourceSuperseded();
-      }
-      await platform
-          .setPropertyAsync(entry.key, entry.value)
-          .timeout(_remaining(watch, budget));
-      // The locked SDK does not propagate mpv_set_property_string errors.
-      // Verify the requested limit before any media URL can start loading.
-      final applied = await platform
-          .getPropertyAsync(entry.key)
-          .timeout(_remaining(watch, budget));
-      final expectedNumber = double.tryParse(entry.value);
-      final matches = expectedNumber == null
-          ? applied == entry.value
-          : double.tryParse(applied) == expectedNumber;
-      if (!matches) {
-        throw PlayerFailure(
-          PlayerFailureKind.nativePlayback,
-          'The playback backend did not apply the forward buffer limit.',
-          generation,
-        );
-      }
-    }
-  }
-
   Future<void> _waitReady(
     mk.Player player,
     int generation,
@@ -490,6 +411,8 @@ final class MediaKitBackend
             // A filter/VO can fail before video readiness confirms its output.
             _requiresVideoColorMapping
                 ? PlayerFailureKind.unsupportedVideoColor
+                : _networkOpenError && _snapshot.phase == PlaybackPhase.opening
+                ? PlayerFailureKind.networkOpen
                 : PlayerFailureKind.nativePlayback,
             'Native source loading terminated with an error.',
             generation,
@@ -504,14 +427,6 @@ final class MediaKitBackend
     _preparation = operation;
     _bufferDiagnostics?.dispose();
     _bufferDiagnostics = null;
-    _audioErrors?.dispose();
-    _audioErrors = null;
-    _videoErrors?.dispose();
-    _videoErrors = null;
-    _bufferRecovery?.dispose();
-    _bufferRecovery = null;
-    _rebuffers?.dispose();
-    _rebuffers = null;
     _generation = operation.generation;
     final generation = _generation;
     final source = plan.source;
@@ -546,105 +461,21 @@ final class MediaKitBackend
       _creating = null;
     }
     final player = _player!;
-    final watchReadStalls =
-        !plan.live &&
-        source is! DashVideoSource &&
-        [
-          video,
-          ?audio,
-        ].every((track) => const {'http', 'https'}.contains(track.uri.scheme));
-    _bufferRecovery = NativeBufferRecovery(
-      snapshot: snapshot,
-      hasAudio: !plan.silent,
-      hasVideo: !plan.audioOnly,
-      watchReadStalls: watchReadStalls,
-      playbackProgress: () => nativeRecoveryProgress(
-        player.getPropertyAsync,
-        audio: !plan.silent,
-        video: !plan.audioOnly,
-      ),
-      onNativeRecovered: () {
-        _audioErrors?.reset();
-        _videoErrors?.reset();
-      },
-      onRecoveryRequired: (reason) {
-        if (!_disposed &&
-            generation == _generation &&
-            identical(_player, player)) {
-          _emit(
-            BackendEvent(
-              BackendEventKind.failure,
-              stallReason: switch (reason) {
-                NativeBufferRecoveryReason.readError =>
-                  PlaybackStallReason.prefetchReadError,
-                NativeBufferRecoveryReason.stalledRead =>
-                  PlaybackStallReason.prefetchReadStall,
-                NativeBufferRecoveryReason.audioError =>
-                  PlaybackStallReason.audioDecodeError,
-                NativeBufferRecoveryReason.videoError =>
-                  PlaybackStallReason.videoDecodeError,
-                NativeBufferRecoveryReason.decoderError => null,
-              },
-            ),
-          );
-        }
-      },
-    );
-    _videoErrors = NativeVideoErrorMonitor(
-      snapshot: snapshot,
-      onFailure: () {
-        if (!_disposed &&
-            generation == _generation &&
-            identical(_player, player)) {
-          _bufferRecovery?.reportDecoderError(
-            NativeBufferRecoveryReason.videoError,
-          );
-        }
-      },
-    );
-    if (!plan.silent) {
-      _audioErrors = NativeAudioErrorMonitor(
-        snapshot: snapshot,
-        onFailure: () {
-          if (!_disposed &&
-              generation == _generation &&
-              identical(_player, player)) {
-            _bufferRecovery?.reportDecoderError(
-              NativeBufferRecoveryReason.audioError,
-            );
-          }
-        },
-      );
-    }
-    if (watchReadStalls) {
-      _rebuffers = NativeRebufferMonitor(
-        snapshot: snapshot,
-        onStalled: (blockedFor) {
-          if (!_disposed &&
-              generation == _generation &&
-              identical(_player, player)) {
-            _diagnose(
-              PlayerDiagnosticKind.playbackStalled,
-              stallReason: PlaybackStallReason.repeatedCacheUnderrun,
-              stalledFor: blockedFor,
-            );
-            _emit(const BackendEvent(BackendEventKind.failure));
-          }
-        },
-      );
-    }
+    _networkOpenError = false;
     if (_nativeLoad == null) {
       final attaching = _attachingLoad =
           NativeLoadObserver.attach(
             player.native,
-            onCachePauseChanged: (paused) =>
-                _rebuffers?.cachePauseChanged(paused),
-            onCacheStateChanged: (reading, endOfInput) => _bufferRecovery
-                ?.readingChanged(reading, endOfInput: endOfInput),
-            onFailure: (code) => _diagnose(
-              PlayerDiagnosticKind.openTerminated,
-              nativeErrorCode: code,
-            ),
+            onFailure: (code) {
+              _diagnose(
+                PlayerDiagnosticKind.openTerminated,
+                nativeErrorCode: code,
+              );
+              if (_snapshot.phase != PlaybackPhase.opening &&
+                  !_snapshot.isSeeking) {
+                _emit(const BackendEvent(BackendEventKind.failure));
+              }
+            },
           ).then((observer) {
             _nativeLoad = observer;
             return observer;
@@ -662,7 +493,15 @@ final class MediaKitBackend
     );
 
     await operation.wait(_audioGain!.apply(options.audioGainDb, smooth: false));
-    _subscribe(player, generation);
+    _subscribe(
+      player,
+      generation,
+      networkSource:
+          source is! DashVideoSource &&
+          [video, ?audio].every(
+            (track) => const {'http', 'https'}.contains(track.uri.scheme),
+          ),
+    );
     final audioOnly = source is ProgressiveSource && source.isAudioOnly;
     if (!audioOnly) {
       await waitForNativeSignal(
@@ -677,14 +516,6 @@ final class MediaKitBackend
         timeout: _remaining(watch, openBudget),
       );
     }
-    await _configureBufferAhead(
-      player,
-      source,
-      options.maxBufferAhead,
-      generation,
-      watch,
-      openBudget,
-    );
     // Configure before decoding starts, never during a hold/release. This
     // controller follows the native player's lifetime across source reuse.
     final rateAudio = _rateAudio ??= NativeRateAudio(
@@ -716,6 +547,19 @@ final class MediaKitBackend
     if (generation != _generation || _disposed) throw const SourceSuperseded();
     final mediaUri = nativeMediaUri(mediaTrack.uri, audioTrack?.uri);
     _seekMedia = mediaUri;
+    _fileOptions = {
+      'force-media-title': 'BiliSail',
+      if (video.uri.scheme == 'file' || video.uri.scheme == 'content')
+        'cache': 'no'
+      else
+        ...nativeCacheOptions(
+          live: plan.live,
+          window: plan.live
+              ? options.requestedBufferAhead
+              : options.maxBufferAhead,
+          rate: options.requestedBufferAhead == null ? options.rate : 1,
+        ),
+    };
     // Restore selection on a reused player after a silent preview/audio-only
     // source. DASH streams are demuxed as one EDL timeline by mpv.
     await operation.wait(
@@ -729,7 +573,7 @@ final class MediaKitBackend
           mk.Media(
             mediaUri,
             httpHeaders: mediaTrack.requestPolicy.headers,
-            nativeOptions: const {'force-media-title': 'BiliSail'},
+            nativeOptions: _fileOptions,
             // Resume as part of loading, before decoding the first frame.
             // Opening at zero and seeking afterward buffers twice when
             // returning from audio-only playback.
@@ -970,12 +814,8 @@ final class MediaKitBackend
 
   @override
   Future<Duration> seekTo(Duration target, PlaybackOperation operation) async {
-    _bufferRecovery?.cancel();
-    _rebuffers?.reset();
     operation.check();
     _seek = operation;
-    _audioErrors?.reset();
-    _videoErrors?.reset();
     final player = _player!;
     final generation = _generation;
     final revision = ++_seekRevision;
@@ -1003,7 +843,10 @@ final class MediaKitBackend
         media,
         'replace',
         '-1',
-        'start=${(target.inMicroseconds / 1000000).toStringAsFixed(6)}',
+        [
+          for (final e in _fileOptions.entries) '${e.key}=${e.value}',
+          'start=${(target.inMicroseconds / 1000000).toStringAsFixed(6)}',
+        ].join(','),
       ]);
     } else {
       await player.seek(target);
@@ -1055,7 +898,11 @@ final class MediaKitBackend
     await Future<void>.delayed(Duration.zero);
   }
 
-  void _subscribe(mk.Player player, int generation) {
+  void _subscribe(
+    mk.Player player,
+    int generation, {
+    required bool networkSource,
+  }) {
     bool active() =>
         !_disposed &&
         generation == _generation &&
@@ -1064,10 +911,6 @@ final class MediaKitBackend
     void event(BackendEvent value) {
       if (active()) {
         _emit(value);
-        _bufferRecovery?.update();
-        _rebuffers?.update();
-        _audioErrors?.update();
-        _videoErrors?.update();
       }
     }
 
@@ -1154,36 +997,21 @@ final class MediaKitBackend
             severity: severity,
             nativeError: summary,
           );
-          _audioErrors?.report(summary, severity);
-          _videoErrors?.report(summary, severity);
-          if (summary.isVideoDecodeError &&
-              severity != NativeLogSeverity.warning) {
-            // FFmpeg video errors are absent from media_kit's error stream.
-            // Arm the existing progress/deadline checks, not an immediate reopen.
-            event(
-              const BackendEvent(
-                BackendEventKind.warning,
-                videoDecodeError: true,
-              ),
-            );
-          }
           if (summary.isVideoDecodeError ||
               severity != NativeLogSeverity.warning ||
               summary.detail == NativeErrorDetail.avDesync) {
             _bufferDiagnostics?.capture();
           }
-          _bufferRecovery?.reportError(
-            summary,
-            decoderErrors: severity != NativeLogSeverity.warning,
-          );
         }
       }),
       player.stream.error.listen((message) {
         if (!active()) return;
         final summary = NativeErrorSummary.classify(message);
         _diagnose(PlayerDiagnosticKind.nativeError, nativeError: summary);
-        event(const BackendEvent(BackendEventKind.warning));
-        _bufferRecovery?.reportError(summary, decoderErrors: true);
+        if (networkSource && isNativeNetworkError(message)) {
+          _networkOpenError = _snapshot.phase == PlaybackPhase.opening;
+          event(const BackendEvent(BackendEventKind.networkError));
+        }
       }),
     ]);
   }
@@ -1191,19 +1019,12 @@ final class MediaKitBackend
   @override
   Future<void> play() async {
     await _player!.play();
-    _audioErrors?.update();
-    _videoErrors?.update();
-    _rebuffers?.update();
   }
 
   void captureReadyDiagnostics() => _bufferDiagnostics?.sourceReady();
 
   @override
   Future<bool> pauseAndWait() async {
-    _audioErrors?.update();
-    _videoErrors?.update();
-    _bufferRecovery?.cancel();
-    _rebuffers?.reset();
     await _player?.pause();
     return true;
   }
@@ -1219,14 +1040,6 @@ final class MediaKitBackend
   Duration? get buffered => _player?.state.buffer;
   @override
   void interrupt() {
-    _audioErrors?.dispose();
-    _audioErrors = null;
-    _videoErrors?.dispose();
-    _videoErrors = null;
-    _bufferRecovery?.dispose();
-    _bufferRecovery = null;
-    _rebuffers?.dispose();
-    _rebuffers = null;
     ++_generation;
     _preparation?.cancel();
     unawaited(cancelSeek().catchError((Object _) {}));
@@ -1257,14 +1070,6 @@ final class MediaKitBackend
   Future<void> resetForNextSource(PlaybackOperation operation) async {
     _bufferDiagnostics?.dispose();
     _bufferDiagnostics = null;
-    _audioErrors?.dispose();
-    _audioErrors = null;
-    _videoErrors?.dispose();
-    _videoErrors = null;
-    _bufferRecovery?.dispose();
-    _bufferRecovery = null;
-    _rebuffers?.dispose();
-    _rebuffers = null;
     ++_generation;
     _preparation?.cancel();
     _generationChanges.add(_generation);

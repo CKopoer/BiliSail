@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:ffi';
 
 import 'package:media_kit/media_kit.dart' as mk;
@@ -9,22 +8,6 @@ import 'package:media_kit/generated/libmpv/bindings.dart' show mpv_event_id;
 import 'native_readiness.dart';
 
 enum NativeOutputProperty { colorMatrix, driver }
-
-({bool reading, bool endOfInput})? nativeCacheReadState(String value) {
-  try {
-    final Object? decoded = jsonDecode(value);
-    if (decoded is Map<String, Object?>) {
-      final idle = decoded['idle'];
-      final eof = decoded['eof'];
-      if (idle is bool && eof is bool) {
-        return (reading: !idle, endOfInput: eof);
-      }
-    }
-  } on FormatException {
-    // The property may be unavailable before a source has been loaded.
-  }
-  return null;
-}
 
 /// Only an error END_FILE for the matching START_FILE ends a load. Logs, EOF,
 /// stop, shutdown and playlist redirects are not terminal load failures.
@@ -130,8 +113,6 @@ final class NativeLoadObserver {
   static Future<NativeLoadObserver> attach(
     mk.NativePlayer platform, {
     required void Function(int errorCode) onFailure,
-    void Function(bool reading, bool endOfInput)? onCacheStateChanged,
-    void Function(bool paused)? onCachePauseChanged,
   }) async {
     final observer = NativeLoadObserver._(platform, onFailure);
     try {
@@ -187,27 +168,6 @@ final class NativeLoadObserver {
         observer._idleChanges.add(null);
       });
       observer._properties.add('idle-active');
-      if (onCachePauseChanged != null) {
-        const name = 'paused-for-cache';
-        await platform.observeProperty(name, (value) async {
-          if (!observer._disposed && (value == 'yes' || value == 'no')) {
-            onCachePauseChanged(value == 'yes');
-          }
-        });
-        observer._properties.add(name);
-      }
-      if (onCacheStateChanged != null) {
-        // mpv exposes this structured property as a whole; /idle is not a
-        // supported sub-property in the locked Windows SDK.
-        const name = 'demuxer-cache-state';
-        await platform.observeProperty(name, (value) async {
-          if (observer._disposed) return;
-          if (nativeCacheReadState(value) case final state?) {
-            onCacheStateChanged(state.reading, state.endOfInput);
-          }
-        });
-        observer._properties.add(name);
-      }
       return observer;
     } on Object {
       await observer.dispose();

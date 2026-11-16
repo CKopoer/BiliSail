@@ -281,10 +281,6 @@ void main() {
       expect(result?.urls.first.path, source.url.path);
       expect(result?.urls.first.query, source.url.query);
       expect(result?.urls.last, source.url);
-      expect(
-        backupMediaCdnUrl(result?.urls ?? [], MediaCdnPreference.ali),
-        source.url,
-      );
     }
   });
   test(

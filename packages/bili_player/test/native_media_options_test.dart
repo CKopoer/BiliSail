@@ -4,6 +4,40 @@ import 'package:bili_player/src/native_media_options.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('only SDK network read and network open errors can request a retry', () {
+    for (final message in [
+      'tcp: ffurl_read returned -5',
+      'Failed to open https://media.test',
+      'Can not open external file http://media.test',
+    ]) {
+      expect(isNativeNetworkError(message), true);
+    }
+    for (final message in [
+      'tcp: connection established',
+      'Invalid NAL unit size',
+      'Failed to open file:///offline.mp4',
+      'Could not open codec',
+      'End of file',
+    ]) {
+      expect(isNativeNetworkError(message), false);
+    }
+  });
+  test('VOD scales the time window and live only reserves forward bytes', () {
+    final vod = nativeCacheOptions(
+      live: false,
+      window: const Duration(seconds: 16),
+      rate: 2,
+    );
+    expect(vod['cache-secs'], '32.000');
+    expect(vod['demuxer-hysteresis-secs'], '21.333');
+    expect(vod['demuxer-max-bytes'], '4194304');
+    expect(vod['demuxer-max-back-bytes'], '4194304');
+    final live = nativeCacheOptions(live: true, window: null, rate: 1);
+    expect(live.containsKey('cache-secs'), false);
+    expect(live.containsKey('demuxer-hysteresis-secs'), false);
+    expect(live['demuxer-max-bytes'], '8388608');
+    expect(live['demuxer-max-back-bytes'], '0');
+  });
   test(
     'native headers split special fields without changing signed values',
     () {

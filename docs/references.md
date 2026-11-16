@@ -1,5 +1,7 @@
 # 参考项目、证据与采用边界
 
+2026-11-17 起，在线点播和直播按 PiliPlus 的 mpv 缓存配置和明确网络错误重试，移除半窗口、累计缓冲、时钟故障推断及启动换线。此前记录中的策略属于历史实现。行为对照与验证见[点播与直播的原生缓存和网络重试](validation/piliplus-network-retry-2026-11-17.md)。
+
 2026-11-15 Android 直出 HDR 色彩修复，只读核对 PiliPlus `217fb54f51f6764176319bbdedab2a7522d75401` 的播放器创建入口及实际媒体 overrides／锁文件，并核对其锁定视频插件 `bggRGjQaUbCoE/media-kit` 的 `85f0a69ea66b100882b27a3375c72e5155375343` 中 Android 默认 `gpu` 输出。借鉴保留硬解并由 GPU 完成色彩映射的职责，独立实现本项目 HDR 媒体提示和按源规范化输出；未复制参考源码／资源，未修改相邻仓库、Pub 缓存或固定媒体依赖。见[原因、来源与验证](validation/hdr-direct-output-2026-11-15.md)。
 
 2026-11-14 Windows Release 正常输入 EOF 误判修复，只读核对 PiliPlus `217fb54f51f6764176319bbdedab2a7522d75401` 的 `lib/plugin/pl_player/controller.dart` 中 SDK 缓存／缓冲订阅、明确错误判断及当前位置重开职责。实际核心和库插件锁定 `My-Responsitories/media-kit` 的 `73771ec38176be2d984a3049c28177bce23b54a0`，视频锁定 `bggRGjQaUbCoE/media-kit` 的 `85f0a69ea66b100882b27a3375c72e5155375343`。借鉴正常播放交由原生、应用依据故障证据恢复的边界，独立删除本项目的 EOF 时间戳差值启发式；未复制 GPLv3 应用代码／资源或修改参考仓库、依赖及 Pub 缓存，见[专项记录](validation/windows-release-dash-eof-2026-11-14.md)。
