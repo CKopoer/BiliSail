@@ -10,6 +10,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [密集视频弹幕分段不可用](validation/danmaku-large-segment-2026-11-16.md) | 登录态超过 2 MiB 的合法响应误判、8 MiB 接收／解码预算与单元回归 |
 | [应用方向与自适应旋转](validation/adaptive-window-rotation.md) | 自动／竖屏／横屏设置、全屏方向优先级、手机／平板与折叠边界、系统限制和验证 |
 | [App 推荐请求与播放归因修正](validation/app-recommendation-alignment-2026-11-16.md) | flush／首卡锚点一起修正、HD 凭据匹配、Android 设备参数及 trackid 贯穿现有心跳 |
 | [App 推荐与官方 Android 对照](validation/app-recommendation-official-audit-2026-11-16.md) | 9.19.0 APK 的 JADX 证据、flush 场景／idx 游标偏差、账号与来源归因边界及游客只读抽样 |
