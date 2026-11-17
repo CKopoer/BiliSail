@@ -51,6 +51,10 @@ void main() {
           expect(player.nativeHandle, handle);
           expect(await player.getPropertyAsync('curl-enabled'), 'no');
           expect(
+            await player.getPropertyAsync('stream-lavf-o'),
+            'rw_timeout=5000000',
+          );
+          expect(
             await player.getPropertyAsync('video-sync'),
             'display-resample',
           );

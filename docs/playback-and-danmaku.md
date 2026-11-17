@@ -1,5 +1,7 @@
 # 播放、直播与弹幕设计
 
+2026-11-18 补齐 Windows 原生 TLS 续读边界：本项目固定 FFmpeg 对不完整 TLS 记录可能无限返回 `EAGAIN`，仅 `network-timeout=5` 无法限制这层等待。保留已对齐的 PiliPlus 缓存／同步与错误重试逻辑，为 lavf 配置 `rw_timeout=5000000`，由原生在超时后按字节续读。运行进程线程栈、实际 PiliPlus 原生库对照和双轨截断回归见[持续缓冲修复](validation/windows-tls-buffering-2026-11-18.md)。
+
 2026-11-17 起，在线点播和直播按 PiliPlus 的 mpv 缓存配置和明确网络错误重试，移除半窗口、累计缓冲、时钟故障推断及启动换线。同日晚补全 HTTP 原生读取、同步、音频缓冲／滤镜、seek 与解码队列的底层对齐，使用 lavf 续读修复 curl 累计重试耗尽造成的中途失声。此前记录中的策略属于历史实现。见[缓存与重试](validation/piliplus-network-retry-2026-11-17.md)及[完整底层对照与失声回归](validation/piliplus-playback-parity-2026-11-17.md)。
 
 2026-11-15 PGC 接入共享空降加载及播放器设置入口，官方片头／片尾来自现有 Web playurl 的 `clip_info_list`。新增默认关闭、可独立工作的“自动跳过官方片头／片尾”；空降自动模式下，已选中的片头／片尾类别也优先使用有效官方区间，缺失的类别保留社区回退，广告等其他类别仍使用空降数据。两者共用确认进度、单次跳转及 source／账号隔离；协议、来源、游客非空样本与验收边界见[PGC 跳过记录](validation/pgc-skip-segments-2026-11-15.md)。

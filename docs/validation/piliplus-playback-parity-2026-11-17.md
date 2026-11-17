@@ -2,6 +2,8 @@
 
 日期：2026-11-17（Asia/Shanghai）。本记录补全此前[缓存与网络重试](piliplus-network-retry-2026-11-17.md)之外的底层差异，替代旧的强制倍速音频策略与 Android 默认解码队列配置。
 
+2026-11-18 补充：不完整 TLS 记录可能在另一层原生重试中永久等待，原先的普通 HTTP 截断没有覆盖这个边界。现场、实际 PiliPlus 原生库对照与兼容修复见[持续缓冲记录](windows-tls-buffering-2026-11-18.md)。
+
 ## 现场与原因
 
 运行中的 `build/windows/x64/runner/Release/bilisail.exe`，PID 16340，22:19:22 打开 DASH，3× 播放。活动播放器 13 在 22:19:47、22:20:05、22:20:23、22:20:41、22:21:17 记录五次警告，22:21:34 出现错误，22:22:01 在 509.92 秒处出现 `ad` / `decoderFailure`。此时视频仍播放，前向缓存约 4 MiB，但双轨最小缓存时长已为零。现场日志已另存于本地 `build/validation/windows-audio-loss-2026-11-17/`。
