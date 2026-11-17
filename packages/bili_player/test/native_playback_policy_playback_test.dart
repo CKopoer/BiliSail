@@ -66,6 +66,14 @@ void main() {
           expect(await player.getPropertyAsync('hr-seek'), 'default');
           expect(await player.getPropertyAsync('hr-seek-framedrop'), 'yes');
           expect(await player.getPropertyAsync('af'), isEmpty);
+          // Verify effective native defaults after SDK initialization and a
+          // source change, not only values accepted by the Dart policy fake.
+          expect(await player.getPropertyAsync('network-timeout'), '5.000000');
+          expect(await player.getPropertyAsync('cache-pause'), 'yes');
+          expect(await player.getPropertyAsync('cache-pause-initial'), 'no');
+          expect(await player.getPropertyAsync('cache-pause-wait'), '1.000000');
+          final demuxOptions = await player.getPropertyAsync('demuxer-lavf-o');
+          expect(demuxOptions, contains('seg_max_retry=5'));
           await backend.play();
           await backend.confirmAudio(operation);
           for (final rate in live ? [1.0] : [2.0, 1.0, 3.0, 1.5]) {
