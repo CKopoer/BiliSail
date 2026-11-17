@@ -3,12 +3,112 @@ import 'dart:ui' as ui;
 
 import 'package:bilisail/core/platform/detached_playback_window.dart';
 import 'package:bilisail/core/platform/window_service.dart';
-import 'package:flutter/widgets.dart';
+import 'package:bilisail/core/presentation/window_orientation_host.dart';
+import 'package:bilisail/app/workspace_playback_window.dart';
+import 'package:bilisail/domain/app_orientation.dart';
+import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'detached view follows app direction without remounting playback',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.display.size = const Size(1600, 1000);
+      tester.view.physicalSize = const Size(1000, 700);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.display.resetSize);
+      addTearDown(tester.view.resetPhysicalSize);
+      for (final name in ['bilisail/desktop_window', 'bilisail/text_input']) {
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          MethodChannel(name),
+          (_) async => null,
+        );
+        addTearDown(
+          () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+            MethodChannel(name),
+            null,
+          ),
+        );
+      }
+      final mainWindow = WindowService.forView(
+        viewId: 1,
+        setFullScreen: (_) async {},
+        activate: () async {},
+      );
+      late _FakeWindow window;
+      late Size playbackSize;
+      final contentKey = GlobalKey();
+      Future<void> show(AppOrientationPreference orientation) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            builder: (context, child) => WindowOrientationHost(
+              window: mainWindow,
+              orientation: orientation,
+              child: child!,
+            ),
+            home: DesktopPlaybackWindow(
+              windowFactory: ({required title, required onCloseRequested}) =>
+                  window = _FakeWindow(tester.view, onCloseRequested),
+              onCloseRequested: () {},
+              onError: (error) => fail('$error'),
+              playback: WorkspacePlaybackWindow(
+                theme: ThemeData(),
+                shortcuts: const ShortcutSettings.defaults(),
+                onBack: () {},
+                onClose: () {},
+                onActivateBrowser: () {},
+                child: Builder(
+                  builder: (context) {
+                    playbackSize = MediaQuery.sizeOf(context);
+                    return SizedBox.expand(key: contentKey);
+                  },
+                ),
+              ),
+              child: const SizedBox.expand(),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      await show(AppOrientationPreference.automatic);
+      final original = contentKey.currentContext;
+      expect(View.of(original!).viewId, window.viewId);
+      expect(playbackSize, const Size(1000, 700));
+      await show(AppOrientationPreference.portrait);
+      expect(playbackSize.width, lessThan(playbackSize.height));
+      expect(window.windowService.keepsBrowsePortrait, isTrue);
+      await window.windowService.setFullScreen(
+        true,
+        orientation: FullScreenOrientation.landscape,
+      );
+      window.view.physicalSize = const Size(1600, 1000);
+      await tester.pumpAndSettle();
+      expect(playbackSize, const Size(1600, 1000));
+      await show(AppOrientationPreference.landscape);
+      expect(playbackSize, const Size(1600, 1000));
+      await window.windowService.setFullScreen(
+        true,
+        orientation: FullScreenOrientation.portrait,
+      );
+      await tester.pumpAndSettle();
+      expect(playbackSize.width, lessThan(playbackSize.height));
+      await window.windowService.setFullScreen(false);
+      await tester.pumpAndSettle();
+      expect(playbackSize, const Size(1600, 1000));
+      await show(AppOrientationPreference.automatic);
+      expect(window.windowService.allowsAutomaticRotation, isTrue);
+      expect(contentKey.currentContext, same(original));
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
+    },
+  );
+
   testWidgets('mini close suppresses unmount restore before saving geometry', (
     tester,
   ) async {

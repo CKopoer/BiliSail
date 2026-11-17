@@ -25,118 +25,167 @@ void main() {
     AppOrientationPreference.landscape,
   ]) {
     for (final display in [const Size(400, 800), const Size(800, 1200)]) {
-      testWidgets('fixed $orientation ignores player rotation on $display', (
-        tester,
-      ) async {
-        tester.view.devicePixelRatio = 1;
-        tester.view.display.size = display;
-        tester.view.physicalSize = const Size(400, 800);
-        addTearDown(tester.view.resetDevicePixelRatio);
-        addTearDown(tester.view.display.resetSize);
-        addTearDown(tester.view.resetPhysicalSize);
-        final applied = <Object?>[];
-        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-          SystemChannels.platform,
-          (call) async {
-            if (call.method == 'SystemChrome.setPreferredOrientations') {
-              applied.add(call.arguments);
-            }
-            return null;
-          },
-        );
-        addTearDown(
-          () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-            SystemChannels.platform,
-            null,
-          ),
-        );
-        final events = StreamController<FullScreenOrientation>.broadcast(
-          sync: true,
-        );
-        addTearDown(events.close);
-        final window = _MobileWindow(events.stream);
-        await window.updateDisplaySize(display, orientation: orientation);
-        final engine = _Engine();
-        final session = PlaybackSession(
-          engine: engine,
-          repository: SystemMediaFixtureRepository(),
-          progress: SystemMediaFixtureProgress(),
-          accountScope: () => 'guest',
-        );
-        addTearDown(session.close);
-        final settings = AppSettings(orientation: orientation);
-        await tester.pumpWidget(
-          ProviderScope(
-            overrides: [
-              playbackSessionProvider.overrideWithValue(session),
-              settingsRepositoryProvider.overrideWithValue(
-                MemorySettingsRepository()..value = settings,
-              ),
-            ],
-            child: InputTestApp(
-              builder: AppNoticeHost.builder,
-              home: Scaffold(
-                body: AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: PlaybackPanel(
-                    detail: systemMediaVideo('方向测试'),
-                    part: systemMediaPart,
-                    settings: settings,
-                    onToggleComments: () {},
-                    window: window,
+      for (final dimensions in [
+        const VideoDimensions(1920, 1080),
+        const VideoDimensions(1080, 1920),
+      ]) {
+        testWidgets(
+          'browse $orientation yields to video ${dimensions.width}x${dimensions.height} on $display',
+          (tester) async {
+            tester.view.devicePixelRatio = 1;
+            tester.view.display.size = display;
+            tester.view.physicalSize =
+                orientation == AppOrientationPreference.landscape
+                ? const Size(800, 400)
+                : const Size(400, 800);
+            addTearDown(tester.view.resetDevicePixelRatio);
+            addTearDown(tester.view.display.resetSize);
+            addTearDown(tester.view.resetPhysicalSize);
+            final applied = <Object?>[];
+            tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+              SystemChannels.platform,
+              (call) async {
+                if (call.method == 'SystemChrome.setPreferredOrientations') {
+                  applied.add(call.arguments);
+                }
+                return null;
+              },
+            );
+            addTearDown(
+              () => tester.binding.defaultBinaryMessenger
+                  .setMockMethodCallHandler(SystemChannels.platform, null),
+            );
+            final events = StreamController<FullScreenOrientation>.broadcast(
+              sync: true,
+            );
+            addTearDown(events.close);
+            final window = _MobileWindow(events.stream);
+            await window.updateDisplaySize(display, orientation: orientation);
+            final engine = _Engine();
+            final session = PlaybackSession(
+              engine: engine,
+              repository: SystemMediaFixtureRepository(),
+              progress: SystemMediaFixtureProgress(),
+              accountScope: () => 'guest',
+            );
+            addTearDown(session.close);
+            final settings = AppSettings(orientation: orientation);
+            await tester.pumpWidget(
+              ProviderScope(
+                overrides: [
+                  playbackSessionProvider.overrideWithValue(session),
+                  settingsRepositoryProvider.overrideWithValue(
+                    MemorySettingsRepository()..value = settings,
+                  ),
+                ],
+                child: InputTestApp(
+                  builder: AppNoticeHost.builder,
+                  home: Scaffold(
+                    body: AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: PlaybackPanel(
+                        detail: systemMediaVideo('方向测试'),
+                        part: systemMediaPart,
+                        settings: settings,
+                        onToggleComments: () {},
+                        window: window,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
-          ),
+            );
+            await _frames(tester);
+            engine.publish(
+              engine.snapshot.copyWith(
+                videoDimensions: dimensions,
+                position: const Duration(seconds: 7),
+              ),
+            );
+            await _frames(tester);
+            expect(events.hasListener, isFalse);
+            final opens = engine.opens;
+            expect(opens, 1);
+            final locked = applied.single;
+            events.add(FullScreenOrientation.landscape);
+            tester.view.display.size = Size(display.height, display.width);
+            tester.view.physicalSize = const Size(800, 400);
+            await _frames(tester);
+            expect(window.isFullScreen, isFalse);
+            tester.view.display.size = display;
+            tester.view.physicalSize =
+                orientation == AppOrientationPreference.landscape
+                ? const Size(800, 400)
+                : const Size(400, 800);
+            await _frames(tester);
+            await _showControls(tester);
+            await tester.tap(findMaterialTooltip('全屏（F）'));
+            await _frames(tester);
+            expect(window.isFullScreen, isTrue);
+            final videoDirection = dimensions.width > dimensions.height
+                ? [
+                    'DeviceOrientation.landscapeLeft',
+                    'DeviceOrientation.landscapeRight',
+                  ]
+                : ['DeviceOrientation.portraitUp'];
+            expect(applied.last, videoDirection);
+            events.add(FullScreenOrientation.portrait);
+            await _frames(tester);
+            expect(
+              window.isFullScreen,
+              isTrue,
+              reason: 'The first physical posture only establishes a baseline',
+            );
+            await window.updateDisplaySize(
+              display,
+              orientation: orientation == AppOrientationPreference.portrait
+                  ? AppOrientationPreference.landscape
+                  : AppOrientationPreference.portrait,
+            );
+            expect(applied.last, videoDirection);
+            await window.updateDisplaySize(display, orientation: orientation);
+            expect(
+              find.byKey(const ValueKey('fake-card-video-surface')),
+              findsOneWidget,
+            );
+            // Late dimensions (e.g. the next part) also update the same fullscreen.
+            engine.publish(
+              engine.snapshot.copyWith(
+                videoDimensions: VideoDimensions(
+                  dimensions.height,
+                  dimensions.width,
+                ),
+              ),
+            );
+            await _frames(tester);
+            expect(window.isFullScreen, isTrue);
+            expect(
+              applied.last,
+              dimensions.width > dimensions.height
+                  ? ['DeviceOrientation.portraitUp']
+                  : [
+                      'DeviceOrientation.landscapeLeft',
+                      'DeviceOrientation.landscapeRight',
+                    ],
+            );
+            await _showControls(tester);
+            await tester.tap(findMaterialTooltip('退出全屏（Esc）'));
+            await _frames(tester);
+            expect(window.isFullScreen, isFalse);
+            expect(applied.last, locked);
+            expect(engine.opens, opens);
+            expect(engine.snapshot.position, const Duration(seconds: 7));
+            expect(
+              find.byKey(const ValueKey('fake-card-video-surface')),
+              findsOneWidget,
+            );
+            await tester.pumpWidget(const SizedBox());
+            await _frames(tester);
+            await window.clearDisplayOrientationPolicy();
+            expect(tester.takeException(), isNull);
+          },
         );
-        await _frames(tester);
-        engine.publish(
-          engine.snapshot.copyWith(
-            videoDimensions: const VideoDimensions(1920, 1080),
-            position: const Duration(seconds: 7),
-          ),
-        );
-        await _frames(tester);
-        expect(events.hasListener, isFalse);
-        final opens = engine.opens;
-        expect(opens, 1);
-        final locked = applied.single;
-        events.add(FullScreenOrientation.landscape);
-        tester.view.display.size = Size(display.height, display.width);
-        tester.view.physicalSize = const Size(800, 400);
-        await _frames(tester);
-        expect(window.isFullScreen, isFalse);
-        await _showControls(tester);
-        await tester.tap(findMaterialTooltip('全屏（F）'));
-        await _frames(tester);
-        expect(window.isFullScreen, isTrue);
-        expect(applied.last, locked);
-        expect(
-          find.byKey(const ValueKey('fake-card-video-surface')),
-          findsOneWidget,
-        );
-        events.add(FullScreenOrientation.portrait);
-        tester.view.display.size = display;
-        tester.view.physicalSize = const Size(400, 800);
-        await _frames(tester);
-        expect(window.isFullScreen, isTrue);
-        await _showControls(tester);
-        await tester.tap(findMaterialTooltip('退出全屏（Esc）'));
-        await _frames(tester);
-        expect(window.isFullScreen, isFalse);
-        expect(applied.last, locked);
-        expect(engine.opens, opens);
-        expect(engine.snapshot.position, const Duration(seconds: 7));
-        expect(
-          find.byKey(const ValueKey('fake-card-video-surface')),
-          findsOneWidget,
-        );
-        await tester.pumpWidget(const SizedBox());
-        await _frames(tester);
-        await window.clearDisplayOrientationPolicy();
-        expect(tester.takeException(), isNull);
-      });
+      }
     }
   }
 }

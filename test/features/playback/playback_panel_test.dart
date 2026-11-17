@@ -3978,7 +3978,7 @@ void main() {
   ]) {
     for (final narrowWindow in [false, true]) {
       testWidgets(
-        'tablet fullscreen preserves orientation and viewport target=$target narrow=$narrowWindow',
+        'tablet fullscreen follows video and preserves viewport target=$target narrow=$narrowWindow',
         (tester) async {
           tester.view.devicePixelRatio = 2;
           tester.view.display.size = const Size(2560, 1600);
@@ -4014,8 +4014,8 @@ void main() {
           final opens = engine.opens;
           final generation = session.sourceGeneration;
           for (final systemBack in [false, true]) {
-            // Unknown dimensions on entry and late landscape/portrait/square
-            // dimensions must all leave the tablet's orientation policy alone.
+            // Late decoded dimensions update fullscreen independently of the
+            // tablet's browsing policy, without reopening the source.
             await tester.tap(findMaterialTooltip('全屏（F）'));
             await _pumpFrames(tester);
             expect(window.isFullScreen, isTrue);
@@ -4032,6 +4032,22 @@ void main() {
                 engine.currentSnapshot.copyWith(videoDimensions: dimensions),
               );
               await _pumpFrames(tester);
+              expect(
+                platformCalls
+                    .where(
+                      (call) =>
+                          call.method ==
+                          'SystemChrome.setPreferredOrientations',
+                    )
+                    .last
+                    .arguments,
+                dimensions.width > dimensions.height
+                    ? [
+                        'DeviceOrientation.landscapeLeft',
+                        'DeviceOrientation.landscapeRight',
+                      ]
+                    : ['DeviceOrientation.portraitUp'],
+              );
             }
             if (systemBack) {
               await tester.binding.handlePopRoute();
@@ -4042,26 +4058,35 @@ void main() {
             expect(window.isFullScreen, isFalse);
             expect(tester.view.physicalSize, initialSize);
             expect(findMaterialTooltip('全屏（F）'), findsOneWidget);
+            expect(
+              platformCalls
+                  .where(
+                    (call) =>
+                        call.method == 'SystemChrome.setPreferredOrientations',
+                  )
+                  .last
+                  .arguments,
+              isEmpty,
+            );
+            expect(
+              platformCalls
+                  .where(
+                    (call) =>
+                        call.method == 'SystemChrome.setEnabledSystemUIMode',
+                  )
+                  .last
+                  .arguments,
+              'SystemUiMode.edgeToEdge',
+            );
           }
-          expect(
-            platformCalls.where(
-              (call) => call.method == 'SystemChrome.setPreferredOrientations',
-            ),
-            isEmpty,
-          );
           expect(
             platformCalls
                 .where(
                   (call) =>
                       call.method == 'SystemChrome.setEnabledSystemUIMode',
                 )
-                .map((call) => call.arguments),
-            [
-              'SystemUiMode.immersiveSticky',
-              'SystemUiMode.edgeToEdge',
-              'SystemUiMode.immersiveSticky',
-              'SystemUiMode.edgeToEdge',
-            ],
+                .where((call) => call.arguments == 'SystemUiMode.edgeToEdge'),
+            hasLength(2),
           );
           expect(engine.opens, opens);
           expect(session.sourceGeneration, generation);
@@ -4736,7 +4761,7 @@ void main() {
   }
 
   testWidgets(
-    'narrow tablet windows rotate playback without locking the display',
+    'narrow tablet windows rotate playback with video fullscreen direction',
     (tester) async {
       tester.view.devicePixelRatio = 1;
       tester.view.display.size = const Size(800, 1200);
@@ -4762,7 +4787,7 @@ void main() {
       tester.view.physicalSize = const Size(500, 800);
       await _pumpFrames(tester);
       expect(window.fullScreen, isTrue);
-      expect(window.orientations.last, isNull);
+      expect(window.orientations.last, FullScreenOrientation.landscape);
       // Moving to a wide layout and then rotating must keep manual fullscreen.
       tester.view.physicalSize = const Size(600, 400);
       await _pumpFrames(tester);
@@ -4779,9 +4804,12 @@ void main() {
       await _pumpFrames(tester);
       expect(window.fullScreen, isFalse);
       expect(
-        window.orientations.every((orientation) => orientation == null),
+        window.orientations.whereType<FullScreenOrientation>().every(
+          (orientation) => orientation == FullScreenOrientation.landscape,
+        ),
         isTrue,
       );
+      expect(window.orientations.last, isNull);
       expect(engine.opens, 1);
       expect(engine.maxSurfaces, 1);
       await tester.pumpWidget(const SizedBox());
@@ -4790,7 +4818,7 @@ void main() {
     },
   );
 
-  testWidgets('fullscreen releases the phone lock when its display unfolds', (
+  testWidgets('unfolded fullscreen keeps video direction and releases on exit', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 3;
@@ -4834,19 +4862,19 @@ void main() {
     expect(orientations, [
       ['DeviceOrientation.landscapeLeft', 'DeviceOrientation.landscapeRight'],
     ]);
-    // Exactly 600 dp on the short side is a large display even while the
-    // current app viewport remains phone-sized. A metrics event must unlock it.
+    // Exactly 600 dp is a large display. Fullscreen still belongs to the video;
+    // only exiting restores the unrestricted large-display browsing policy.
     tester.view.display.size = const Size(2400, 1800);
     await _pumpFrames(tester);
     expect(window.isFullScreen, isTrue);
     expect(orientations, [
       ['DeviceOrientation.landscapeLeft', 'DeviceOrientation.landscapeRight'],
-      <String>[],
     ]);
     await tester.tap(findMaterialTooltip('退出全屏（Esc）'));
     await _pumpFrames(tester);
     expect(window.isFullScreen, isFalse);
     expect(orientations, hasLength(2));
+    expect(orientations.last, isEmpty);
     expect(engine.opens, 1);
     expect(engine.maxSurfaces, 1);
     expect(tester.takeException(), isNull);

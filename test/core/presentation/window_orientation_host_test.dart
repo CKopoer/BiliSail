@@ -29,9 +29,149 @@ void main() {
     ),
   );
 
+  testWidgets(
+    'desktop direction constrains layout and preserves the subtree',
+    (tester) async {
+      _display(tester, const Size(1600, 1000));
+      tester.view.physicalSize = const Size(1000, 700);
+      final sizes = <Size>[];
+      final window = WindowService.forView(
+        viewId: 72,
+        setFullScreen: (_) async {},
+        activate: () async {},
+        resize: (size) async {
+          sizes.add(size);
+          return false; // A maximized window can keep its native rectangle.
+        },
+      );
+      final child = GlobalKey();
+      late Size mediaSize;
+      Future<void> show(AppOrientationPreference orientation) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            builder: (context, content) => WindowOrientationHost(
+              window: window,
+              orientation: orientation,
+              child: content!,
+            ),
+            home: Builder(
+              builder: (context) {
+                mediaSize = MediaQuery.sizeOf(context);
+                return SizedBox.expand(key: child);
+              },
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      await show(AppOrientationPreference.automatic);
+      final original = child.currentContext;
+      expect(mediaSize, const Size(1000, 700));
+      expect(sizes, isEmpty);
+      await show(AppOrientationPreference.portrait);
+      expect(mediaSize.width, lessThan(mediaSize.height));
+      expect(tester.getSize(find.byKey(child)), mediaSize);
+      expect(window.keepsBrowsePortrait, isTrue);
+      expect(sizes.single.width, lessThan(sizes.single.height));
+      await window.setFullScreen(
+        true,
+        orientation: FullScreenOrientation.landscape,
+      );
+      tester.view.physicalSize = const Size(1600, 1000);
+      await tester.pumpAndSettle();
+      expect(mediaSize, const Size(1600, 1000));
+      expect(sizes, hasLength(1));
+      await show(AppOrientationPreference.landscape);
+      expect(mediaSize, const Size(1600, 1000));
+      tester.view.physicalSize = const Size(700, 1000);
+      await tester.pumpAndSettle();
+      expect(mediaSize.width, greaterThan(mediaSize.height));
+      await window.setFullScreen(
+        true,
+        orientation: FullScreenOrientation.portrait,
+      );
+      await tester.pumpAndSettle();
+      expect(mediaSize, const Size(700, 1000));
+      await window.setFullScreen(false);
+      await tester.pumpAndSettle();
+      expect(mediaSize.width, greaterThan(mediaSize.height));
+      await show(AppOrientationPreference.automatic);
+      expect(mediaSize, const Size(700, 1000));
+      expect(child.currentContext, same(original));
+      expect(window.allowsAutomaticRotation, isTrue);
+      expect(orientations, isEmpty);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
+    },
+    variant: TargetPlatformVariant({
+      TargetPlatform.windows,
+      TargetPlatform.macOS,
+      TargetPlatform.linux,
+    }),
+  );
+
+  testWidgets('desktop normal windows resize once and cancel stale choices', (
+    tester,
+  ) async {
+    _display(tester, const Size(1600, 1000));
+    tester.view.physicalSize = const Size(1000, 700);
+    final resized = <Size>[];
+    var available = true;
+    final window = WindowService.forView(
+      viewId: 73,
+      setFullScreen: (_) async {},
+      activate: () async {},
+      isAvailable: () => available,
+      resize: (size) async {
+        resized.add(size);
+        return true;
+      },
+    );
+    Future<void> update(
+      AppOrientationPreference orientation, {
+      Size size = const Size(1000, 700),
+    }) async {
+      final pending = window.updateDisplaySize(
+        const Size(1600, 1000),
+        orientation: orientation,
+        logicalWindowSize: size,
+      );
+      await tester.pumpAndSettle();
+      await pending;
+    }
+
+    await update(AppOrientationPreference.portrait);
+    expect(resized.single.width, lessThan(resized.single.height));
+    expect(resized.single.height, lessThanOrEqualTo(900));
+    await update(AppOrientationPreference.portrait);
+    expect(resized, hasLength(1));
+    await update(
+      AppOrientationPreference.landscape,
+      size: const Size(700, 900),
+    );
+    expect(resized.last, const Size(900, 700));
+    final stale = window.updateDisplaySize(
+      const Size(1600, 1000),
+      orientation: AppOrientationPreference.portrait,
+      logicalWindowSize: const Size(1000, 700),
+    );
+    final latest = window.updateDisplaySize(
+      const Size(1600, 1000),
+      logicalWindowSize: const Size(1000, 700),
+    );
+    await tester.pumpAndSettle();
+    await Future.wait([stale, latest]);
+    expect(resized, hasLength(2));
+    available = false;
+    await update(AppOrientationPreference.portrait);
+    expect(resized, hasLength(2));
+    await window.clearDisplayOrientationPolicy();
+  });
+
   for (final size in [const Size(400, 900), const Size(800, 1200)]) {
     testWidgets(
-      'fixed direction overrides fullscreen and size changes: $size',
+      'video fullscreen overrides browse direction and restores it: $size',
       (tester) async {
         _display(tester, size);
         final window = _MobileWindow();
@@ -61,11 +201,16 @@ void main() {
           true,
           orientation: FullScreenOrientation.portrait,
         );
+        expect(orientations.last, ['DeviceOrientation.portraitUp']);
         await window.setFullScreen(false);
+        expect(orientations.last, [
+          'DeviceOrientation.landscapeLeft',
+          'DeviceOrientation.landscapeRight',
+        ]);
         tester.view.display.size = const Size(1200, 800);
         tester.view.physicalSize = const Size(1200, 800);
         await tester.pump();
-        expect(orientations, hasLength(1));
+        expect(orientations, hasLength(3));
         await show(AppOrientationPreference.portrait);
         expect(window.keepsBrowsePortrait, isTrue);
         expect(orientations.last, ['DeviceOrientation.portraitUp']);
@@ -73,10 +218,13 @@ void main() {
           true,
           orientation: FullScreenOrientation.landscape,
         );
-        expect(orientations, hasLength(2));
+        expect(orientations, hasLength(5));
         await show(AppOrientationPreference.automatic);
         expect(window.allowsAutomaticRotation, isTrue);
-        expect(orientations.last, isEmpty);
+        expect(orientations.last, [
+          'DeviceOrientation.landscapeLeft',
+          'DeviceOrientation.landscapeRight',
+        ]);
         expect(child.currentContext, same(originalChild));
         tester.view.display.size = const Size(400, 900);
         tester.view.physicalSize = const Size(400, 900);
@@ -214,7 +362,7 @@ void main() {
     },
   );
 
-  testWidgets('unfolding orders release after a delayed phone fullscreen lock', (
+  testWidgets('unfolding keeps video fullscreen until exit releases the lock', (
     tester,
   ) async {
     final window = _MobileWindow();
@@ -243,15 +391,18 @@ void main() {
     gate.complete();
     await entering;
     await unfold;
-    expect(orientations.last, isEmpty);
-    // A stale fullscreen update is ignored while the full display is expanded.
+    expect(orientations.last, [
+      'DeviceOrientation.landscapeLeft',
+      'DeviceOrientation.landscapeRight',
+    ]);
+    // Video dimensions still own fullscreen on an unfolded display.
     await window.setFullScreen(
       true,
-      orientation: FullScreenOrientation.landscape,
+      orientation: FullScreenOrientation.portrait,
     );
-    expect(orientations, hasLength(3));
+    expect(orientations.last, ['DeviceOrientation.portraitUp']);
     await window.setFullScreen(false);
-    expect(orientations, hasLength(3));
+    expect(orientations.last, isEmpty);
     await window.clearDisplayOrientationPolicy();
   });
 

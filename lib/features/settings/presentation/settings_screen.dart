@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/platform/window_size_policy.dart';
 import '../../../shared/ui/page_tab_style.dart';
 import '../../../shared/ui/paging_tab_strip.dart';
 import '../../../shared/ui/smooth_scroll_behavior.dart';
@@ -341,19 +340,15 @@ final class _SettingsCategoryPageState
                       if (widget.category == SettingsCategory.appearance)
                         _section('外观', [
                           AppIconSettings(value: s.appIcon),
-                          if (WindowSizePolicy.isMobile(
-                            defaultTargetPlatform,
-                          )) ...[
-                            _choices('应用方向', s.orientation, const {
-                              AppOrientationPreference.automatic: '自动',
-                              AppOrientationPreference.portrait: '竖屏',
-                              AppOrientationPreference.landscape: '横屏',
-                            }, controller.setOrientation),
-                            const Text(
-                              '自动：窄屏移动设备浏览时保持竖屏，其他设备跟随系统旋转；竖屏或横屏：固定应用方向，播放全屏时同样生效。',
-                              style: TextStyle(fontSize: 12),
-                            ),
-                          ],
+                          _choices('应用方向', s.orientation, const {
+                            AppOrientationPreference.automatic: '自动',
+                            AppOrientationPreference.portrait: '竖屏',
+                            AppOrientationPreference.landscape: '横屏',
+                          }, controller.setOrientation),
+                          const Text(
+                            '自动：窄屏移动设备浏览时保持竖屏，其他设备按系统方向或窗口尺寸自适应；竖屏或横屏：固定普通页面方向。播放全屏始终按视频方向自动选择。',
+                            style: TextStyle(fontSize: 12),
+                          ),
                           _choices('页面导航模式', s.navigationMode, const {
                             WorkspaceNavigationMode.singlePage: '单标签页',
                             WorkspaceNavigationMode.dualTabs: '双标签页',

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:ui' show AppExitResponse, AppExitType;
 
 import 'package:bilisail/core/platform/window_service.dart';
+import 'package:bilisail/domain/app_orientation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,6 +13,49 @@ import '../../support/window_service_fake.dart';
 
 void main() {
   final binding = _WindowExitTestBinding();
+
+  testWidgets('main direction resize preserves native window presentation', (
+    tester,
+  ) async {
+    const channel = MethodChannel('window_manager');
+    final resized = <Map<Object?, Object?>>[];
+    var presentation = '';
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+      call,
+    ) async {
+      if (call.method == 'setBounds') {
+        resized.add(call.arguments as Map<Object?, Object?>);
+        return null;
+      }
+      return switch (call.method) {
+        'isMaximized' => presentation == 'maximized',
+        'isMinimized' => presentation == 'minimized',
+        'isFullScreen' => presentation == 'fullscreen',
+        _ => null,
+      };
+    });
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        channel,
+        null,
+      ),
+    );
+    final window = WindowService();
+    for (final state in ['maximized', 'minimized', 'fullscreen', 'normal']) {
+      presentation = state;
+      final pending = window.updateDisplaySize(
+        const Size(2000, 1400),
+        orientation: AppOrientationPreference.portrait,
+        logicalWindowSize: const Size(1000, 700),
+      );
+      await tester.pumpAndSettle();
+      await pending;
+      expect(resized, hasLength(state == 'normal' ? 1 : 0));
+    }
+    expect(resized.single['width'], 700);
+    expect(resized.single['height'], 1000);
+    await window.clearDisplayOrientationPolicy();
+  });
 
   testWidgets('main close waits for application cleanup with playback open', (
     tester,
