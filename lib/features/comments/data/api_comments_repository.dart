@@ -53,6 +53,7 @@ final class ApiCommentsRepository
     decorationFanNumber: v.decorationFanNumber,
     decorationFanColor: v.decorationFanColor,
     emotes: v.emotes,
+    linkTitles: v.linkTitles,
     mentionedUsers: Map.unmodifiable({
       for (final entry in v.mentionedUsers.entries)
         entry.key: ?UserId.tryParse(entry.value),

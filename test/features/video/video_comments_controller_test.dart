@@ -79,6 +79,53 @@ void main() {
     auth.changesController.close();
   });
   testWidgets(
+    'new video reference forms navigate through the shared comment panel',
+    (tester) async {
+      const bv = 'BV117BkBsEWw';
+      repo.items = [
+        const CommentEntry(
+          id: '10',
+          author: '甲',
+          message: '$bv\nwww.bilibili.com/video/$bv\nbilibili://video/$bv',
+          linkTitles: {bv: '视频标题'},
+        ),
+      ];
+      final videos = <VideoId>[], opened = <Uri>[];
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authRepositoryProvider.overrideWithValue(auth),
+            videoCommentsRepositoryProvider.overrideWithValue(repo),
+            commentVideoNavigatorProvider.overrideWithValue(videos.add),
+            webLinkOpenerProvider.overrideWithValue((uri) async {
+              opened.add(uri);
+              return true;
+            }),
+          ],
+          child: MaterialApp(
+            home: const Scaffold(
+              body: CommentsPanel(
+                target: CommentTarget('42', CommentTargetType.video),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      for (final label in [
+        '视频标题',
+        'www.bilibili.com/video/$bv',
+        'bilibili://video/$bv',
+      ]) {
+        await tester.tapOnText(find.textRange.ofSubstring(label));
+        await tester.pumpAndSettle();
+      }
+      expect(videos, List.filled(3, const VideoId(bv)));
+      expect(opened, isEmpty);
+      expect(repo.writes, 0);
+    },
+  );
+  testWidgets(
     'main, preview and detailed replies open URLs and seek the local session',
     (tester) async {
       const url = 'https://daily.juya.uk/issues/2026-10-06/';

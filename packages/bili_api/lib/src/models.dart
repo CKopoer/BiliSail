@@ -189,6 +189,7 @@ final class ApiVideoComment {
     this.decorationFanColor,
     this.emotes = const {},
     this.mentionedUsers = const {},
+    this.linkTitles = const {},
     this.pictures = const [],
     this.authorMid,
     this.state,
@@ -211,6 +212,7 @@ final class ApiVideoComment {
 
   /// Server-supplied mention names mapped to decimal user IDs.
   final Map<String, String> mentionedUsers;
+  final Map<String, String> linkTitles;
   final List<Uri> pictures;
   final bool liked;
   final bool isPinned, isUpAuthor, upLiked, upReplied;
