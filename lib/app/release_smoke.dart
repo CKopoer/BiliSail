@@ -46,6 +46,34 @@ enum ReleaseCredentialStep {
   final String marker;
 }
 
+Future<void> waitForReleaseSmokeWindowFocus(
+  int viewId, {
+  WindowInputFocus? focus,
+}) async {
+  final nativeFocus = focus ?? WindowInputFocus.instance;
+  // The first rasterized frame and its AppKit focus notification arrive on
+  // different queues. Observe the real transition without activating again.
+  final focused = Completer<void>();
+  void observe() {
+    if (nativeFocus.observed &&
+        nativeFocus.viewId == viewId &&
+        !focused.isCompleted) {
+      focused.complete();
+    }
+  }
+
+  nativeFocus.addListener(observe);
+  try {
+    await (() async {
+      await nativeFocus.synchronizeNativeFocus();
+      observe();
+      await focused.future;
+    })().timeout(releaseSmokeFocusTimeout);
+  } finally {
+    nativeFocus.removeListener(observe);
+  }
+}
+
 // Run only in the explicit startup smoke of the exact bundle being packaged.
 // This must exercise the real FFI twice; a capability check alone would let
 // an in-window fallback hide a broken macOS multi-window initialization.
@@ -108,12 +136,8 @@ Future<void> verifyMacOSPlaybackWindows(
     try {
       stderr.writeln('BILISAIL_FOCUS_STAGE:prepare');
       await playback.prepare();
-      // Check before any second activation: the SDK installs its window
-      // delegate after makeKeyAndOrderFront, losing the initial focus event.
-      final focus = WindowInputFocus.instance;
-      if (!focus.observed || focus.viewId != playback.viewId) {
-        throw StateError('Initial native playback focus was not synchronized');
-      }
+      // Flutter 3.50 shows a regular macOS window from onFirstFrame. Mount its
+      // content before checking initial focus, without a second activation.
       stderr.writeln('BILISAIL_FOCUS_STAGE:present');
       mainWindow.present(
         app,
@@ -129,7 +153,9 @@ Future<void> verifyMacOSPlaybackWindows(
         ),
       );
       await binding.endOfFrame.timeout(const Duration(seconds: 5));
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+      await waitForReleaseSmokeWindowFocus(playback.viewId);
+      // Let AppInputHost commit the observed native focus on the next frame.
+      await binding.endOfFrame.timeout(const Duration(seconds: 5));
       final view = dispatcher.views.singleWhere(
         (view) => view.viewId == playback.viewId,
       );
