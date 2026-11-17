@@ -9,21 +9,21 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   for (final isAndroid in [true, false]) {
     test(
-      'platform default uses Android=$isAndroid when no flag is supplied',
+      'Android=$isAndroid keeps native queue defaults without an override',
       () {
         expect(
           resolveVideoFrameQueueEnabled(
             isAndroid: isAndroid,
             buildOverride: '',
           ),
-          isAndroid,
+          false,
         );
         expect(
           resolveVideoFrameQueueEnabled(
             isAndroid: isAndroid,
             buildOverride: 'invalid',
           ),
-          isAndroid,
+          false,
         );
       },
     );
@@ -57,7 +57,7 @@ void main() {
         final expected = switch (flag) {
           'true' => true,
           'false' => false,
-          _ => isAndroid,
+          _ => false,
         };
         expect(resolveVideoFrameQueueEnabled(isAndroid: isAndroid), expected);
       }

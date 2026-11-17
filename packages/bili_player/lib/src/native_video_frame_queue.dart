@@ -3,7 +3,7 @@ import 'dart:async';
 import 'native_readiness.dart';
 
 /// Constructor overrides take priority over the build flag and platform default.
-/// An absent or invalid build flag uses Android-on / other-platforms-off.
+/// An absent or invalid build flag keeps mpv's decoder queue defaults.
 bool resolveVideoFrameQueueEnabled({
   required bool isAndroid,
   bool? enabledOverride,
@@ -15,7 +15,7 @@ bool resolveVideoFrameQueueEnabled({
     switch (buildOverride) {
       'true' => true,
       'false' => false,
-      _ => isAndroid,
+      _ => false,
     };
 
 /// Configured before loadfile creates the video decoder.

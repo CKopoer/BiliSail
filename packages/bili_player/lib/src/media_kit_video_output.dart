@@ -325,6 +325,18 @@ final class MediaKitVideoOutput
       return;
     }
     if (Platform.isAndroid) {
+      // Match PiliPlus: idle VO dimensions must not size a newly loaded source.
+      await player.setPropertyAsync('force-window', 'no');
+      if (await player.getPropertyAsync('force-window') != 'no') {
+        throw StateError(
+          'The native backend rejected idle video output policy.',
+        );
+      }
+      if (_disposed ||
+          revision != _bindingRevision ||
+          !identical(_player, player)) {
+        return;
+      }
       // Size SurfaceTexture before the SDK attaches it to the decoder. Track
       // discovery is too late for the GPU's initial buffer while paused.
       final layout = _viewportLayout;

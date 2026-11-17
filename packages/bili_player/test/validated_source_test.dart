@@ -44,6 +44,7 @@ void main() {
       );
       final decoder = videoDecoderConfiguration(
         isAndroid: true,
+        debugMode: false,
         decoding: options.videoDecoding,
         androidOutput: options.androidVideoOutput,
       );
@@ -81,6 +82,7 @@ void main() {
           outputs.add(plan.options.androidVideoOutput);
           final decoder = videoDecoderConfiguration(
             isAndroid: true,
+            debugMode: false,
             decoding: plan.options.videoDecoding,
             androidOutput: plan.options.androidVideoOutput,
           );
