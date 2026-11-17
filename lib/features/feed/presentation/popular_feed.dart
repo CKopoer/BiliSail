@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/presentation/workspace_activity.dart';
 import '../../../domain/app_failure.dart';
+import '../../../domain/video.dart';
 import '../../../shared/ui/paged_scroll_viewport.dart';
 import '../../../shared/ui/content_section_tabs.dart';
 import '../../../shared/ui/responsive_card_grid.dart';
@@ -139,7 +140,43 @@ class _PopularPaneState extends ConsumerState<_PopularPane> {
   final _storage = PageStorageBucket();
   final _weekStorage = <int, PageStorageBucket>{};
   bool _regionFallbackPending = false;
+  List<VideoSummary>? _gridItems;
+  SliverVideoGrid? _grid;
   PopularSection get section => widget.section;
+
+  void _openVideo(VideoId id) => context.go('/video/${id.value}');
+
+  Widget _itemsSliver(AsyncValue<List<VideoSummary>> value) {
+    final items = value.asData?.value;
+    if (!identical(items, _gridItems)) {
+      _gridItems = items;
+      _grid = null;
+    }
+    final controller = ref.read(feedControllerProvider.notifier);
+    return value.when(
+      loading: () => const SliverToBoxAdapter(
+        child: SizedBox(height: 280, child: StateView.loading()),
+      ),
+      error: (error, _) => SliverToBoxAdapter(
+        child: StateView.error(
+          message: error is AppFailure ? error.message : '热门内容加载失败',
+          onAction: controller.refresh,
+        ),
+      ),
+      data: (items) => items.isEmpty
+          ? const SliverToBoxAdapter(
+              child: StateView.empty(message: '这里暂时没有内容'),
+            )
+          // Footer/activity changes must not replace the row delegate. The
+          // cache owns only this pane's current immutable list and widget.
+          : _grid ??= SliverVideoGrid(
+              items: items,
+              showRecommendationReason: section == PopularSection.weekly,
+              onOpen: _openVideo,
+              onOpenUser: (id) => context.go('/user/${id.value}'),
+            ),
+    );
+  }
 
   bool _needsRegionFallback() {
     if (!mounted || !widget.active || !WorkspaceActivity.isActive(context)) {
@@ -280,36 +317,7 @@ class _PopularPaneState extends ConsumerState<_PopularPane> {
                             ref.invalidate(rankingCategoriesProvider),
                       ),
                     ),
-                  SliverCardGridPadding(
-                    sliver: feed.items.when(
-                      loading: () => const SliverToBoxAdapter(
-                        child: SizedBox(
-                          height: 280,
-                          child: StateView.loading(),
-                        ),
-                      ),
-                      error: (error, _) => SliverToBoxAdapter(
-                        child: StateView.error(
-                          message: error is AppFailure
-                              ? error.message
-                              : '热门内容加载失败',
-                          onAction: controller.refresh,
-                        ),
-                      ),
-                      data: (items) => items.isEmpty
-                          ? const SliverToBoxAdapter(
-                              child: StateView.empty(message: '这里暂时没有内容'),
-                            )
-                          : SliverVideoGrid(
-                              items: items,
-                              showRecommendationReason:
-                                  section == PopularSection.weekly,
-                              onOpen: (id) => context.go('/video/${id.value}'),
-                              onOpenUser: (id) =>
-                                  context.go('/user/${id.value}'),
-                            ),
-                    ),
-                  ),
+                  SliverCardGridPadding(sliver: _itemsSliver(feed.items)),
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.all(16),

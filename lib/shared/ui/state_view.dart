@@ -1,5 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../../core/presentation/workspace_activity.dart';
+
 final class StateView extends StatelessWidget {
   const StateView.loading({super.key, this.message = '正在加载…'})
     : icon = Icons.hourglass_empty_rounded,
@@ -38,9 +40,14 @@ final class StateView extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (isLoading)
-                const SizedBox.square(
-                  dimension: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                TickerMode(
+                  // Gate the visual animation only: wrapping a retained page
+                  // also pauses Riverpod consumers and their account updates.
+                  enabled: WorkspaceActivity.isVisible(context),
+                  child: const SizedBox.square(
+                    dimension: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
                 )
               else
                 Icon(icon, size: 36, color: muted),
