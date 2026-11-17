@@ -538,6 +538,16 @@ class _FlutterDetachedPlaybackWindow extends DetachedPlaybackWindow {
       setFullScreen: Platform.isMacOS
           ? (value) => _macOSPresentationCall('setFullScreen', enabled: value)
           : (value) async => _controller.setFullscreen(value),
+      resize: (size) async {
+        if (!_open ||
+            _controller.isMaximized ||
+            _controller.isMinimized ||
+            _controller.isFullscreen) {
+          return false;
+        }
+        _controller.setSize(size);
+        return true;
+      },
       prepareToClose: Platform.isMacOS
           ? () => _macOSPresentationCall('prepareToClose')
           : null,

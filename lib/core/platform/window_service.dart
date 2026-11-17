@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui' show AppExitType;
 
 import 'package:flutter/foundation.dart';
@@ -44,6 +45,7 @@ class WindowService {
     : viewId = null,
       nativeWindowHandle = null,
       _setViewFullScreen = null,
+      _resizeView = null,
       _prepareViewToClose = null,
       _activateView = null,
       _isViewAvailable = null;
@@ -52,10 +54,12 @@ class WindowService {
     required this.viewId,
     this.nativeWindowHandle,
     required Future<void> Function(bool value) setFullScreen,
+    Future<bool> Function(Size size)? resize,
     required Future<void> Function() activate,
     Future<void> Function()? prepareToClose,
     bool Function()? isAvailable,
   }) : _setViewFullScreen = setFullScreen,
+       _resizeView = resize,
        _prepareViewToClose = prepareToClose,
        _activateView = activate,
        _isViewAvailable = isAvailable;
@@ -381,6 +385,7 @@ class WindowService {
   final int? viewId;
   final int? nativeWindowHandle;
   final Future<void> Function(bool value)? _setViewFullScreen;
+  final Future<bool> Function(Size size)? _resizeView;
   final Future<void> Function()? _prepareViewToClose;
   final Future<void> Function()? _activateView;
   final bool Function()? _isViewAvailable;
@@ -422,6 +427,12 @@ class WindowService {
   FullScreenOrientation? _mobileFullScreenOrientation;
   FullScreenOrientation? _appliedMobileOrientation;
   Future<void> _orientationCommands = Future<void>.value();
+  final _fullScreenOrientation = ValueNotifier<AppOrientationPreference?>(null);
+  ValueListenable<AppOrientationPreference?> get fullScreenOrientation =>
+      _fullScreenOrientation;
+  Size? _desktopWindowSize;
+  Size? _desktopDisplaySize;
+  (Size, Size, AppOrientationPreference)? _lastDesktopResize;
   bool get isFullScreen => _fullScreen;
   bool get allowsAutomaticRotation =>
       _orientationPreference == AppOrientationPreference.automatic;
@@ -434,38 +445,124 @@ class WindowService {
   Future<void> updateDisplaySize(
     Size logicalDisplaySize, {
     AppOrientationPreference orientation = AppOrientationPreference.automatic,
+    Size? logicalWindowSize,
   }) {
-    if (hasDesktopWindow || viewId != null) return Future<void>.value();
-    _browsePortrait = WindowSizePolicy.compactDisplay(logicalDisplaySize);
     _orientationPreference = orientation;
+    if (hasDesktopWindow || viewId != null) {
+      _desktopWindowSize = logicalWindowSize;
+      _desktopDisplaySize = logicalDisplaySize;
+      return _applyDesktopOrientation();
+    }
+    _browsePortrait = WindowSizePolicy.compactDisplay(logicalDisplaySize);
     return _applyMobileOrientation();
   }
 
   Future<void> clearDisplayOrientationPolicy() {
-    if (_browsePortrait == null) return Future<void>.value();
     _browsePortrait = null;
     _orientationPreference = AppOrientationPreference.automatic;
+    _desktopWindowSize = null;
+    _lastDesktopResize = null;
+    if (hasDesktopWindow || viewId != null) return Future<void>.value();
     return _applyMobileOrientation();
+  }
+
+  Future<void> _applyDesktopOrientation() {
+    final operation = _orientationCommands.then((_) async {
+      if (_orientationPreference == AppOrientationPreference.automatic ||
+          _desktopWindowSize == null ||
+          _fullScreen ||
+          _fullScreenOrientation.value != null) {
+        _lastDesktopResize = null;
+        return;
+      }
+      // SDK window operations can pump native messages. Leave the Flutter
+      // frame before resizing, and consume the latest preference afterwards.
+      await Future<void>.delayed(Duration.zero);
+      final preference = _orientationPreference;
+      final size = _desktopWindowSize;
+      final display = _desktopDisplaySize;
+      if (_closing ||
+          _isViewAvailable?.call() == false ||
+          preference == AppOrientationPreference.automatic ||
+          size == null ||
+          size.isEmpty ||
+          !size.isFinite ||
+          display == null ||
+          display.isEmpty ||
+          !display.isFinite) {
+        _lastDesktopResize = null;
+        return;
+      }
+      final portrait = preference == AppOrientationPreference.portrait;
+      if (portrait ? size.width < size.height : size.width > size.height) {
+        _lastDesktopResize = null;
+        return;
+      }
+      final request = (size, display, preference);
+      if (_lastDesktopResize == request ||
+          miniPlayer.value ||
+          _fullScreen ||
+          _fullScreenOrientation.value != null) {
+        return;
+      }
+      // Fit the swapped rectangle within the display. Fullscreen/maximized
+      // windows retain their native state; the host constrains their viewport.
+      final swapped = size.width == size.height
+          ? (portrait
+                ? Size(size.width * 9 / 16, size.height)
+                : Size(size.width, size.height * 9 / 16))
+          : Size(size.height, size.width);
+      final scale = math.min(
+        1.0,
+        math.min(
+          display.width * .9 / swapped.width,
+          display.height * .9 / swapped.height,
+        ),
+      );
+      final target = swapped * scale;
+      final resize = _resizeView;
+      if (resize != null) {
+        if (await resize(target).timeout(_geometryTimeout)) {
+          _lastDesktopResize = request;
+        }
+      } else if (viewId == null) {
+        if (await windowManager.isMaximized().timeout(_geometryTimeout) ||
+            await windowManager.isMinimized().timeout(_geometryTimeout) ||
+            await windowManager.isFullScreen().timeout(_geometryTimeout)) {
+          return;
+        }
+        if (_closing ||
+            preference != _orientationPreference ||
+            size != _desktopWindowSize ||
+            display != _desktopDisplaySize) {
+          return;
+        }
+        await windowManager.setSize(target).timeout(_geometryTimeout);
+        _lastDesktopResize = request;
+      }
+    });
+    _orientationCommands = operation.then(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return operation;
   }
 
   Future<void> _applyMobileOrientation() {
     final operation = _orientationCommands.then((_) async {
-      // Read the latest display and owner intent when the command runs, so a
-      // late phone request cannot re-lock an unfolded display.
-      final automaticOrientation = _browsePortrait == false
-          ? null
-          : _mobileFullScreenRequested
+      // Read the latest display and owner intent when the command runs.
+      // Fullscreen belongs to the video's dimensions on every display size.
+      // The app preference only owns the browsing layout restored on exit.
+      final orientation = _mobileFullScreenRequested
           ? _mobileFullScreenOrientation
-          : _browsePortrait == true
-          ? FullScreenOrientation.portrait
-          : null;
-      // Explicit app direction also applies to fullscreen, on every mobile
-      // display size. Only automatic mode delegates direction to playback.
-      final orientation = switch (_orientationPreference) {
-        AppOrientationPreference.automatic => automaticOrientation,
-        AppOrientationPreference.portrait => FullScreenOrientation.portrait,
-        AppOrientationPreference.landscape => FullScreenOrientation.landscape,
-      };
+          : switch (_orientationPreference) {
+              AppOrientationPreference.automatic =>
+                _browsePortrait == true ? FullScreenOrientation.portrait : null,
+              AppOrientationPreference.portrait =>
+                FullScreenOrientation.portrait,
+              AppOrientationPreference.landscape =>
+                FullScreenOrientation.landscape,
+            };
       if (orientation == _appliedMobileOrientation) return;
       await SystemChrome.setPreferredOrientations(switch (orientation) {
         FullScreenOrientation.landscape => const [
@@ -592,6 +689,14 @@ class WindowService {
       }
     }
     _fullScreen = value;
+    _fullScreenOrientation.value = value
+        ? switch (orientation) {
+            FullScreenOrientation.portrait => AppOrientationPreference.portrait,
+            FullScreenOrientation.landscape =>
+              AppOrientationPreference.landscape,
+            null => AppOrientationPreference.automatic,
+          }
+        : null;
   }
 }
 

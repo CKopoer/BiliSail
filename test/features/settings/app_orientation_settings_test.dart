@@ -202,15 +202,12 @@ void main() {
   );
 
   testWidgets(
-    'desktop settings do not offer unsupported direction controls',
+    'desktop direction choices default to automatic and persist',
     (tester) async {
+      final repository = MemorySettingsRepository();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [
-            settingsRepositoryProvider.overrideWithValue(
-              MemorySettingsRepository(),
-            ),
-          ],
+          overrides: [settingsRepositoryProvider.overrideWithValue(repository)],
           child: const MaterialApp(
             home: Scaffold(
               body: SettingsScreen(category: SettingsCategory.appearance),
@@ -219,7 +216,21 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('应用方向'), findsNothing);
+      expect(find.text('应用方向'), findsOneWidget);
+      final automatic = find.widgetWithText(ChoiceChip, '自动').first;
+      expect(tester.widget<ChoiceChip>(automatic).selected, isTrue);
+      for (final (label, orientation) in [
+        ('竖屏', AppOrientationPreference.portrait),
+        ('横屏', AppOrientationPreference.landscape),
+        ('自动', AppOrientationPreference.automatic),
+      ]) {
+        final choice = find.widgetWithText(ChoiceChip, label).first;
+        await tester.ensureVisible(choice);
+        await tester.tap(choice);
+        await tester.pumpAndSettle();
+        expect(repository.value.orientation, orientation);
+        expect(tester.widget<ChoiceChip>(choice).selected, isTrue);
+      }
     },
     variant: TargetPlatformVariant({
       TargetPlatform.windows,

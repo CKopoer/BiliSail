@@ -534,7 +534,6 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   }
 
   FullScreenOrientation? get _preferredFullScreenOrientation {
-    if (!_isPhoneDisplay) return null;
     return _videoOrientation ??
         _fullScreenOrientation ??
         (_isViewLandscape
@@ -552,7 +551,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
 
   bool get _usesCompactRotation {
     if (widget.window.hasDesktopWindow ||
-        !widget.window.allowsAutomaticRotation) {
+        (!_fullScreen && !widget.window.allowsAutomaticRotation)) {
       return false;
     }
     final view = _view;
@@ -692,7 +691,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
         _active &&
         _appResumed &&
         _isPhoneDisplay &&
-        widget.window.allowsAutomaticRotation &&
+        (_fullScreen || widget.window.allowsAutomaticRotation) &&
         widget.window.supportsPhoneRotationActions &&
         (_fullScreen
             ? _fullScreenRequest != null
@@ -704,6 +703,12 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
       return;
     }
     if (_deviceOrientationSubscription != null) return;
+    if (_fullScreen) {
+      // A browse direction lock says nothing about the physical posture. A
+      // fresh fullscreen subscription must establish its own first baseline.
+      _deviceOrientationBaselinePending = true;
+      _physicalLandscapeSeen = false;
+    }
     final owner = Object();
     _deviceOrientationOwner = owner;
     _deviceOrientationSubscription = widget.window.deviceOrientations.listen((
@@ -768,10 +773,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     _syncDeviceOrientation();
     _scheduleAutoFullScreen();
     final request = _fullScreenRequest;
-    if (request == null ||
-        !_fullScreen ||
-        !_active ||
-        widget.window.hasDesktopWindow) {
+    if (request == null || !_fullScreen || !_active) {
       return;
     }
     final orientation = _preferredFullScreenOrientation;

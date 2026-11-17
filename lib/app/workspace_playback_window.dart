@@ -8,6 +8,7 @@ import '../core/platform/playback_window_chrome.dart';
 import '../core/platform/window_service.dart';
 import '../core/presentation/app_input_host.dart';
 import '../core/presentation/input_scope.dart';
+import '../core/presentation/window_orientation_host.dart';
 import '../features/settings/domain/shortcut_settings.dart';
 import '../shared/ui/app_notice.dart';
 import '../shared/ui/responsive_layout_scope.dart';
@@ -205,6 +206,7 @@ class _WorkspacePlaybackWindowState extends State<WorkspacePlaybackWindow> {
   Widget build(BuildContext context) {
     _input.configure(widget.shortcuts);
     final window = WindowServiceScope.maybeOf(context);
+    final orientation = WindowOrientationHost.orientationOf(context);
     return MaterialApp(
       title: '哔帆 · 播放',
       theme: widget.theme,
@@ -214,37 +216,46 @@ class _WorkspacePlaybackWindowState extends State<WorkspacePlaybackWindow> {
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       scrollBehavior: const SmoothScrollBehavior(),
       navigatorObservers: [_input.routes],
-      builder: (context, child) => SmoothScrollScope(
-        animation: widget.wheelScrollAnimation,
-        dampingRatio: widget.wheelDampingRatio,
-        chromiumCurve: widget.chromiumScrollCurve,
-        distanceMultiplier: widget.wheelScrollDistanceMultiplier,
-        durationMultiplier: widget.wheelScrollDurationMultiplier,
-        child: AppInputHost<Object>(
-          dispatcher: _input,
-          routes: _input.routes,
-          onEditingChanged: window == null
-              ? null
-              : (active) => window.setTextInputActive(active),
-          child: AppNoticeHost(
-            child: CommandTargetScope<Object>(
-              scope: CommandScope.workspace,
-              commands: {
-                for (final command in <Object>[
-                  ShortcutAction.closeTab,
-                  ShortcutAction.nextTab,
-                  ShortcutAction.previousTab,
-                ])
-                  command: (stroke) => _command(command, stroke),
-              },
-              child: ResponsiveLayoutScope(
-                settings: widget.responsiveLayout,
-                child: child ?? const SizedBox.shrink(),
+      builder: (context, child) {
+        final content = SmoothScrollScope(
+          animation: widget.wheelScrollAnimation,
+          dampingRatio: widget.wheelDampingRatio,
+          chromiumCurve: widget.chromiumScrollCurve,
+          distanceMultiplier: widget.wheelScrollDistanceMultiplier,
+          durationMultiplier: widget.wheelScrollDurationMultiplier,
+          child: AppInputHost<Object>(
+            dispatcher: _input,
+            routes: _input.routes,
+            onEditingChanged: window == null
+                ? null
+                : (active) => window.setTextInputActive(active),
+            child: AppNoticeHost(
+              child: CommandTargetScope<Object>(
+                scope: CommandScope.workspace,
+                commands: {
+                  for (final command in <Object>[
+                    ShortcutAction.closeTab,
+                    ShortcutAction.nextTab,
+                    ShortcutAction.previousTab,
+                  ])
+                    command: (stroke) => _command(command, stroke),
+                },
+                child: ResponsiveLayoutScope(
+                  settings: widget.responsiveLayout,
+                  child: child ?? const SizedBox.shrink(),
+                ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+        return window == null
+            ? content
+            : WindowOrientationHost(
+                window: window,
+                orientation: orientation,
+                child: content,
+              );
+      },
       home: Scaffold(
         body: SafeArea(
           child: Column(
