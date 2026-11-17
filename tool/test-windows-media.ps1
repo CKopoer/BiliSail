@@ -17,6 +17,7 @@ try {
   & flutter @silentArguments
   if ($LASTEXITCODE -ne 0) { throw 'Windows silent video validation failed' }
   & (Join-Path $PSScriptRoot 'test-windows-buffer.ps1')
+  & (Join-Path $PSScriptRoot 'test-windows-http-audio.ps1')
 } finally {
   $env:BILI_TEST_SYSTEM_MEDIA_SCRIPT = $previousSystemMediaScript
   Remove-Item Env:BILI_TEST_MEDIA_DIR -ErrorAction SilentlyContinue

@@ -44,7 +44,6 @@ void registerMediaKitSeekSynchronizationTests({
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       final blocked = Completer<void>();
       final resumeVideo = Completer<void>();
-      final secondBlocked = Completer<void>();
       var blockedRequests = 0;
       var delayVideo = false;
       server.listen((request) async {
@@ -64,7 +63,6 @@ void registerMediaKitSeekSynchronizationTests({
         }
         if (delayVideo) {
           blockedRequests++;
-          if (blockedRequests == 2) secondBlocked.complete();
           if (!blocked.isCompleted) blocked.complete();
           await resumeVideo.future;
         }
@@ -128,6 +126,7 @@ void registerMediaKitSeekSynchronizationTests({
             .widget<mkv.Video>(find.byType(mkv.Video))
             .controller
             .player;
+        final playlistEntry = await native.getPropertyAsync('playlist/0/id');
         delayVideo = true;
         var seekCompleted = false;
         final seeking = engine.seek(const Duration(seconds: 9)).then((_) {
@@ -181,13 +180,10 @@ void registerMediaKitSeekSynchronizationTests({
           _ => null,
         };
         if (scenario.startsWith('supersededAgain')) {
-          await _withFrames(
-            tester,
-            secondBlocked.future.timeout(const Duration(seconds: 3)),
-          );
-          // Android's decoder Surface is flushed during a native source
-          // replacement. Check the decoded final frame below; retaining the
-          // old texture's pixels while reloading is a desktop guarantee.
+          await tester.pump(const Duration(milliseconds: 200));
+          // A replacement target is queued in the same native source. It must
+          // not stop/loadfile merely to interrupt the held demuxer read.
+          expect(blockedRequests, 1);
           if (!Platform.isAndroid) await _pixels(boundaryKey);
           if (scenario.endsWith('Stopped')) {
             await _withFrames(tester, engine.stop());
@@ -204,12 +200,13 @@ void registerMediaKitSeekSynchronizationTests({
           ]);
         }
         if (scenario.startsWith('superseded')) {
-          // A newer target cancels the obsolete wait before video refills.
+          // A newer target cancels the obsolete Dart wait promptly. mpv still
+          // owns its active I/O; let that connection supply data before asking
+          // the latest native target to be confirmed.
           await _withFrames(
             tester,
             seeking.timeout(const Duration(milliseconds: 500)),
           );
-          await _withFrames(tester, next!.timeout(const Duration(seconds: 3)));
           expect(resumeVideo.isCompleted, false);
         }
         resumeVideo.complete();
@@ -222,6 +219,7 @@ void registerMediaKitSeekSynchronizationTests({
         expect(engine.currentSnapshot.isSeeking, isFalse);
         expect(engine.currentSnapshot.desiredPlaying, shouldPlay);
         expect(engine.currentSnapshot.generation, generation);
+        expect(await native.getPropertyAsync('playlist/0/id'), playlistEntry);
         expect(failures, isEmpty);
         expect(
           await native.getPropertyAsync('pause'),

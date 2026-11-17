@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:media_kit_video/media_kit_video.dart' as mkv;
 
 import 'player_contract.dart';
@@ -10,11 +11,13 @@ mkv.VideoControllerConfiguration videoDecoderConfiguration({
   required VideoDecodingMode decoding,
   AndroidVideoOutputMode androidOutput = AndroidVideoOutputMode.renderedTexture,
   bool Function()? usesDolbyVisionRenderer,
+  bool debugMode = kDebugMode,
 }) => isAndroid && usesDolbyVisionRenderer != null
     ? _AndroidSourceVideoConfiguration(
         decoding,
         androidOutput,
         usesDolbyVisionRenderer,
+        debugMode,
       )
     : mkv.VideoControllerConfiguration(
         // Software decoding still uses the GPU video output. Desktop defaults remain
@@ -22,7 +25,9 @@ mkv.VideoControllerConfiguration videoDecoderConfiguration({
         hwdec: decoding == VideoDecodingMode.software
             ? 'no'
             : isAndroid
-            ? 'mediacodec,auto-safe'
+            ? debugMode
+                  ? 'auto-safe'
+                  : 'mediacodec,auto-safe'
             : null,
         vo:
             isAndroid &&
@@ -42,12 +47,15 @@ final class _AndroidSourceVideoConfiguration
     VideoDecodingMode decoding,
     this.androidOutput,
     this.usesDolbyVisionRenderer,
+    bool debugMode,
   ) : direct =
           decoding == VideoDecodingMode.automatic &&
           androidOutput == AndroidVideoOutputMode.directTexture,
       super(
         hwdec: decoding == VideoDecodingMode.software
             ? 'no'
+            : debugMode
+            ? 'auto-safe'
             : 'mediacodec,auto-safe',
         // Keep the Surface available to the pre-decoder color hook, including
         // sources that will use software HEVC with gpu-next.

@@ -45,7 +45,7 @@ mpv [v0.41.0 音频时钟](https://github.com/mpv-player/mpv/blob/v0.41.0/player
 
 ## 优化及取舍
 
-[configureNativeRateAudio](../../packages/bili_player/lib/src/native_rate_audio.dart)在有音轨的点播打开前，保留 `audio-buffer=0.05` 和 `af=scaletempo2`，新增经回读确认的 `autosync=30`。mpv [视频调度源码](https://github.com/mpv-player/mpv/blob/v0.41.0/player/video.c)的 `update_avsync_before_frame` 将 AO 报告值与基于已播放时间的预测作平均，降低时钟突变触发的一次性回切追帧。30 是平均因子，不是 30ms 延迟、30fps 或速率渐变。
+当时的 `configureNativeRateAudio` 在有音轨的点播打开前，保留 `audio-buffer=0.05` 和 `af=scaletempo2`，新增经回读确认的 `autosync=30`。mpv [视频调度源码](https://github.com/mpv-player/mpv/blob/v0.41.0/player/video.c)的 `update_avsync_before_frame` 将 AO 报告值与基于已播放时间的预测作平均，降低时钟突变触发的一次性回切追帧。30 是平均因子，不是 30ms 延迟、30fps 或速率渐变。该强制音频策略后续已撤回；2026-11-17 的现行配置见[底层对齐记录](piliplus-playback-parity-2026-11-17.md)。
 
 三项配置共用原打开 deadline，源失效、超时或原生静默拒绝均不能继续发布成功。配置沿用原范围：有音轨点播、离线和听视频；直播、无声 DASH、静音视频预览不变。调速过程仍只写一次目标 `speed`，不增加定时调速、暂停、seek 或滤镜重建。
 

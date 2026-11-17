@@ -1,5 +1,7 @@
 # 参考项目、证据与采用边界
 
+2026-11-17 播放底层对齐只读核对 PiliPlus `217fb54f51f6764176319bbdedab2a7522d75401` 的 `lib/plugin/pl_player/controller.dart`、`lib/utils/storage_pref.dart`、`models/hwdec_type.dart` 及其锁定的 media-kit 核心 `73771ec38176be2d984a3049c28177bce23b54a0`；核对本机两应用实际 libmpv／FFmpeg 版本与固定 mpv 的 curl／lavf 源码。独立实现 HTTP 路径、同步、音频、seek 和解码队列行为对齐；无 GPLv3 应用源码／资源复制、相邻仓库／Pub 缓存修改或依赖替换。逐项采用边界及受控失声复现见[底层对齐记录](validation/piliplus-playback-parity-2026-11-17.md)。
+
 2026-11-17 评论链接只读参考 PiliPlus `217fb54f51f6764176319bbdedab2a7522d75401` 的评论富文本、`ReplyContent.jumpUrl` 和视频 scheme 分发，核对其实际 overrides／锁文件。仅借鉴服务端链接标题、行内图标和 BV／AV 视频身份的职责，独立实现本项目纯 Dart 解析、协议字段映射与共享评论组件；未复制 GPLv3 应用源码／资源、修改相邻仓库或依赖。来源、行为及验证见[专项记录](validation/comment-video-links-2026-11-17.md)。
 
 2026-11-17 起，在线点播和直播按 PiliPlus 的 mpv 缓存配置和明确网络错误重试，移除半窗口、累计缓冲、时钟故障推断及启动换线。此前记录中的策略属于历史实现。行为对照与验证见[点播与直播的原生缓存和网络重试](validation/piliplus-network-retry-2026-11-17.md)。

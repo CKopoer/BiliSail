@@ -16,7 +16,7 @@
 
 ## 适配当前实现
 
-[NativeRateAudio](../../packages/bili_player/lib/src/native_rate_audio.dart) 由 [MediaKitBackend](../../packages/bili_player/lib/src/media_kit_backend.dart) 持有，与原生播放器同寿命。每次 `preparePaused` 在打开媒体、开始解码之前应用有声点播策略；手势按下／松开仍只调速，不修改滤镜、不 seek、不暂停或重开媒体。
+当时的 `NativeRateAudio` 由 [MediaKitBackend](../../packages/bili_player/lib/src/media_kit_backend.dart) 持有，与原生播放器同寿命。每次 `preparePaused` 在打开媒体、开始解码之前应用有声点播策略；手势按下／松开仍只调速，不修改滤镜、不 seek、不暂停或重开媒体。2026-11-17 按用户要求统一采用 PiliPlus 的播放底层行为，该强制音频策略已删除，现行实现与验证见[底层对齐记录](piliplus-playback-parity-2026-11-17.md)。
 
 首次应用前保存后端实际的四项默认值。同一实例复用到有声视频／影视／离线／听视频时重新应用；切到直播、静音 DASH 或无声预览时恢复首次默认值，而非把前一源的点播策略当成默认。首次就是直播／静音源时不写入音频策略。保留 EDL、SDK 事件、原生实例复用、解码选择、网络预读、用户音量及独立增益。
 

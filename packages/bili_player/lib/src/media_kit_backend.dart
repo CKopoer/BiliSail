@@ -16,7 +16,6 @@ import 'native_player_properties.dart';
 import 'native_buffering_diagnostics.dart';
 import 'native_load_observer.dart';
 import 'native_audio_gain.dart';
-import 'native_rate_audio.dart';
 import 'native_video_frame_queue.dart';
 import 'native_video_color.dart';
 import 'video_dimensions.dart';
@@ -33,7 +32,11 @@ final class MediaKitBackend
     bool? experimentalAndroidViewport,
     this.experimentalAudioAutosync,
     Future<mk.Player> Function()? createPlayer,
-  }) : _createPlayer = createPlayer ?? createNativePlayer,
+  }) : _createPlayer =
+           createPlayer ??
+           (() => createNativePlayer(
+             experimentalAudioAutosync: experimentalAudioAutosync,
+           )),
        _videoOutput = MediaKitVideoOutput(
          limitAndroidOutputToViewport: experimentalAndroidViewport,
        ),
@@ -56,12 +59,9 @@ final class MediaKitBackend
   final MediaKitVideoOutput _videoOutput;
   final List<StreamSubscription<Object?>> _subscriptions = [];
   mk.Player? _player;
-  String? _seekMedia;
-  bool _replaceSeek = false;
   NativeLoadObserver? _nativeLoad;
   Future<NativeLoadObserver>? _attachingLoad;
   NativeAudioGain? _audioGain;
-  NativeRateAudio? _rateAudio;
   Future<mk.Player>? _creating;
   Future<void>? _disposal;
   PlaybackOperation? _preparation;
@@ -74,7 +74,6 @@ final class MediaKitBackend
   NativeReadinessStage? _readinessStage;
   Timer? _colorDeadline;
   bool _networkOpenError = false;
-  Map<String, String> _fileOptions = const {};
   NativeBufferingDiagnostics? _bufferDiagnostics;
   DiagnosticSourceKind? diagnosticSourceKind;
   NativeReadinessStage? get readinessStage => _readinessStage;
@@ -516,22 +515,6 @@ final class MediaKitBackend
         timeout: _remaining(watch, openBudget),
       );
     }
-    // Configure before decoding starts, never during a hold/release. This
-    // controller follows the native player's lifetime across source reuse.
-    final rateAudio = _rateAudio ??= NativeRateAudio(
-      write: player.setPropertyAsync,
-      read: player.getPropertyAsync,
-    );
-    await rateAudio.configure(
-      enabled: !plan.live && !plan.silent,
-      isCurrent: () =>
-          generation == _generation &&
-          !_disposed &&
-          !operation.isCancelled &&
-          identical(_player, player),
-      timeout: _remaining(watch, openBudget),
-      experimentalAutosync: experimentalAudioAutosync,
-    );
     if (experimentalVideoFrameQueue && source is DashPairSource) {
       await configureNativeVideoFrameQueue(
         write: player.setPropertyAsync,
@@ -546,8 +529,7 @@ final class MediaKitBackend
     }
     if (generation != _generation || _disposed) throw const SourceSuperseded();
     final mediaUri = nativeMediaUri(mediaTrack.uri, audioTrack?.uri);
-    _seekMedia = mediaUri;
-    _fileOptions = {
+    final fileOptions = {
       'force-media-title': 'BiliSail',
       if (video.uri.scheme == 'file' || video.uri.scheme == 'content')
         'cache': 'no'
@@ -573,7 +555,7 @@ final class MediaKitBackend
           mk.Media(
             mediaUri,
             httpHeaders: mediaTrack.requestPolicy.headers,
-            nativeOptions: _fileOptions,
+            nativeOptions: fileOptions,
             // Resume as part of loading, before decoding the first frame.
             // Opening at zero and seeking afterward buffers twice when
             // returning from audio-only playback.
@@ -819,9 +801,6 @@ final class MediaKitBackend
     final player = _player!;
     final generation = _generation;
     final revision = ++_seekRevision;
-    final replacePending = _replaceSeek;
-    _replaceSeek = false;
-    if (replacePending) await operation.wait(pauseAndWait());
     final watch = Stopwatch()..start();
     final budget = operation.remaining;
     // Keep the confirmed source's video barrier while native events settle.
@@ -830,27 +809,12 @@ final class MediaKitBackend
         _hasRealTrack(player.state.tracks.video);
     final load = _nativeLoad;
     final previousSeek = load?.state.seekCount ?? 0;
-    final previousLoad = load?.state.loadCount ?? 0;
     // mpv owns seeking and cache-pause for the whole pair. Preserve native
     // playback intent and packet cache instead of stopping/reloading the source.
     if (revision != _seekRevision || generation != _generation) {
       throw const SourceSuperseded();
     }
-    final media = _seekMedia;
-    if (replacePending && media != null) {
-      await player.native.command([
-        'loadfile',
-        media,
-        'replace',
-        '-1',
-        [
-          for (final e in _fileOptions.entries) '${e.key}=${e.value}',
-          'start=${(target.inMicroseconds / 1000000).toStringAsFixed(6)}',
-        ].join(','),
-      ]);
-    } else {
-      await player.seek(target);
-    }
+    await player.seek(target);
     // time-pos may jump before any target video data has arrived. Require
     // SEEK -> PLAYBACK_RESTART as well as the confirmed target position.
     final duration = player.state.duration;
@@ -863,13 +827,8 @@ final class MediaKitBackend
       () =>
           (!video ||
               load != null &&
-                  (replacePending
-                      ? load.state.loadCount > previousLoad &&
-                            load.state.restartedLoadCount ==
-                                load.state.loadCount
-                      : load.state.seekCount > previousSeek &&
-                            load.state.restartedSeekCount ==
-                                load.state.seekCount)) &&
+                  load.state.seekCount > previousSeek &&
+                  load.state.restartedSeekCount == load.state.seekCount) &&
           (player.state.position - expected).abs() <=
               const Duration(milliseconds: 250),
       [player.stream.position, _seekChanges.stream],
@@ -890,12 +849,6 @@ final class MediaKitBackend
     _seekChanges.add(++_seekRevision);
     // The next native seek replaces this target. Retiring only the Dart wait
     // keeps mpv's source, demuxer cache and selected external audio intact.
-    if (_player?.state.buffering != true) return;
-    // A blocked demux read cannot accept another seek until its socket exits.
-    // Reserve source retirement for that native buffering path.
-    _replaceSeek = true;
-    await _player?.native.command(['stop']);
-    await Future<void>.delayed(Duration.zero);
   }
 
   void _subscribe(
@@ -953,7 +906,7 @@ final class MediaKitBackend
         (value) => event(BackendEvent(BackendEventKind.playing, value: value)),
       ),
       player.stream.completed.listen((value) {
-        if (!value || _seek != null || _replaceSeek) return;
+        if (!value || _seek != null) return;
         final revision = _seekRevision;
         unawaited(() async {
           try {
@@ -964,8 +917,7 @@ final class MediaKitBackend
             if (!active() ||
                 revision != _seekRevision ||
                 eof != 'yes' ||
-                _seek != null ||
-                _replaceSeek) {
+                _seek != null) {
               return;
             }
             event(
@@ -1086,8 +1038,6 @@ final class MediaKitBackend
     _mediaLeases = AndroidMediaLeases();
     await _nativeLoad!.reset();
     _seek = null;
-    _seekMedia = null;
-    _replaceSeek = false;
     _readinessStage = null;
   }
 

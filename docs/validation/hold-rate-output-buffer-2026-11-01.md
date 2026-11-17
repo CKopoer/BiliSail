@@ -14,7 +14,7 @@
 
 ## 修改
 
-- 将原 `configureNativeTempoFilter` 扩展并重命名为 [configureNativeRateAudio](../../packages/bili_player/lib/src/native_rate_audio.dart)。点播打开前依次写入／回读 `audio-buffer=0.05` 和 `af=scaletempo2`。两项共用原打开截止时间，每一步前后检查当前源，拒绝未应用的配置；数值回读允许 mpv 的小数格式标准化。
+- 将原 `configureNativeTempoFilter` 扩展并重命名为当时的 `configureNativeRateAudio`。点播打开前依次写入／回读 `audio-buffer=0.05` 和 `af=scaletempo2`。两项共用原打开截止时间，每一步前后检查当前源，拒绝未应用的配置；数值回读允许 mpv 的小数格式标准化。该历史策略已撤回，现行配置见[2026-11-17 底层对齐](piliplus-playback-parity-2026-11-17.md)。
 - 50 ms 是输出最小缓冲请求，保留多个音频设备周期；设备仍可能选择更大的队列。调速期间继续只改 `speed`，不暂停、seek、重开媒体或重写滤镜，保持音调校正。
 - 配置沿用原常驻滤镜的范围：有音轨的点播 DASH、普通／影视／离线媒体及听视频；直播、视频预览和明确无声 DASH 不调整。每次打开创建新原生播放器，不向直播残留点播配置。
 - 网络前后向缓存、预缓冲门槛、用户音量／响度增益、400 ms 手势默认延迟和有效设置、暂停意图、固定倍速及运行内记忆保持原规则。没有新增依赖、设置字段或迁移。
@@ -47,7 +47,7 @@ flutter run --profile -d windows -t packages/bili_player/tool/rate_transition_pr
 
 ## 自动检查与验收边界
 
-[配置回归](../../packages/bili_player/test/native_rate_audio_test.dart)共 17 项，通过 fake 属性读写验证输出缓冲、常驻滤镜、标准化回读、拒绝静默失败、每一步源替换、超时后的迟到写入和共享 deadline；保留网络缓存及音量／增益。Windows 既有普通／全屏上滑固定回归扩展为真实播放中分别执行键盘／触摸 1x→2x→1x，确认音视频仍解码、位置继续前进、播放意图与源代次保持；该行为断言不替代 Profile 连续性测量。
+当时的 `native_rate_audio_test.dart` 配置回归共 17 项，通过 fake 属性读写验证输出缓冲、常驻滤镜、标准化回读、拒绝静默失败、每一步源替换、超时后的迟到写入和共享 deadline；保留网络缓存及音量／增益。Windows 既有普通／全屏上滑固定回归扩展为真实播放中分别执行键盘／触摸 1x→2x→1x，确认音视频仍解码、位置继续前进、播放意图与源代次保持；该行为断言不替代 Profile 连续性测量。
 
 - 根检查脚本分阶段通过：根应用 **3922** 项，`bili_api` **540**、`bili_player` **131**、`bili_danmaku` **153**、`bili_mux` **5** 项，共 **4751 项通过**。根应用 13 项符号链接用例因权限条件跳过；mux 的 10 项原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计作原生封装通过。根应用通过记录在 `build/hold-rate-output-check-final.log`；最终四包日志为 `build/hold-rate-output-package-check-final.log`。
 - 最后执行 `tool/check.ps1 -SkipPub -Stage Lint`，格式、全库静态分析、Linux 插件分析和打包边界检查通过，见 `build/hold-rate-output-lint-final.log`。新增文档相对链接及 `git diff --check` 通过。

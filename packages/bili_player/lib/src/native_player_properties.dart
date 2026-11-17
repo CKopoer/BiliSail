@@ -1,7 +1,10 @@
 import 'dart:ffi';
+import 'dart:io';
 
 import 'package:ffi/ffi.dart';
 import 'package:media_kit/media_kit.dart' as mk;
+
+import 'native_playback_policy.dart';
 
 /// SDK commands and bounded metadata/configuration access for this adapter.
 /// Regular playback progress uses SDK events rather than polling this adapter.
@@ -52,12 +55,20 @@ extension NativePlayerProperties on mk.Player {
   }
 }
 
-Future<mk.Player> createNativePlayer() async {
+Future<mk.Player> createNativePlayer({int? experimentalAudioAutosync}) async {
   final player = mk.Player(
     configuration: const mk.PlayerConfiguration(logLevel: mk.MPVLogLevel.warn),
   );
   try {
     await player.handle;
+    await configureNativePlaybackPolicy(
+      isAndroid: Platform.isAndroid,
+      write: player.setPropertyAsync,
+      read: player.getPropertyAsync,
+      isCurrent: () => !player.native.disposed,
+      timeout: const Duration(seconds: 3),
+      experimentalAutosync: experimentalAudioAutosync,
+    );
     return player;
   } on Object {
     await player.dispose();

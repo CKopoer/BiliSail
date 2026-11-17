@@ -3,6 +3,17 @@ import 'package:bili_player/src/video_decoder_configuration.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('Android release and profile use PiliPlus MediaCodec preference', () {
+    for (final sourceAware in [false, true]) {
+      final configuration = videoDecoderConfiguration(
+        isAndroid: true,
+        decoding: VideoDecodingMode.automatic,
+        debugMode: false,
+        usesDolbyVisionRenderer: sourceAware ? () => false : null,
+      );
+      expect(configuration.hwdec, 'mediacodec,auto-safe');
+    }
+  });
   test(
     'direct texture is opt-in and software and desktop retain GPU output',
     () {
@@ -50,9 +61,7 @@ void main() {
         expect(configuration.vo, isNull);
         expect(
           configuration.hwdec,
-          decoding == VideoDecodingMode.automatic
-              ? 'mediacodec,auto-safe'
-              : 'no',
+          decoding == VideoDecodingMode.automatic ? 'auto-safe' : 'no',
         );
         expect(configuration.androidAttachSurfaceAfterVideoParameters, isFalse);
         dolby = true;
@@ -64,7 +73,7 @@ void main() {
         usesDolbyVisionRenderer: () => false,
       );
       expect(nextSource.vo, isNull);
-      expect(nextSource.hwdec, 'mediacodec,auto-safe');
+      expect(nextSource.hwdec, 'auto-safe');
     },
   );
 
@@ -73,7 +82,7 @@ void main() {
       isAndroid: true,
       decoding: VideoDecodingMode.automatic,
     );
-    expect(configuration.hwdec, 'mediacodec,auto-safe');
+    expect(configuration.hwdec, 'auto-safe');
     expect(configuration.androidAttachSurfaceAfterVideoParameters, isFalse);
     expect(configuration.enableHardwareAcceleration, isTrue);
     expect(configuration.vo, isNull);

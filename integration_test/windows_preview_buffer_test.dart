@@ -137,7 +137,7 @@ void main() {
       await checkWindow('seek');
       expect(rangeRequests, greaterThan(0));
 
-      // A regular open restores the two-minute window, covering this short file.
+      // A regular open restores PiliPlus's 16-second window on the same player.
       await engine.open(
         DashPairSource(
           video: source.video,
@@ -146,9 +146,20 @@ void main() {
         ),
         const OpenOptions(volume: 0),
       );
+      await engine.pause();
       await _until(
         tester,
-        () => engine.currentSnapshot.buffered >= const Duration(seconds: 58),
+        () =>
+            engine.currentSnapshot.buffered - engine.currentSnapshot.position >=
+            const Duration(seconds: 15),
+      );
+      expect(
+        engine.currentSnapshot.buffered - engine.currentSnapshot.position,
+        lessThanOrEqualTo(const Duration(seconds: 17)),
+      );
+      expect(
+        engine.currentSnapshot.buffered,
+        lessThan(engine.currentSnapshot.duration),
       );
       debugPrint(
         'PREVIEW_BUFFER backend=media_kit regular bufferedMs=${engine.currentSnapshot.buffered.inMilliseconds}',
