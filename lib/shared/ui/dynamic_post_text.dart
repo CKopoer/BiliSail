@@ -5,6 +5,7 @@ import '../../domain/dynamic_post.dart';
 import '../../domain/user.dart';
 import '../../features/dynamic/domain/dynamic_link.dart';
 import 'app_network_image.dart';
+import 'image_viewer.dart';
 
 /// Expansion belongs to the retained list, rather than to an evictable row.
 class DynamicPostExpansionState {
@@ -84,6 +85,9 @@ class _DynamicPostTextState extends State<DynamicPostText> {
           : part.text;
       remaining -= part.text.length;
       final image = part.imageUrl;
+      final pictures = part.kind == DynamicTextKind.pictures
+          ? part.pictureUrls
+          : const <Uri>[];
       final link = part.kind == DynamicTextKind.topic
           ? dynamicTopicDestination(name: part.text, url: part.linkUrl)
           : part.linkUrl;
@@ -121,12 +125,15 @@ class _DynamicPostTextState extends State<DynamicPostText> {
             ),
           ),
         );
-      } else if ((part.userId != null && widget.onOpenUser != null) ||
+      } else if ((!widget.layoutOnly && pictures.isNotEmpty) ||
+          (part.userId != null && widget.onOpenUser != null) ||
           (link != null && widget.onOpenLink != null)) {
         final recognizer = TapGestureRecognizer()
           ..onTap = () {
             final userId = part.userId;
-            if (userId != null && widget.onOpenUser != null) {
+            if (pictures.isNotEmpty) {
+              showImageViewer(context, pictures, 0);
+            } else if (userId != null && widget.onOpenUser != null) {
               widget.onOpenUser!(userId);
             } else if (link != null) {
               widget.onOpenLink?.call(link);

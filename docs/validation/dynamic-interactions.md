@@ -52,3 +52,19 @@ Windows Profile 只读探针构建成功、进程退出码 0。现有登录会�
 `flutter build windows --profile -t lib/main.dart` 成功，已将 `build/windows/x64/runner/Profile/bilisail.exe` 恢复为普通应用入口。未自动提交真实账号的点赞、发送或转发；实际写入、桌面鼠标／触感及 Android/macOS 设备交互尚未验证。本轮共用评论布局的视觉证据来自 widget 测试，不宣称完成三端实机验收。日志位于本机忽略目录 `artifacts/dynamic-interactions-check.log`、`dynamic-interactions-probe-build.log`、`dynamic-interactions-probe.log` 和 `dynamic-interactions-build.log`。
 
 显式开发探针 [dynamic_interactions_probe.dart](../../tool/dynamic_interactions_probe.dart) 使用既有安全会话读取一页动态、最多三类评论及其楼中楼、一个动态详情。只输出类型/数量/错误分类，不输出 ID、正文、URL 或凭据；普通启动和 CI 不运行此探针，也没有写操作路径。运行后需以 `lib/main.dart` 恢复普通 Windows 构建。
+
+## 正文“查看图片”打开方式修复（2026-11-17）
+
+公开只读查询[用户提供的动态](https://t.bilibili.com/1271520214728572935)的[详情接口](https://api.bilibili.com/x/polymer/web-dynamic/v1/detail?id=1271520214728572935)返回成功：`module_dynamic.desc.rich_text_nodes` 中的 `RICH_TEXT_NODE_TYPE_VIEW_PICTURE` 自带 `pics[].src`，但 `jump_url` 是 `//www.bilibili.com/read/cv/` 占位地址。原解析器将该节点归为普通链接并丢弃图片列表，共享正文随后把占位地址交给外链回调，导致默认浏览器打开。
+
+修复将该节点保留为独立的 `pictures` 类型，通过 API 模型和领域映射传递不可变图片列表，点击时直接调用已有的共享图片查看器。每个节点保留自己的图片组，不与主图网格或转发原文的图片混合；HTTP／协议相对图片地址沿用现有规则统一为 HTTPS，并限制每组解析前 18 条，过滤非法协议和带凭据的地址。普通网页、用户、话题和表情沿用原行为；离屏高度测量不加载图片。
+
+只读参考本地 PiliPlus 提交 `217fb54f51f6764176319bbdedab2a7522d75401` 的 [rich_node_panel.dart](../../../PiliPlus/lib/pages/dynamics/widgets/rich_node_panel.dart) 和 [result.dart](../../../PiliPlus/lib/models/dynamics/result.dart)，借鉴“保留图片节点及优先使用节点内图片”的职责。其根 [LICENSE](../../../PiliPlus/LICENSE) 为 GPLv3；本次独立编写解析、领域映射与点击处理，未复制参考源码或资源，未修改相邻仓库或增加依赖。本次覆盖响应已有 `pics` 的情况；缺失／非法图片列表只保留可读文字，不打开占位网页，未新增 PiliPlus 的按需图片查询端点。
+
+新增 [跨解析／映射／点击的组件回归](../../test/shared/ui/dynamic_inline_images_test.dart)，修复前已确认点击会错误回调空专栏地址。修复后覆盖窄屏／宽屏、详情正文／转发原文、不同图片组、关闭查看器及普通外链；[API 测试](../../packages/bili_api/test/dynamic_content_test.dart)另覆盖首页／空间入口、容量与非法数据，[领域映射测试](../../test/shared/data/dynamic_post_mapper_test.dart)覆盖转发及不可变列表。定向应用测试 59 项、API 测试 93 项通过。
+
+完整检查的格式及打包边界脚本通过；首轮静态分析受到同期评论链接测试文件的未使用 import 阻塞，该文件后续更新后，独立重跑 `flutter analyze --no-pub` 通过。`tool/check.ps1 -SkipPub -Stage PackageTests` 通过：`bili_api` 1028、`bili_player` 258、`bili_danmaku` 161、`bili_mux` 5 项；播放器原生用例跳过 3 项，未配置 `BILI_MUX_LIBRARY` 的 mux 原生用例跳过 10 项。
+
+`tool/check.ps1 -SkipPub -Stage RootTests` 完成：5782 项通过、13 项跳过，1 项同期评论链接测试失败（`comment_video_link_test.dart` 的 `app references normalize without adding an empty query`，视频 URL 尾部多出 `?`）。同期代码更新后，对该失败项单独复跑通过；未再次执行整套根应用测试。本任务未修改或提交评论链接文件。
+
+按用户要求不构建、不执行设备操作；真实动态的运行构建和实机交互由用户后续验收。

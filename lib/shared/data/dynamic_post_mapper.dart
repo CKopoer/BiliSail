@@ -63,14 +63,19 @@ DynamicPost mapDynamicPost(ApiDynamicPost p) {
         .toList(),
     spans: p.spans
         .map(
-          (s) => DynamicTextSpan(
-            kind: DynamicTextKind.values.byName(s.kind.name),
-            text: s.text,
-            imageUrl: s.imageUrl,
-            linkUrl: s.linkUrl,
-            userId: UserId.tryParse(s.userId),
-            emojiSize: s.emojiSize,
-          ),
+          (s) => s.kind == ApiDynamicTextKind.pictures
+              ? DynamicTextSpan.pictures(
+                  text: s.text,
+                  pictureUrls: s.pictureUrls,
+                )
+              : DynamicTextSpan(
+                  kind: DynamicTextKind.values.byName(s.kind.name),
+                  text: s.text,
+                  imageUrl: s.imageUrl,
+                  linkUrl: s.linkUrl,
+                  userId: UserId.tryParse(s.userId),
+                  emojiSize: s.emojiSize,
+                ),
         )
         .toList(),
     imageUrls: p.imageUrls,

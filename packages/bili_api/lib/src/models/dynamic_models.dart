@@ -1,6 +1,6 @@
 import '../models.dart';
 
-enum ApiDynamicTextKind { plain, emoji, mention, topic, link }
+enum ApiDynamicTextKind { plain, emoji, mention, topic, link, pictures }
 
 enum ApiDynamicCardKind {
   article,
@@ -79,10 +79,22 @@ final class ApiDynamicTextSpan {
     this.linkUrl,
     this.userId,
     this.emojiSize = 1,
-  });
+  }) : pictureUrls = const [];
+
+  ApiDynamicTextSpan.pictures({
+    required this.text,
+    required Iterable<Uri> pictureUrls,
+  }) : kind = ApiDynamicTextKind.pictures,
+       pictureUrls = List.unmodifiable(pictureUrls),
+       imageUrl = null,
+       linkUrl = null,
+       userId = null,
+       emojiSize = 1;
+
   final ApiDynamicTextKind kind;
   final String text;
   final Uri? imageUrl, linkUrl;
+  final List<Uri> pictureUrls;
   final String? userId;
   final double emojiSize;
 }

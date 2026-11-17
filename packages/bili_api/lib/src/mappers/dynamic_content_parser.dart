@@ -64,10 +64,6 @@ Uri? _richNodeUrl(Map<String, Object?> node, String dynamicId) {
       '/h5/lottery/result',
       {'business_id': dynamicId},
     ),
-    'RICH_TEXT_NODE_TYPE_VIEW_PICTURE' => Uri.https(
-      't.bilibili.com',
-      '/$dynamicId',
-    ),
     _ => null,
   };
 }

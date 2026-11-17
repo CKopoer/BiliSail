@@ -2,7 +2,7 @@ import 'comment_target.dart';
 import 'user.dart';
 import 'video.dart';
 
-enum DynamicTextKind { plain, emoji, mention, topic, link }
+enum DynamicTextKind { plain, emoji, mention, topic, link, pictures }
 
 enum DynamicCardKind {
   article,
@@ -97,10 +97,22 @@ final class DynamicTextSpan {
     this.linkUrl,
     this.userId,
     this.emojiSize = 1,
-  });
+  }) : pictureUrls = const [];
+
+  DynamicTextSpan.pictures({
+    required this.text,
+    required Iterable<Uri> pictureUrls,
+  }) : kind = DynamicTextKind.pictures,
+       pictureUrls = List.unmodifiable(pictureUrls),
+       imageUrl = null,
+       linkUrl = null,
+       userId = null,
+       emojiSize = 1;
+
   final DynamicTextKind kind;
   final String text;
   final Uri? imageUrl, linkUrl;
+  final List<Uri> pictureUrls;
   final UserId? userId;
   final double emojiSize;
 }
