@@ -409,6 +409,7 @@ class RunnerTests: XCTestCase {
     var homes = 0
     let caption = PlaybackTitlebarBack(window: window,
                                       onBack: { backs += 1 }, onHome: { homes += 1 })
+    caption.configure(enabled: true, showHome: false)
     window.addTitlebarAccessoryViewController(caption)
     defer { caption.detach() }
     guard let home = caption.view.subviews.compactMap({ $0 as? NSButton })
@@ -430,6 +431,38 @@ class RunnerTests: XCTestCase {
     XCTAssertFalse(caption.backButton.isEnabled)
     home.performClick(nil)
     XCTAssertEqual(homes, 1)
+    caption.detach()
+    caption.detach()
+    XCTAssertFalse(window.titlebarAccessoryViewControllers.contains(where: { $0 === caption }))
+  }
+
+  @MainActor
+  func testPlaybackCaptionConfigurationPreservesAppKitHeightAndSkipsRedundantResize() {
+    final class ResizeTrackingView: NSView {
+      var resizeCount = 0
+      override func setFrameSize(_ newSize: NSSize) {
+        resizeCount += 1
+        super.setFrameSize(newSize)
+      }
+    }
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 360),
+                          styleMask: [.titled, .closable], backing: .buffered, defer: false)
+    let caption = PlaybackTitlebarBack(window: window, onBack: {}, onHome: {})
+    let view = ResizeTrackingView(frame: NSRect(x: 0, y: 0, width: 36, height: 41))
+    caption.view = view
+    let baseline = view.resizeCount
+    // Model a height assigned by AppKit rather than the constructor's 28 pt.
+    caption.configure(enabled: true, showHome: false)
+    caption.configure(enabled: false, showHome: false)
+    XCTAssertEqual(view.resizeCount, baseline)
+    caption.configure(enabled: true, showHome: true)
+    XCTAssertEqual(view.frame.size, NSSize(width: 72, height: 41))
+    XCTAssertEqual(view.resizeCount, baseline + 1)
+    caption.configure(enabled: false, showHome: true)
+    XCTAssertEqual(view.resizeCount, baseline + 1)
+    caption.configure(enabled: true, showHome: false)
+    XCTAssertEqual(view.frame.size, NSSize(width: 36, height: 41))
+    XCTAssertEqual(view.resizeCount, baseline + 2)
   }
 
   func testRepeatedQuitWaitsForCleanupApproval() {

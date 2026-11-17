@@ -53,6 +53,16 @@ macOS 原生插件按根 `pubspec.yaml` 的项目级开关统一使用 CocoaPods
 
 Dart 3.13.5 内置的 [Pub 源码](https://github.com/dart-lang/pub/blob/ec276d10a7fa0f6c6ec005340fb9ad29f3b012d0/lib/src/source/hosted.dart#L40) 会将官方旧域名 `https://pub.dartlang.org` 规范化为 `https://pub.dev`，再用于 hosted 来源身份比较；两者的文本差异不等于来源冲突。`pub.flutter-io.cn` 是另一来源，不能依赖这种官方别名规范化消除镜像冲突。验证以固定 Flutter 3.47.6 的实际解析、内容哈希与 `--enforce-lockfile` 为准。
 
+## 2026-11-18：macOS arm64 标题栏绑定崩溃
+
+[CI 44120327112](https://github.com/CKopoer/BiliSail/actions/runs/44120327112) 对应 `eed24e9288b657045a5986083edc71f1631e0e51`。检查、原生 mux 回归与其余六个平台构建通过；[macOS arm64 job](https://github.com/CKopoer/BiliSail/actions/runs/44120327112/job/134171826953) 已完成 Release 编译、架构与签名校验、主窗首帧以及第一轮播放窗焦点／Space 检查，随后在 `BILISAIL_FOCUS_STAGE:bind` 退出。下载的诊断产物 `startup.result.json` 记录应用 `exitCode=139`、worker `exitCode=1`、两层 `timedOut=false`，应用总耗时约 6.045 秒；失败后的独立 cleanup 成功。它是标题栏绑定阶段的原生崩溃，不是首帧等待、焦点断言、执行预算或编译失败。`startup.crash.json` 为 `not_found`，没有线程栈，不能据此确定崩溃的内部调用或将后续源码修正直接视为已验证的 SIGSEGV 根因。
+
+对照 Apple 的 [accessory 控制器约束](https://developer.apple.com/documentation/appkit/nstitlebaraccessoryviewcontroller)与 [view 初始化要求](https://developer.apple.com/documentation/appkit/nsviewcontroller/view)，[原生标题栏](../../macos/Runner/MainFlutterWindow.swift)存在两个可确认的问题：在安装自定义 view 之前设置 `layoutAttribute`，以及 `.left` accessory 已挂载后，每次配置都把 AppKit 管理的高度重设为 28 pt。现先安装程序化 view，再设置布局；首次按钮状态和宽度在加入窗口前配置。后续配置只在宽度改变时写入新宽度，保留当前高度，普通启用／禁用不再触发尺寸更新。返回／主页回调、全屏处理与独立窗口所有权沿用原流程。
+
+新增 Swift XCTest 覆盖非 28 pt 高度保留、宽度切换、重复配置不 resize，并扩展实际 accessory 的按钮回调／幂等移除验证。为区分没有崩溃栈时的创建、配置与挂载，原生只在显式 smoke 输出四个固定白名单阶段；[监督脚本](../../tool/macos-release-validation.ps1)的失败摘要同时显示应用与 worker 退出码。保留全部 arm64 smoke 与失败阻断，不重试崩溃，不跳过标题栏、窗口或 Keychain 检查。
+
+Windows／Flutter 3.50.0 的 `tool/check.ps1 -SkipPub` 完整通过：格式、全仓静态分析、打包边界及 7,237 项 Dart／Flutter 测试（根应用 5,793、API 1,035、播放器 243、弹幕 161、封装 5）。根应用 13 项、播放器 4 项环境／原生用例跳过，10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，均不计作原生通过。23 项真实子进程监督回归通过，包含合成 `139` 退出、最后原生标题栏阶段和脱敏边界；15 项 macOS 诊断采集回归通过。两份文档的 97 条本地文件链接与 `git diff --check` 通过，五份锁文件未改。日志为 `build/ci-44120327112-check.log` 与 `build/ci-44120327112-smoke-check.log`。本轮没有 Dart 代码改动，无需热重载；本机没有 Swift／Xcode／AppKit，尚未执行新增 XCTest、macOS 构建或真实 Release smoke。修复是否消除本次崩溃仍须 macOS arm64 的新 CI 确认，设备安装升级、真实账号与音画验收也未执行。
+
 ## 2026-11-17：macOS 播放窗口首帧与焦点检查
 
 [CI 43910647559](https://github.com/CKopoer/BiliSail/actions/runs/43910647559) 对应 master `58266ee2`。分析、四份根测试、包测试、mux 原生回归及其他六个目标构建通过；macOS arm64 已完成 Release 编译、签名与主窗首帧检查，在第一次播放窗 `prepare` 后进入清理，报 `state`，没有执行 `present`。诊断产物确认没有超时，清理阶段也正常退出。

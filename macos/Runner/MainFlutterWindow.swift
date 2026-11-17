@@ -450,6 +450,7 @@ private final class DesktopWindowController {
           return
         }
         if self.captions[viewID] == nil {
+          ReleaseSmokeNativeStage.titlebarCreate.emit()
           let caption = PlaybackTitlebarBack(
             window: window,
             onBack: { [weak self] in
@@ -458,10 +459,16 @@ private final class DesktopWindowController {
             onHome: { [weak self] in
               self?.channel.invokeMethod("home", arguments: ["viewId": viewID])
             })
+          ReleaseSmokeNativeStage.titlebarConfigure.emit()
+          caption.configure(enabled: enabled, showHome: args["showHome"] as? Bool ?? false)
           self.captions[viewID] = caption
+          ReleaseSmokeNativeStage.titlebarInstall.emit()
           window.addTitlebarAccessoryViewController(caption)
+        } else {
+          ReleaseSmokeNativeStage.titlebarConfigure.emit()
+          self.captions[viewID]?.configure(enabled: enabled, showHome: args["showHome"] as? Bool ?? false)
         }
-        self.captions[viewID]?.configure(enabled: enabled, showHome: args["showHome"] as? Bool ?? false)
+        ReleaseSmokeNativeStage.titlebarReady.emit()
         result(nil)
       default:
         result(FlutterMethodNotImplemented)
@@ -885,8 +892,10 @@ final class PlaybackTitlebarBack: NSTitlebarAccessoryViewController {
     self.onBack = onBack
     self.onHome = onHome
     super.init(nibName: nil, bundle: nil)
-    layoutAttribute = .left
+    // AppKit's layout setter can consult the view. Install the programmatic
+    // view first so it never falls back to loading a nib for this subclass.
     view = NSView(frame: NSRect(x: 0, y: 0, width: 36, height: 28))
+    layoutAttribute = .left
     backButton.frame = NSRect(x: 3, y: 3, width: 30, height: 22)
     backButton.bezelStyle = .texturedRounded
     backButton.font = .systemFont(ofSize: 20)
@@ -922,7 +931,12 @@ final class PlaybackTitlebarBack: NSTitlebarAccessoryViewController {
     backButton.isEnabled = enabled
     homeButton.isEnabled = enabled
     homeButton.isHidden = !showHome
-    view.setFrameSize(NSSize(width: showHome ? 72 : 36, height: 28))
+    // A left/right accessory owns only its width; AppKit owns its height.
+    // Do not reset the live titlebar's height or trigger redundant layout.
+    let width: CGFloat = showHome ? 72 : 36
+    if view.frame.width != width {
+      view.setFrameSize(NSSize(width: width, height: view.frame.height))
+    }
   }
 
   @objc private func back() {
