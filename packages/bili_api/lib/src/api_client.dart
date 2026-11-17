@@ -1486,6 +1486,15 @@ final class BiliApiClient {
             e.key: _commentImage(_commentMap(e.value)['url'])!,
       }),
       mentionedUsers: _commentMentionedUsers(content),
+      linkTitles: Map.unmodifiable({
+        for (final entry in _commentMap(content['jump_url']).entries.take(100))
+          if (_commentMap(entry.value)['title'] case final String title)
+            if (entry.key.isNotEmpty &&
+                entry.key.length <= 2048 &&
+                title.trim().isNotEmpty &&
+                title.length <= 300)
+              entry.key: title.trim(),
+      }),
       pictures: pictures,
       message: content['message'] == '' && pictures.isNotEmpty
           ? ''

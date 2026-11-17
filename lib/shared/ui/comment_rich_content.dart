@@ -68,6 +68,7 @@ class _CommentRichContentState extends State<CommentRichContent> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.comment.message != widget.comment.message ||
         !identical(oldWidget.comment.emotes, widget.comment.emotes) ||
+        !identical(oldWidget.comment.linkTitles, widget.comment.linkTitles) ||
         !identical(
           oldWidget.comment.mentionedUsers,
           widget.comment.mentionedUsers,
@@ -82,6 +83,7 @@ class _CommentRichContentState extends State<CommentRichContent> {
       widget.comment.message,
       emoteTokens: widget.comment.emotes.keys,
       mentionedUsers: widget.comment.mentionedUsers,
+      linkTitles: widget.comment.linkTitles,
     );
   }
 
@@ -127,13 +129,44 @@ class _CommentRichContentState extends State<CommentRichContent> {
             ? () => openUser(userId)
             : null;
         final recognizer = _recognizer(i, widget.layoutOnly ? null : onTap);
+        final video = part.kind == CommentTextKind.videoLink;
+        if (video || part.linkTitle != null) {
+          final icon = Icon(
+            video ? Icons.play_circle_outline : Icons.link,
+            // WidgetSpan scales its child with the surrounding text already.
+            size: 16,
+            applyTextScaling: false,
+            color: styles.linkColor,
+          );
+          spans.add(
+            WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: ExcludeSemantics(
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 2),
+                  child: widget.layoutOnly || onTap == null
+                      ? icon
+                      : MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: GestureDetector(onTap: onTap, child: icon),
+                        ),
+                ),
+              ),
+            ),
+          );
+        }
         spans.add(
           TextSpan(
-            text: part.text,
-            style:
-                part.kind == CommentTextKind.link ||
-                    part.kind == CommentTextKind.timestamp ||
-                    (part.kind == CommentTextKind.mention && onTap != null)
+            text: part.linkTitle ?? part.text,
+            semanticsLabel: video ? '视频：${part.linkTitle ?? part.text}' : null,
+            style: video
+                ? TextStyle(
+                    color: styles.linkColor,
+                    fontWeight: FontWeight.w600,
+                  )
+                : part.kind == CommentTextKind.link ||
+                      part.kind == CommentTextKind.timestamp ||
+                      (part.kind == CommentTextKind.mention && onTap != null)
                 ? TextStyle(color: styles.linkColor)
                 : null,
             recognizer: recognizer,

@@ -44,6 +44,8 @@ void main() {
           expect(entry.isUpAuthor, isFalse);
           expect(entry.upLiked, isTrue);
           expect(entry.upReplied, isTrue);
+          expect(entry.linkTitles, {'BV117BkBsEWw': '视频标题'});
+          expect(() => entry.linkTitles.clear(), throwsUnsupportedError);
           expect(entry.replies.single.isUpAuthor, isTrue);
           expect(entry.replies.single.isPinned, isFalse);
         }
@@ -55,6 +57,7 @@ void main() {
           expect(entry.isPinned, isFalse);
           expect(entry.upLiked, isFalse);
           expect(entry.upReplied, isFalse);
+          expect(entry.linkTitles, {'av170001': '回复中的视频'});
         }
         expect(root.nicknameColor, 0xfb7299);
         expect(root.withLike(true).nicknameColor, 0xfb7299);
@@ -138,6 +141,13 @@ final class _Transport implements ApiTransport {
                         },
                         'content': {
                           'message': 'comment',
+                          'jump_url': {
+                            'BV117BkBsEWw': {'title': '视频标题'},
+                            'invalid': {'title': 123},
+                            'empty': {'title': '  '},
+                            'bad': 'unexpected',
+                            'oversized': {'title': 'x' * 301},
+                          },
                           'at_name_to_mid_str': {'reader': '9007199254740993'},
                         },
                         'reply_control': {
@@ -155,6 +165,9 @@ final class _Transport implements ApiTransport {
                             },
                             'content': {
                               'message': 'reply',
+                              'jump_url': {
+                                'av170001': {'title': '回复中的视频'},
+                              },
                               'members': [
                                 {'uname': 'reader', 'mid': '100'},
                               ],

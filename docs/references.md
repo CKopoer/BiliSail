@@ -1,5 +1,7 @@
 # 参考项目、证据与采用边界
 
+2026-11-17 评论链接只读参考 PiliPlus `217fb54f51f6764176319bbdedab2a7522d75401` 的评论富文本、`ReplyContent.jumpUrl` 和视频 scheme 分发，核对其实际 overrides／锁文件。仅借鉴服务端链接标题、行内图标和 BV／AV 视频身份的职责，独立实现本项目纯 Dart 解析、协议字段映射与共享评论组件；未复制 GPLv3 应用源码／资源、修改相邻仓库或依赖。来源、行为及验证见[专项记录](validation/comment-video-links-2026-11-17.md)。
+
 2026-11-17 起，在线点播和直播按 PiliPlus 的 mpv 缓存配置和明确网络错误重试，移除半窗口、累计缓冲、时钟故障推断及启动换线。此前记录中的策略属于历史实现。行为对照与验证见[点播与直播的原生缓存和网络重试](validation/piliplus-network-retry-2026-11-17.md)。
 
 2026-11-15 Android 直出 HDR 色彩修复，只读核对 PiliPlus `217fb54f51f6764176319bbdedab2a7522d75401` 的播放器创建入口及实际媒体 overrides／锁文件，并核对其锁定视频插件 `bggRGjQaUbCoE/media-kit` 的 `85f0a69ea66b100882b27a3375c72e5155375343` 中 Android 默认 `gpu` 输出。借鉴保留硬解并由 GPU 完成色彩映射的职责，独立实现本项目 HDR 媒体提示和按源规范化输出；未复制参考源码／资源，未修改相邻仓库、Pub 缓存或固定媒体依赖。见[原因、来源与验证](validation/hdr-direct-output-2026-11-15.md)。

@@ -39,6 +39,7 @@ final class CommentEntry {
     this.decorationFanColor,
     this.emotes = const {},
     this.mentionedUsers = const {},
+    this.linkTitles = const {},
     this.pictures = const [],
     this.visibility = CommentVisibility.unknown,
     this.submissionMessage,
@@ -56,6 +57,7 @@ final class CommentEntry {
   final int? decorationFanColor;
   final Map<String, Uri> emotes;
   final Map<String, UserId> mentionedUsers;
+  final Map<String, String> linkTitles;
   final List<Uri> pictures;
   final String id, author, message;
   final Uri? avatarUrl;
@@ -86,6 +88,7 @@ final class CommentEntry {
     decorationFanColor: decorationFanColor,
     emotes: emotes,
     mentionedUsers: mentionedUsers,
+    linkTitles: linkTitles,
     pictures: pictures,
     avatarUrl: avatarUrl,
     authorId: authorId,
@@ -122,6 +125,7 @@ final class CommentEntry {
         decorationFanColor: decorationFanColor,
         emotes: emotes,
         mentionedUsers: mentionedUsers,
+        linkTitles: linkTitles,
         pictures: pictures,
         avatarUrl: avatarUrl,
         authorId: authorId,

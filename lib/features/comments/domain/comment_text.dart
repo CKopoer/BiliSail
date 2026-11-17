@@ -1,6 +1,7 @@
 import '../../../domain/user.dart';
+import 'comment_video_link.dart';
 
-enum CommentTextKind { plain, emote, link, timestamp, mention }
+enum CommentTextKind { plain, emote, link, videoLink, timestamp, mention }
 
 final class CommentTextPart {
   const CommentTextPart(
@@ -9,6 +10,7 @@ final class CommentTextPart {
     this.url,
     this.position,
     this.userId,
+    this.linkTitle,
   });
 
   final String text;
@@ -16,6 +18,7 @@ final class CommentTextPart {
   final Uri? url;
   final Duration? position;
   final UserId? userId;
+  final String? linkTitle;
 }
 
 /// Decode once for display; the original comment remains available unchanged.
@@ -54,6 +57,7 @@ List<CommentTextPart> parseCommentText(
   String message, {
   Iterable<String> emoteTokens = const [],
   Map<String, UserId> mentionedUsers = const {},
+  Map<String, String> linkTitles = const {},
 }) {
   final text = decodeCommentEntities(message);
   final emotes = emoteTokens.where((token) => token.isNotEmpty).toSet().toList()
@@ -69,10 +73,14 @@ List<CommentTextPart> parseCommentText(
     [
       if (emotes.isNotEmpty) emotes.map(RegExp.escape).join('|'),
       // Consume a whole URL before looking for timestamps within its path/query.
-      r'''[hH][tT][tT][pP][sS]?://[^\s<>"'，。！？；：、（）【】「」『』《》]+''',
+      // Other schemes also own their entire token, preventing a BV inside an
+      // unsupported URL from becoming a separate clickable video reference.
+      r'''[A-Za-z][A-Za-z0-9+.-]*://[^\s<>"'，。！？；：、（）【】「」『』《》]+''',
+      r'''(?<![0-9A-Za-z_@./:?=&%#-])(?://)?(?:(?:(?:[wW]{3}|[mM])\.)?[bB][iI][lL][iI][bB][iI][lL][iI]\.[cC][oO][mM]|[bB]23\.[tT][vV])/[^\s<>"'，。！？；：、（）【】「」『』《》]+''',
       if (mentionTokens.isNotEmpty)
         '(?<![0-9A-Za-z_@])(?:${mentionTokens.map(RegExp.escape).join('|')})'
             r'(?=$|[\s:：,，.。!?！？;；、()（）\[\]【】「」『』《》@])',
+      r'(?<![0-9A-Za-z_/@.?=&%#:-])(?:[bB][vV][0-9A-Za-z]{10}|[aA][vV][1-9][0-9]*)(?![0-9A-Za-z_])',
       // A full-width colon can also punctuate Chinese prose beside a timecode.
       // Reject digit-colon chains without losing labels such as "高能：00：09".
       r'(?<![0-9A-Za-z_:])(?<![0-9]：)(?:[0-9]{1,3}[:：][0-5][0-9][:：][0-5][0-9]|[0-9]{1,4}[:：][0-5][0-9])(?![0-9A-Za-z_:]|：[0-9])',
@@ -98,19 +106,27 @@ List<CommentTextPart> parseCommentText(
         CommentTextPart(token, CommentTextKind.mention, userId: userId),
       );
       cursor = match.end;
-    } else if (token.toLowerCase().startsWith('http')) {
+    } else if (!RegExp(r'^[0-9]').hasMatch(token)) {
       final link = _trimLinkPunctuation(token);
-      final uri = Uri.tryParse(link);
-      final valid =
-          uri != null &&
-          (uri.scheme == 'http' || uri.scheme == 'https') &&
-          uri.host.isNotEmpty &&
-          uri.userInfo.isEmpty;
+      final uri = parseCommentLinkUri(link);
+      final video = uri != null && parseCommentVideoLink(uri) != null;
+      final title = linkTitles[link];
       parts.add(
         CommentTextPart(
           link,
-          valid ? CommentTextKind.link : CommentTextKind.plain,
-          url: valid ? uri : null,
+          uri == null
+              ? CommentTextKind.plain
+              : video
+              ? CommentTextKind.videoLink
+              : CommentTextKind.link,
+          url: uri,
+          linkTitle:
+              uri != null &&
+                  (video || isBilibiliShortLink(uri)) &&
+                  title != null &&
+                  title.trim().isNotEmpty
+              ? decodeCommentEntities(title.trim())
+              : null,
         ),
       );
       // Keep punctuation in the comment, outside the clickable link.
