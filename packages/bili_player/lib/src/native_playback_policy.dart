@@ -30,6 +30,11 @@ Future<void> configureNativePlaybackPolicy({
   remaining();
   final properties = {
     if (transport == 'yes' || transport == 'no') 'curl-enabled': 'no',
+    // network-timeout bounds TCP waits, but not lavf's outer TLS EAGAIN loop.
+    // SChannel can keep returning EAGAIN for an incomplete record after TCP
+    // EOF. Bound that loop too, so lavf can reconnect from the received offset
+    // instead of leaving an empty demuxer cache paused indefinitely.
+    'stream-lavf-o': 'rw_timeout=5000000',
     'video-sync': 'display-resample',
     'autosync': '${experimentalAutosync ?? (isAndroid ? 30 : 0)}',
     if (isAndroid) 'ao': 'opensles,aaudio,audiotrack',

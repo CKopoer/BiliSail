@@ -36,6 +36,7 @@ void main() {
           );
           expect(values['curl-enabled'], curl.isEmpty ? '' : 'no');
           expect(writes.contains('curl-enabled'), curl.isNotEmpty);
+          expect(values['stream-lavf-o'], 'rw_timeout=5000000');
           expect(values['video-sync'], 'display-resample');
           expect(values['autosync'], android ? '30' : '0');
           expect(
