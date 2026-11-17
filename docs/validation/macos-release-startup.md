@@ -2,6 +2,10 @@
 
 日期：2026-10-08；验证更新：2026-11-02。当前配置提供 arm64／Intel x64、ad-hoc 签名、未公证的预览 DMG。arm64 保留完整启动／窗口／Keychain smoke；2026-11-02 起按用户要求，x64 仅执行构建、架构、版本、签名、权限、可执行文件和镜像等静态校验，不再将运行 smoke 作为打包门槛，详见下文的 [x64 调整记录](#2026-11-02x64-打包移除运行-smoke)。历史 [CI #221](https://github.com/CKopoer/BiliSail/actions/runs/40804720827)（代码提交 `64acaa709315b9c91e15c67ae173f56b05689570`）的两种架构均完成完整 smoke 和 DMG 打包。设备安装升级、Gatekeeper、真实账号与音画播放仍未验收。
 
+## 2026-11-18：标题栏绑定阶段崩溃
+
+[CI 44120327112 的 macOS arm64 任务](https://github.com/CKopoer/BiliSail/actions/runs/44120327112/job/134171826953)在第一轮播放窗焦点与 Space 检查通过后，于标题栏返回按钮绑定阶段以 `139` 退出；两层监督器均未超时，系统崩溃报告未找到。原生 accessory 的初始化顺序与尺寸更新已按 AppKit 的 view／宽高职责修正，并补充固定原生阶段及退出码诊断，见 [CI 专项记录](ci-cd.md#2026-11-18macos-arm64-标题栏绑定崩溃)。Windows 子进程回归通过不代表修复后的 AppKit 执行已通过；新增 Swift XCTest、arm64 Release smoke 和设备操作仍待 Mac 验证。
+
 ## 根因与配置
 
 原 [Release](../../macos/Runner/Release.entitlements) 和 [Debug/Profile](../../macos/Runner/DebugProfile.entitlements) 都声明了空 `keychain-access-groups`。空数组仍启用受限的 Keychain Sharing；它与 [构建脚本](../../tool/build-release.ps1) 的 `CODE_SIGN_IDENTITY=-` 不相容，可能在 Dart 入口执行前被系统拒绝加载。按用户提供的上一轮系统日志，这是本次待修复的启动拦截原因；本机未重新采集该日志。
