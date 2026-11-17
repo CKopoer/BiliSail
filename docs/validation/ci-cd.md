@@ -53,6 +53,18 @@ macOS 原生插件按根 `pubspec.yaml` 的项目级开关统一使用 CocoaPods
 
 Dart 3.13.5 内置的 [Pub 源码](https://github.com/dart-lang/pub/blob/ec276d10a7fa0f6c6ec005340fb9ad29f3b012d0/lib/src/source/hosted.dart#L40) 会将官方旧域名 `https://pub.dartlang.org` 规范化为 `https://pub.dev`，再用于 hosted 来源身份比较；两者的文本差异不等于来源冲突。`pub.flutter-io.cn` 是另一来源，不能依赖这种官方别名规范化消除镜像冲突。验证以固定 Flutter 3.47.6 的实际解析、内容哈希与 `--enforce-lockfile` 为准。
 
+## 2026-11-17：macOS 播放窗口首帧与焦点检查
+
+[CI 43910647559](https://github.com/CKopoer/BiliSail/actions/runs/43910647559) 对应 master `58266ee2`。分析、四份根测试、包测试、mux 原生回归及其他六个目标构建通过；macOS arm64 已完成 Release 编译、签名与主窗首帧检查，在第一次播放窗 `prepare` 后进入清理，报 `state`，没有执行 `present`。诊断产物确认没有超时，清理阶段也正常退出。
+
+固定 [Flutter 3.50 的普通窗口实现](https://github.com/flutter/flutter/blob/ab2912035e160d9cad6306df307576da6128ebdb/engine/src/flutter/shell/platform/darwin/macos/framework/Source/FlutterWindowController.mm#L565) 在 `onFirstFrame` 才调用 `makeKeyAndOrderFront`。旧烟测在挂载窗口内容之前要求新播放窗已经获得原生焦点，因而必然拒绝仍聚焦主窗的正常状态。
+
+[启动烟测](../../lib/app/release_smoke.dart) 改为先挂载播放窗并提交首帧，再读取真实焦点快照并等待对应 view 的焦点事件，沿用 60 秒焦点预算及外层 180 秒 GUI 总预算；随后提交一个正常帧，让 `AppInputHost` 应用焦点后检查 Flutter 焦点与原生 Space 按下／释放。保留两轮创建／销毁、主窗前台前提和跨进程 Keychain 验证，不增加播放窗激活调用。新增回归覆盖焦点已到达、首帧后延迟到达、持续停在主窗和原生查询无响应；超时后移除观察者，迟到回复不能使检查转为成功。
+
+本轮 Linux / Flutter 3.50.0 / Dart 3.14.0 的 `tool/check.ps1 -EnforceLockfile` 完整通过：五份锁文件严格解析且普通 Pub 不漂移，格式、全仓静态分析及打包边界检查通过，Dart／Flutter 测试共 7,206 项成功（根应用 5,761、API 1,021、播放器 258、弹幕 161、封装 5）。根应用 5 项、播放器 3 项环境用例跳过；未配置 `BILI_MUX_LIBRARY` 的 10 项 mux 原生用例跳过，不计作原生通过。窗口／启动定向回归 66 项通过；22 项子进程监督和 15 项诊断采集回归通过，容器的孤儿进程由仓库外的 subreaper 包装器回收，监督实现未修改。文档本地文件链接及 `git diff --check` 通过。
+
+本机没有 macOS / AppKit，未执行真实 Release 窗口、签名、DMG 或设备验收；修复提交的 macOS arm64 完整 smoke 与各平台构建由推送后的 CI 复验。
+
 ## 2026-11-17：Flutter 3.50 后的 Android 与 macOS 构建失败
 
 [CI 43904052334](https://github.com/CKopoer/BiliSail/actions/runs/43904052334) 的格式／分析、四份根测试、包测试、mux 原生回归及其余平台构建均通过，Android arm64 与 macOS arm64 在打包步骤失败。

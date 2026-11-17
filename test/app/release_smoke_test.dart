@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ViewFocusDirection, ViewFocusEvent, ViewFocusState;
 
 import 'package:bilisail/app/release_smoke.dart';
 import 'package:bilisail/core/presentation/window_input_focus.dart';
@@ -19,6 +20,85 @@ ReleaseSmokeRequest request(String phase) =>
         as ReleaseSmokeRequest;
 
 void main() {
+  for (final initiallyFocused in [true, false]) {
+    testWidgets(
+      'playback smoke observes first-frame focus without activation: $initiallyFocused',
+      (tester) async {
+        const channel = MethodChannel('bilisail/application_window');
+        final calls = <String>[];
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          channel,
+          (call) async {
+            calls.add(call.method);
+            return {'viewId': initiallyFocused ? 200 : 100, 'revision': 1};
+          },
+        );
+        addTearDown(
+          () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+            channel,
+            null,
+          ),
+        );
+        final focus = WindowInputFocus();
+        var completed = false;
+        final pending = waitForReleaseSmokeWindowFocus(
+          200,
+          focus: focus,
+        ).then((_) => completed = true);
+        await tester.idle();
+        expect(completed, initiallyFocused);
+        if (!initiallyFocused) {
+          // The native window becomes key only after its content is rendered.
+          await tester.pump(const Duration(milliseconds: 200));
+          expect(completed, isFalse);
+          focus.didChangeViewFocus(
+            const ViewFocusEvent(
+              viewId: 200,
+              state: ViewFocusState.focused,
+              direction: ViewFocusDirection.undefined,
+            ),
+          );
+        }
+        await pending;
+        expect(completed, isTrue);
+        expect(calls, ['getWindowFocus']);
+      },
+    );
+  }
+
+  for (final replies in [true, false]) {
+    testWidgets('missing playback focus fails within its budget: $replies', (
+      tester,
+    ) async {
+      const channel = MethodChannel('bilisail/application_window');
+      final snapshot = Completer<Map<String, Object?>>();
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        channel,
+        (_) => snapshot.future,
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          channel,
+          null,
+        ),
+      );
+      final focus = WindowInputFocus(
+        nativeSnapshotTimeout: releaseSmokeFocusTimeout,
+      );
+      final pending = expectLater(
+        waitForReleaseSmokeWindowFocus(200, focus: focus),
+        throwsA(isA<TimeoutException>()),
+      );
+      if (replies) snapshot.complete({'viewId': 100, 'revision': 1});
+      await tester.pump(releaseSmokeFocusTimeout);
+      await pending;
+      if (!replies) snapshot.complete({'viewId': 200, 'revision': 2});
+      await tester.idle();
+      // Remove the observer and invalidate late snapshots when the probe ends.
+      expect(focus.observed, isFalse);
+    });
+  }
+
   for (final responds in [true, false]) {
     testWidgets('smoke focus uses its bounded probe budget: $responds', (
       tester,
