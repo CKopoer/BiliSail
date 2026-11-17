@@ -89,6 +89,14 @@ foreach ($stage in @('bind', 'reactivate', 'reactivated', 'unbind', 'geometry', 
   }
 }
 
+foreach ($stage in @('titlebar-create', 'titlebar-configure', 'titlebar-install', 'titlebar-ready')) {
+  $line = "BILISAIL_NATIVE_STAGE:$stage"
+  $diagnostics = @(Get-MacOSSmokeDiagnosticLines "$line`n$line private`n${line}:https://example.invalid/?token=private")
+  if ($diagnostics.Count -ne 1 -or $diagnostics[0] -cne $line) {
+    throw 'macOS titlebar diagnostics lost a stage or accepted private output.'
+  }
+}
+
 # A synchronously completing reader must yield after bounded chunks even when
 # there is no newline, then discard the entire oversized line before recovery.
 $pipe = @{
@@ -183,7 +191,7 @@ $pwsh = (Get-Process -Id $PID).Path
 $smokeTestDirectory = Join-Path ([System.IO.Path]::GetTempPath()) "bilisail smoke $([guid]::NewGuid().ToString('N'))"
 New-Item -ItemType Directory -Path $smokeTestDirectory | Out-Null
 try {
-  $scenarios = @('slow-launch', 'launch-timeout', 'native-hang', 'probe-timeout', 'duplicate-entry', 'failure', 'classified-failure', 'missing-ack', 'stderr-ack', 'no-entry', 'flood', 'unterminated-ack', 'unterminated-output', 'long-line-recovery')
+  $scenarios = @('slow-launch', 'launch-timeout', 'native-hang', 'probe-timeout', 'duplicate-entry', 'failure', 'native-crash', 'classified-failure', 'missing-ack', 'stderr-ack', 'no-entry', 'flood', 'unterminated-ack', 'unterminated-output', 'long-line-recovery')
   foreach ($scenario in $scenarios) {
     Remove-Item -LiteralPath (Join-Path $smokeTestDirectory 'verify-deleted.result.json') -Force -ErrorAction SilentlyContinue
     $launchLimit = if ($scenario -eq 'launch-timeout') { 1 } elseif ($scenario -eq 'native-hang') { 3 } else { 10 }
@@ -228,6 +236,15 @@ try {
       }
       'failure' {
         if (!$failure -or $status.timedOut -or $status.exitCode -ne 7) { throw 'A failed child was accepted.' }
+      }
+      'native-crash' {
+        if (!$failure -or $status.timedOut -or $status.supervisorTimedOut -or
+            $status.exitCode -ne 139 -or $status.workerExitCode -ne 1 -or
+            $status.lastStage -cne 'BILISAIL_NATIVE_STAGE:titlebar-install' -or
+            $failure -notmatch 'app exit: 139, worker exit: 1' -or
+            $failure -notmatch 'last stage: BILISAIL_NATIVE_STAGE:titlebar-install') {
+          throw 'A native application crash lost its exit code or titlebar stage.'
+        }
       }
       'classified-failure' {
         if (!$failure -or $status.timedOut -or $status.exitCode -ne 1 -or

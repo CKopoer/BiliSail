@@ -44,7 +44,7 @@ function Confirm-MacOSSmokeResult([int]$ExitCode, [string]$Output, [string]$Phas
 function Get-MacOSSmokeDiagnosticLines([string]$Text) {
   foreach ($line in ($Text -split '\r?\n')) {
     if ($line -cmatch '^BILISAIL_FOCUS_STAGE:(foreground|foreground-focus|foreground-ready|prepare|present|primary|space|passed|bind|reactivate|reactivated|unbind|geometry|detach|retire|retired)$' -or
-        $line -cmatch '^BILISAIL_NATIVE_STAGE:(application|engine-create|plugins-register|plugins-ready|engine-run|engine-running)$' -or
+        $line -cmatch '^BILISAIL_NATIVE_STAGE:(application|engine-create|plugins-register|plugins-ready|engine-run|engine-running|titlebar-create|titlebar-configure|titlebar-install|titlebar-ready)$' -or
         $line -cmatch '^BILISAIL_RELEASE_STAGE:(dart-entry|headless-startup|headless-hidden|window-create|window-ready|dependencies|dependencies-ready|first-frame-wait|first-frame|playback-windows|credentials|closed)$' -or
         $line -cmatch '^BILISAIL_CREDENTIAL_STAGE:(empty|write-first|read-first|write-second|read-second|read-restart|delete|deleted|cleanup-bootstrap|cleanup-recommendation)$' -or
         $line -cmatch '^BILISAIL_RELEASE_SMOKE_FAILED:(startup|write|read-delete|verify-deleted|cleanup)$' -or
@@ -190,7 +190,7 @@ function Invoke-MacOSReleaseSmokePhase {
       if (!$status.timedOut -and $status.Contains('launchMilliseconds') -and $null -eq $status.launchMilliseconds) {
         throw "macOS Release smoke phase '$Phase' exited before Dart entry."
       }
-      throw "macOS Release smoke phase '$Phase' failed (last stage: $($status.lastStage), error: $($status.errorKind), timeout: $($status.timeoutKind))."
+      throw "macOS Release smoke phase '$Phase' failed (app exit: $($status.exitCode), worker exit: $($worker.ExitCode), last stage: $($status.lastStage), error: $($status.errorKind), timeout: $($status.timeoutKind))."
     }
     if ($status.timedOut -or !$status.outputDrained -or $null -eq $status.launchMilliseconds) {
       throw "macOS Release smoke phase '$Phase' has an incomplete supervisor result."

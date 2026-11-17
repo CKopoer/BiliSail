@@ -66,6 +66,10 @@ enum ReleaseSmokeNativeStage: String {
   case pluginsReady = "plugins-ready"
   case engineRun = "engine-run"
   case engineRunning = "engine-running"
+  case titlebarCreate = "titlebar-create"
+  case titlebarConfigure = "titlebar-configure"
+  case titlebarInstall = "titlebar-install"
+  case titlebarReady = "titlebar-ready"
 
   func emit() {
     guard ProcessInfo.processInfo.arguments.contains("--bilisail-release-smoke") else { return }

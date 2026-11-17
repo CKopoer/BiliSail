@@ -41,6 +41,14 @@ switch ($scenario) {
     Start-Sleep -Milliseconds 700
   }
   'failure' { [Console]::Error.WriteLine('native private https://example.invalid/?token=private'); exit 7 }
+  'native-crash' {
+    [Console]::Error.WriteLine('BILISAIL_FOCUS_STAGE:bind')
+    [Console]::Error.WriteLine('BILISAIL_NATIVE_STAGE:titlebar-create')
+    [Console]::Error.WriteLine('BILISAIL_NATIVE_STAGE:titlebar-configure')
+    [Console]::Error.WriteLine('BILISAIL_NATIVE_STAGE:titlebar-install')
+    [Console]::Error.WriteLine('native private https://example.invalid/?token=private')
+    exit 139
+  }
   'classified-failure' {
     [Console]::Error.WriteLine('BILISAIL_FOCUS_STAGE:foreground-focus')
     [Console]::Error.WriteLine('BILISAIL_RELEASE_SMOKE_ERROR:timeout')
