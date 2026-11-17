@@ -39,6 +39,100 @@ Future<ApiDynamicPost> load(
 void main() {
   for (final home in [true, false]) {
     test(
+      'inline pictures retain their own gallery in ${home ? "feed" : "space"}',
+      () async {
+        final value = await load(
+          richPost(
+            nodes: [
+              {
+                'type': 'RICH_TEXT_NODE_TYPE_VIEW_PICTURE',
+                'text': '查看图片',
+                'rid': '1271520214728572935',
+                'jump_url': '//www.bilibili.com/read/cv/',
+                'pics': [
+                  {'src': 'http://i0.hdslb.com/bfs/new_dyn/one.jpg'},
+                  {'src': '//i0.hdslb.com/bfs/new_dyn/two.jpg'},
+                ],
+              },
+            ],
+          ),
+          home: home,
+        );
+        final span = value.spans.single;
+        expect(span.kind, ApiDynamicTextKind.pictures);
+        expect(span.text, '查看图片');
+        expect(span.pictureUrls, [
+          Uri.parse('https://i0.hdslb.com/bfs/new_dyn/one.jpg'),
+          Uri.parse('https://i0.hdslb.com/bfs/new_dyn/two.jpg'),
+        ]);
+        expect(span.linkUrl, isNull);
+        expect(value.imageUrls, isEmpty);
+        expect(() => span.pictureUrls.clear(), throwsUnsupportedError);
+      },
+    );
+  }
+
+  test(
+    'inline pictures reject unsafe sources and bound each gallery',
+    () async {
+      final value = await load(
+        richPost(
+          nodes: [
+            {
+              'type': 'RICH_TEXT_NODE_TYPE_VIEW_PICTURE',
+              'text': '查看图片',
+              'pics': [
+                null,
+                {'src': 'javascript:alert(1)'},
+                {'src': 'file:///private/image.jpg'},
+                {'src': 'https://user:password@example.test/image.jpg'},
+                for (var i = 0; i < 20; i++)
+                  {'src': 'https://i0.hdslb.com/$i.jpg'},
+              ],
+            },
+          ],
+        ),
+      );
+      expect(value.spans.single.pictureUrls, [
+        for (var i = 0; i < 14; i++) Uri.parse('https://i0.hdslb.com/$i.jpg'),
+      ]);
+    },
+  );
+
+  for (final pics in [
+    null,
+    <Object?>[],
+    'invalid',
+    [
+      null,
+      {'src': 123},
+    ],
+  ]) {
+    test(
+      'unavailable inline pictures stay readable without a browser fallback: $pics',
+      () async {
+        final value = await load(
+          richPost(
+            nodes: [
+              {
+                'type': 'RICH_TEXT_NODE_TYPE_VIEW_PICTURE',
+                'text': '查看图片',
+                'jump_url': '//www.bilibili.com/read/cv/',
+                'pics': pics,
+              },
+            ],
+          ),
+        );
+        expect(value.spans.single.kind, ApiDynamicTextKind.pictures);
+        expect(value.spans.single.text, '查看图片');
+        expect(value.spans.single.pictureUrls, isEmpty);
+        expect(value.spans.single.linkUrl, isNull);
+      },
+    );
+  }
+
+  for (final home in [true, false]) {
+    test(
       'typed reservation retains exact identity and action state in ${home ? "feed" : "space"}',
       () async {
         final card = (await load(

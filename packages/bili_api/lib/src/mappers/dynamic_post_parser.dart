@@ -48,6 +48,7 @@ ApiDynamicPost parseDynamicPost(
         ApiDynamicTextKind.emoji,
       'RICH_TEXT_NODE_TYPE_AT' => ApiDynamicTextKind.mention,
       'RICH_TEXT_NODE_TYPE_TOPIC' => ApiDynamicTextKind.topic,
+      'RICH_TEXT_NODE_TYPE_VIEW_PICTURE' => ApiDynamicTextKind.pictures,
       'RICH_TEXT_NODE_TYPE_WEB' ||
       'RICH_TEXT_NODE_TYPE_BV' ||
       'RICH_TEXT_NODE_TYPE_AV' ||
@@ -55,19 +56,29 @@ ApiDynamicPost parseDynamicPost(
       'RICH_TEXT_NODE_TYPE_GOODS' ||
       'RICH_TEXT_NODE_TYPE_VOTE' ||
       'RICH_TEXT_NODE_TYPE_LOTTERY' ||
-      'RICH_TEXT_NODE_TYPE_VIEW_PICTURE' ||
       'RICH_TEXT_NODE_TYPE_OGV_SEASON' => ApiDynamicTextKind.link,
       _ => ApiDynamicTextKind.plain,
     };
     spans.add(
-      ApiDynamicTextSpan(
-        kind: kind,
-        text: text,
-        imageUrl: kind == ApiDynamicTextKind.emoji ? image : null,
-        linkUrl: _richNodeUrl(node, id),
-        userId: kind == ApiDynamicTextKind.mention ? _id(node['rid']) : null,
-        emojiSize: emoji['size'] == 2 ? 2 : 1,
-      ),
+      // VIEW_PICTURE's jump_url can be a placeholder article URL. The
+      // pictures belong to this node, independently of the post's main grid.
+      kind == ApiDynamicTextKind.pictures
+          ? ApiDynamicTextSpan.pictures(
+              text: text,
+              pictureUrls: _list(
+                node['pics'],
+              ).take(18).map((raw) => _uri(_map(raw)['src'])).whereType<Uri>(),
+            )
+          : ApiDynamicTextSpan(
+              kind: kind,
+              text: text,
+              imageUrl: kind == ApiDynamicTextKind.emoji ? image : null,
+              linkUrl: _richNodeUrl(node, id),
+              userId: kind == ApiDynamicTextKind.mention
+                  ? _id(node['rid'])
+                  : null,
+              emojiSize: emoji['size'] == 2 ? 2 : 1,
+            ),
     );
     if (remaining <= 0) break;
   }

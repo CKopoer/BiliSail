@@ -5,6 +5,29 @@ import 'package:bilisail/shared/data/dynamic_post_mapper.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('inline galleries map immutably through forwarded content', () {
+    final sources = [Uri.parse('https://i0.hdslb.com/one.jpg')];
+    final apiSpan = ApiDynamicTextSpan.pictures(
+      text: '查看图片',
+      pictureUrls: sources,
+    );
+    sources.clear();
+    final post = mapDynamicPost(
+      ApiDynamicPost(
+        id: '1',
+        original: ApiDynamicPost(id: '2', spans: [apiSpan]),
+      ),
+    );
+    final span = post.original!.spans.single;
+    expect(span.kind, DynamicTextKind.pictures);
+    expect(span.text, '查看图片');
+    expect(span.pictureUrls, [Uri.parse('https://i0.hdslb.com/one.jpg')]);
+    expect(span.linkUrl, isNull);
+    expect(post.imageUrls, isEmpty);
+    expect(post.original!.imageUrls, isEmpty);
+    expect(() => span.pictureUrls.clear(), throwsUnsupportedError);
+  });
+
   test('reservation action metadata survives forwarded domain mapping', () {
     final post = mapDynamicPost(
       ApiDynamicPost(
