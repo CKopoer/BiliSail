@@ -23,7 +23,7 @@ try {
   $env:BILI_TEST_TLS_SERVER = Join-Path $repoRoot 'tool/fixtures/truncated_tls_server.py'
   Push-Location packages/bili_player
   try {
-    & flutter test --no-pub test/native_http_audio_playback_test.dart test/native_https_read_playback_test.dart
+    & flutter test --no-pub test/native_http_audio_playback_test.dart test/native_https_read_playback_test.dart test/native_network_open_playback_test.dart
     if ($LASTEXITCODE -ne 0) { throw 'HTTP audio regression failed.' }
   } finally { Pop-Location }
 } finally {

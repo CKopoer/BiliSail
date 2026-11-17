@@ -10,6 +10,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [PiliPlus 底层播放链路复核](validation/piliplus-playback-audit-2026-11-18.md) | 应用／SDK／原生默认值对照、实际网络打开错误、保留差异与缓冲／同步回归 |
 | [Windows TLS 读取持续缓冲](validation/windows-tls-buffering-2026-11-18.md) | 运行现场线程栈、不完整 TLS 记录重试循环、PiliPlus 实际原生库对照与有界续读 |
 | [播放底层对齐与 Windows 失声](validation/piliplus-playback-parity-2026-11-17.md) | curl 累计重试耗尽、lavf 原生续读、同步／音频／seek／队列完整对照与原生故障回归 |
 | [评论视频链接识别与样式](validation/comment-video-links-2026-11-17.md) | 裸 BV／AV、无协议地址、App 视频链接、服务端标题与行内播放图标及离线回归 |
