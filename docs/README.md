@@ -10,6 +10,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [视频卡列表与标签生命周期](validation/feed-tab-lifecycle-2026-11-18.md) | 行高缓存／分页冗余调度、空闲卡片监听、隐藏动画与热门网格复用及回归 |
 | [PiliPlus 底层播放链路复核](validation/piliplus-playback-audit-2026-11-18.md) | 应用／SDK／原生默认值对照、实际网络打开错误、保留差异与缓冲／同步回归 |
 | [Windows TLS 读取持续缓冲](validation/windows-tls-buffering-2026-11-18.md) | 运行现场线程栈、不完整 TLS 记录重试循环、PiliPlus 实际原生库对照与有界续读 |
 | [播放底层对齐与 Windows 失声](validation/piliplus-playback-parity-2026-11-17.md) | curl 累计重试耗尽、lavf 原生续读、同步／音频／seek／队列完整对照与原生故障回归 |

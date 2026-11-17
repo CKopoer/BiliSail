@@ -47,6 +47,7 @@ class _VideoCardCoverState extends State<VideoCardCover> {
   Object? _coverConfiguration;
   Widget? _cover;
   StreamSubscription<VideoId>? _watchLaterSubscription;
+  VideoCardWatchLaterToggle? _watchedInteractions;
 
   bool get _hovered => _active && (widget.hovered ?? _pointerHovered);
 
@@ -79,19 +80,34 @@ class _VideoCardCoverState extends State<VideoCardCover> {
       _busy = false;
       ++_writeGeneration;
     }
-    if (scope?.interactions != _scope?.interactions) {
-      unawaited(_watchLaterSubscription?.cancel());
-      final interactions = scope?.interactions;
-      _watchLaterSubscription = interactions is VideoCardWatchLaterToggle
-          ? (interactions as VideoCardWatchLaterToggle).watchLaterChanges
-                .listen((id) {
-                  if (mounted && id == widget.video.id) setState(() {});
-                })
-          : null;
-    }
     _scope = scope;
     _active = active;
+    _syncWatchLaterSubscription();
     if (_hovered || widget.focused) _refreshWatchLater();
+  }
+
+  void _syncWatchLaterSubscription() {
+    final interactions = _scope?.interactions;
+    final target =
+        _active &&
+            widget.showWatchLaterButton &&
+            widget.video.id.isValid &&
+            (_hovered || widget.focused) &&
+            interactions is VideoCardWatchLaterToggle
+        ? interactions as VideoCardWatchLaterToggle
+        : null;
+    if (identical(target, _watchedInteractions)) return;
+    unawaited(_watchLaterSubscription?.cancel());
+    _watchedInteractions = target;
+    // Membership is read from the account owner when the action appears.
+    // Idle/hidden cards need neither stream fan-out nor event-driven builds.
+    _watchLaterSubscription = target?.watchLaterChanges.listen((id) {
+      if (mounted &&
+          identical(target, _watchedInteractions) &&
+          id == widget.video.id) {
+        setState(() {});
+      }
+    });
   }
 
   @override
@@ -122,6 +138,7 @@ class _VideoCardCoverState extends State<VideoCardCover> {
     if (oldWidget.hovered != widget.hovered) {
       _snapBack = widget.hovered == false && _ancestorScrolling();
     }
+    _syncWatchLaterSubscription();
     if (_hovered || widget.focused) _refreshWatchLater();
   }
 
@@ -131,6 +148,7 @@ class _VideoCardCoverState extends State<VideoCardCover> {
       _pointerHovered = hovered;
       _snapBack = !hovered && _ancestorScrolling();
     });
+    _syncWatchLaterSubscription();
     if (hovered) _refreshWatchLater();
   }
 

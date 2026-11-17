@@ -283,7 +283,10 @@ class _RenderCardRows extends RenderSliverList {
   void collectGarbage(int leadingGarbage, int trailingGarbage) {
     // Capture sizes before Flutter recycles rows, including rows traversed by
     // a forward jump. The bounded cache owns only indices and pixel extents.
-    var remaining = childCount - trailingGarbage;
+    // Only rows leaving at the start can be needed by a later reverse jump.
+    // Rewriting every mounted row here churns the LRU on every scroll layout,
+    // even when no row is recycled. Trailing garbage may have stale sizes.
+    var remaining = leadingGarbage;
     final boxConstraints = constraints.asBoxConstraints();
     for (
       var child = firstChild;

@@ -97,7 +97,7 @@ final class _PagedScrollViewportState extends State<PagedScrollViewport> {
       if (!mounted) return;
       _updateTopVisibility();
       _checkForMore(force: force);
-    });
+    }, debugLabel: 'PagedScrollViewport.pagination');
     // Metrics notifications can arrive after the frame has finished; request
     // one frame for this coalesced check rather than polling every frame.
     WidgetsBinding.instance.ensureVisualUpdate();
@@ -150,12 +150,25 @@ final class _PagedScrollViewportState extends State<PagedScrollViewport> {
       OverscrollNotification(:final overscroll) => overscroll > 0,
       _ => false,
     };
-    if (movingDown) _scheduleCheck(force: true);
+    // Most scroll frames cannot request a page. In particular, exhausted and
+    // retained lists must not enqueue an extra post-layout check every frame.
+    if (movingDown &&
+        _active &&
+        widget.canLoadMore &&
+        !_requestPending &&
+        notification.metrics.extentAfter <= 600) {
+      _scheduleCheck(force: true);
+    }
     return false;
   }
 
   bool _onMetrics(ScrollMetricsNotification notification) {
-    if (notification.depth == 0 && notification.metrics.axis == Axis.vertical) {
+    if (notification.depth == 0 &&
+        notification.metrics.axis == Axis.vertical &&
+        _active &&
+        widget.canLoadMore &&
+        !_requestPending &&
+        notification.metrics.extentAfter <= 600) {
       _scheduleCheck();
     }
     return false;

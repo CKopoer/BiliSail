@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/domain/page_result.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
@@ -10,6 +12,8 @@ import 'package:bilisail/features/feed/domain/home_repository.dart';
 import 'package:bilisail/features/feed/domain/popular_feed.dart';
 import 'package:bilisail/features/feed/presentation/feed_screen.dart';
 import 'package:bilisail/shared/ui/content_section_tabs.dart';
+import 'package:bilisail/shared/ui/video_grid.dart';
+import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -147,6 +151,97 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'popular retains grid delegates across activity and tab changes',
+    (tester) async {
+      final active = ValueNotifier(true);
+      addTearDown(active.dispose);
+      await mount(tester, active: active);
+      final grid = tester.widget<SliverVideoGrid>(find.byType(SliverVideoGrid));
+      final position = tester
+          .widget<CustomScrollView>(
+            find.byKey(const PageStorageKey('popular-all-null')),
+          )
+          .controller!
+          .position;
+      position.jumpTo(300);
+      await tester.pumpAndSettle();
+      var cardBuilds = 0;
+      debugOnRebuildDirtyWidget = (element, builtOnce) {
+        if (builtOnce && element.widget is VideoCard) cardBuilds++;
+      };
+      addTearDown(() => debugOnRebuildDirtyWidget = null);
+      active.value = false;
+      await tester.pumpAndSettle();
+      active.value = true;
+      await tester.pumpAndSettle();
+      expect(cardBuilds, 0);
+      expect(tester.widget(find.byType(SliverVideoGrid)), same(grid));
+      await select(tester, PopularSection.precious);
+      await select(tester, PopularSection.all);
+      expect(tester.widget(find.byType(SliverVideoGrid)), same(grid));
+      expect(position.pixels, 300);
+      expect(repository.calls.where((call) => call == 'all'), hasLength(1));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'popular footer updates retain rows and appended data replaces them',
+    (tester) async {
+      repository.popularHasMore = true;
+      await mount(tester);
+      final controller = ProviderScope.containerOf(
+        tester.element(find.byType(FeedScreen)),
+      ).read(feedControllerProvider.notifier);
+      final grid = tester.widget<SliverVideoGrid>(find.byType(SliverVideoGrid));
+      final pending = Completer<PageResult<VideoSummary>>();
+      repository.nextPopular = pending;
+      final request = controller.loadMore();
+      await tester.pump();
+      expect(tester.widget(find.byType(SliverVideoGrid)), same(grid));
+      pending.completeError(StateError('offline'));
+      await request;
+      await tester.pumpAndSettle();
+      expect(controller.state.pageError, isNotNull);
+      expect(tester.widget(find.byType(SliverVideoGrid)), same(grid));
+      final append = Completer<PageResult<VideoSummary>>();
+      repository.nextPopular = append;
+      final retry = controller.loadMore();
+      await tester.pump();
+      expect(tester.widget(find.byType(SliverVideoGrid)), same(grid));
+      append.complete(
+        const PageResult(
+          items: [
+            VideoSummary(
+              id: VideoId('BV1234567890'),
+              title: 'Appended',
+              author: 'Author',
+              coverUrl: '',
+              duration: Duration.zero,
+            ),
+          ],
+          hasMore: false,
+        ),
+      );
+      await retry;
+      await tester.pumpAndSettle();
+      final updated = tester.widget<SliverVideoGrid>(
+        find.byType(SliverVideoGrid),
+      );
+      expect(identical(updated, grid), isFalse);
+      expect(updated.items, hasLength(61));
+      expect(updated.items.last.title, 'Appended');
+      await controller.refresh();
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<SliverVideoGrid>(find.byType(SliverVideoGrid)).items,
+        hasLength(60),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('four sections are lazy and retained with the shared video grid', (
     tester,
@@ -337,6 +432,8 @@ class _Repository
         HomeRepository {
   final calls = <String>[];
   final homeSections = <String>[];
+  bool popularHasMore = false;
+  Completer<PageResult<VideoSummary>>? nextPopular;
   List<VideoCategory> regions = const [VideoCategory(id: '1008', name: '游戏')];
   @override
   String get accountScope => 'test';
@@ -369,7 +466,8 @@ class _Repository
     required RequestCancellation cancellation,
   }) async {
     calls.add('all');
-    return this.page('all');
+    if (page > 1 && nextPopular != null) return nextPopular!.future;
+    return PageResult(items: this.page('all').items, hasMore: popularHasMore);
   }
 
   @override
