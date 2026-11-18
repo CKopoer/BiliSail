@@ -27,8 +27,9 @@ Future<List<LocalImage>> pickLocalImages(
           // or extra metadata permissions on iOS.
           requestFullMetadata: false,
         )
-      : defaultTargetPlatform == TargetPlatform.windows
-      ? await _pickWindowsImages(viewId)
+      : defaultTargetPlatform == TargetPlatform.windows ||
+            defaultTargetPlatform == TargetPlatform.macOS
+      ? await _pickWindowImages(viewId)
       : await openFiles(
           acceptedTypeGroups: [
             XTypeGroup(
@@ -92,15 +93,15 @@ Future<List<LocalImage>> pickLocalImages(
   return List.unmodifiable(images);
 }
 
-const _windowsPicker = MethodChannel('bilisail/image_picker');
+const _desktopPicker = MethodChannel('bilisail/image_picker');
 
-Future<List<XFile>> _pickWindowsImages(int? viewId) async {
+Future<List<XFile>> _pickWindowImages(int? viewId) async {
   if (viewId == null) {
     throw const AppFailure(AppFailureKind.storage, '无法确定图片选择窗口，请重新打开页面');
   }
-  // file_selector_windows always uses the engine's implicit (main) view.
-  // The runner resolves this caller's view and runs the Shell dialog in an STA.
-  final paths = await _windowsPicker.invokeListMethod<String>('pickImages', {
+  // The desktop plugins only query the implicit view, which can be absent in
+  // macOS multiview. The runner instead binds the dialog to this caller's view.
+  final paths = await _desktopPicker.invokeListMethod<String>('pickImages', {
     'viewId': viewId,
   });
   if (paths == null || paths.any((path) => path.isEmpty)) {

@@ -9,6 +9,7 @@ final class MacOSApplication {
   private let exitChannel: FlutterMethodChannel
   private var systemFontsChannel: FlutterMethodChannel?
   private var imageExportChannel: FlutterMethodChannel?
+  private var imagePickerChannel: ImagePickerChannel?
   private var appIconChannel: FlutterMethodChannel?
   private var desktopWindows: DesktopWindowController?
   private var mainGeometry: PersistentWindowGeometry?
@@ -193,6 +194,13 @@ final class MacOSApplication {
     imageExportChannel = registerImageExport(
       messenger: engine.binaryMessenger
     )
+    imagePickerChannel = ImagePickerChannel(messenger: engine.binaryMessenger) { [weak self] viewID in
+      guard let self = self else { return nil }
+      return NSApp.windows.first { window in
+        guard let controller = window.contentViewController as? FlutterViewController else { return false }
+        return controller.engine === self.engine && controller.viewIdentifier == viewID
+      }
+    }
     desktopWindows = DesktopWindowController(
       messenger: engine.binaryMessenger
     )
@@ -233,6 +241,7 @@ final class MacOSApplication {
   }
 
   deinit {
+    imagePickerChannel?.shutDown()
     mainGeometry?.detach()
     for observer in focusObservers { NotificationCenter.default.removeObserver(observer) }
     for observer in workspaceObservers {
@@ -250,6 +259,7 @@ final class MacOSApplication {
 
   func shutDown() {
     NativeLifecycleEvent.engineShutdownBegin.record()
+    imagePickerChannel?.shutDown()
     engine.shutDownEngine()
     NativeLifecycleEvent.engineShutdownEnd.record()
   }

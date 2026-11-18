@@ -2,6 +2,8 @@
 
 日期：2026-11-18。
 
+同日后续补齐了 [macOS 的显式窗口归属与异步 sheet](macos-comment-image-picker-2026-11-18.md)。下文“其他平台沿用原选择器”及测试数字保留本次 Windows 提交当时的范围。
+
 ## 定位与证据
 
 共享 `CommentsPanel` 原先只把剩余图片数量传给 `pickCommentImages`，桌面统一调用 `file_selector.openFiles`。根锁文件固定的 `file_selector_windows 0.9.3+6` 在 `RegisterWithRegistrar` 中通过 `registrar->GetView()` 获取隐式主视图，`GetRootWindow` 再取其顶层 HWND，没有接收发起选图的 view ID。因此双标签独立播放窗口中的评论选图也会使用主窗口作为系统对话框 owner。
