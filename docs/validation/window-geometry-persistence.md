@@ -58,3 +58,10 @@
 - `tool/check.ps1 -SkipPub -Stage Lint` 和 `git diff --check` 通过，日志为 `build/narrow-frame-delegate-lint.log`。未运行全量根应用／子包测试。
 
 本次继续遵循用户只做相关单元测试的范围；不构建或运行客户端，实际窄屏重开画面和跨屏 DPI 仍待用户构建验收。
+
+## Linux 主窗口紧凑标题栏（2026-11-18）
+
+Linux 将最小化、最大化／还原及关闭合入与 Windows 共用的 44 逻辑像素工作区工具栏。窗口创建时配置 GTK 客户端装饰，工作区准备完成后隐藏 GTK 标题栏，保留外框缩放和尺寸持久化。启动阶段的错误界面仍可使用 GTK 窗口按钮。[GTK 3 自定义标题栏](https://docs.gtk.org/gtk3/method.Window.set_titlebar.html)
+
+- WSL Ubuntu 24.04 的 Linux x64 Debug 构建通过。X11／Openbox 实测单行布局、拖动、双击最大化／还原、窗口按钮、边缘缩放及关闭后的几何写入。Wayland 和发行安装包待验证。
+- Linux 窗口服务和工作区定向测试 171 项通过。Windows `tool/check.ps1 -SkipPub` 通过，10 项 mux 原生测试因未配置 `BILI_MUX_LIBRARY` 跳过。

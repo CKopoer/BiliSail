@@ -134,6 +134,9 @@ Future<void> main(List<String> arguments) async {
     );
     final app = dependencies.scope(BiliApp(dependencies: dependencies));
     smokeStage('dependencies-ready');
+    // Leave the GTK caption available to the startup error screen until the
+    // workspace can supply its own window controls.
+    if (Platform.isLinux) await dependencies.window.useCustomTitleBar();
     present(app);
     coreLog?.record(CoreDiagnosticEvent.ready);
     if (smoke != null) {
