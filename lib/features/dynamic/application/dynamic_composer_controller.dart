@@ -17,7 +17,7 @@ final dynamicComposerRepositoryProvider = Provider<DynamicComposerRepository?>(
   (ref) => null,
 );
 final dynamicImagePickerProvider =
-    Provider<Future<List<LocalImage>> Function(int)>(
+    Provider<Future<List<LocalImage>> Function(int remaining, {int? viewId})>(
       (ref) => throw UnimplementedError('Dynamic image picker'),
     );
 

@@ -10,6 +10,7 @@
 #include "system_fonts.h"
 #include "app_icon.h"
 #include "image_export.h"
+#include "image_picker_channel.h"
 #include "text_input.h"
 #include "desktop_window.h"
 #include "system_media_controls.h"
@@ -41,6 +42,7 @@ class FlutterWindow : public Win32Window {
   std::unique_ptr<TextInputChannel> text_input_channel_;
   std::unique_ptr<AppIconChannel> app_icon_channel_;
   std::unique_ptr<ImageExportChannel> image_export_channel_;
+  std::unique_ptr<ImagePickerChannel> image_picker_channel_;
   std::unique_ptr<DesktopWindowChannel> desktop_window_channel_;
   std::unique_ptr<SystemMediaControlsChannel> system_media_channel_;
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>

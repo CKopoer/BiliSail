@@ -21,6 +21,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/dynamic_fakes.dart';
+import '../../support/detached_window_fake.dart';
 
 final _image = CommentLocalImage(
   base64Decode(
@@ -36,6 +37,8 @@ void main() {
   late ProviderContainer container;
   late CommentsController controller;
   Completer<List<CommentLocalImage>>? pendingPick;
+  int? pickerViewId;
+  var pickerCalls = 0;
 
   setUpAll(() async {
     await (FontLoader('HarmonyOS Sans')..addFont(
@@ -48,6 +51,8 @@ void main() {
 
   setUp(() async {
     pendingPick = null;
+    pickerViewId = null;
+    pickerCalls = 0;
     repo = _Repo();
     auth = DynamicAuthFake();
     container = ProviderContainer(
@@ -55,9 +60,14 @@ void main() {
         authRepositoryProvider.overrideWithValue(auth),
         commentsRepositoryProvider.overrideWith((ref, type) => repo),
         videoCommentsRepositoryProvider.overrideWithValue(repo),
-        commentImagePickerProvider.overrideWithValue(
-          (remaining) async => pendingPick?.future ?? [_image],
-        ),
+        commentImagePickerProvider.overrideWithValue((
+          remaining, {
+          int? viewId,
+        }) async {
+          pickerViewId = viewId;
+          pickerCalls++;
+          return pendingPick?.future ?? [_image];
+        }),
       ],
     );
     container.listen(commentsProviderFor(_target), (_, _) {});
@@ -75,31 +85,45 @@ void main() {
     double scale = 1,
     double keyboard = 0,
     CommentTarget target = _target,
+    bool detached = false,
   }) async {
     await tester.binding.setSurfaceSize(Size(width, 700));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp(
-          theme: BiliTheme.light(),
-          builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context).copyWith(
-              textScaler: TextScaler.linear(scale),
-              viewInsets: EdgeInsets.only(bottom: keyboard),
-            ),
-            child: AppNoticeHost(child: child!),
+    final content = UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        theme: BiliTheme.light(),
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.linear(scale),
+            viewInsets: EdgeInsets.only(bottom: keyboard),
           ),
-          home: Scaffold(
-            body: CommentsPanel(
-              target: target,
-              playbackPosition: target.type == CommentTargetType.video
-                  ? () => const Duration(seconds: 3723)
-                  : null,
-            ),
+          child: AppNoticeHost(child: child!),
+        ),
+        home: Scaffold(
+          body: CommentsPanel(
+            target: target,
+            playbackPosition: target.type == CommentTargetType.video
+                ? () => const Duration(seconds: 3723)
+                : null,
           ),
         ),
       ),
+    );
+    await tester.pumpWidget(
+      detached
+          ? ViewAnchor(
+              view: View(
+                view: FakeSecondaryFlutterView(
+                  tester.view,
+                  viewId: 100,
+                  size: const Size(800, 700),
+                ),
+                child: content,
+              ),
+              child: const SizedBox.shrink(),
+            )
+          : content,
     );
     await tester.pumpAndSettle();
     await tester.tap(find.byType(TextField));
@@ -246,7 +270,43 @@ void main() {
     await tester.pump();
     pendingPick!.complete([_image]);
     await tester.pumpAndSettle();
+    expect(pickerViewId, tester.view.viewId);
     expect(findMaterialTooltip('移除图片 1'), findsNothing);
+    expect(repo.uploads, 0);
+    expect(repo.posts, 0);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('detached playback composer passes its view and opens once', (
+    tester,
+  ) async {
+    pendingPick = Completer<List<CommentLocalImage>>();
+    await show(tester, detached: true);
+    final add = findMaterialTooltip('添加图片（最多9张，每张10MB）');
+    await tester.tap(add);
+    await tester.pump();
+    expect(pickerViewId, 100);
+    expect(pickerViewId, isNot(tester.view.viewId));
+    await tester.tap(add);
+    await tester.pump();
+    expect(pickerCalls, 1);
+    pendingPick!.complete([_image]);
+    await tester.pumpAndSettle();
+    expect(findMaterialTooltip('移除图片 1'), findsOneWidget);
+    expect(repo.uploads, 0);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('closing the composer discards pending image results', (
+    tester,
+  ) async {
+    pendingPick = Completer<List<CommentLocalImage>>();
+    await show(tester);
+    await tester.tap(findMaterialTooltip('添加图片（最多9张，每张10MB）'));
+    await tester.pump();
+    await tester.pumpWidget(const SizedBox.shrink());
+    pendingPick!.complete([_image]);
+    await tester.pumpAndSettle();
     expect(repo.uploads, 0);
     expect(repo.posts, 0);
     expect(tester.takeException(), isNull);

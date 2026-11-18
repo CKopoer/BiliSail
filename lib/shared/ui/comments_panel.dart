@@ -215,6 +215,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
     try {
       final images = await ref.read(commentImagePickerProvider)(
         CommentLocalImage.maxCount - _images.length,
+        viewId: View.of(context).viewId,
       );
       if (!mounted ||
           generation != _draftGeneration ||

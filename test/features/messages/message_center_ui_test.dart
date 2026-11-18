@@ -46,7 +46,7 @@ void main() {
           messageRepositoryProvider.overrideWithValue(messages),
           messageCenterRepositoryProvider.overrideWithValue(center),
           messageImagePickerProvider.overrideWithValue(
-            picker ?? () async => null,
+            ({int? viewId}) async => picker == null ? null : picker(),
           ),
         ],
         child: MaterialApp(

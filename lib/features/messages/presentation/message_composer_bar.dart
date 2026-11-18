@@ -57,7 +57,9 @@ class _MessageComposerBarState extends ConsumerState<MessageComposerBar> {
     final account = _account();
     setState(() => _picking = true);
     try {
-      final image = await ref.read(messageImagePickerProvider)();
+      final image = await ref.read(messageImagePickerProvider)(
+        viewId: View.of(context).viewId,
+      );
       if (_current(account) && image != null) widget.onImageChanged(image);
     } catch (error) {
       if (mounted && _current(account)) {

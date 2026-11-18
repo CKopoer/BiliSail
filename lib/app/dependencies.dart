@@ -542,8 +542,8 @@ class AppDependencies {
             accountScope: () => session.accountScope,
           ),
         ),
-        messageImagePickerProvider.overrideWithValue(() async {
-          final images = await pickCommentImages(1);
+        messageImagePickerProvider.overrideWithValue(({int? viewId}) async {
+          final images = await pickCommentImages(1, viewId: viewId);
           if (images.isEmpty) return null;
           final image = images.first;
           return MessageLocalImage(
@@ -727,8 +727,9 @@ class AppDependencies {
           ),
         ),
         dynamicImagePickerProvider.overrideWithValue(
-          (remaining) => pickLocalImages(
+          (remaining, {int? viewId}) => pickLocalImages(
             remaining,
+            viewId: viewId,
             label: '动态图片',
             maxCount: DynamicComposerState.maxImages,
           ),

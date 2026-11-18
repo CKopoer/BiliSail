@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../domain/app_failure.dart';
@@ -10,6 +11,7 @@ import '../../domain/local_image.dart';
 Future<List<LocalImage>> pickLocalImages(
   int remaining, {
   ImagePicker? imagePicker,
+  int? viewId,
   String label = '图片',
   int maxCount = LocalImage.maxCount,
 }) async {
@@ -25,6 +27,8 @@ Future<List<LocalImage>> pickLocalImages(
           // or extra metadata permissions on iOS.
           requestFullMetadata: false,
         )
+      : defaultTargetPlatform == TargetPlatform.windows
+      ? await _pickWindowsImages(viewId)
       : await openFiles(
           acceptedTypeGroups: [
             XTypeGroup(
@@ -86,4 +90,21 @@ Future<List<LocalImage>> pickLocalImages(
     images.add(LocalImage(bytes, mime));
   }
   return List.unmodifiable(images);
+}
+
+const _windowsPicker = MethodChannel('bilisail/image_picker');
+
+Future<List<XFile>> _pickWindowsImages(int? viewId) async {
+  if (viewId == null) {
+    throw const AppFailure(AppFailureKind.storage, '无法确定图片选择窗口，请重新打开页面');
+  }
+  // file_selector_windows always uses the engine's implicit (main) view.
+  // The runner resolves this caller's view and runs the Shell dialog in an STA.
+  final paths = await _windowsPicker.invokeListMethod<String>('pickImages', {
+    'viewId': viewId,
+  });
+  if (paths == null || paths.any((path) => path.isEmpty)) {
+    throw const AppFailure(AppFailureKind.storage, '无法读取所选图片');
+  }
+  return [for (final path in paths) XFile(path)];
 }

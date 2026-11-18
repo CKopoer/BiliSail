@@ -55,6 +55,7 @@ class _DynamicComposeDialogState extends ConsumerState<DynamicComposeDialog> {
         DynamicComposerState.maxImages -
             draft.images.length -
             draft.existingPictures.length,
+        viewId: View.of(context).viewId,
       );
       if (mounted &&
           controller.isCurrent(draft.accountScope, draft.sessionEpoch)) {
