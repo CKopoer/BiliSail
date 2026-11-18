@@ -3,7 +3,180 @@ import FlutterMacOS
 import XCTest
 @testable import BiliSail
 
+private final class FakeImageSelectionPanel: ImageSelectionPanel {
+  var urls: [URL] = []
+  weak var owner: NSWindow?
+  var cancelCalls = 0
+  private var completion: ((NSApplication.ModalResponse) -> Void)?
+
+  func begin(for window: NSWindow, completion: @escaping (NSApplication.ModalResponse) -> Void) {
+    owner = window
+    self.completion = completion
+  }
+
+  func complete(_ response: NSApplication.ModalResponse) { completion?(response) }
+
+  func cancel() {
+    cancelCalls += 1
+    completion?(.cancel)
+  }
+}
+
 class RunnerTests: XCTestCase {
+
+  private func imagePickerWindow() -> NSWindow {
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
+      styleMask: [.titled, .closable], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    return window
+  }
+
+  func testImagePickerUsesCallerWindowAndDefersOneSelectionReply() {
+    let main = imagePickerWindow()
+    let playback = imagePickerWindow()
+    defer { playback.close(); main.close() }
+    let panel = FakeImageSelectionPanel()
+    panel.urls = [URL(fileURLWithPath: "/tmp/图片.png"), URL(fileURLWithPath: "/tmp/second.gif")]
+    var scheduled: [() -> Void] = []
+    var results: [ImageSelectionResult] = []
+    let picker = ImageSelectionCoordinator(resolveWindow: { $0 == 100 ? playback : main },
+      makePanel: { panel }, schedule: { scheduled.append($0) })
+    picker.pick(viewID: 100) { results.append($0) }
+    XCTAssertTrue(panel.owner === playback)
+    XCTAssertFalse(panel.owner === main)
+    panel.complete(.OK)
+    panel.complete(.OK)
+    XCTAssertTrue(results.isEmpty)
+    while !scheduled.isEmpty { scheduled.removeFirst()() }
+    XCTAssertEqual(results, [.selected(["/tmp/图片.png", "/tmp/second.gif"])])
+  }
+
+  func testImagePickerRejectsMissingWindowWithoutCreatingUnownedPanel() {
+    var results: [ImageSelectionResult] = []
+    let picker = ImageSelectionCoordinator(resolveWindow: { _ in nil }, makePanel: {
+      XCTFail("A missing view must never fall back to an application-modal panel")
+      return FakeImageSelectionPanel()
+    })
+    picker.pick(viewID: 100) { results.append($0) }
+    XCTAssertEqual(results, [.unavailable])
+  }
+
+  func testImagePickerPreventsReentryAcrossMainAndPlaybackWindows() {
+    let main = imagePickerWindow()
+    let playback = imagePickerWindow()
+    defer { playback.close(); main.close() }
+    let first = FakeImageSelectionPanel()
+    let second = FakeImageSelectionPanel()
+    var panels = [first, second]
+    var scheduled: [() -> Void] = []
+    var results: [ImageSelectionResult] = []
+    let picker = ImageSelectionCoordinator(resolveWindow: { $0 == 100 ? playback : main },
+      makePanel: { panels.removeFirst() }, schedule: { scheduled.append($0) })
+    picker.pick(viewID: 100) { results.append($0) }
+    picker.pick(viewID: 0) { results.append($0) }
+    XCTAssertEqual(results, [.busy])
+    XCTAssertEqual(panels.count, 1)
+    first.complete(.cancel)
+    while !scheduled.isEmpty { scheduled.removeFirst()() }
+    XCTAssertEqual(results, [.busy, .cancelled])
+    picker.pick(viewID: 0) { results.append($0) }
+    XCTAssertTrue(second.owner === main)
+    first.complete(.OK)
+    while !scheduled.isEmpty { scheduled.removeFirst()() }
+    XCTAssertEqual(results, [.busy, .cancelled])
+    second.complete(.cancel)
+    while !scheduled.isEmpty { scheduled.removeFirst()() }
+    XCTAssertEqual(results, [.busy, .cancelled, .cancelled])
+  }
+
+  func testImagePickerWindowCloseCancelsAndIgnoresLateOrDuplicateCallbacks() {
+    let window = imagePickerWindow()
+    defer { window.close() }
+    let notifications = NotificationCenter()
+    let panel = FakeImageSelectionPanel()
+    var scheduled: [() -> Void] = []
+    var results: [ImageSelectionResult] = []
+    let picker = ImageSelectionCoordinator(resolveWindow: { _ in window }, makePanel: { panel },
+      notifications: notifications, schedule: { scheduled.append($0) })
+    picker.pick(viewID: 100) { results.append($0) }
+    panel.complete(.OK)
+    notifications.post(name: NSWindow.willCloseNotification, object: window)
+    notifications.post(name: NSWindow.willCloseNotification, object: window)
+    XCTAssertEqual(results, [.unavailable])
+    XCTAssertEqual(panel.cancelCalls, 1)
+    while !scheduled.isEmpty { scheduled.removeFirst()() }
+    panel.complete(.OK)
+    while !scheduled.isEmpty { scheduled.removeFirst()() }
+    XCTAssertEqual(results, [.unavailable])
+  }
+
+  func testImagePickerDropsSelectionIfViewRetiresBeforeSheetCompletion() {
+    let window = imagePickerWindow()
+    defer { window.close() }
+    var current: NSWindow? = window
+    let panel = FakeImageSelectionPanel()
+    panel.urls = [URL(fileURLWithPath: "/tmp/test.png")]
+    var scheduled: [() -> Void] = []
+    var results: [ImageSelectionResult] = []
+    let picker = ImageSelectionCoordinator(resolveWindow: { _ in current }, makePanel: { panel },
+      schedule: { scheduled.append($0) })
+    picker.pick(viewID: 100) { results.append($0) }
+    panel.complete(.OK)
+    current = nil
+    while !scheduled.isEmpty { scheduled.removeFirst()() }
+    XCTAssertEqual(results, [.unavailable])
+  }
+
+  func testImagePickerShutdownRetiresRequestBeforeSynchronousCancelCompletion() {
+    let window = imagePickerWindow()
+    defer { window.close() }
+    let panel = FakeImageSelectionPanel()
+    var scheduled: [() -> Void] = []
+    var results: [ImageSelectionResult] = []
+    let picker = ImageSelectionCoordinator(resolveWindow: { _ in window }, makePanel: { panel },
+      schedule: { scheduled.append($0) })
+    picker.pick(viewID: 100) { results.append($0) }
+    picker.shutDown()
+    picker.shutDown()
+    while !scheduled.isEmpty { scheduled.removeFirst()() }
+    XCTAssertEqual(results, [.unavailable])
+    XCTAssertEqual(panel.cancelCalls, 1)
+    picker.pick(viewID: 100) { results.append($0) }
+    XCTAssertEqual(results, [.unavailable, .unavailable])
+    panel.complete(.OK)
+    while !scheduled.isEmpty { scheduled.removeFirst()() }
+    XCTAssertEqual(results, [.unavailable, .unavailable])
+  }
+
+  func testImagePickerRejectsEmptyNonFileAndOversizedSelectionsWithoutPartialSuccess() {
+    let window = imagePickerWindow()
+    defer { window.close() }
+    let selections: [[URL]] = [[], [URL(string: "https://example.invalid/image.png")!],
+      Array(repeating: URL(fileURLWithPath: "/tmp/test.png"), count: 19)]
+    for urls in selections {
+      let panel = FakeImageSelectionPanel()
+      panel.urls = urls
+      var results: [ImageSelectionResult] = []
+      let picker = ImageSelectionCoordinator(resolveWindow: { _ in window }, makePanel: { panel },
+        schedule: { $0() })
+      picker.pick(viewID: 100) { results.append($0) }
+      panel.complete(.OK)
+      XCTAssertEqual(results, [.failed])
+    }
+  }
+
+  func testImagePickerDeinitCancelsOutstandingPanel() {
+    let window = imagePickerWindow()
+    defer { window.close() }
+    let panel = FakeImageSelectionPanel()
+    var results: [ImageSelectionResult] = []
+    var picker: ImageSelectionCoordinator? = ImageSelectionCoordinator(
+      resolveWindow: { _ in window }, makePanel: { panel }, schedule: { $0() })
+    picker?.pick(viewID: 100) { results.append($0) }
+    picker = nil
+    XCTAssertEqual(results, [.unavailable])
+    XCTAssertEqual(panel.cancelCalls, 1)
+  }
 
   func testMiniPlayerRetirementNeverRestoresClosingWindow() {
     let suite = "BiliSail.MiniRetirement.\(UUID().uuidString)"
