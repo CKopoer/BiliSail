@@ -22,7 +22,7 @@
 
 | 能力 | host / method / path | 关键参数、鉴权与分页 |
 | --- | --- | --- |
-| 动态详情/点赞确认 | `api.bilibili.com` GET `/x/polymer/web-dynamic/v1/detail` | `id` 十进制字符串，`features=itemOpusStyle`；Cookie 可选，无 CSRF |
+| 动态详情/点赞确认 | `api.bilibili.com` GET `/x/polymer/web-dynamic/v1/detail` | `id` 十进制字符串，旧版资源链接使用 `rid` 和 `type=2`。均携带 `features=itemOpusStyle`，Cookie 可选，无 CSRF |
 | 评论列表 | `api.bilibili.com` GET `/x/v2/reply` | `oid`、`type`、`pn`、`ps=20`、`sort=1/0`、`nohot=1`；Cookie 可选 |
 | 楼中楼 | `api.bilibili.com` GET `/x/v2/reply/reply` | 同一 `oid/type`，`root`、`pn`、`ps=20` |
 | 评论点赞/取消 | `api.bilibili.com` POST `/x/v2/reply/action` | form：`oid/type/rpid/action=1/0`；Cookie 必需，表单注入 `csrf` |

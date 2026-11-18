@@ -282,12 +282,16 @@ final class DynamicClient {
     );
   }
 
-  Future<ApiDynamicPost> detail(String id, {ApiRequestContext? context}) async {
+  Future<ApiDynamicPost> detail(
+    String id, {
+    bool byResourceId = false,
+    ApiRequestContext? context,
+  }) async {
     _id(id);
     const endpoint = 'dynamic_detail';
     final data = await api.requestJson(
       Uri.https('api.bilibili.com', '/x/polymer/web-dynamic/v1/detail', {
-        'id': id,
+        if (byResourceId) ...{'rid': id, 'type': '2'} else 'id': id,
         'features': 'itemOpusStyle',
       }),
       endpoint,
@@ -298,7 +302,7 @@ final class DynamicClient {
       throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
     }
     final post = parseDynamicPost(item, endpoint);
-    if (post.id != id) {
+    if (!byResourceId && post.id != id) {
       throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
     }
     return post;

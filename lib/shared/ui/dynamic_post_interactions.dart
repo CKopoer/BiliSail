@@ -203,7 +203,7 @@ String? _pollDynamicId(DynamicPost post, String pollId) {
   return original == null ? null : _pollDynamicId(original, pollId);
 }
 
-class _DynamicDetailDialog extends ConsumerStatefulWidget {
+class _DynamicDetailDialog extends StatelessWidget {
   const _DynamicDetailDialog({
     required this.post,
     required this.focusComments,
@@ -220,11 +220,75 @@ class _DynamicDetailDialog extends ConsumerStatefulWidget {
   final VoidCallback? onLogin;
 
   @override
-  ConsumerState<_DynamicDetailDialog> createState() =>
-      _DynamicDetailDialogState();
+  Widget build(BuildContext context) {
+    return Dialog(
+      insetPadding: const EdgeInsets.all(12),
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1280, maxHeight: 1000),
+        child: SizedBox(
+          width: 1280,
+          child: Column(
+            children: [
+              const _DialogHeader(title: '动态详情'),
+              const Divider(height: 1),
+              Expanded(
+                child: DynamicDetailContent(
+                  post: post,
+                  focusComments: focusComments,
+                  onOpenUser: onOpenUser == null
+                      ? null
+                      : (id) {
+                          Navigator.pop(context);
+                          onOpenUser!(id);
+                        },
+                  onOpenVideo: onOpenVideo == null
+                      ? null
+                      : (video) {
+                          Navigator.pop(context);
+                          onOpenVideo!(video);
+                        },
+                  onOpenLink: onOpenLink == null
+                      ? null
+                      : (url) {
+                          Navigator.pop(context);
+                          onOpenLink!(url);
+                        },
+                  onLogin: onLogin,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class _DynamicDetailDialogState extends ConsumerState<_DynamicDetailDialog> {
+class DynamicDetailContent extends ConsumerStatefulWidget {
+  const DynamicDetailContent({
+    super.key,
+    required this.post,
+    this.focusComments = false,
+    this.onOpenUser,
+    this.onOpenVideo,
+    this.onOpenLink,
+    this.onLogin,
+  });
+
+  final DynamicPost post;
+  final bool focusComments;
+  final ValueChanged<UserId>? onOpenUser;
+  final ValueChanged<VideoSummary>? onOpenVideo;
+  final ValueChanged<Uri>? onOpenLink;
+  final VoidCallback? onLogin;
+
+  @override
+  ConsumerState<DynamicDetailContent> createState() =>
+      _DynamicDetailContentState();
+}
+
+class _DynamicDetailContentState extends ConsumerState<DynamicDetailContent> {
   final _expansion = DynamicPostExpansionState();
 
   @override
@@ -238,71 +302,32 @@ class _DynamicDetailDialogState extends ConsumerState<_DynamicDetailDialog> {
     final post =
         ref.watch(dynamicActionsProvider(widget.post.id)).detail ?? widget.post;
     final target = post.commentTarget;
-    final onUser = widget.onOpenUser == null
-        ? null
-        : (UserId id) {
-            Navigator.pop(context);
-            widget.onOpenUser!(id);
-          };
-    return Dialog(
-      insetPadding: const EdgeInsets.all(12),
-      clipBehavior: Clip.antiAlias,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1280, maxHeight: 1000),
-        child: SizedBox(
-          width: 1280,
-          child: Column(
-            children: [
-              const _DialogHeader(title: '动态详情'),
-              const Divider(height: 1),
-              Expanded(
-                child: DynamicDetailLayout(
-                  focusComments: widget.focusComments,
-                  content: InteractiveDynamicPostCard(
-                    post: post,
-                    inDetail: true,
-                    expansionState: _expansion,
-                    onOpenUser: onUser,
-                    onOpenVideo: widget.onOpenVideo == null
-                        ? null
-                        : (video) {
-                            Navigator.pop(context);
-                            widget.onOpenVideo!(video);
-                          },
-                    onOpenLink: widget.onOpenLink == null
-                        ? null
-                        : (url) {
-                            Navigator.pop(context);
-                            widget.onOpenLink!(url);
-                          },
-                    onLogin: widget.onLogin,
-                  ),
-                  comments:
-                      target == null ||
-                          post.commentForbidden ||
-                          post.unavailable
-                      ? Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Text(
-                              post.commentForbidden
-                                  ? '该动态已关闭评论'
-                                  : '该动态暂不支持评论，请在官方页面查看',
-                            ),
-                          ),
-                        )
-                      : CommentsPanel(
-                          target: target,
-                          replyCount: post.commentCount,
-                          onOpenUser: onUser,
-                          onLogin: widget.onLogin,
-                        ),
+    return DynamicDetailLayout(
+      focusComments: widget.focusComments,
+      content: InteractiveDynamicPostCard(
+        post: post,
+        inDetail: true,
+        expansionState: _expansion,
+        onOpenUser: widget.onOpenUser,
+        onOpenVideo: widget.onOpenVideo,
+        onOpenLink: widget.onOpenLink,
+        onLogin: widget.onLogin,
+      ),
+      comments: target == null || post.commentForbidden || post.unavailable
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  post.commentForbidden ? '该动态已关闭评论' : '该动态暂不支持评论，请在官方页面查看',
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
+            )
+          : CommentsPanel(
+              target: target,
+              replyCount: post.commentCount,
+              onOpenUser: widget.onOpenUser,
+              onLogin: widget.onLogin,
+            ),
     );
   }
 }

@@ -50,8 +50,9 @@ class DynamicRepositoryFake implements DynamicRepository {
   @override
   Future<DynamicPost> detail(
     String id,
-    RequestCancellation cancellation,
-  ) async => loaded;
+    RequestCancellation cancellation, {
+    bool byResourceId = false,
+  }) async => loaded;
   @override
   Future<void> like(
     String id,

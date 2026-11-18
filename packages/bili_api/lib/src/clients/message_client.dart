@@ -928,19 +928,28 @@ final class MessageClient {
       final parts = parsed.pathSegments
           .where((part) => part.isNotEmpty)
           .toList();
-      // Folded notifications carry their subject/root in path segments.
+      // Comment notifications can carry their subject and thread in the path.
       if (parts case [
-        'msg_fold',
-        '1',
-        final aid,
+        'msg_fold' || 'detail',
+        final business,
+        final subject,
         final root,
         ...,
       ] when parsed.host == 'comment') {
-        if (_positiveDecimal(aid) == null || _positiveDecimal(root) == null) {
+        if (_positiveDecimal(subject) == null ||
+            _positiveDecimal(root) == null) {
           return null;
         }
-        return _videoTarget(aid).replace(
+        final target = switch (business) {
+          '1' => _videoTarget(subject),
+          '17' => Uri.https('t.bilibili.com', '/$subject'),
+          '11' || '16' => _foldedDynamicTarget(parsed, subject),
+          _ => null,
+        };
+        if (target == null) return null;
+        return target.replace(
           queryParameters: {
+            ...target.queryParameters,
             'comment_root_id': root,
             'comment_secondary_id': ?_positiveDecimal(
               parsed.queryParameters['anchor'],
@@ -976,7 +985,18 @@ final class MessageClient {
             Uri.https('www.bilibili.com', '/bangumi/play/ss$decimal'),
           ),
           'article' => Uri.https('www.bilibili.com', '/read/cv$decimal'),
-          'dynamic' => Uri.https('t.bilibili.com', '/$decimal'),
+          'dynamic' => withContext(Uri.https('t.bilibili.com', '/$decimal')),
+          'opus' when parts.length == 1 && decimal == id => withContext(
+            Uri.https('t.bilibili.com', '/$decimal'),
+          ),
+          'following'
+              when parts.length == 2 &&
+                  parts.first == 'detail' &&
+                  decimal == id =>
+            withContext(Uri.https('t.bilibili.com', '/$decimal')),
+          'album' when parts.length == 1 && decimal == id => withContext(
+            Uri.https('t.bilibili.com', '/$decimal'),
+          ).replace(queryParameters: {...parsed.queryParameters, 'type': '2'}),
           'live' => Uri.https('live.bilibili.com', '/$decimal'),
           _ => null,
         };
@@ -998,16 +1018,23 @@ final class MessageClient {
           av.substring(2),
         ).replace(query: uri.query, fragment: uri.fragment);
       }
-      if (parts case [
-        'h5',
-        'comment',
-        'sub',
-      ] when uri.queryParameters['pageType'] == '1') {
+      if (parts case ['h5', 'comment', 'sub']) {
         final oid = _positiveDecimal(uri.queryParameters['oid']);
         final root = _positiveDecimal(uri.queryParameters['root']);
         if (oid != null && root != null) {
-          return _videoTarget(oid).replace(
-            queryParameters: {...uri.queryParameters, 'comment_root_id': root},
+          final target = switch (uri.queryParameters['pageType']) {
+            '1' => _videoTarget(oid),
+            '17' => Uri.https('t.bilibili.com', '/$oid'),
+            '11' || '16' => Uri.https('t.bilibili.com', '/$oid', {'type': '2'}),
+            _ => null,
+          };
+          if (target == null) return uri;
+          return target.replace(
+            queryParameters: {
+              ...uri.queryParameters,
+              ...target.queryParameters,
+              'comment_root_id': root,
+            },
           );
         }
       }
@@ -1017,6 +1044,21 @@ final class MessageClient {
             host == 'b23.tv'
         ? uri
         : null;
+  }
+
+  Uri _foldedDynamicTarget(Uri notification, String subject) {
+    final link = notification.queryParameters['enterUri'];
+    final uri = link == null ? null : Uri.tryParse(link);
+    if (uri case Uri(
+      scheme: 'bilibili',
+      host: 'following',
+      userInfo: '',
+      hasPort: false,
+      pathSegments: ['detail', final id],
+    ) when _positiveDecimal(id) != null) {
+      return Uri.https('t.bilibili.com', '/$id');
+    }
+    return Uri.https('t.bilibili.com', '/$subject', {'type': '2'});
   }
 
   Uri _videoTarget(String aid) => Uri.https(

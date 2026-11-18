@@ -8,7 +8,11 @@ final class DynamicWriteUncertain implements Exception {
 abstract interface class DynamicRepository {
   String get accountScope;
   int get sessionEpoch;
-  Future<DynamicPost> detail(String id, RequestCancellation cancellation);
+  Future<DynamicPost> detail(
+    String id,
+    RequestCancellation cancellation, {
+    bool byResourceId = false,
+  });
   Future<void> like(String id, bool liked, RequestCancellation cancellation);
   Future<String> repost(
     String id,

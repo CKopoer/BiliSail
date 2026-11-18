@@ -65,6 +65,21 @@ void main() {
     }
   });
 
+  test('dynamic notifications use detail routes and retain comment IDs', () {
+    const cases = {
+      'https://t.bilibili.com/9007199254740993123':
+          '/dynamic/9007199254740993123',
+      'https://www.bilibili.com/opus/9007199254740993123?comment_root_id=10&comment_secondary_id=11&from=message': '/dynamic/9007199254740993123?comment_root_id=10&comment_secondary_id=11',
+      'https://m.bilibili.com/h5/dynamic/9007199254740993123/?p=2&t=3#reply20':
+          '/dynamic/9007199254740993123?comment_root_id=20',
+      'https://t.bilibili.com/456?type=2&root=10':
+          '/dynamic/resource/456?comment_root_id=10',
+    };
+    for (final entry in cases.entries) {
+      expect(messageWorkspaceLocation(Uri.parse(entry.key)), entry.value);
+    }
+  });
+
   test(
     'unsupported or unsafe message targets cannot select a workspace page',
     () {
@@ -77,7 +92,10 @@ void main() {
         'https://www.bilibili.com/video/not-a-video',
         'https://www.bilibili.com/bangumi/play/ep0',
         'https://www.bilibili.com/read/cv123',
-        'https://t.bilibili.com/123',
+        'https://t.bilibili.com/123/extra',
+        'https://t.bilibili.com.evil.example/123',
+        'https://t.bilibili.com/vote/h5/index?vote_id=123',
+        'https://www.bilibili.com/opus/0',
         'https://live.bilibili.com/0',
         'https://space.bilibili.com/-1',
         'javascript:alert(1)',
