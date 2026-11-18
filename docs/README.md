@@ -10,6 +10,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [Windows 评论选图与窗口归属](validation/windows-comment-image-picker-2026-11-18.md) | 显式调用视图、独立 STA、重入／取消／关闭保护与离线回归 |
 | [视频卡列表与标签生命周期](validation/feed-tab-lifecycle-2026-11-18.md) | 行高缓存／分页冗余调度、空闲卡片监听、隐藏动画与热门网格复用及回归 |
 | [PiliPlus 底层播放链路复核](validation/piliplus-playback-audit-2026-11-18.md) | 应用／SDK／原生默认值对照、实际网络打开错误、保留差异与缓冲／同步回归 |
 | [Windows TLS 读取持续缓冲](validation/windows-tls-buffering-2026-11-18.md) | 运行现场线程栈、不完整 TLS 记录重试循环、PiliPlus 实际原生库对照与有界续读 |

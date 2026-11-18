@@ -51,6 +51,8 @@ bool FlutterWindow::OnCreate() {
         text_input_registrar, view_id);
     return view ? FlutterDesktopViewGetHWND(view) : nullptr;
   };
+  image_picker_channel_ = std::make_unique<ImagePickerChannel>(
+      flutter_controller_->engine()->messenger(), resolve_view);
   text_input_channel_ = std::make_unique<TextInputChannel>(
       flutter_controller_->engine()->messenger(),
       flutter_controller_->view()->GetNativeWindow(),
@@ -98,6 +100,7 @@ void FlutterWindow::OnDestroy() {
   intercept_main_window_close_ = false;
   application_exit_channel_.reset();
   system_media_channel_.reset();
+  image_picker_channel_.reset();
   image_export_channel_.reset();
   desktop_window_channel_.reset();
   app_icon_channel_.reset();

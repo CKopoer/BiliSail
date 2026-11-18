@@ -53,7 +53,7 @@ void main() {
           dynamicComposerRepositoryProvider.overrideWithValue(repository),
           dynamicTopicRepositoryProvider.overrideWithValue(topic),
           dynamicImagePickerProvider.overrideWithValue(
-            (_) async => [
+            (_, {int? viewId}) async => [
               LocalImage(
                 base64Decode(
                   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==',

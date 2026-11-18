@@ -284,6 +284,8 @@ macOS 内容区触控板向右滑动可通过工作区原有返回入口回退�
 
 `PlatformServices` 分成小接口：`WindowService`、`AudioSessionService`、`PowerService`、`MediaControlsService`、`PipService`、`FileAccessService`、`ExternalLinkService`。通过 capability 返回支持状态，页面不散落 `Platform.isWindows`。
 
+2026-11-18 Windows 本地图片选择通过共享平台入口接收调用方的 Flutter view ID；runner 解析该视图的顶层窗口，在独立 STA 中创建、显示、取消和释放系统对话框，结果仅在平台线程返回。进程同时只允许一个选择器，调用窗口关闭后取消并丢弃结果；评论、动态和私信复用这一入口。图片读取／格式／容量校验仍在共享 Dart 适配器，草稿与账号隔离仍由原控制器和组件持有，见[Windows 评论选图与窗口归属](validation/windows-comment-image-picker-2026-11-18.md)。
+
 | 能力 | Android | Windows | macOS |
 | --- | --- | --- | --- |
 | 前台播放/全屏 | 横屏、音频焦点、耳机断开、系统栏 | 窗口全屏、显示缩放、多显示器 | 原生全屏、Retina、音频路由 |

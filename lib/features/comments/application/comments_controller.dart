@@ -14,10 +14,14 @@ import '../domain/comment_composer.dart';
 final videoCommentsRepositoryProvider = Provider<CommentsRepository>(
   (ref) => throw UnimplementedError('CommentsRepository'),
 );
-final commentImagePickerProvider =
-    Provider<Future<List<CommentLocalImage>> Function(int)>(
-      (ref) => throw UnimplementedError('Comment image picker'),
-    );
+typedef CommentImagePicker = Future<List<CommentLocalImage>> Function(
+  int remaining, {
+  int? viewId,
+});
+
+final commentImagePickerProvider = Provider<CommentImagePicker>(
+  (ref) => throw UnimplementedError('Comment image picker'),
+);
 final commentsRepositoryProvider =
     Provider.family<CommentsRepository, CommentTargetType>(
       (ref, type) => type == CommentTargetType.video

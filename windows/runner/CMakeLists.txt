@@ -12,6 +12,8 @@ add_executable(${BINARY_NAME} WIN32
   "shell_app_icon.cpp"
   "system_fonts.cpp"
   "image_export.cpp"
+  "image_picker.cpp"
+  "image_picker_channel.cpp"
   "text_input.cpp"
   "desktop_window.cpp"
   "system_media_controls.cpp"
