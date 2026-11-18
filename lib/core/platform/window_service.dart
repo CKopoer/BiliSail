@@ -417,8 +417,14 @@ class WindowService {
   bool get hasDesktopWindow =>
       Platform.isWindows || Platform.isMacOS || Platform.isLinux;
 
-  /// Other desktop platforms retain their native caption until validated.
-  bool get hasCustomTitleBar => Platform.isWindows && viewId == null;
+  bool get hasCustomTitleBar =>
+      viewId == null && (Platform.isWindows || Platform.isLinux);
+
+  Future<void> useCustomTitleBar() async {
+    if (!hasCustomTitleBar) return;
+    await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+  }
+
   bool _fullScreen = false;
   bool? _browsePortrait;
   AppOrientationPreference _orientationPreference =
@@ -599,9 +605,7 @@ class WindowService {
     }
     await windowManager.setTitle('BiliSail');
     await windowManager.setMinimumSize(const Size(420, 560));
-    if (hasCustomTitleBar) {
-      await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
-    }
+    if (Platform.isWindows) await useCustomTitleBar();
   }
 
   void _requestApplicationExit() {

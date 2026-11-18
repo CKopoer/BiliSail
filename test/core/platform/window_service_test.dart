@@ -207,6 +207,7 @@ void main() {
         activate: () async => activations++,
       );
       await main.initialize();
+      await main.useCustomTitleBar();
       await main.activate();
       await main.setFullScreen(true);
       await main.setFullScreen(false);
@@ -215,6 +216,28 @@ void main() {
       expect(fullscreen, [true, false]);
     },
   );
+
+  testWidgets('Linux hides the GTK caption when the workspace is ready', (
+    tester,
+  ) async {
+    const channel = MethodChannel('window_manager');
+    final styles = <Object?>[];
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'setTitleBarStyle') {
+        styles.add(call.arguments);
+      }
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+
+    final window = WindowService();
+    expect(window.hasCustomTitleBar, isTrue);
+    await window.initialize();
+    expect(styles, isEmpty);
+    await window.useCustomTitleBar();
+    expect(styles.single, containsPair('titleBarStyle', 'hidden'));
+  }, skip: !Platform.isLinux);
 
   testWidgets(
     'playback caption calls target one view and stop after retirement',
