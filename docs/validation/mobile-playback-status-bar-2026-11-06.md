@@ -38,3 +38,9 @@
 - 验证使用 `build/statusbar-exit-worktree/` 隔离检出，避免与主工作区并发测试争用原生 DLL；三个改动代码文件与主工作区逐文件 SHA-256 一致。根检查的构建边界／格式及五份锁文件的 `--enforce-lockfile` 解析通过；最终全仓静态分析无问题，根应用 4,591 项、四个子包 1,056 项离线测试通过。13 项 Windows 符号链接条件用例、10 项未配置 `BILI_MUX_LIBRARY` 的 mux 原生用例跳过，不计为原生通过。
 - Android `950c21ca`（2211133C）最终 Profile 真机回归全部通过，结果见 `build/statusbar-exit-worktree/build/validation/android-statusbar-exit/results.json`：`fullscreenExit` 中的退出前覆盖、竖屏黑色状态区和普通页黑色状态区断言均通过。普通 Release／fixture 均为开发包 `dev.bilisail.bilisail.test`、版本 `1.2.8+0`，fixture 补传同版本的 `BILISAIL_RELEASE_VERSION`；结束后覆盖恢复普通入口 Release，常亮与 adb reverse 已恢复，未卸载或清数据。最终普通 APK、SHA-256 和元信息同步到根工作区 `build/development/android-arm64/`。
 - iOS 和宽屏设备保留组件回归覆盖，未进行本轮实机验证；没有测量性能，也未采集原生合成转场的逐帧视频。真机像素断言读取 Flutter 绘制结果。未发现可连接的 DTD 调试应用，无法热重载。
+
+## 2026-11-18 iOS 横屏全屏顶部弹幕
+
+- 截图中播放器顶部的黑色区域盖住了视频和第一行弹幕。全屏路由复用了普通播放页的状态栏背景，iOS 横屏仍报告顶部安全区时，背景会按该高度覆盖已经铺满视口的内容。见 [#142](https://github.com/CKopoer/BiliSail/issues/142)。
+- iOS 横屏全屏播放视频时只提供系统状态栏样式，视频和弹幕正常绘制至视口顶边。播放器控件仍读取原始安全区。见[状态栏适配](../../lib/core/presentation/mobile_playback_status_bar.dart)。
+- 使用 iPhone 14 Pro Max 的横屏逻辑尺寸，在顶部安全区出现前后对比首行固定弹幕的实际绘制像素，并检查系统状态栏样式。iOS 真机显示仍待验证。见[播放面板回归](../../test/features/playback/playback_panel_test.dart)。

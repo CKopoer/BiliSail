@@ -10,10 +10,12 @@ class MobilePlaybackStatusBar extends StatefulWidget {
     super.key,
     required this.enabled,
     required this.builder,
+    this.fullScreenVideo = false,
   });
 
   final bool enabled;
   final WidgetBuilder builder;
+  final bool fullScreenVideo;
 
   @override
   State<MobilePlaybackStatusBar> createState() =>
@@ -66,8 +68,12 @@ class _MobilePlaybackStatusBarState extends State<MobilePlaybackStatusBar>
     if (!widget.enabled || !WindowSizePolicy.isMobile(platform)) {
       return child;
     }
-    // Edge-to-edge Android ignores the requested status bar color. Paint the
-    // existing safe area without changing the content's insets or bottom bar.
+    // iOS can report a top inset in landscape fullscreen. Keep the status
+    // style while letting the video and danmaku paint to the top edge.
+    final paintBackground =
+        !widget.fullScreenVideo ||
+        platform != TargetPlatform.iOS ||
+        MediaQuery.orientationOf(context) != Orientation.landscape;
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -80,15 +86,17 @@ class _MobilePlaybackStatusBarState extends State<MobilePlaybackStatusBar>
             // Hidden bars report zero padding. Keep the style at the top sample
             // point so showing them during rotation cannot restore dark icons.
             height: padding.top > 0 ? padding.top : 1,
-            child: const IgnorePointer(
+            child: IgnorePointer(
               child: AnnotatedRegion<SystemUiOverlayStyle>(
-                value: SystemUiOverlayStyle(
+                value: const SystemUiOverlayStyle(
                   statusBarColor: Colors.transparent,
                   statusBarIconBrightness: Brightness.light,
                   statusBarBrightness: Brightness.dark,
                   systemStatusBarContrastEnforced: false,
                 ),
-                child: ColoredBox(color: Colors.black),
+                child: paintBackground
+                    ? const ColoredBox(color: Colors.black)
+                    : const SizedBox.expand(),
               ),
             ),
           ),

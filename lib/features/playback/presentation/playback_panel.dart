@@ -841,9 +841,14 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
                   ),
               ],
             ),
-            child: MobilePlaybackStatusBar(
-              enabled: true,
-              builder: (_) => AndroidSystemUi(
+            child: ListenableBuilder(
+              listenable: _session,
+              builder: (_, child) => MobilePlaybackStatusBar(
+                enabled: true,
+                fullScreenVideo: !_session.audioOnly,
+                builder: (_) => child!,
+              ),
+              child: AndroidSystemUi(
                 backgroundColor: Colors.black,
                 brightness: Brightness.dark,
                 child: Dialog.fullscreen(
