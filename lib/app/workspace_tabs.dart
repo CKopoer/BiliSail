@@ -23,6 +23,8 @@ final class WorkspaceTab {
   bool get isTopic =>
       location.pathSegments.length == 2 &&
       location.pathSegments.first == 'topic';
+  bool get isDynamicDetail => location.path.startsWith('/dynamic/');
+  bool get hasOwnNavigation => isTopic || isDynamicDetail;
   bool get isBrowse => location.path == '/';
   bool get isAccount => location.path == '/me';
   bool get isMessages => location.path == '/messages';
@@ -48,6 +50,7 @@ final class WorkspaceTab {
     if (isLive) return '直播 · ${location.pathSegments.last}';
     if (isProfile) return '用户主页 · ${location.pathSegments.last}';
     if (isTopic) return '话题 · ${location.pathSegments.last}';
+    if (isDynamicDetail) return '动态详情';
     return '浏览';
   }
 

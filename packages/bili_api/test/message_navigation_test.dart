@@ -120,6 +120,89 @@ void main() {
     });
   }
 
+  for (final (section, item, path, query) in [
+    (
+      ApiInboxSection.replies,
+      {
+        'native_uri':
+            'bilibili://following/detail/9007199254740993123?comment_on=1',
+        'source_id': '202',
+        'root_id': '200',
+      },
+      '/9007199254740993123',
+      {
+        'comment_on': '1',
+        'comment_root_id': '200',
+        'comment_secondary_id': '202',
+      },
+    ),
+    (
+      ApiInboxSection.mentions,
+      {'native_uri': 'bilibili://opus/9007199254740993123#reply200'},
+      '/9007199254740993123',
+      <String, String>{},
+    ),
+    (
+      ApiInboxSection.replies,
+      {
+        'native_uri':
+            'bilibili://comment/detail/17/9007199254740993123/200/?anchor=202',
+      },
+      '/9007199254740993123',
+      {'comment_root_id': '200', 'comment_secondary_id': '202'},
+    ),
+    (
+      ApiInboxSection.likes,
+      {
+        'native_uri':
+            'bilibili://comment/msg_fold/11/345/200/201/?anchor=202&enterUri=bilibili%3A%2F%2Ffollowing%2Fdetail%2F9007199254740993123',
+      },
+      '/9007199254740993123',
+      {'comment_root_id': '200', 'comment_secondary_id': '202'},
+    ),
+    (
+      ApiInboxSection.likes,
+      {'native_uri': 'bilibili://comment/msg_fold/11/345/200/201/?anchor=202'},
+      '/345',
+      {'type': '2', 'comment_root_id': '200', 'comment_secondary_id': '202'},
+    ),
+    (
+      ApiInboxSection.likes,
+      {'native_uri': 'bilibili://album/345/'},
+      '/345',
+      {'type': '2'},
+    ),
+    (
+      ApiInboxSection.replies,
+      {
+        'native_uri':
+            'https://www.bilibili.com/h5/comment/sub?oid=9007199254740993123&pageType=17&root=200&comment_secondary_id=202',
+      },
+      '/9007199254740993123',
+      {
+        'oid': '9007199254740993123',
+        'pageType': '17',
+        'root': '200',
+        'comment_root_id': '200',
+        'comment_secondary_id': '202',
+      },
+    ),
+  ]) {
+    test('normalizes dynamic notification ${item['native_uri']}', () async {
+      final api = BiliApiClient(transport: _Transport(_page(section, item)));
+      addTearDown(api.close);
+      final entry = (await MessageClient(
+        api,
+      ).notifications(section)).items.single;
+      expect(entry.targetUrl?.host, 't.bilibili.com');
+      expect(entry.targetUrl?.path, path);
+      expect(entry.targetUrl?.queryParameters, query);
+      if (section == ApiInboxSection.mentions) {
+        expect(entry.targetUrl?.fragment, 'reply200');
+      }
+    });
+  }
+
   test(
     'invalid native target falls back to valid web URL; danmaku is not a comment',
     () async {

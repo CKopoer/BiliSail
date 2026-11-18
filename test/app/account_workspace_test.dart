@@ -4,6 +4,10 @@ import 'dart:async';
 
 import 'package:bilisail/app/router.dart';
 import 'package:bilisail/core/network/api_requests.dart';
+import 'package:bilisail/core/platform/external_links.dart';
+import 'package:bilisail/domain/comment_target.dart';
+import 'package:bilisail/domain/content_link.dart';
+import 'package:bilisail/domain/dynamic_post.dart';
 import 'package:bilisail/domain/page_result.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
@@ -13,9 +17,12 @@ import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/auth/presentation/account_button.dart';
 import 'package:bilisail/features/auth/presentation/account_menu.dart';
 import 'package:bilisail/features/auth/presentation/account_screen.dart';
+import 'package:bilisail/features/comments/application/comments_controller.dart';
+import 'package:bilisail/features/comments/domain/comments_repository.dart';
 import 'package:bilisail/features/downloads/application/download_controller.dart';
 import 'package:bilisail/features/downloads/domain/download_repository.dart';
 import 'package:bilisail/features/downloads/presentation/downloads_screen.dart';
+import 'package:bilisail/features/dynamic/application/dynamic_actions_controller.dart';
 import 'package:bilisail/features/feed/application/feed_controller.dart';
 import 'package:bilisail/features/feed/application/home_controller.dart';
 import 'package:bilisail/features/feed/domain/feed_repository.dart';
@@ -26,6 +33,7 @@ import 'package:bilisail/features/library/application/library_controller.dart';
 import 'package:bilisail/features/library/domain/library_repository.dart';
 import 'package:bilisail/features/library/presentation/history_screen.dart';
 import 'package:bilisail/features/messages/application/messages_controller.dart';
+import 'package:bilisail/features/messages/domain/message_repository.dart';
 import 'package:bilisail/features/messages/presentation/messages_screen.dart';
 import 'package:bilisail/features/settings/presentation/settings_screen.dart';
 import 'package:bilisail/features/settings/application/settings_controller.dart';
@@ -40,6 +48,9 @@ import 'package:go_router/go_router.dart';
 
 import '../support/input_test_app.dart';
 import '../features/messages/message_fakes.dart';
+import '../support/dynamic_fakes.dart';
+
+const _dynamicTarget = CommentTarget('456', CommentTargetType.album);
 
 void main() {
   late _HistoryRepository history;
@@ -63,6 +74,9 @@ void main() {
     _AuthRepository? auth,
     int Function()? epoch,
     WorkspaceNavigationMode mode = WorkspaceNavigationMode.dualTabs,
+    DynamicRepositoryFake? dynamics,
+    CommentsRepository? dynamicComments,
+    Future<bool> Function(Uri)? externalOpener,
   }) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = Size(width, 820);
@@ -95,12 +109,108 @@ void main() {
           feedRepositoryProvider.overrideWithValue(_FeedRepository()),
           downloadRepositoryProvider.overrideWithValue(downloads),
           messageRepositoryProvider.overrideWithValue(messages),
+          if (dynamics != null)
+            dynamicRepositoryProvider.overrideWithValue(dynamics),
+          if (dynamicComments != null)
+            commentsRepositoryProvider(_dynamicTarget.type)
+                .overrideWithValue(dynamicComments),
+          if (externalOpener != null)
+            externalLinkOpenerProvider.overrideWithValue(externalOpener),
         ],
         child: InputTestApp.router(routerConfig: router),
       ),
     );
     await tester.pumpAndSettle();
     return router;
+  }
+
+  for (final (section, mode, width, targetPath) in [
+    (
+      InboxSection.replies,
+      WorkspaceNavigationMode.singlePage,
+      390.0,
+      '/100?comment_root_id=200&comment_secondary_id=202',
+    ),
+    (InboxSection.likes, WorkspaceNavigationMode.dualTabs, 1200.0, '/100'),
+    (
+      InboxSection.mentions,
+      WorkspaceNavigationMode.multipleTabs,
+      1200.0,
+      '/456?type=2&comment_root_id=200&comment_secondary_id=202',
+    ),
+  ]) {
+    testWidgets(
+      '$section opens dynamic detail and returns to the retained inbox',
+      (tester) async {
+        messages.entries = [
+          InboxEntry(
+            id: '999',
+            title: '动态通知',
+            text: '通知正文',
+            targetUrl: Uri.parse('https://t.bilibili.com$targetPath'),
+          ),
+        ];
+        final dynamicRepository = _NotificationDynamics();
+        final comments = _NotificationComments();
+        final external = <Uri>[];
+        final router = await mount(
+          tester,
+          width: width,
+          mode: mode,
+          initialLocation: '/messages',
+          dynamics: dynamicRepository,
+          dynamicComments: comments,
+          externalOpener: (uri) async {
+            external.add(uri);
+            return true;
+          },
+        );
+        if (mode == WorkspaceNavigationMode.multipleTabs) {
+          router.go('/history');
+          await tester.pumpAndSettle();
+          router.go('/messages');
+          await tester.pumpAndSettle();
+        }
+        await tester.tap(
+          find.byKey(ValueKey('message-section-${section.name}')),
+        );
+        await tester.pumpAndSettle();
+        final inbox = tester.state(find.byType(MessagesScreen));
+        final reads = messages.reads;
+        await tester.tap(
+          find.text(section == InboxSection.replies ? '查看原内容' : '通知正文'),
+        );
+        await tester.pumpAndSettle();
+        final byResourceId = section == InboxSection.mentions;
+        final location = router.routeInformationProvider.value.uri;
+        expect(
+          location.path,
+          byResourceId ? '/dynamic/resource/456' : '/dynamic/100',
+        );
+        expect(dynamicRepository.reads, [
+          byResourceId ? ('456', true) : ('100', false),
+        ]);
+        expect(external, isEmpty);
+        if (section == InboxSection.likes) {
+          expect(find.text('原动态正文').hitTestable(), findsOneWidget);
+          expect(comments.locations, isEmpty);
+        } else {
+          expect(comments.locations, [
+            ('456', const CommentLocation('200', replyId: '202')),
+          ]);
+          expect(find.text('被定位的回复').hitTestable(), findsOneWidget);
+          await tester.tap(findMaterialTooltip('返回评论'));
+          await tester.pumpAndSettle();
+        }
+        await tester.tap(find.byKey(const ValueKey('dynamic-detail-back')));
+        await tester.pumpAndSettle();
+        expect(router.routeInformationProvider.value.uri.path, '/messages');
+        expect(tester.state(find.byType(MessagesScreen)), same(inbox));
+        expect(find.text('通知正文').hitTestable(), findsOneWidget);
+        expect(messages.reads, reads);
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
 
   Future<void> select(WidgetTester tester, String label) async {
@@ -615,6 +725,63 @@ final class _AuthRepository extends Fake implements AuthRepository {
 
   void notifySession() => _changes.add(current);
   Future<void> dispose() => _changes.close();
+}
+
+final class _NotificationDynamics extends DynamicRepositoryFake {
+  final reads = <(String, bool)>[];
+
+  @override
+  Future<DynamicPost> detail(
+    String id,
+    RequestCancellation cancellation, {
+    bool byResourceId = false,
+  }) async {
+    reads.add((id, byResourceId));
+    return DynamicPost(id: '100', text: '原动态正文', commentTarget: _dynamicTarget);
+  }
+}
+
+final class _NotificationComments extends Fake
+    implements CommentsRepository, CommentLocationRepository {
+  final locations = <(String, CommentLocation)>[];
+
+  @override
+  String get accountScope => 'user:7';
+  @override
+  int get sessionEpoch => 1;
+
+  @override
+  Future<CommentPage> load(
+    String oid,
+    int page,
+    CommentSort sort,
+    RequestCancellation cancellation, {
+    String? cursor,
+  }) async => const CommentPage(items: [], hasMore: false);
+
+  @override
+  Future<LocatedCommentThread> locate(
+    String oid,
+    CommentLocation location,
+    RequestCancellation cancellation,
+  ) async {
+    locations.add((oid, location));
+    return const LocatedCommentThread(
+      root: CommentEntry(id: '200', author: '评论作者', message: '原评论'),
+      page: CommentPage(
+        items: [
+          CommentEntry(
+            id: '202',
+            author: '回复作者',
+            message: '被定位的回复',
+            rootId: '200',
+          ),
+        ],
+        hasMore: false,
+      ),
+      pageNumber: 1,
+    );
+  }
 }
 
 final class _HistoryRepository implements LibraryRepository {

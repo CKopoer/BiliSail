@@ -185,12 +185,16 @@ final class ApiDynamicRepository
   );
 
   @override
-  Future<DynamicPost> detail(String id, RequestCancellation cancellation) =>
-      requests.run(
-        (context) async =>
-            mapDynamicPost(await client.detail(id, context: context)),
-        cancellation: cancellation,
-      );
+  Future<DynamicPost> detail(
+    String id,
+    RequestCancellation cancellation, {
+    bool byResourceId = false,
+  }) => requests.run(
+    (context) async => mapDynamicPost(
+      await client.detail(id, byResourceId: byResourceId, context: context),
+    ),
+    cancellation: cancellation,
+  );
 
   @override
   Future<DynamicPoll> poll(String id, RequestCancellation cancellation) =>

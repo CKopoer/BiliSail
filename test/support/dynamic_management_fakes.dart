@@ -40,9 +40,14 @@ class DynamicManagementFake extends DynamicRepositoryFake
   }
 
   @override
-  Future<DynamicPost> detail(String id, RequestCancellation c) {
+  Future<DynamicPost> detail(
+    String id,
+    RequestCancellation c, {
+    bool byResourceId = false,
+  }) {
     lastCancellation = c;
-    return pendingDetail?.future ?? super.detail(id, c);
+    return pendingDetail?.future ??
+        super.detail(id, c, byResourceId: byResourceId);
   }
 
   @override

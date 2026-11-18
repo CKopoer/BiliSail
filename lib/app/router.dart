@@ -24,6 +24,7 @@ import '../features/messages/domain/message_target.dart';
 import '../features/messages/presentation/messages_screen.dart';
 import '../features/profile/application/profile_controller.dart';
 import '../features/profile/presentation/profile_screen.dart';
+import '../features/dynamic/presentation/dynamic_detail_screen.dart';
 import '../features/dynamic/application/dynamic_topic_controller.dart';
 import '../features/dynamic/domain/dynamic_link.dart';
 import '../features/dynamic/presentation/dynamic_topic_screen.dart';
@@ -204,6 +205,8 @@ GoRouter createBiliRouter({
           '/live/:roomId',
           '/user/:mid',
           '/topic/:id',
+          '/dynamic/:id',
+          '/dynamic/resource/:id',
           '/history',
           '/messages',
           '/settings',
@@ -712,6 +715,50 @@ final class _WorkspacePage extends ConsumerWidget {
               case '/history':
                 return HistoryScreen(key: PageStorageKey('history-${tab.id}'));
               default:
+                if (tab.isDynamicDetail) {
+                  return DynamicDetailScreen(
+                    id: uri.pathSegments.last,
+                    byResourceId: uri.pathSegments.length == 3,
+                    onOpenUser: (user) => context.go('/user/${user.value}'),
+                    onOpenVideo: (video) =>
+                        context.go('/video/${video.id.value}'),
+                    onOpenLink: (target) async {
+                      final location = messageWorkspaceLocation(target);
+                      if (location != null) {
+                        context.go(location);
+                        return;
+                      }
+                      final topic = dynamicTopicId(target);
+                      if (topic != null) {
+                        context.go('/topic/$topic');
+                        return;
+                      }
+                      final query = dynamicSearchQuery(target);
+                      if (query != null) {
+                        context.go(
+                          Uri(
+                            path: '/search',
+                            queryParameters: {'q': query},
+                          ).toString(),
+                        );
+                        return;
+                      }
+                      var opened = false;
+                      try {
+                        opened = await ref.read(webLinkOpenerProvider)(target);
+                      } on PlatformException {
+                        opened = false;
+                      }
+                      if (context.mounted && !opened) {
+                        showAppNotice(context, '无法打开链接，请稍后重试');
+                      }
+                    },
+                    onLogin: () => showAppDialog<void>(
+                      context: context,
+                      builder: (_) => const AccountDialog(),
+                    ),
+                  );
+                }
                 if (tab.isTopic) {
                   return DynamicTopicScreen(
                     key: PageStorageKey('topic-${tab.id}'),

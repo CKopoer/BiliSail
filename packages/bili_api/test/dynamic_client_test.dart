@@ -284,6 +284,15 @@ void main() {
       expect(post.liked, true);
       expect(post.commentForbidden, true);
       expect(post.repostForbidden, true);
+      final byResource = await DynamicClient(
+        api(transport),
+      ).detail('55', byResourceId: true);
+      expect(byResource.id, id);
+      expect(transport.gets.last.queryParameters, {
+        'rid': '55',
+        'type': '2',
+        'features': 'itemOpusStyle',
+      });
       transport.getData = {
         'item': {'id_str': '10', 'type': 'DYNAMIC_TYPE_NONE'},
       };
