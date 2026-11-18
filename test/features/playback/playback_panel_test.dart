@@ -5156,6 +5156,105 @@ void main() {
     );
   }
 
+  testWidgets('iOS landscape fullscreen keeps top danmaku above the inset', (
+    tester,
+  ) async {
+    const landscape = Size(932, 430);
+    const sideInsets = FakeViewPadding(left: 59, right: 59, bottom: 21);
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = landscape;
+    tester.view.display.size = landscape;
+    tester.view.padding = tester.view.viewPadding = sideInsets;
+    addTearDown(tester.view.reset);
+    addTearDown(tester.view.display.resetSize);
+    final engine = _FakeEngine();
+    final session = _session(engine);
+    addTearDown(session.close);
+    final boundary = GlobalKey();
+    await tester.pumpWidget(
+      RepaintBoundary(
+        key: boundary,
+        child: _app(
+          session,
+          _FakeWindowService(desktop: false),
+          const AppSettings.defaults(),
+        ),
+      ),
+    );
+    await _pumpFrames(tester);
+    await _showControls(tester);
+    await session.pause();
+    await tester.tap(findMaterialTooltip('全屏（F）'));
+    await _pumpFrames(tester);
+    await tester.tapAt(_surfacePoint(tester));
+    await _pumpSurfaceTap(tester);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('player-controls')), findsNothing);
+
+    session.danmaku.replaceEvents(const [
+      DanmakuEvent(
+        id: 'top',
+        at: Duration.zero,
+        text: 'Top danmaku',
+        mode: DanmakuMode.top,
+      ),
+    ]);
+    session.danmaku.seekConfirmed(Duration.zero);
+    await _pumpFrames(tester);
+
+    Future<int> topDanmakuPixels() async {
+      final render =
+          boundary.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+      return (await tester.runAsync(() async {
+        final image = await render.toImage();
+        try {
+          final pixels = (await image.toByteData(
+            format: ImageByteFormat.rawRgba,
+          ))!;
+          var lit = 0;
+          for (var y = 0; y < 20; y++) {
+            for (
+              var x = image.width ~/ 2 - 100;
+              x < image.width ~/ 2 + 100;
+              x++
+            ) {
+              if (pixels.getUint8((y * image.width + x) * 4) > 0) lit++;
+            }
+          }
+          return lit;
+        } finally {
+          image.dispose();
+        }
+      }))!;
+    }
+
+    final visiblePixels = await topDanmakuPixels();
+    expect(visiblePixels, greaterThan(0));
+    const reportedInsets = FakeViewPadding(
+      top: 20,
+      left: 59,
+      right: 59,
+      bottom: 21,
+    );
+    tester.view.padding = tester.view.viewPadding = reportedInsets;
+    await _pumpFrames(tester);
+    expect(await topDanmakuPixels(), visiblePixels);
+    expect(
+      tester.binding.renderViews.single.debugLayer!
+          .find<SystemUiOverlayStyle>(const Offset(466, 0))
+          ?.statusBarBrightness,
+      Brightness.dark,
+    );
+    await _showControls(tester);
+    final back = find.byKey(const ValueKey('player-back'));
+    expect(
+      tester.getTopLeft(back).dy,
+      greaterThanOrEqualTo(reportedInsets.top),
+    );
+    await tester.pumpWidget(const SizedBox());
+    await _pumpFrames(tester);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
   for (final action in ['button', 'back', 'escape', 'swipe']) {
     for (final dark in [false, true]) {
       testWidgets(
