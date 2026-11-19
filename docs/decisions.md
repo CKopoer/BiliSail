@@ -498,6 +498,8 @@ Android 复用既有媒体服务，暂停／换源期间不撤下前台服务，
 
 ## D66：Windows 视频与弹幕合成使用 Skia
 
+此决定已由 [D98](#d98windows-恢复使用-impeller) 取代，以下为 Flutter 3.47.6 的历史记录。
+
 **决定（2026-11-01）**：继续对比 PiliPlus 后，在 Windows runner 显式关闭 Impeller，与参考应用的渲染后端选择一致。固定引擎此前默认启用 Impeller OpenGLESSDF，真实全屏播放的单独开关对照显示，该路径叠加透明弹幕时成本明显增加。只通过 Flutter 提供的 `DartProject` API 选择后端，不另起原生窗口、修改 Pub 缓存或改变硬解配置／用户透明度／显示刷新率驱动的 Ticker。
 
 同一视频的 `hwdec-current` 在两种后端下均为 `d3d11va-copy`；不能把 `hwdec=auto`、视频纹理 GPU 复制和实际解码模式混为一谈。精确来源、交叉复测、回归及适用范围见[Windows Skia 播放记录](validation/windows-skia-playback-2026-11-01.md)。升级 Flutter 后须重新复核纹理、透明合成和窗口生命周期，再决定是否恢复 Impeller。
@@ -658,3 +660,9 @@ media_kit 常规 seek 保留原生播放意图和缓存；只有取消已阻塞�
 ## D97：应用方向在所有平台生效并默认自动
 
 **决定（2026-11-17）**：按用户要求，将现有“应用方向”设置扩展到所有平台，沿用 `AppSettings.orientation`、即时保存与回退机制，各平台缺省均为自动，保留有效旧选择。应用方向只约束普通页面；播放全屏始终按视频尺寸自动选横屏／竖屏，退出后恢复最新的应用设置。移动端继续通过系统方向接口执行；桌面普通窗口请求调整宽高，最大化／全屏等状态通过统一视口约束保持普通页面设置或视频方向，独立播放窗口继承同一应用选择并使用自己的窗口端口。自动模式按窗口尺寸／原有移动策略自适应，固定模式不替换页面、Navigator 或播放器。实现和验证边界见[应用方向与自适应旋转](validation/adaptive-window-rotation.md)。
+
+## D98：Windows 恢复使用 Impeller
+
+**决定（2026-11-19）**：按用户要求移除 Windows runner 的 Skia 覆盖，使用 Flutter 3.50.0 在 Windows 上默认启用的 Impeller（OpenGLES，经 ANGLE）。配置作用于 runner 启动的 Flutter 引擎。此前的全屏弹幕对照数据来自 Flutter 3.47.6，保留在[历史对照记录](validation/windows-skia-playback-2026-11-01.md)。[Flutter 渲染器文档](https://docs.flutter.dev/perf/impeller#windows)
+
+Windows x64 本机引擎日志确认启用 `Impeller (OpenGLESSDF)`。离线原生回归覆盖分轨播放、普通与独立播放窗口全屏、全屏切换时的弹幕状态，以及暂停和播放时调整窗口后的实际视频像素。仓库检查 `tool/check.ps1 -SkipPub` 及普通入口 Windows x64 Release 构建通过。全屏弹幕 GPU 开销尚未在 Flutter 3.50.0 上复测。
