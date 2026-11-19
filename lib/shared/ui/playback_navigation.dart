@@ -6,11 +6,13 @@ class PlaybackNavigation extends InheritedWidget {
     super.key,
     required this.onBack,
     required this.onHome,
+    this.onHistory,
     this.showInPlayer = false,
     required super.child,
   });
 
   final VoidCallback onBack, onHome;
+  final bool Function({required bool backwards})? onHistory;
   final bool showInPlayer;
 
   static PlaybackNavigation? maybeOf(BuildContext context) =>
@@ -20,5 +22,6 @@ class PlaybackNavigation extends InheritedWidget {
   bool updateShouldNotify(PlaybackNavigation oldWidget) =>
       onBack != oldWidget.onBack ||
       onHome != oldWidget.onHome ||
+      onHistory != oldWidget.onHistory ||
       showInPlayer != oldWidget.showInPlayer;
 }

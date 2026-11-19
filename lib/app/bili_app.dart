@@ -301,21 +301,11 @@ class _BiliAppState extends ConsumerState<BiliApp> {
         onNavigate: (path) => context.go(path),
       ),
       actionsBuilder: (context, detail, part) => VideoActionsBar(
-        detail: detail,
         onDownload: () => _downloadVideo(context, detail, part),
-        onLogin: () => showAppDialog<void>(
-          context: context,
-          builder: (_) => const AccountDialog(),
-        ),
       ),
       menuBuilder: (context, detail, part) => VideoActionsBar(
-        detail: detail,
         onDownload: () => _downloadVideo(context, detail, part),
         menuOnly: true,
-        onLogin: () => showAppDialog<void>(
-          context: context,
-          builder: (_) => const AccountDialog(),
-        ),
         onReload: () {
           ref.invalidate(relatedVideosProvider(detail.summary.id));
           final pageContainer = ProviderScope.containerOf(
@@ -477,20 +467,23 @@ class _BiliAppState extends ConsumerState<BiliApp> {
                 dispatcher: _input,
                 routes: _input.routes,
                 onEditingChanged: widget.dependencies.window.setTextInputActive,
-                child: AppUpdateHost(
-                  navigatorKey: _router.routerDelegate.navigatorKey,
-                  child: AppNoticeHost(
-                    child: VideoCardInteractionScope(
-                      interactions: cardInteractions,
-                      onNotice: showAppNotice,
-                      hoverPlaybackEnabled: settings.videoCardHoverPlayback,
-                      child: LiveCardPreviewScope(
-                        controller: liveCardPreviews,
-                        enabled: settings.videoCardHoverPlayback,
-                        child: ResponsiveLayoutScope(
-                          settings: settings.responsiveLayout,
-                          child: AndroidSystemUi(
-                            child: child ?? const SizedBox.shrink(),
+                child: WindowShortcutTarget(
+                  window: widget.dependencies.window,
+                  child: AppUpdateHost(
+                    navigatorKey: _router.routerDelegate.navigatorKey,
+                    child: AppNoticeHost(
+                      child: VideoCardInteractionScope(
+                        interactions: cardInteractions,
+                        onNotice: showAppNotice,
+                        hoverPlaybackEnabled: settings.videoCardHoverPlayback,
+                        child: LiveCardPreviewScope(
+                          controller: liveCardPreviews,
+                          enabled: settings.videoCardHoverPlayback,
+                          child: ResponsiveLayoutScope(
+                            settings: settings.responsiveLayout,
+                            child: AndroidSystemUi(
+                              child: child ?? const SizedBox.shrink(),
+                            ),
                           ),
                         ),
                       ),

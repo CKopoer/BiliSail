@@ -21,6 +21,19 @@ class ShortcutSettingsSection extends StatelessWidget {
   });
   final ShortcutSettings settings;
   final Future<void> Function(ShortcutSettings) save;
+  static const _pageActions = [
+    ShortcutAction.closeTab,
+    ShortcutAction.newTab,
+    ShortcutAction.nextTab,
+    ShortcutAction.previousTab,
+    ShortcutAction.refresh,
+    ShortcutAction.toggleSidebar,
+    ShortcutAction.returnToBrowser,
+    ShortcutAction.switchPlaybackWindow,
+    ShortcutAction.toggleMaximized,
+    ShortcutAction.previousPlayback,
+    ShortcutAction.nextPlayback,
+  ];
   Future<void> _save(BuildContext context, ShortcutSettings value) async {
     try {
       await save(value);
@@ -87,15 +100,7 @@ class ShortcutSettingsSection extends StatelessWidget {
       for (final issue in settings.issues) Text(issue),
       const _ShortcutDiagnostics(),
       const ListTile(contentPadding: EdgeInsets.zero, title: Text('标签页与页面')),
-      for (final action in [
-        ShortcutAction.closeTab,
-        ShortcutAction.newTab,
-        ShortcutAction.nextTab,
-        ShortcutAction.previousTab,
-        ShortcutAction.refresh,
-        ShortcutAction.toggleSidebar,
-      ])
-        _binding(context, action),
+      for (final action in _pageActions) _binding(context, action),
       const ListTile(contentPadding: EdgeInsets.zero, title: Text('播放控制')),
       _ShortcutSlider(
         label: '前进 / 后退步长（秒）',
@@ -133,14 +138,7 @@ class ShortcutSettingsSection extends StatelessWidget {
         ),
       ),
       for (final action in ShortcutAction.values.where(
-        (action) => ![
-          ShortcutAction.closeTab,
-          ShortcutAction.newTab,
-          ShortcutAction.nextTab,
-          ShortcutAction.previousTab,
-          ShortcutAction.refresh,
-          ShortcutAction.toggleSidebar,
-        ].contains(action),
+        (action) => !_pageActions.contains(action),
       ))
         _binding(context, action),
       Align(

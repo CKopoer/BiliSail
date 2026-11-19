@@ -60,6 +60,8 @@ final class PlaybackShortcutController extends ChangeNotifier {
     if (fullscreen()) ShortcutAction.exitFullscreen,
     ShortcutAction.volumeUp,
     ShortcutAction.volumeDown,
+    ShortcutAction.volumeUpTen,
+    ShortcutAction.volumeDownTen,
     ShortcutAction.mute,
     if (!session.isLive) ...{
       ShortcutAction.seekBack,
@@ -68,6 +70,8 @@ final class PlaybackShortcutController extends ChangeNotifier {
       ShortcutAction.slower,
       ShortcutAction.faster,
       ShortcutAction.toggleRate,
+      ShortcutAction.normalRate,
+      ShortcutAction.doubleRate,
       ShortcutAction.danmaku,
       ShortcutAction.subtitles,
     },
@@ -239,6 +243,10 @@ final class PlaybackShortcutController extends ChangeNotifier {
         return adjustVolume(5);
       case ShortcutAction.volumeDown:
         return adjustVolume(-5);
+      case ShortcutAction.volumeUpTen:
+        return adjustVolume(10);
+      case ShortcutAction.volumeDownTen:
+        return adjustVolume(-10);
       case ShortcutAction.mute:
         final volume = session.commandVolume;
         if (volume > 0) _savedVolume = volume;
@@ -253,6 +261,10 @@ final class PlaybackShortcutController extends ChangeNotifier {
         );
       case ShortcutAction.toggleRate:
         await session.setRate(session.commandRate == 1 ? 2 : 1);
+      case ShortcutAction.normalRate:
+        await session.setRate(1);
+      case ShortcutAction.doubleRate:
+        await session.setRate(2);
       case ShortcutAction.danmaku:
         toggleDanmaku();
       case ShortcutAction.subtitles:
@@ -275,6 +287,8 @@ final class PlaybackShortcutController extends ChangeNotifier {
       ShortcutAction.slower,
       ShortcutAction.faster,
       ShortcutAction.toggleRate,
+      ShortcutAction.normalRate,
+      ShortcutAction.doubleRate,
     }.contains(action)) {
       _showRateFeedback();
     }

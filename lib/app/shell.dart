@@ -628,6 +628,15 @@ final class _BiliAppShellState extends State<BiliAppShell>
     if (_desktopDual) widget.onActivateBrowser?.call();
   }
 
+  bool _movePlaybackHistory(String id, {required bool backwards}) {
+    if (!_workspace.movePlaybackHistory(id, backwards: backwards)) {
+      return false;
+    }
+    setState(() {});
+    _commitWorkspace();
+    return true;
+  }
+
   void _cycleTabs({bool backwards = false}) {
     if (_singlePage) return;
     if (_desktopDual) {
@@ -721,6 +730,9 @@ final class _BiliAppShellState extends State<BiliAppShell>
         _cycleTabs();
       case ShortcutAction.previousTab:
         _cycleTabs(backwards: true);
+      case ShortcutAction.switchPlaybackWindow:
+        if (_workspace.playbackId == null) return CommandOutcome.noOp;
+        _returnToPlayback();
     }
     return CommandOutcome.completed;
   }
@@ -741,6 +753,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
           ShortcutAction.closeTab,
           ShortcutAction.nextTab,
           ShortcutAction.previousTab,
+          if (_desktopDual) ShortcutAction.switchPlaybackWindow,
         ])
           command: (stroke) => _workspaceCommand(command, stroke),
       },
@@ -1273,6 +1286,11 @@ final class _BiliAppShellState extends State<BiliAppShell>
                                           _goBack();
                                         },
                                   onHome: _playbackHome,
+                                  onHistory: ({required backwards}) =>
+                                      _movePlaybackHistory(
+                                        tab.id,
+                                        backwards: backwards,
+                                      ),
                                   showInPlayer: _playerShowsNavigation,
                                   child: _android
                                       ? _workspaceFrame(context, view, page)

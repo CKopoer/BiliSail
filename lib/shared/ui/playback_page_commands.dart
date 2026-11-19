@@ -17,8 +17,11 @@ class PlaybackPageCommands extends StatelessWidget {
     this.onCompleted,
     this.onRelatedCompleted,
     this.onLoopCompleted,
+    this.toggleDescription,
+    this.toggleComments,
   });
   final VoidCallback previousPart, nextPart, toggleInfo;
+  final VoidCallback? toggleDescription, toggleComments;
   final Widget child;
   final bool hasNext;
   final VoidCallback? onCompleted;
@@ -35,10 +38,15 @@ class PlaybackPageCommands extends StatelessWidget {
         (ShortcutAction.previousPart, previousPart),
         (ShortcutAction.nextPart, nextPart),
         (ShortcutAction.fullWindow, toggleInfo),
+        if (toggleDescription case final toggle?)
+          (ShortcutAction.toggleVideoDescription, toggle),
+        if (toggleComments case final toggle?)
+          (ShortcutAction.toggleVideoComments, toggle),
       ])
         command: (stroke) {
           if (stroke.phase != InputPhase.down) return CommandOutcome.noOp;
-          if (command == ShortcutAction.fullWindow) {
+          if (command != ShortcutAction.previousPart &&
+              command != ShortcutAction.nextPart) {
             InputScope.of<Object>(context)?.dispatcher.beforeNavigation();
           }
           action();

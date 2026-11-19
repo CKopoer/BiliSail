@@ -7,10 +7,12 @@ class DanmakuComposerDraft extends InheritedWidget {
     required this.controller,
     required this.clearSent,
     required super.child,
+    this.autofocus = false,
   });
 
   final TextEditingController controller;
   final ValueChanged<String> clearSent;
+  final bool autofocus;
 
   static TextEditingController? maybeOf(BuildContext context) => context
       .dependOnInheritedWidgetOfExactType<DanmakuComposerDraft>()
@@ -19,7 +21,13 @@ class DanmakuComposerDraft extends InheritedWidget {
   static ValueChanged<String>? clearSentOf(BuildContext context) =>
       context.getInheritedWidgetOfExactType<DanmakuComposerDraft>()?.clearSent;
 
+  static bool autofocusOf(BuildContext context) =>
+      context
+          .dependOnInheritedWidgetOfExactType<DanmakuComposerDraft>()
+          ?.autofocus ??
+      false;
+
   @override
   bool updateShouldNotify(DanmakuComposerDraft oldWidget) =>
-      controller != oldWidget.controller;
+      controller != oldWidget.controller || autofocus != oldWidget.autofocus;
 }

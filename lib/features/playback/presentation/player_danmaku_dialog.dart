@@ -1,9 +1,14 @@
 import 'package:material_ui/material_ui.dart';
 
 class PlayerDanmakuDialog extends StatelessWidget {
-  const PlayerDanmakuDialog({super.key, required this.composer});
+  const PlayerDanmakuDialog({
+    super.key,
+    required this.composer,
+    this.autofocus = false,
+  });
 
   final Widget composer;
+  final bool autofocus;
 
   @override
   Widget build(BuildContext context) {

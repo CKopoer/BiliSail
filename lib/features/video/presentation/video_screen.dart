@@ -41,6 +41,7 @@ import 'video_collection_panel.dart';
 import '../application/video_controller.dart';
 import '../application/video_extras_controller.dart';
 import 'video_comments_panel.dart';
+import 'video_actions_bar.dart';
 import '../../../domain/content_link.dart';
 import '../../../shared/ui/content_link_scope.dart';
 import 'video_tags_panel.dart';
@@ -285,7 +286,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
       _lastCid = selected.cid;
       _pendingAdvance = null;
     }
-    return Stack(
+    final page = Stack(
       children: [
         WidthLayoutBuilder(
           builder: (context, width) {
@@ -308,6 +309,12 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                   ? () => _playRelated(video, selected)
                   : null,
               toggleInfo: toggleInfo,
+              toggleDescription: transitioning
+                  ? null
+                  : () => _toggleVideoDetails(0),
+              toggleComments: transitioning
+                  ? null
+                  : () => _toggleVideoDetails(1),
               child: Focus(
                 child: Builder(
                   builder: (context) {
@@ -350,8 +357,9 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                                       MaterialTapTargetSize.shrinkWrap,
                                 ),
                                 onPressed: () => setState(() {
-                                  _descriptionExpanded = !_descriptionExpanded;
-                                  _tagsRequested = true;
+                                  _setDescriptionExpanded(
+                                    !_descriptionExpanded,
+                                  );
                                 }),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
@@ -665,6 +673,34 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
           ),
       ],
     );
+    final onLogin = widget.onLogin;
+    return onLogin != null && widget.actionsBuilder != null
+        ? VideoActionsScope(
+            detail: video,
+            onLogin: onLogin,
+            active: !transitioning,
+            child: page,
+          )
+        : page;
+  }
+
+  void _toggleVideoDetails(int tab) {
+    final alreadyVisible =
+        _infoVisible.value && (widget.queue == null || !_queueExpanded);
+    final currentTab = _tab ?? 0;
+    _infoVisible.value = true;
+    setState(() {
+      // Keep the introductory pane and its description disclosure separate.
+      final sameTab = currentTab == tab && alreadyVisible;
+      _queueExpanded = false;
+      if (tab == 0) _setDescriptionExpanded(!sameTab || !_descriptionExpanded);
+      _tab = tab == 1 && sameTab ? 0 : tab;
+    });
+  }
+
+  void _setDescriptionExpanded(bool expanded) {
+    _descriptionExpanded = expanded;
+    _tagsRequested = true;
   }
 
   Widget _player(VideoDetail video, VideoPart part) {

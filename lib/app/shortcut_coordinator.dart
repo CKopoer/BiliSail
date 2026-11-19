@@ -1,6 +1,10 @@
+import 'package:flutter/widgets.dart';
+
 import '../core/input/input_stroke.dart';
 import '../core/input/shortcut_dispatcher.dart';
+import '../core/platform/window_service.dart';
 import '../core/presentation/app_input_host.dart';
+import '../core/presentation/input_scope.dart';
 import '../domain/shortcut_command.dart';
 import '../features/settings/domain/shortcut_settings.dart';
 
@@ -13,10 +17,18 @@ final class ShortcutCoordinator extends ShortcutDispatcher<Object> {
           ShortcutAction.closeTab ||
           ShortcutAction.nextTab ||
           ShortcutAction.previousTab ||
+          ShortcutAction.switchPlaybackWindow ||
+          ShortcutAction.toggleMaximized ||
           ShortcutAction.toggleSidebar => CommandScope.workspace,
           ShortcutAction.refresh ||
           ShortcutAction.previousPart ||
           ShortcutAction.nextPart ||
+          ShortcutAction.likeVideo ||
+          ShortcutAction.coinVideo ||
+          ShortcutAction.favoriteVideo ||
+          ShortcutAction.shareVideo ||
+          ShortcutAction.toggleVideoDescription ||
+          ShortcutAction.toggleVideoComments ||
           ShortcutAction.fullWindow => CommandScope.page,
           _ => CommandScope.playback,
         },
@@ -24,6 +36,8 @@ final class ShortcutCoordinator extends ShortcutDispatcher<Object> {
           ShortcutAction.seekBack,
           ShortcutAction.volumeUp,
           ShortcutAction.volumeDown,
+          ShortcutAction.volumeUpTen,
+          ShortcutAction.volumeDownTen,
           ShortcutAction.nextTab,
           ShortcutAction.previousTab,
           ReservedShortcut.imagePrevious,
@@ -79,5 +93,38 @@ final class ShortcutCoordinator extends ShortcutDispatcher<Object> {
       }
     }
     replaceBindings(bindings, disabled: disabled);
+  }
+}
+
+class WindowShortcutTarget extends StatelessWidget {
+  const WindowShortcutTarget({
+    super.key,
+    required this.window,
+    required this.child,
+  });
+
+  final WindowService? window;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final window = this.window;
+    if (window == null || !window.canToggleWindowMaximized) return child;
+    return CommandTargetScope<Object>(
+      scope: CommandScope.workspace,
+      merge: const {ShortcutAction.toggleMaximized},
+      commands: {
+        ShortcutAction.toggleMaximized: (stroke) async {
+          if (stroke.phase != InputPhase.down ||
+              window.isFullScreen ||
+              window.miniPlayer.value) {
+            return CommandOutcome.noOp;
+          }
+          await window.toggleWindowMaximized();
+          return CommandOutcome.completed;
+        },
+      },
+      child: child,
+    );
   }
 }

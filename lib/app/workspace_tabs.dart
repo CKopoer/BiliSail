@@ -78,6 +78,8 @@ final class WorkspaceTabs {
   String? _playbackId;
   final List<String> _playbackVisits = [];
   final List<Uri> _playbackHistory = [];
+  final List<Uri> _playbackForward = [];
+  List<String>? _playbackTraversal;
   ({String id, Uri location, List<String> history})? _playbackEntry;
   ({String tabId, String browseId, Uri rootLocation, List<String> history})?
   _messagesReturnPoint;
@@ -177,7 +179,46 @@ final class WorkspaceTabs {
     return true;
   }
 
-  void clearPlaybackHistory() => _playbackHistory.clear();
+  void clearPlaybackHistory() {
+    _playbackHistory.clear();
+    _playbackForward.clear();
+    _playbackTraversal = null;
+  }
+
+  bool movePlaybackHistory(String id, {required bool backwards}) {
+    if (id != _activeId && (!_dualMode || id != _playbackId)) return false;
+    final tab = _tabs
+        .where((tab) => tab.id == id && tab.isPlayback)
+        .firstOrNull;
+    if (tab == null) return false;
+    if (id == _playbackId && _movePlaybackSlot(tab, backwards: backwards)) {
+      _activate(id);
+      return true;
+    }
+    if (_dualMode) return false;
+    // Snapshot the retained media visits for a traversal. Selecting a history
+    // item updates the most-recent playback without rearranging this order.
+    final order = _playbackTraversal ??= List.of(_playbackVisits);
+    final index = order.indexOf(id);
+    final next = index + (backwards ? -1 : 1);
+    if (index < 0 || next < 0 || next >= order.length) return false;
+    _activate(order[next], traversingPlayback: true);
+    return true;
+  }
+
+  bool _movePlaybackSlot(WorkspaceTab tab, {required bool backwards}) {
+    final from = backwards ? _playbackHistory : _playbackForward;
+    final to = backwards ? _playbackForward : _playbackHistory;
+    if (from.isEmpty || !updateLocation(tab.id, from.last)) return false;
+    from.removeLast();
+    _appendPlaybackLocation(to, tab.location);
+    return true;
+  }
+
+  void _appendPlaybackLocation(List<Uri> history, Uri location) {
+    history.add(location);
+    if (history.length > maximumTabs) history.removeAt(0);
+  }
 
   /// Leave all media visits in single mode; other modes retain playback.
   void returnFromPlayback() {
@@ -214,7 +255,7 @@ final class WorkspaceTabs {
     for (final tab in _tabs.where((tab) => tab.isPlayback).toList()) {
       close(tab.id);
     }
-    _playbackHistory.clear();
+    clearPlaybackHistory();
     _trimHistory();
   }
 
@@ -262,15 +303,19 @@ final class WorkspaceTabs {
     return _dualMode || _singleMode ? _tabs.first : null;
   }
 
-  void _activate(String id) {
+  void _activate(String id, {bool traversingPlayback = false}) {
     if (id != _activeId) {
+      if (!traversingPlayback) _playbackTraversal = null;
       _backHistory.add(_activeId);
       if (_backHistory.length > maximumHistory) _backHistory.removeAt(0);
       _activeId = id;
     }
     if (active.isPlayback) {
       _rememberPlaybackVisit();
-      if (_playbackId != id) _playbackHistory.clear();
+      if (_playbackId != id) {
+        _playbackHistory.clear();
+        _playbackForward.clear();
+      }
       _playbackId = id;
     } else {
       _browseId = id;
@@ -287,25 +332,25 @@ final class WorkspaceTabs {
   bool goBack() {
     if (!canGoBack) return false;
     if (_singleMode && active.isPlayback && _playbackHistory.isNotEmpty) {
-      return updateLocation(activeId, _playbackHistory.removeLast());
+      return _movePlaybackSlot(active, backwards: true);
     }
     if (_dualMode && active.isPlayback) {
       if (_playbackHistory.isNotEmpty) {
-        updateLocation(activeId, _playbackHistory.removeLast());
+        return _movePlaybackSlot(active, backwards: true);
       } else {
         return close(activeId);
       }
-      return true;
     }
     if (_dualMode) return goBackBrowsing();
     _trimHistory();
     final leaving = _activeId;
+    _playbackTraversal = null;
     _activeId = _backHistory.isEmpty ? 'home' : _backHistory.removeLast();
     if (!active.isPlayback) {
       _browseId = _activeId;
     } else if (_playbackId != activeId) {
       _playbackId = activeId;
-      _playbackHistory.clear();
+      clearPlaybackHistory();
     }
     if (active.isPlayback) _rememberPlaybackVisit();
     _trimHistory();
@@ -429,10 +474,8 @@ final class WorkspaceTabs {
       final slot = _tabs.firstWhere((tab) => tab.id == _playbackId);
       // Route commits and part/quality updates are not new media visits.
       if (slot.location.path != location.path) {
-        _playbackHistory.add(slot.location);
-        if (_playbackHistory.length > maximumTabs) {
-          _playbackHistory.removeAt(0);
-        }
+        _appendPlaybackLocation(_playbackHistory, slot.location);
+        _playbackForward.clear();
       }
       updateLocation(slot.id, location);
       _activate(slot.id);
@@ -497,10 +540,11 @@ final class WorkspaceTabs {
     final wasActive = _activeId == id;
     _tabs.removeAt(index);
     _playbackVisits.remove(id);
+    _playbackTraversal?.remove(id);
     _backHistory.removeWhere((previous) => previous == id);
     if (id == _playbackId) {
       _playbackId = null;
-      _playbackHistory.clear();
+      clearPlaybackHistory();
     }
     if (id == _browseId) _browseId = 'home';
     if (wasActive) {

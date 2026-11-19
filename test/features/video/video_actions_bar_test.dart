@@ -170,11 +170,10 @@ Future<void> pumpActions(
         home: MediaQuery(
           data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
           child: Scaffold(
-            body: VideoActionsBar(
+            body: VideoActionsScope(
               detail: testDetail,
-              menuOnly: menuOnly,
-              onReload: onReload,
               onLogin: onLogin ?? () {},
+              child: VideoActionsBar(menuOnly: menuOnly, onReload: onReload),
             ),
           ),
         ),
