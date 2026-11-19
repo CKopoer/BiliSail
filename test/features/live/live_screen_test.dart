@@ -4,6 +4,7 @@ import 'dart:async';
 
 import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/domain/responsive_layout_settings.dart';
 import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/auth/domain/auth_repository.dart';
@@ -15,6 +16,7 @@ import 'package:bilisail/features/live/presentation/live_screen.dart';
 import 'package:bilisail/features/live/presentation/live_chat_bubble.dart';
 import 'package:bilisail/features/live/presentation/live_player_danmaku.dart';
 import 'package:bilisail/features/live/presentation/live_super_chat_card.dart';
+import 'package:bilisail/shared/ui/responsive_layout_scope.dart';
 import 'package:bilisail/shared/ui/smooth_scroll_behavior.dart';
 import 'package:bilisail/shared/ui/paging_tab_strip.dart';
 import 'package:flutter/gestures.dart';
@@ -52,10 +54,12 @@ void main() {
   late _Repository repository;
   late _RealtimeRepository realtime;
   late ProviderContainer container;
+  late ValueNotifier<ResponsiveLayoutSettings> layout;
 
   setUp(() {
     repository = _Repository();
     realtime = _RealtimeRepository();
+    layout = ValueNotifier(const ResponsiveLayoutSettings.defaults());
     container = ProviderContainer(
       overrides: [
         liveRepositoryProvider.overrideWithValue(repository),
@@ -66,6 +70,7 @@ void main() {
   });
 
   tearDown(() async {
+    layout.dispose();
     container.dispose();
     await realtime.events.close();
   });
@@ -82,6 +87,11 @@ void main() {
   }) async {
     await tester.binding.setSurfaceSize(Size(width, height));
     addTearDown(() => tester.binding.setSurfaceSize(null));
+    final page = LiveScreen(
+      roomId: roomId,
+      onOpenUser: onOpenUser,
+      playerBuilder: playerBuilder ?? (_, _) => const _PlayerProbe(),
+    );
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
@@ -94,10 +104,10 @@ void main() {
               disableAnimations: disableAnimations,
             ),
             child: Scaffold(
-              body: LiveScreen(
-                roomId: roomId,
-                onOpenUser: onOpenUser,
-                playerBuilder: playerBuilder ?? (_, _) => const _PlayerProbe(),
+              body: ValueListenableBuilder(
+                valueListenable: layout,
+                builder: (_, settings, _) =>
+                    ResponsiveLayoutScope(settings: settings, child: page),
               ),
             ),
           ),
@@ -136,12 +146,12 @@ void main() {
     final player = tester.state(find.byType(_PlayerProbe));
     expect(findMaterialTooltip('收起直播信息'), findsNothing);
     expect(find.byKey(const ValueKey('live-chat-list')), findsOneWidget);
-    for (final width in [899.0, 900.0, 1280.0, 390.0, 900.0]) {
+    for (final width in [999.0, 1000.0, 1280.0, 390.0, 1000.0]) {
       await tester.binding.setSurfaceSize(Size(width, 800));
       await tester.pumpAndSettle();
       expect(
         findMaterialTooltip('收起直播信息'),
-        width >= 900 ? findsOneWidget : findsNothing,
+        width >= 1000 ? findsOneWidget : findsNothing,
       );
       expect(find.byKey(const ValueKey('live-chat-list')), findsOneWidget);
       expect(tester.state(find.byType(_PlayerProbe)), same(player));
@@ -149,15 +159,46 @@ void main() {
     await tester.tap(findMaterialTooltip('收起直播信息'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('live-chat-list')), findsNothing);
-    await tester.binding.setSurfaceSize(const Size(899, 800));
+    await tester.binding.setSurfaceSize(const Size(999, 800));
     await tester.pumpAndSettle();
     expect(findMaterialTooltip('展开直播信息'), findsNothing);
-    await tester.binding.setSurfaceSize(const Size(900, 800));
+    await tester.binding.setSurfaceSize(const Size(1000, 800));
     await tester.pumpAndSettle();
     await tester.tap(findMaterialTooltip('展开直播信息'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('live-chat-list')), findsOneWidget);
     expect(tester.state(find.byType(_PlayerProbe)), same(player));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('custom playback threshold updates the open live room', (
+    tester,
+  ) async {
+    await showPage(tester, width: 800);
+    await tester.pumpAndSettle();
+    final player = find.byType(_PlayerProbe);
+    final playerState = tester.state(player);
+    final chat = find.byKey(const ValueKey('live-chat-list'));
+    final chatScrollPosition = chatPosition(tester);
+    expect(tester.getSize(player).width, 800);
+    expect(
+      tester.getTopLeft(chat).dy,
+      greaterThan(tester.getTopLeft(player).dy),
+    );
+
+    layout.value = ResponsiveLayoutSettings(playbackSideBySideWidth: 800);
+    await tester.pumpAndSettle();
+    expect(findMaterialTooltip('收起直播信息'), findsOneWidget);
+    expect(tester.getSize(player).width, 420);
+    expect(tester.getTopLeft(chat).dx, tester.getTopRight(player).dx);
+    expect(tester.state(player), same(playerState));
+
+    layout.value = const ResponsiveLayoutSettings.defaults();
+    await tester.pumpAndSettle();
+    expect(findMaterialTooltip('收起直播信息'), findsNothing);
+    expect(tester.getSize(player).width, 800);
+    expect(tester.state(player), same(playerState));
+    expect(chatPosition(tester), same(chatScrollPosition));
     expect(tester.takeException(), isNull);
   });
 
