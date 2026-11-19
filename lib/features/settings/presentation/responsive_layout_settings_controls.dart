@@ -80,7 +80,7 @@ class ResponsiveLayoutSettingsControls extends StatelessWidget {
       ListTile(
         contentPadding: EdgeInsets.zero,
         title: const Text('播放页左右布局阈值'),
-        subtitle: Text('${settings.playbackSideBySideWidth} 逻辑像素；视频和影视播放页共用'),
+        subtitle: Text('${settings.playbackSideBySideWidth} 逻辑像素（视频、影视和直播间共用）'),
         trailing: const Icon(Icons.chevron_right),
         onTap: () => showAppDialog<void>(
           context: context,

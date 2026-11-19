@@ -12,6 +12,7 @@ import '../../../domain/user.dart';
 import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/playback_sidebar_toggle.dart';
 import '../../../shared/ui/playback_info_tabs.dart';
+import '../../../shared/ui/responsive_layout_scope.dart';
 import '../../../shared/ui/smooth_scroll_behavior.dart';
 import '../../../shared/ui/state_view.dart';
 import '../application/live_controller.dart';
@@ -290,7 +291,9 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
     final sidebar = _sidebar(context, room, controller);
     return LayoutBuilder(
       builder: (context, constraints) {
-        final wide = constraints.maxWidth >= 900;
+        final wide =
+            constraints.maxWidth >=
+            ResponsiveLayoutScope.of(context).playbackSideBySideWidth;
         final playerWidth = _infoVisible && wide
             ? math.max(0.0, constraints.maxWidth - 380)
             : constraints.maxWidth;
