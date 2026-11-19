@@ -73,6 +73,7 @@ import '../features/search/application/search_discovery_controller.dart';
 import '../features/search/data/search_discovery_repository.dart';
 import '../features/search/data/api_search_repository.dart';
 import '../features/video/application/video_controller.dart';
+import '../features/video/application/interactive_video_controller.dart';
 import '../features/video/application/video_card_controller.dart';
 import '../features/video/application/video_card_preview_playback.dart';
 import '../features/video/application/video_actions_controller.dart';
@@ -477,6 +478,7 @@ class AppDependencies {
   }
 
   Widget scope(Widget child) {
+    final videos = ApiVideoRepository(api, requests);
     final live = ApiLiveRepository(
       LiveClient(api),
       requests,
@@ -655,9 +657,8 @@ class AppDependencies {
             accountScope: () => session.accountScope,
           ),
         ),
-        videoRepositoryProvider.overrideWithValue(
-          ApiVideoRepository(api, requests),
-        ),
+        videoRepositoryProvider.overrideWithValue(videos),
+        interactiveVideoRepositoryProvider.overrideWithValue(videos),
         videoCardPreviewPlaybackProvider.overrideWithValue(cardPreviews),
         videoCardWatchLaterRepositoryProvider.overrideWith(
           (ref) => AppVideoCardWatchLaterRepository(

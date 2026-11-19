@@ -315,7 +315,7 @@ class _BiliAppState extends ConsumerState<BiliApp> {
           pageContainer.invalidate(videoTagsProvider(detail.summary.id));
           final session = pageContainer.read(playbackSessionProvider);
           if (session.detail?.summary.id == detail.summary.id &&
-              session.part?.cid == part.cid) {
+              session.part?.playbackKey == part.playbackKey) {
             unawaited(session.retry());
           }
         },

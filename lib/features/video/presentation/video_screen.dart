@@ -39,6 +39,9 @@ import '../domain/video_card_interactions.dart';
 import 'video_author_header.dart';
 import 'video_collection_panel.dart';
 import '../application/video_controller.dart';
+import '../application/interactive_video_controller.dart';
+import '../domain/interactive_video_repository.dart';
+import 'video_branch_choices.dart';
 import '../application/video_extras_controller.dart';
 import 'video_comments_panel.dart';
 import 'video_actions_bar.dart';
@@ -104,6 +107,7 @@ final class VideoScreen extends ConsumerStatefulWidget {
 
 final class _VideoScreenState extends ConsumerState<VideoScreen> {
   String? _selectedCid;
+  ({int epoch, VideoPart part})? _interactivePart;
   int? _tab;
   final _infoVisible = ValueNotifier(true);
   bool _descriptionExpanded = false;
@@ -140,6 +144,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
     if (link != _contentLink) {
       if (link.page != _contentLink?.page && link.page != null) {
         _selectedCid = null;
+        _interactivePart = null;
       }
       _contentLink = link;
       if (link.comment != null) {
@@ -200,12 +205,14 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
     if (oldWidget.id != widget.id) {
       _completionWaiting = null;
       _selectedCid = widget.initialCid;
+      _interactivePart = null;
       _tab = null;
       _descriptionExpanded = false;
       _tagsRequested = false;
     }
     if (oldWidget.initialCid != widget.initialCid) {
       _selectedCid = widget.initialCid;
+      _interactivePart = null;
     }
   }
 
@@ -281,6 +288,23 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
             .where((part) => part.page == _contentLink?.page)
             .firstOrNull ??
         video.parts.first;
+    final epoch = ref.read(sessionEpochProvider)();
+    final branch = _interactivePart;
+    final activePart = video.isInteractive && branch?.epoch == epoch
+        ? branch?.part ?? selected
+        : selected;
+    final interactiveNode =
+        video.isInteractive &&
+            !transitioning &&
+            WorkspaceMediaPermission.isAllowed(context)
+        ? (
+            graph: (id: video.summary.id, cid: selected.cid, epoch: epoch),
+            edgeId: activePart.interactiveEdgeId,
+          )
+        : null;
+    final choices = interactiveNode == null
+        ? null
+        : ref.watch(interactiveVideoChoicesProvider(interactiveNode));
     if (!transitioning) {
       _lastVideo = video;
       _lastCid = selected.cid;
@@ -308,6 +332,34 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
               onRelatedCompleted: widget.queue == null
                   ? () => _playRelated(video, selected)
                   : null,
+              completedOverlay: interactiveNode == null || choices == null
+                  ? null
+                  : Builder(
+                      builder: (_) {
+                        if (_interactiveSession(interactiveNode, activePart) ==
+                            null) {
+                          return const SizedBox.shrink();
+                        }
+                        return VideoBranchChoices(
+                          key: ValueKey(interactiveNode),
+                          choices: choices,
+                          onChoose: (choice) => _chooseBranch(
+                            interactiveNode,
+                            activePart,
+                            choice,
+                          ),
+                          onRetry: () =>
+                              _retryChoices(interactiveNode, activePart),
+                          onRestart: interactiveNode.edgeId == null
+                              ? null
+                              : () => _chooseBranch(
+                                  interactiveNode,
+                                  activePart,
+                                  null,
+                                ),
+                        );
+                      },
+                    ),
               toggleInfo: toggleInfo,
               toggleDescription: transitioning
                   ? null
@@ -318,7 +370,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
               child: Focus(
                 child: Builder(
                   builder: (context) {
-                    final playerContent = _player(video, selected);
+                    final playerContent = _player(video, activePart);
                     final content = Padding(
                       padding: const EdgeInsets.fromLTRB(12, 16, 12, 0),
                       child: Column(
@@ -386,6 +438,14 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                             spacing: 10,
                             runSpacing: 6,
                             children: [
+                              if (video.isInteractive)
+                                _Meta(
+                                  icon: Icons.alt_route_rounded,
+                                  label: '互动视频',
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
                               _Meta(
                                 icon: BiliIcons.playCount,
                                 label: compactCount(video.summary.playCount),
@@ -478,8 +538,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                                   : null,
                               onLogin: widget.onLogin,
                               onSelectPart: (part) {
-                                setState(() => _selectedCid = part.cid);
-                                widget.onPartChanged?.call(part);
+                                _selectPart(part);
                               },
                               onOpenVideoPart: widget.onOpenVideoPart,
                             ),
@@ -521,7 +580,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                         trailing: widget.menuBuilder?.call(
                           context,
                           video,
-                          selected,
+                          activePart,
                         ),
                         pageBuilder: (context, tab, active) {
                           if (tab == 0) {
@@ -715,6 +774,72 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
       color: Colors.black,
       child: Builder(builder: (context) => builder(context, video, part)),
     );
+  }
+
+  PlaybackSession? _interactiveSession(
+    InteractiveVideoNode node,
+    VideoPart expectedPart,
+  ) {
+    if (!mounted ||
+        widget.id != node.graph.id ||
+        _lastCid != node.graph.cid ||
+        node.graph.epoch != ref.read(sessionEpochProvider)() ||
+        (_interactivePart?.epoch == node.graph.epoch
+                ? _interactivePart?.part.playbackKey
+                : null) !=
+            (node.edgeId == null ? null : expectedPart.playbackKey) ||
+        !WorkspaceActivity.isActive(context)) {
+      return null;
+    }
+    final session = ref.read(playbackSessionProvider);
+    return session.sourceMatchesAccount &&
+            session.detail?.summary.id == node.graph.id &&
+            session.part?.playbackKey == expectedPart.playbackKey &&
+            session.snapshots.value.phase == PlaybackPhase.ended &&
+            !session.isResolving &&
+            session.error == null
+        ? session
+        : null;
+  }
+
+  void _chooseBranch(
+    InteractiveVideoNode node,
+    VideoPart current,
+    InteractiveVideoChoice? choice,
+  ) {
+    final session = _interactiveSession(node, current);
+    if (session == null) return;
+    if (choice?.edgeId == node.edgeId && choice?.cid == current.cid) {
+      unawaited(session.play());
+      return;
+    }
+    setState(() {
+      _interactivePart = choice == null
+          ? null
+          : (
+              epoch: node.graph.epoch,
+              part: VideoPart(
+                cid: choice.cid,
+                page: current.page,
+                title: choice.label,
+                duration: Duration.zero,
+                interactiveEdgeId: choice.edgeId,
+              ),
+            );
+    });
+  }
+
+  void _retryChoices(InteractiveVideoNode node, VideoPart part) {
+    if (_interactiveSession(node, part) == null) return;
+    ref.invalidate(interactiveVideoGraphProvider(node.graph));
+  }
+
+  void _selectPart(VideoPart part) {
+    setState(() {
+      _interactivePart = null;
+      _selectedCid = part.cid;
+    });
+    widget.onPartChanged?.call(part);
   }
 
   Future<void> _playRelated(VideoDetail video, VideoPart selected) async {
@@ -915,7 +1040,9 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
     if (session != null &&
         !session.prepareNextVideo(
           video.summary.id,
-          current.cid,
+          video.isInteractive && session.detail?.summary.id == video.summary.id
+              ? session.part?.cid ?? current.cid
+              : current.cid,
           nextId: next.id,
           nextCid: next.cid,
           completed:
@@ -941,8 +1068,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
     final part = video.parts.firstWhere(
       (part) => part.cid == (target.cid ?? video.parts.first.cid),
     );
-    setState(() => _selectedCid = part.cid);
-    widget.onPartChanged?.call(part);
+    _selectPart(part);
   }
 
   Future<void> _closeQueue(VideoPart selected) async {

@@ -279,6 +279,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   }
 
   void _onPlaybackCompleted() {
+    if (widget.target == null && widget.detail?.isInteractive == true) return;
     final snapshot = _session.snapshots.value;
     if (snapshot.phase == PlaybackPhase.playing) {
       _handledCompletionGeneration = null;
@@ -300,7 +301,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
           _session.sourceGeneration != generation ||
           _session.snapshots.value.phase != PlaybackPhase.ended ||
           _session.detail?.summary.id != widget.detail?.summary.id ||
-          _session.part?.cid != widget.part?.cid ||
+          _session.part?.playbackKey != widget.part?.playbackKey ||
           _session.contentTarget != widget.target) {
         return;
       }
@@ -332,7 +333,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     super.didUpdateWidget(oldWidget);
     final sourceChanged =
         widget.detail?.summary.id != oldWidget.detail?.summary.id ||
-        widget.part?.cid != oldWidget.part?.cid ||
+        widget.part?.playbackKey != oldWidget.part?.playbackKey ||
         widget.target != oldWidget.target;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -1831,6 +1832,14 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                 builder: (context, snapshot) {
                   final sourceGeneration = session.sourceGeneration;
                   final settings = widget.settings.value;
+                  final completedOverlay =
+                      widget.active &&
+                          snapshot.phase == PlaybackPhase.ended &&
+                          !session.isResolving &&
+                          session.media != null &&
+                          session.error == null
+                      ? widget.pageCommands.value?.completedOverlay
+                      : null;
                   if (session.audioOnly) {
                     return AudioPlaybackView(
                       key: _playerBoundsKey,
@@ -1839,6 +1848,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                       fullScreen: widget.fullScreen,
                       onFullScreen: _toggleFullScreen,
                       commands: widget.pageCommands.value,
+                      completedOverlay: completedOverlay,
                       navigation: ValueListenableBuilder<PlaybackNavigation?>(
                         valueListenable: widget.navigation,
                         builder: (context, actions, _) => Row(
@@ -2664,6 +2674,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                 ],
                               ),
                             ),
+                            ?completedOverlay,
                           ],
                         ),
                       );

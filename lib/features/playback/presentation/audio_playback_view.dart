@@ -22,6 +22,7 @@ class AudioPlaybackView extends StatelessWidget {
     required this.fullScreen,
     required this.navigation,
     this.commands,
+    this.completedOverlay,
   });
 
   final PlaybackSession session;
@@ -30,6 +31,7 @@ class AudioPlaybackView extends StatelessWidget {
   final bool fullScreen;
   final Widget navigation;
   final PlaybackPageCommands? commands;
+  final Widget? completedOverlay;
 
   @override
   Widget build(BuildContext context) {
@@ -90,7 +92,15 @@ class AudioPlaybackView extends StatelessWidget {
                     ],
                   ),
                 ),
-                Expanded(child: _content(context)),
+                Expanded(
+                  child: switch (completedOverlay) {
+                    final overlay? => Stack(
+                      fit: StackFit.expand,
+                      children: [_content(context), overlay],
+                    ),
+                    null => _content(context),
+                  },
+                ),
                 if (session.error case final error?)
                   SizedBox(
                     height: 32,

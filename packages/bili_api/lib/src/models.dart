@@ -299,7 +299,9 @@ final class ApiVideoDetail {
     this.replyCount,
     this.staff = const [],
     this.access = const ApiVideoAccess(),
+    this.isInteractive = false,
   });
+  final bool isInteractive;
   final String aid;
   final String bvid;
   final String title;
@@ -319,6 +321,18 @@ final class ApiVideoDetail {
   final int? replyCount;
   final List<ApiVideoStaffMember> staff;
   final ApiVideoAccess access;
+}
+
+final class ApiInteractiveVideoChoice {
+  const ApiInteractiveVideoChoice({
+    required this.edgeId,
+    required this.cid,
+    required this.label,
+  });
+
+  final String edgeId;
+  final String cid;
+  final String label;
 }
 
 final class ApiMediaTrack {

@@ -145,12 +145,16 @@ final class VideoPart {
     required this.page,
     required this.title,
     required this.duration,
+    this.interactiveEdgeId,
   });
 
   final String cid;
   final int page;
   final String title;
   final Duration duration;
+  final String? interactiveEdgeId;
+
+  (String, String?) get playbackKey => (cid, interactiveEdgeId);
 }
 
 final class VideoStaffMember {
@@ -184,6 +188,7 @@ final class VideoDetail {
     this.replyCount,
     this.collection,
     this.staff = const [],
+    this.isInteractive = false,
   });
 
   final VideoSummary summary;
@@ -198,6 +203,7 @@ final class VideoDetail {
   final int? replyCount;
   final VideoCollection? collection;
   final List<VideoStaffMember> staff;
+  final bool isInteractive;
 }
 
 final class VideoCollection {
