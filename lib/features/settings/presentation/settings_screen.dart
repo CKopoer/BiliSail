@@ -646,7 +646,7 @@ final class _SettingsCategoryPageState
                             '自动播放',
                             s.autoPlay,
                             controller.setAutoPlay,
-                            '打开视频后开始播放',
+                            '打开点播内容后开始播放；进入新直播间时会自动起播',
                           ),
                           _toggle(
                             '自动跳过官方片头／片尾',

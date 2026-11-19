@@ -1607,6 +1607,46 @@ void main() {
   );
 
   test(
+    'new live rooms play with VOD autoplay off, subject to permission',
+    () async {
+      final engine = _FakeEngine();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(autoResolve: true),
+        contentRepository: _FakeContentRepository(),
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+      );
+      addTearDown(session.close);
+      session.configureSettings(AppSettings(autoPlay: false));
+      final video = Object(), live = Object();
+      session.attach(video);
+      session.attach(live);
+      await session.activate(video, _detail('video'), _part('video'));
+      expect(engine.currentSnapshot.desiredPlaying, isFalse);
+
+      const firstRoom = LivePlaybackTarget('42');
+      await session.activate(live, null, null, target: firstRoom);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+      await session.pause();
+
+      await session.setPlaybackAllowed(false);
+      await session.activate(
+        live,
+        null,
+        null,
+        target: const LivePlaybackTarget('43'),
+      );
+      expect(engine.currentSnapshot.desiredPlaying, isFalse);
+      await session.setPlaybackAllowed(true);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+
+      await session.activate(live, null, null, target: firstRoom);
+      expect(engine.currentSnapshot.desiredPlaying, isFalse);
+    },
+  );
+
+  test(
     'live line and quality switches preserve pause, volume and server order',
     () async {
       final engine = _FakeEngine();

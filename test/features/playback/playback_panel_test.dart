@@ -1777,9 +1777,11 @@ void main() {
                 of: find.byKey(const ValueKey('player-controls')),
                 matching: find.byType(IconButton),
               ),
-              findsNWidgets(
-                !session.isLive && target is! OfflinePlaybackTarget ? 5 : 4,
-              ),
+              findsNWidgets(target is OfflinePlaybackTarget ? 4 : 5),
+            );
+            expect(
+              findMaterialTooltip('重新加载直播').hitTestable(),
+              session.isLive ? findsOneWidget : findsNothing,
             );
             for (final key in ['compact-playback-actions']) {
               expect(find.byKey(ValueKey(key)), findsNothing);
@@ -7167,7 +7169,7 @@ void main() {
       in <(String, ContentPlaybackTarget?, double)>[
         ('video', null, 780),
         ('pgc', const PgcPlaybackTarget('12', cid: '123'), 780),
-        ('live', const LivePlaybackTarget('12'), 480),
+        ('live', const LivePlaybackTarget('12'), 520),
         ('offline', const OfflinePlaybackTarget('local-task'), 740),
       ]) {
     testWidgets(
@@ -9964,6 +9966,80 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await _pumpFrames(tester);
   });
+  for (final compact in [false, true]) {
+    for (final fullscreen in [false, true]) {
+      testWidgets(
+        'live reload sits beside transport compact=$compact fullscreen=$fullscreen',
+        (tester) async {
+          tester.view.devicePixelRatio = 1;
+          tester.view.physicalSize = Size(compact ? 300 : 1400, 900);
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final engine = _FakeEngine();
+          final session = _session(
+            engine,
+            contentRepository: _LiveMenuRepository(),
+          );
+          addTearDown(session.close);
+          await tester.pumpWidget(
+            _app(
+              session,
+              _FakeWindowService(),
+              AppSettings(autoPlay: false),
+              width: compact ? 300 : 1200,
+              target: const LivePlaybackTarget('12'),
+              composer: (_) => const TextField(),
+            ),
+          );
+          await _pumpFrames(tester);
+          await _showControls(tester);
+          expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+          if (fullscreen) {
+            await tester.tap(findMaterialTooltip('全屏（F）'));
+            await _pumpFrames(tester);
+          }
+          final pause = findMaterialTooltip('暂停（空格）').hitTestable();
+          final reload = findMaterialTooltip('重新加载直播').hitTestable();
+          final pauseRect = tester.getRect(pause);
+          final reloadRect = tester.getRect(reload);
+          expect(reloadRect.center.dy, pauseRect.center.dy);
+          expect(reloadRect.left, closeTo(pauseRect.right, 1));
+
+          await session.changeLiveLine(1);
+          await session.setVolume(32);
+          if (compact) {
+            await tester.tap(pause);
+          } else {
+            engine._emit(
+              engine.currentSnapshot.copyWith(
+                phase: PlaybackPhase.buffering,
+                isBuffering: true,
+              ),
+            );
+          }
+          engine._emit(
+            engine.currentSnapshot.copyWith(
+              position: const Duration(seconds: 12),
+            ),
+          );
+          await _pumpFrames(tester);
+          final opens = engine.opens;
+          await tester.tap(reload);
+          await _pumpFrames(tester);
+          expect(engine.opens, opens + 1);
+          expect(engine.currentSnapshot.position, Duration.zero);
+          expect(engine.currentSnapshot.desiredPlaying, !compact);
+          expect(engine.currentSnapshot.volume, 32);
+          expect(session.liveLine, 1);
+          expect(engine.maxSurfaces, 1);
+          expect(tester.takeException(), isNull);
+          await tester.pumpWidget(const SizedBox());
+          await _pumpFrames(tester);
+        },
+      );
+    }
+  }
+
   testWidgets('a buffering online source can be manually reloaded from More', (
     tester,
   ) async {
@@ -9980,6 +10056,7 @@ void main() {
     );
     await _pumpFrames(tester);
     await _showControls(tester);
+    expect(findMaterialTooltip('重新加载直播'), findsNothing);
     engine._emit(
       engine.currentSnapshot.copyWith(
         position: const Duration(seconds: 12),

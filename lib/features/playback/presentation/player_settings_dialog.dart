@@ -397,7 +397,7 @@ class _PlayerSettingsDialogState extends ConsumerState<_PlayerSettingsDialog> {
                         const Padding(
                           padding: EdgeInsets.all(16),
                           child: Text(
-                            '视频默认清晰度、自动播放和续播用于新视频；播放页调整的倍速和音量由本次运行中的后续播放继承，重启后使用默认值。未在播放页调整时，修改默认值也会应用到当前播放。',
+                            '默认清晰度、自动播放和续播用于新打开的点播内容。进入新直播间时会自动起播。播放页调整的倍速和音量由本次运行中的后续播放继承，重启后使用默认值。未在播放页调整时，修改默认值也会应用到当前播放。',
                           ),
                         ),
                       ],

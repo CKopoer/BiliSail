@@ -697,7 +697,8 @@ class PlaybackSession extends ChangeNotifier {
       desiredPlaying:
           nextPlaying ??
           restored?.desiredPlaying ??
-          (sameOwner ? _desiredPlaying : _settings.autoPlay),
+          (target is LivePlaybackTarget ||
+              (sameOwner ? _desiredPlaying : _settings.autoPlay)),
       rate:
           restored?.rate ?? _rateMemory.rateFor(_settings.defaultPlaybackRate),
       volume:

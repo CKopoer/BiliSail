@@ -2105,6 +2105,11 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                         shortcuts:
                                             widget.settings.value.shortcuts,
                                       ),
+                                      _LiveReloadButton(
+                                        session: session,
+                                        onFocus: _focusNode.requestFocus,
+                                        prominent: true,
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -2952,6 +2957,11 @@ class _ControlBar extends StatelessWidget {
     );
     Widget slot(Widget child, [double width = _ControlsLayout.buttonWidth]) =>
         SizedBox(width: width, height: 40, child: child);
+    final transport = [
+      slot(play),
+      if (session.isLive && session.error == null)
+        slot(_LiveReloadButton(session: session, onFocus: onFocus)),
+    ];
     final composerBuilder = danmakuComposerBuilder;
     final composer = composerBuilder == null
         ? null
@@ -3054,7 +3064,10 @@ class _ControlBar extends StatelessWidget {
         0.0,
         (layout.inputs.width -
                 _ControlsLayout.buttonWidth *
-                    (2 + (showNext ? 1 : 0) + visibleToolCount))
+                    (transport.length +
+                        1 +
+                        (showNext ? 1 : 0) +
+                        visibleToolCount))
             .clamp(0.0, double.infinity),
       );
       return Column(
@@ -3067,7 +3080,7 @@ class _ControlBar extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              slot(play),
+              ...transport,
               if (showNext)
                 slot(_NextButton(session: session, commands: pageCommands)),
               SizedBox(
@@ -3122,7 +3135,7 @@ class _ControlBar extends StatelessWidget {
       ),
       children: layout.compact
           ? [
-              if (showPlayInBar) slot(play),
+              if (showPlayInBar) ...transport,
               if (showNext)
                 slot(_NextButton(session: session, commands: pageCommands)),
               if (!timeAboveRow) SizedBox(width: layout.timeWidth, child: time),
@@ -3146,7 +3159,7 @@ class _ControlBar extends StatelessWidget {
               slot(fullscreenButton),
             ]
           : [
-              slot(play),
+              ...transport,
               if (showNext)
                 slot(_NextButton(session: session, commands: pageCommands)),
               SizedBox(width: layout.timeWidth, child: time),
@@ -3496,6 +3509,7 @@ class _ControlsLayout {
         inputs.width <
         buttonWidth *
                 (4 +
+                    (inputs.isLive ? 1 : 0) +
                     (inputs.hasNextButton ? 1 : 0) +
                     (inputs.hasSubtitles ? 1 : 0) +
                     (inputs.hasVoices ? 1 : 0)) +
@@ -3555,12 +3569,7 @@ class _PlayButton extends StatelessWidget {
         : snapshot.desiredPlaying
         ? shortcutHint(shortcuts, ShortcutAction.playPause, '暂停')
         : shortcutHint(shortcuts, ShortcutAction.playPause, '播放'),
-    style: prominent
-        ? IconButton.styleFrom(
-            backgroundColor: Colors.black38,
-            minimumSize: const Size(56, 56),
-          )
-        : null,
+    style: prominent ? _prominentTransportButtonStyle : null,
     onPressed: () {
       onFocus();
       unawaited(
@@ -3577,6 +3586,44 @@ class _PlayButton extends StatelessWidget {
       size: prominent ? 32 : 20,
     ),
   );
+}
+
+const _prominentTransportButtonStyle = ButtonStyle(
+  backgroundColor: WidgetStatePropertyAll(Colors.black38),
+  minimumSize: WidgetStatePropertyAll(Size(56, 56)),
+);
+
+class _LiveReloadButton extends StatelessWidget {
+  const _LiveReloadButton({
+    required this.session,
+    required this.onFocus,
+    this.prominent = false,
+  });
+
+  final PlaybackSession session;
+  final VoidCallback onFocus;
+  final bool prominent;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = !session.isResolving && session.media != null;
+    return IconButton(
+      tooltip: '重新加载直播',
+      style: prominent ? _prominentTransportButtonStyle : null,
+      onPressed: enabled
+          ? () {
+              if (session.isResolving) return;
+              onFocus();
+              unawaited(session.retry());
+            }
+          : null,
+      icon: Icon(
+        Icons.refresh,
+        color: enabled ? Colors.white : Colors.white38,
+        size: prominent ? 32 : 20,
+      ),
+    );
+  }
 }
 
 String _time(Duration value) {
