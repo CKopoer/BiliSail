@@ -1052,6 +1052,39 @@ void main() {
     },
   );
 
+  test(
+    'audio-only EOF completes even when the sampled clock trails the end',
+    () async {
+      const duration = Duration(seconds: 12);
+      final backend = _Backend()
+        ..tracks = const PreparedTracks(
+          hasVideo: false,
+          hasAudio: true,
+          duration: duration,
+        );
+      final engine = SharedPlayerEngine(createBackend: () => backend);
+      addTearDown(engine.dispose);
+      final failures = <PlayerFailure>[];
+      engine.failures.listen(failures.add);
+      await engine.open(
+        ProgressiveSource(track('audio'), isAudioOnly: true),
+        const OpenOptions(play: true, rate: 3),
+      );
+      backend.signals.add(
+        const BackendEvent(
+          BackendEventKind.ended,
+          position: Duration(milliseconds: 10700),
+        ),
+      );
+      await tick();
+
+      expect(engine.currentSnapshot.phase, PlaybackPhase.ended);
+      expect(engine.currentSnapshot.position, duration);
+      expect(engine.currentSnapshot.desiredPlaying, isFalse);
+      expect(failures, isEmpty);
+    },
+  );
+
   test('natural EOF emits once, ignores trailing events, and replay resumes native events', () async {
     final backend = _Backend();
     final engine = SharedPlayerEngine(createBackend: () => backend);
