@@ -3,6 +3,56 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
+    'media history keys keep a dual slot open and discard old forward visits',
+    () {
+      final workspace = WorkspaceTabs()..setDualMode(true);
+      for (final media in ['A', 'B', 'C']) {
+        workspace.acceptRoute(Uri.parse('/video/$media'));
+      }
+      final id = workspace.activeId;
+      expect(workspace.movePlaybackHistory(id, backwards: true), isTrue);
+      expect(workspace.active.location.path, '/video/B');
+      expect(workspace.movePlaybackHistory(id, backwards: true), isTrue);
+      expect(workspace.movePlaybackHistory(id, backwards: true), isFalse);
+      expect(workspace.active.location.path, '/video/A');
+      expect(workspace.movePlaybackHistory(id, backwards: false), isTrue);
+      expect(workspace.active.location.path, '/video/B');
+      workspace.acceptRoute(Uri.parse('/video/D'));
+      expect(workspace.movePlaybackHistory(id, backwards: false), isFalse);
+      expect(workspace.goBack(), isTrue);
+      expect(workspace.active.location.path, '/video/B');
+      expect(workspace.movePlaybackHistory(id, backwards: false), isTrue);
+      expect(workspace.active.location.path, '/video/D');
+    },
+  );
+
+  for (final single in [true, false]) {
+    test('media history traverses retained playback tabs, single=$single', () {
+      final workspace = WorkspaceTabs()..setSingleMode(single);
+      for (final media in ['A', 'B', 'C']) {
+        workspace.acceptRoute(Uri.parse('/video/$media'));
+      }
+      for (final step in [
+        (true, 'B'),
+        (true, 'A'),
+        (false, 'B'),
+        (false, 'C'),
+      ]) {
+        expect(
+          workspace.movePlaybackHistory(workspace.activeId, backwards: step.$1),
+          isTrue,
+        );
+        expect(workspace.active.location.path, '/video/${step.$2}');
+        workspace.acceptRoute(workspace.active.route);
+      }
+      expect(
+        workspace.movePlaybackHistory(workspace.activeId, backwards: false),
+        isFalse,
+      );
+      expect(workspace.tabs, hasLength(4));
+    });
+  }
+  test(
     'video titles survive route commits, part changes and tab selection',
     () {
       final workspace = WorkspaceTabs();

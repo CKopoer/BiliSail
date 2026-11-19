@@ -32,8 +32,10 @@ import 'package:bilisail/shared/ui/danmaku_composer_draft.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/video/application/video_actions_controller.dart';
 import 'package:bilisail/features/video/presentation/video_danmaku_composer.dart';
+import 'package:bilisail/features/video/presentation/video_actions_bar.dart';
 
-import '../video/video_actions_bar_test.dart' show FakeActions, FakeAuth;
+import '../video/video_actions_bar_test.dart'
+    show FakeActions, FakeAuth, testDetail, testPart;
 
 import 'package:bilisail/shared/ui/playback_page_commands.dart';
 import 'package:bilisail/shared/ui/playback_navigation.dart';
@@ -230,6 +232,12 @@ void main() {
           expect(window.alwaysOnTop.value, isFalse);
         }
         await tester.tap(findMaterialTooltip('还原播放页'));
+        await _pumpFrames(tester);
+        expect(find.byKey(const ValueKey('mini-player')), findsNothing);
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
+        await _pumpFrames(tester);
+        expect(find.byKey(const ValueKey('mini-player')), findsOneWidget);
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
         await _pumpFrames(tester);
         expect(find.byKey(const ValueKey('mini-player')), findsNothing);
         expect(engine.opens, opens);
@@ -1548,6 +1556,138 @@ void main() {
         },
       );
     }
+  }
+
+  for (final fullscreen in [false, true]) {
+    testWidgets(
+      'video interaction shortcuts share the action bar, fullscreen=$fullscreen',
+      (tester) async {
+        final actions = FakeActions();
+        final session = _session(_FakeEngine());
+        final window = _FakeWindowService();
+        final settings = AppSettings(
+          shortcuts: const ShortcutSettings.defaults()
+              .withKeys(ShortcutAction.coinVideo, ['Alt+W'])
+              .withKeys(ShortcutAction.composeDanmaku, ['J']),
+        );
+        String? clipboard;
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          (call) async {
+            if (call.method == 'Clipboard.setData') {
+              clipboard =
+                  (call.arguments as Map<Object?, Object?>)['text'] as String?;
+            }
+            return null;
+          },
+        );
+        addTearDown(
+          () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+            SystemChannels.platform,
+            null,
+          ),
+        );
+        addTearDown(session.close);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              authRepositoryProvider.overrideWithValue(FakeAuth(true)),
+              videoActionsRepositoryProvider.overrideWithValue(actions),
+              playbackSessionProvider.overrideWithValue(session),
+            ],
+            child: InputTestApp(
+              shortcuts: settings.shortcuts,
+              builder: AppNoticeHost.builder,
+              home: Scaffold(
+                body: VideoActionsScope(
+                  detail: testDetail,
+                  onLogin: () {},
+                  child: Column(
+                    children: [
+                      const VideoActionsBar(),
+                      Expanded(
+                        child: PlaybackPanel(
+                          detail: testDetail,
+                          part: testPart,
+                          settings: settings,
+                          window: window,
+                          onToggleComments: () {},
+                          danmakuComposerBuilder: (_) => VideoDanmakuComposer(
+                            detail: testDetail,
+                            part: testPart,
+                            onLogin: () {},
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await _pumpFrames(tester);
+        if (fullscreen) {
+          await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+          await _pumpFrames(tester);
+          expect(window.fullScreen, isTrue);
+          expect(findMaterialTooltip('分享').hitTestable(), findsNothing);
+        }
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        await _pumpFrames(tester);
+        expect(session.commandVolume, 90);
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+        await _pumpFrames(tester);
+        expect(session.commandVolume, 100);
+        await tester.sendKeyEvent(LogicalKeyboardKey.digit2);
+        await _pumpFrames(tester);
+        expect(session.commandRate, 2);
+        await tester.sendKeyEvent(LogicalKeyboardKey.digit1);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+        await _pumpFrames(tester);
+        expect(session.commandRate, 1);
+        expect(actions.calls, ['load']);
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.keyQ);
+        await tester.sendKeyRepeatEvent(LogicalKeyboardKey.keyQ);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.keyQ);
+        await _pumpFrames(tester);
+        expect(actions.calls, ['load', 'like:true']);
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyE);
+        await tester.pumpAndSettle();
+        expect(find.text('收藏到'), findsOneWidget);
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyQ);
+        expect(actions.calls, ['load', 'like:true', 'folders']);
+        await tester.tap(find.text('测试收藏夹'));
+        await tester.tap(find.text('保存'));
+        await tester.pumpAndSettle();
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyW);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+        await tester.pumpAndSettle();
+        expect(find.text('为视频投币'), findsOneWidget);
+        expect(actions.calls.last, 'favorite:33:');
+        await tester.tap(find.text('1 枚'));
+        await tester.pumpAndSettle();
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyV);
+        await tester.pump();
+        expect(clipboard, 'https://www.bilibili.com/video/BV1234567890');
+        expect(actions.calls.last, 'coin:1');
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
+        await tester.pumpAndSettle();
+        final dialog = find.byKey(const ValueKey('player-danmaku-dialog'));
+        expect(dialog, findsOneWidget);
+        final edit = tester.widget<EditableText>(
+          find.descendant(of: dialog, matching: find.byType(EditableText)),
+        );
+        expect(edit.focusNode.hasPrimaryFocus, isTrue);
+        await tester.tap(findMaterialTooltip('关闭发送窗口'));
+        await tester.pumpAndSettle();
+        expect(window.fullScreen, fullscreen);
+        await tester.pumpWidget(const SizedBox());
+        await _pumpFrames(tester);
+      },
+    );
   }
 
   testWidgets(

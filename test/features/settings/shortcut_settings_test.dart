@@ -4,6 +4,55 @@ import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'official additions leave occupied defaults and saved bindings intact',
+    () {
+      const defaults = ShortcutSettings.defaults();
+      expect(defaults.conflict, isNull);
+      expect(defaults.actionFor('W'), ShortcutAction.fullWindow);
+      expect(defaults.actionFor('X'), ShortcutAction.nextPart);
+      expect(defaults.actionFor('M'), ShortcutAction.nextPart);
+      expect(defaults.actionFor('Enter'), ShortcutAction.fullscreen);
+      for (final action in [
+        ShortcutAction.coinVideo,
+        ShortcutAction.toggleVideoDescription,
+        ShortcutAction.mute,
+        ShortcutAction.composeDanmaku,
+      ]) {
+        expect(defaults.keysFor(action), isEmpty);
+      }
+      expect(defaults.actionFor('Q'), ShortcutAction.likeVideo);
+      expect(defaults.actionFor('E'), ShortcutAction.favoriteVideo);
+      expect(defaults.actionFor('V'), ShortcutAction.shareVideo);
+      expect(defaults.actionFor('BracketLeft'), ShortcutAction.previousPart);
+      expect(defaults.actionFor('Shift+ArrowRight'), ShortcutAction.faster);
+      final legacy = ShortcutSettings.fromJson({
+        'bindings': {
+          'playPause': ['Q', 'E', 'BracketRight', 'Shift+ArrowRight'],
+          'previousPart': ['Alt+N'],
+          'slower': [],
+        },
+        'disabled': ['playPause'],
+      });
+      expect(legacy.conflict, isNull);
+      expect(legacy.issues, isEmpty);
+      expect(legacy.keysFor(ShortcutAction.likeVideo), isEmpty);
+      expect(legacy.keysFor(ShortcutAction.favoriteVideo), isEmpty);
+      expect(legacy.keysFor(ShortcutAction.nextPart), ['X', 'M', 'Period']);
+      expect(legacy.keysFor(ShortcutAction.faster), ['F2', 'Quote']);
+      expect(legacy.keysFor(ShortcutAction.previousPart), ['Alt+N']);
+      expect(legacy.keysFor(ShortcutAction.slower), isEmpty);
+      final restored = ShortcutSettings.fromJson(legacy.toJson());
+      expect(restored.keysFor(ShortcutAction.playPause), [
+        'Q',
+        'E',
+        'BracketRight',
+        'Shift+ArrowRight',
+      ]);
+      expect(restored.isEnabled(ShortcutAction.playPause), isFalse);
+      expect(restored.issues, isEmpty);
+    },
+  );
   for (final apple in [false, true]) {
     final key = apple ? 'Meta+B' : 'Ctrl+B';
     test('sidebar defaults and custom bindings survive JSON: apple=$apple', () {

@@ -6,6 +6,31 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('shifted characters match their history and rate shortcuts', () {
+    final input = InputNormalizer(platform: TargetPlatform.windows);
+    input.key(
+      const KeyDownEvent(
+        physicalKey: PhysicalKeyboardKey.shiftLeft,
+        logicalKey: LogicalKeyboardKey.shiftLeft,
+        timeStamp: Duration.zero,
+      ),
+    );
+    for (final (logical, physical, key) in [
+      (LogicalKeyboardKey.less, PhysicalKeyboardKey.comma, 'Comma'),
+      (LogicalKeyboardKey.greater, PhysicalKeyboardKey.period, 'Period'),
+      (LogicalKeyboardKey.exclamation, PhysicalKeyboardKey.digit1, '1'),
+      (LogicalKeyboardKey.at, PhysicalKeyboardKey.digit2, '2'),
+    ]) {
+      final stroke = input.key(
+        KeyDownEvent(
+          physicalKey: physical,
+          logicalKey: logical,
+          timeStamp: Duration.zero,
+        ),
+      );
+      expect(stroke.chord, ShortcutChord(key, modifiers: ShortcutChord.shift));
+    }
+  });
   test('Windows tracks both sides of every modifier independently', () {
     final input = InputNormalizer(platform: TargetPlatform.windows);
     for (final (left, leftPhysical, right, rightPhysical, mask) in [

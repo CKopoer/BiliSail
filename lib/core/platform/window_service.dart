@@ -195,6 +195,25 @@ class WindowService {
   Future<void> togglePlaybackWindowMaximized() =>
       _playbackCaptionCall('toggleMaximized');
 
+  bool get canToggleWindowMaximized =>
+      hasCustomPlaybackTitleBar || (viewId == null && hasDesktopWindow);
+
+  Future<void> toggleWindowMaximized() async {
+    if (!canToggleWindowMaximized ||
+        _closing ||
+        _fullScreen ||
+        miniPlayer.value) {
+      return;
+    }
+    if (hasCustomPlaybackTitleBar) {
+      await togglePlaybackWindowMaximized();
+    } else if (await windowManager.isMaximized().timeout(_geometryTimeout)) {
+      await windowManager.unmaximize().timeout(_geometryTimeout);
+    } else {
+      await windowManager.maximize().timeout(_geometryTimeout);
+    }
+  }
+
   Future<void> minimizePlaybackWindow() => _playbackCaptionCall('minimize');
 
   Future<void> _playbackCaptionCall(

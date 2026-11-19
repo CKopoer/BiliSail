@@ -196,7 +196,9 @@ class _WorkspacePlaybackWindowState extends State<WorkspacePlaybackWindow> {
       case ShortcutAction.closeTab:
         // The workspace handles page-local detail before media history/close.
         widget.onBack();
-      case ShortcutAction.nextTab || ShortcutAction.previousTab:
+      case ShortcutAction.nextTab ||
+          ShortcutAction.previousTab ||
+          ShortcutAction.switchPlaybackWindow:
         widget.onActivateBrowser();
     }
     return CommandOutcome.completed;
@@ -229,20 +231,24 @@ class _WorkspacePlaybackWindowState extends State<WorkspacePlaybackWindow> {
             onEditingChanged: window == null
                 ? null
                 : (active) => window.setTextInputActive(active),
-            child: AppNoticeHost(
-              child: CommandTargetScope<Object>(
-                scope: CommandScope.workspace,
-                commands: {
-                  for (final command in <Object>[
-                    ShortcutAction.closeTab,
-                    ShortcutAction.nextTab,
-                    ShortcutAction.previousTab,
-                  ])
-                    command: (stroke) => _command(command, stroke),
-                },
-                child: ResponsiveLayoutScope(
-                  settings: widget.responsiveLayout,
-                  child: child ?? const SizedBox.shrink(),
+            child: WindowShortcutTarget(
+              window: window,
+              child: AppNoticeHost(
+                child: CommandTargetScope<Object>(
+                  scope: CommandScope.workspace,
+                  commands: {
+                    for (final command in <Object>[
+                      ShortcutAction.closeTab,
+                      ShortcutAction.nextTab,
+                      ShortcutAction.previousTab,
+                      ShortcutAction.switchPlaybackWindow,
+                    ])
+                      command: (stroke) => _command(command, stroke),
+                  },
+                  child: ResponsiveLayoutScope(
+                    settings: widget.responsiveLayout,
+                    child: child ?? const SizedBox.shrink(),
+                  ),
                 ),
               ),
             ),

@@ -120,6 +120,7 @@ final class _PgcDanmakuComposerState extends ConsumerState<PgcDanmakuComposer> {
           ),
           Expanded(
             child: TextField(
+              autofocus: DanmakuComposerDraft.autofocusOf(context),
               controller: _text,
               maxLength: 100,
               enabled: !state.busy,

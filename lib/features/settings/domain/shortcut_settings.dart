@@ -49,9 +49,19 @@ final class ShortcutSettings {
             )
             .firstOrNull
       : null;
-  List<String> keysFor(ShortcutAction action) =>
-      _overrides[action] ??
-      action.defaultsFor(useAppleDefaults: useAppleDefaults);
+  List<String> keysFor(ShortcutAction action) {
+    if (_overrides[action] case final keys?) return keys;
+    final defaults = action.defaultsFor(useAppleDefaults: useAppleDefaults);
+    if (action.addedKeys.isEmpty || _overrides.isEmpty) return defaults;
+    return List.unmodifiable(
+      defaults.where(
+        (key) =>
+            !action.addedKeys.contains(key) ||
+            !_overrides.values.any((keys) => keys.contains(key)),
+      ),
+    );
+  }
+
   Map<String, Object?> toJson() =>
       storedJson ??
       {

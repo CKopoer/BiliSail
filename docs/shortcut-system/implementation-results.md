@@ -6,7 +6,7 @@
 
 - [AppInputHost](../../lib/core/presentation/app_input_host.dart) 位于根 Navigator 外层，拥有唯一业务键盘提前监听和鼠标全局路由。InputNormalizer 共用录制／执行键名表，Quote／quoteSingle 统一，修饰键精确匹配；未知逻辑标识可回退到两个标点物理位置，合法其他 Unicode 布局不会强行解释为 US 标点。
 - 2026-10-29 补充 Flutter 控件手势的窗口边界清理：沿用同一 pointer route 跟踪本 view 未结束的鼠标指针，失焦／失活、迁移、设备移除及销毁时调用 `cancelPointer`。业务快捷键序列取消和控件 tap／drag 取消分别完成，避免丢失 Up 后只有曾按下的侧栏按钮持续失效；迟到 Up 不执行动作。模拟 Command+W 关闭双窗口后的失败复现、修复及 macOS 实机验证边界见[侧栏记录](../validation/wide-sidebar.md#多标签按钮统一与关闭播放后侧栏交互2026-10-29)。
-- [ShortcutDispatcher](../../lib/core/input/shortcut_dispatcher.dart) 为纯 Dart 泛型内核；[命令目录](../../lib/domain/shortcut_command.dart) 提供 23 个动作和平台默认别名；[组合根](../../lib/app/shortcut_coordinator.dart) 编译设置、目录归属及图片绑定。输入只选择一个目标；重复注册返回 duplicateTarget，边界／忙碌仍消费已认领序列。
+- [ShortcutDispatcher](../../lib/core/input/shortcut_dispatcher.dart) 为纯 Dart 泛型内核；[命令目录](../../lib/domain/shortcut_command.dart) 定义动作和平台默认别名；[组合根](../../lib/app/shortcut_coordinator.dart) 编译设置、目录归属及图片绑定。输入只选择一个目标；重复注册返回 duplicateTarget，边界／忙碌仍消费已认领序列。
 - [InputScope 与目标注册](../../lib/core/presentation/input_scope.dart) 提供可释放句柄、source revision、编辑／控件保护和非 Route 弹层屏障。根／Shell Navigator observer 共用路由账本，包括 requestFocus:false 的弹窗。普通弹窗隔离底层；全屏属于呈现，保留所属页的工作区／页面／媒体命令。
 - [PlaybackShortcutController](../../lib/features/playback/application/playback_shortcut_controller.dart) 由 PlaybackPanel owner 持有，普通／全屏视图共享；视图只保留绘制和控件行为。长按达到阈值即标记正在加速，异步 begin 未完成时释放也不会变成短按 seek；失焦、弹层、切页、换源、设置修改、呈现交接均可取消。
 - PlaybackSession 保存待确认音量／永久倍速目标；[MediaCommandPump](../../lib/features/playback/application/media_command_pump.dart) 将原生调用限制为一个进行中与一个最新目标。快速离散调速从目标值推进；失败清除本代次待处理动作，不自动重放。临时开始／恢复与永久调速共享协调规则，临时倍速不写共享记忆。
@@ -252,6 +252,15 @@ smoke 时，记录 keyWindow/view、active、responder 类型／所属关系、�
 窗口标题、URL、账号或凭据。原生受控事件测试仍不是用户设备上的物理按键验收。
 
 - 原生烟测前置条件：CI 直接启动二进制会保持后台（924a63c 的脱敏轨迹为 active=0/key=0/view=null）。烟测先激活主窗口并核实原生焦点，再创建播放窗口；不会重新激活播放窗口来绕过首次焦点缺失。生产快照继续拒绝非活动应用。
+
+## 官方客户端快捷键补齐（2026-11-19）
+
+- [Issue #144](https://github.com/CKopoer/BiliSail/issues/144) 中的 `Q`、`E`、`V` 分别用于点赞／取消点赞、打开收藏夹选择和复制视频分享链接。投币可以自定义键位，继续由确认弹窗选择数量。视频操作由同一视频页持有，普通播放、全屏与原按钮共用登录检查、忙碌状态和账号／视频身份校验。点赞长按三连未纳入本次功能。
+- `W` 继续显隐整个视频信息区，`X`、`M` 继续选择下一分 P，`Enter` 继续切换全屏。投币、简介、静音和弹幕输入的默认绑定为空。绑定弹幕输入后可打开并聚焦输入框，提交仍使用编辑器的回车。
+- `A` 从播放返回浏览，`B` 在桌面双标签的浏览窗和播放窗之间切换，`G` 最大化或还原支持的桌面窗口，`S` 在普通播放和迷你小窗之间切换。`C` 打开评论，再按回到简介。`Shift+,`、`Shift+.` 遍历当前工作区播放历史，双标签复用播放槽，单／多标签在已保留的播放页之间移动。
+- `[`、`]` 加入分 P／剧集的原绑定。`Shift+←`、`Shift+→` 沿用倍速档位设置，`Shift+1`、`Shift+2` 直接选择 1 倍／2 倍。`Shift+↑`、`Shift+↓` 调整 10 个百分点，无修饰键时仍调整 5 个百分点。
+- 新增默认键避让已有显式绑定，保留旧配置的自定义键位、空绑定与禁用状态。设置存储格式保持不变。
+- `tool/check.ps1 -SkipPub` 通过。根应用 5,832 项通过，四个包共 1,452 项通过。模拟按键覆盖普通／全屏互动、弹窗确认、旧绑定兼容和小窗往返。根应用 14 项及播放器包 10 项按条件跳过，另有 10 项 mux 用例因未配置 `BILI_MUX_LIBRARY` 跳过。Windows 实键、原生窗口交互和真实账号写入仍待验收。
 
 ## 收起／展开侧边栏快捷键（2026-11-07）
 

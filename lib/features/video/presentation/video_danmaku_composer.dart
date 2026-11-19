@@ -148,6 +148,7 @@ class _VideoDanmakuComposerState extends ConsumerState<VideoDanmakuComposer> {
           Expanded(
             child: TextField(
               controller: _text,
+              autofocus: DanmakuComposerDraft.autofocusOf(context),
               maxLength: 100,
               enabled: !state.busy,
               style: const TextStyle(fontSize: 12, color: Colors.white),

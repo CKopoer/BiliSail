@@ -28,6 +28,7 @@ import '../../../shared/ui/smooth_scroll_behavior.dart';
 import '../../../domain/video.dart';
 import '../../settings/domain/app_settings.dart';
 import '../../../core/input/shortcut_dispatcher.dart';
+import '../../../core/input/input_stroke.dart';
 import '../../../core/presentation/input_scope.dart';
 import '../application/playback_shortcut_controller.dart';
 import '../application/playback_session.dart';
@@ -928,6 +929,18 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
 
   void _requestMiniPlayer() => unawaited(_enterMiniPlayer());
 
+  Future<CommandOutcome> _toggleMiniPlayer(InputStroke stroke) async {
+    if (stroke.phase != InputPhase.down || _fullScreen) {
+      return CommandOutcome.noOp;
+    }
+    if (_miniPlayer) {
+      await _exitMiniPlayer();
+    } else {
+      await _enterMiniPlayer();
+    }
+    return CommandOutcome.completed;
+  }
+
   void _pipChanged() {
     if (!_systemPip || PictureInPictureService.instance.active.value) return;
     _pipExitTimer?.cancel();
@@ -1091,6 +1104,31 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
       commands: {
         for (final action in _shortcuts.capabilities)
           action: (stroke) => _shortcuts.execute(action, stroke),
+        ShortcutAction.toggleMiniPlayer: _toggleMiniPlayer,
+        ShortcutAction.returnToBrowser: (stroke) {
+          final navigation = _navigation.value;
+          if (stroke.phase != InputPhase.down || navigation == null) {
+            return CommandOutcome.noOp;
+          }
+          _navigateFromPlayer(navigation.onHome);
+          return CommandOutcome.completed;
+        },
+        for (final action in [
+          ShortcutAction.previousPlayback,
+          ShortcutAction.nextPlayback,
+        ])
+          action: (stroke) {
+            if (stroke.phase != InputPhase.down ||
+                _navigation.value?.onHistory?.call(
+                      backwards: action == ShortcutAction.previousPlayback,
+                    ) !=
+                    true) {
+              return CommandOutcome.noOp;
+            }
+            _dismissMiniPlayer();
+            _dismissFullScreen();
+            return CommandOutcome.completed;
+          },
       },
       child: _fullScreen || _miniPlayer
           ? const ColoredBox(color: Colors.black)
@@ -1120,6 +1158,11 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     final epoch = _session.sessionEpoch();
     return DanmakuComposerDraft(
       controller: _danmakuDraft,
+      autofocus:
+          context
+              .findAncestorWidgetOfExactType<PlayerDanmakuDialog>()
+              ?.autofocus ??
+          false,
       clearSent: (text) {
         if (mounted &&
             _session.sourceGeneration == generation &&
@@ -1138,6 +1181,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
 
   void _navigateFromPlayer(VoidCallback action) {
     _shortcuts.cancel();
+    _dismissMiniPlayer();
     _dismissFullScreen();
     action();
   }
@@ -1519,7 +1563,10 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
     });
   }
 
-  Future<void> _openComposerDialog(BuildContext context) async {
+  Future<void> _openComposerDialog(
+    BuildContext context, {
+    bool autofocus = false,
+  }) async {
     final builder = widget.danmakuComposerBuilder;
     if (_composerDialogOpen || builder == null || !widget.active) return;
     _composerDialogOpen = true;
@@ -1533,7 +1580,10 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
           _composerDialogRoute = ModalRoute.of<void>(context);
           return UncontrolledProviderScope(
             container: container,
-            child: PlayerDanmakuDialog(composer: Builder(builder: builder)),
+            child: PlayerDanmakuDialog(
+              autofocus: autofocus,
+              composer: Builder(builder: builder),
+            ),
           );
         },
       );
@@ -1628,7 +1678,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     if (!widget.active) return const ColoredBox(color: Colors.black);
-    return ListenableBuilder(
+    final view = ListenableBuilder(
       listenable: Listenable.merge([
         widget.controlsVisible,
         _cursorHidden,
@@ -1660,6 +1710,18 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
         onPointerCancel: _onPointerEnd,
         child: _buildPlayer(context),
       ),
+    );
+    if (widget.danmakuComposerBuilder == null) return view;
+    return CommandTargetScope<Object>(
+      scope: CommandScope.playback,
+      commands: {
+        ShortcutAction.composeDanmaku: (stroke) async {
+          if (stroke.phase != InputPhase.down) return CommandOutcome.noOp;
+          await _openComposerDialog(context, autofocus: true);
+          return CommandOutcome.completed;
+        },
+      },
+      child: view,
     );
   }
 

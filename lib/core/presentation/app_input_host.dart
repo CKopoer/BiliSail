@@ -111,7 +111,18 @@ final class InputNormalizer {
         }
       }
     }
+    final mask = modifiers;
     var name = _keys[event.logicalKey];
+    if (name == null && mask & ShortcutChord.shift != 0) {
+      // Some platforms report the shifted character as the logical key.
+      name = switch ((event.logicalKey, event.physicalKey)) {
+        (LogicalKeyboardKey.less, PhysicalKeyboardKey.comma) => 'Comma',
+        (LogicalKeyboardKey.greater, PhysicalKeyboardKey.period) => 'Period',
+        (LogicalKeyboardKey.exclamation, PhysicalKeyboardKey.digit1) => '1',
+        (LogicalKeyboardKey.at, PhysicalKeyboardKey.digit2) => '2',
+        _ => null,
+      };
+    }
     var fallback = false;
     // Only unknown/non-layout logical identities may use US punctuation positions.
     if (name == null && event.logicalKey.keyId > 0x10ffff) {
@@ -135,7 +146,7 @@ final class InputNormalizer {
           : event is KeyRepeatEvent
           ? InputPhase.repeat
           : InputPhase.down,
-      chord: name == null ? null : ShortcutChord(name, modifiers: modifiers),
+      chord: name == null ? null : ShortcutChord(name, modifiers: mask),
       synthesized: event.synthesized,
       physicalFallback: fallback,
     );

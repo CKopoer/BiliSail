@@ -7,6 +7,7 @@ import '../../../shared/ui/app_dialog.dart';
 import '../../../core/presentation/workspace_activity.dart';
 import '../../../shared/ui/app_network_image.dart';
 import '../../../shared/ui/app_notice.dart';
+import '../../../shared/ui/danmaku_composer_draft.dart';
 import '../../../shared/ui/emoticon_picker_dialog.dart';
 import '../application/live_danmaku_controller.dart';
 import '../domain/live_danmaku_repository.dart';
@@ -125,6 +126,7 @@ final class _LiveDanmakuComposerState
             ),
           Expanded(
             child: TextField(
+              autofocus: DanmakuComposerDraft.autofocusOf(context),
               key: ValueKey(
                 player
                     ? 'live-player-danmaku-input'

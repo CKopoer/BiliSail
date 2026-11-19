@@ -233,6 +233,14 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
       onLoopCompleted: () =>
           _stepEpisode(season, selected, 1, completed: true, loop: true),
       toggleInfo: () => setState(() => _infoVisible = !_infoVisible),
+      toggleDescription: () => setState(() {
+        _infoVisible = !_infoVisible || tab != 0;
+        _tab = 0;
+      }),
+      toggleComments: () => setState(() {
+        _tab = _infoVisible && tab == 1 ? 0 : 1;
+        _infoVisible = true;
+      }),
       child: WidthLayoutBuilder(
         builder: (context, width) {
           final wide =
