@@ -591,10 +591,14 @@ class SharedPlayerEngine
         }
       case BackendEventKind.ended:
         final position = event.position ?? _snapshot.position;
-        if (!_live &&
+        final duration = _snapshot.duration;
+        // At audio-only EOF the sampled audio clock can lag behind the
+        // container duration, especially at higher playback rates.
+        if (_requiresVideo &&
+            !_live &&
             _snapshot.desiredPlaying &&
-            _snapshot.duration > Duration.zero &&
-            _snapshot.duration - position > const Duration(milliseconds: 500)) {
+            duration > Duration.zero &&
+            duration - position > const Duration(milliseconds: 500)) {
           final revision = _seekRevision;
           _diagnose(
             PlayerDiagnosticKind.playbackStalled,
@@ -607,10 +611,12 @@ class SharedPlayerEngine
           unawaited(_fail(PlayerFailureKind.videoInterrupted));
           return;
         }
+        final completed = !_requiresVideo && duration > Duration.zero
+            ? _timeline(position: duration)
+            : _snapshot.copyWith(position: position);
         _publish(
-          _snapshot.copyWith(
+          completed.copyWith(
             phase: PlaybackPhase.ended,
-            position: position,
             desiredPlaying: false,
             isBuffering: false,
             isSeeking: false,
