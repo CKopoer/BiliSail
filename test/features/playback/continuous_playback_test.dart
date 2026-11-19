@@ -22,10 +22,12 @@ import 'package:bilisail/features/playback/domain/content_playback.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/features/playback/presentation/playback_panel.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
+import 'package:bilisail/features/video/application/interactive_video_controller.dart';
 import 'package:bilisail/features/video/application/video_controller.dart';
 import 'package:bilisail/features/video/application/video_extras_controller.dart';
 import 'package:bilisail/features/video/application/watch_later_queue_registry.dart';
 import 'package:bilisail/features/video/domain/video_playback_sequence.dart';
+import 'package:bilisail/features/video/domain/interactive_video_repository.dart';
 import 'package:bilisail/features/video/domain/watch_later_queue.dart';
 import 'package:bilisail/features/video/presentation/video_screen.dart';
 import 'package:bilisail/features/video/presentation/watch_later_queue_panel.dart';
@@ -96,6 +98,151 @@ final _season = PgcSeason(
 );
 
 void main() {
+  for (final (fullscreen, listening) in [
+    (false, false),
+    (true, false),
+    (false, true),
+  ]) {
+    testWidgets(
+      'interactive choices wait for EOF and open at zero, fullscreen=$fullscreen listening=$listening',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = fullscreen
+            ? const Size(1200, 800)
+            : const Size(390, 800);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        final engine = _Engine();
+        final session = _session(engine);
+        final interactive = _InteractiveVideo();
+        final window = _Window();
+        addTearDown(session.close);
+        final video = _interactiveFixture();
+        var advances = 0;
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              playbackSessionProvider.overrideWithValue(session),
+              authControllerProvider.overrideWith(_Auth.new),
+              interactiveVideoRepositoryProvider.overrideWithValue(interactive),
+              videoDetailProvider(_a).overrideWith((_) => video),
+              relatedVideosProvider(_a).overrideWith((_) => const []),
+            ],
+            child: MaterialApp(
+              home: Scaffold(
+                body: VideoScreen(
+                  id: _a,
+                  onAdvanceVideo: (_, _) => advances++,
+                  playerBuilder: (_, detail, part) => PlaybackPanel(
+                    detail: detail,
+                    part: part,
+                    settings: AppSettings(
+                      continuousPlayback: true,
+                      continuousRelatedPlayback: true,
+                      playbackMode: fullscreen
+                          ? PlaybackMode.listLoop
+                          : PlaybackMode.continuous,
+                      danmakuEnabled: false,
+                      playerControlsMode: PlayerControlsMode.dynamic,
+                    ),
+                    window: window,
+                    onToggleComments: () {},
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await _frames(tester);
+        expect(engine.options?.startPosition, const Duration(seconds: 8));
+        expect(find.text('第一条路线'), findsNothing);
+        if (listening) {
+          await session.setAudioOnly(true);
+          await _frames(tester);
+          expect(session.audioOnly, isTrue);
+        }
+        final opens = engine.opens;
+        if (fullscreen) {
+          await tester.tap(findMaterialTooltip('全屏（F）'));
+          await _frames(tester);
+          expect(window.fullscreen, isTrue);
+        }
+        engine.end();
+        await _frames(tester);
+        expect(find.text('正在加载剧情选项…'), findsOneWidget);
+        expect(advances, 0);
+        interactive.root.complete(const [
+          InteractiveVideoChoice(edgeId: '1', cid: '101', label: '第一条路线'),
+          InteractiveVideoChoice(edgeId: '2', cid: '102', label: '第二条路线'),
+        ]);
+        await _frames(tester);
+        await tester.tap(find.text('第一条路线'));
+        await _frames(tester);
+        expect(session.part?.playbackKey, ('101', '1'));
+        expect(engine.opens, opens + 1);
+        expect(engine.options?.startPosition, Duration.zero);
+        expect(session.snapshots.value.phase, PlaybackPhase.playing);
+        expect(session.audioOnly, listening);
+        expect(find.text('第一条路线'), findsNothing);
+        engine.end();
+        await _frames(tester);
+        expect(find.text('继续剧情'), findsOneWidget);
+        await tester.tap(find.text('继续剧情'));
+        await _frames(tester);
+        expect(session.part?.playbackKey, ('102', '2'));
+        expect(engine.options?.startPosition, Duration.zero);
+        engine.end();
+        await _frames(tester);
+        expect(find.text('从头再看'), findsOneWidget);
+        await tester.tap(find.text('从头再看'));
+        await _frames(tester);
+        expect(session.part?.playbackKey, ('101', null));
+        expect(engine.options?.startPosition, Duration.zero);
+        expect(interactive.versions, 1);
+        expect(interactive.nodes, [null, '1', '2', null]);
+        expect(window.fullscreen, fullscreen);
+        expect(advances, 0);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await _frames(tester);
+      },
+    );
+  }
+
+  test(
+    'interactive provider cancels abandoned nodes and isolates late results',
+    () async {
+      final interactive = _InteractiveVideo();
+      final container = ProviderContainer(
+        overrides: [
+          interactiveVideoRepositoryProvider.overrideWithValue(interactive),
+        ],
+      );
+      addTearDown(container.dispose);
+      const graph = (id: _a, cid: '101', epoch: 0);
+      final root = container.listen(
+        interactiveVideoChoicesProvider((graph: graph, edgeId: null)),
+        (_, _) {},
+      );
+      await interactive.rootStarted.future;
+      expect(interactive.nodes, [null]);
+      final currentProvider = interactiveVideoChoicesProvider((
+        graph: graph,
+        edgeId: '1',
+      ));
+      final current = container.listen(currentProvider, (_, _) {});
+      root.close();
+      await container.read(currentProvider.future);
+      await container.pump();
+      expect(interactive.cancellations.first.isCancelled, isTrue);
+      interactive.root.complete(const [
+        InteractiveVideoChoice(edgeId: '1', cid: '101', label: '旧选项'),
+      ]);
+      await container.pump();
+      expect(current.read().requireValue.single.label, '继续剧情');
+      expect(interactive.versions, 1);
+    },
+  );
+
   for (final width in [390.0, 1200.0]) {
     for (final mode in [PlaybackMode.continuous, PlaybackMode.listLoop]) {
       for (final favorite in [false, true]) {
@@ -1632,6 +1779,51 @@ PlaybackSession _session(
   danmakuNow: () => Duration.zero,
   sleepTimerNow: now,
 );
+
+VideoDetail _interactiveFixture() => VideoDetail(
+  summary: _video(_a, _parts).summary,
+  description: '',
+  parts: [_parts.first],
+  collection: _collection,
+  isInteractive: true,
+);
+
+final class _InteractiveVideo implements InteractiveVideoRepository {
+  final rootStarted = Completer<void>();
+  final root = Completer<List<InteractiveVideoChoice>>();
+  final nodes = <String?>[];
+  final cancellations = <RequestCancellation>[];
+  int versions = 0;
+
+  @override
+  Future<String> loadGraphVersion(
+    VideoId id,
+    String cid, {
+    required RequestCancellation cancellation,
+  }) async {
+    versions++;
+    return '100';
+  }
+
+  @override
+  Future<List<InteractiveVideoChoice>> loadChoices(
+    VideoId id,
+    String graphVersion, {
+    String? edgeId,
+    required RequestCancellation cancellation,
+  }) async {
+    nodes.add(edgeId);
+    cancellations.add(cancellation);
+    if (edgeId == null && !rootStarted.isCompleted) rootStarted.complete();
+    return switch (edgeId) {
+      null => root.future,
+      '1' => const [
+        InteractiveVideoChoice(edgeId: '2', cid: '102', label: '继续剧情'),
+      ],
+      _ => const [],
+    };
+  }
+}
 
 class _Engine extends CardFakeEngine {
   Completer<void>? seeking;

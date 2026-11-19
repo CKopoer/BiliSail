@@ -17,6 +17,7 @@ class PlaybackPageCommands extends StatelessWidget {
     this.onCompleted,
     this.onRelatedCompleted,
     this.onLoopCompleted,
+    this.completedOverlay,
     this.toggleDescription,
     this.toggleComments,
   });
@@ -27,6 +28,7 @@ class PlaybackPageCommands extends StatelessWidget {
   final VoidCallback? onCompleted;
   final VoidCallback? onRelatedCompleted;
   final VoidCallback? onLoopCompleted;
+  final Widget? completedOverlay;
   static PlaybackPageCommands? maybeOf(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<_PageCommands>()?.commands;
   @override

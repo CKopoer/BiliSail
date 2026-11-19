@@ -206,7 +206,10 @@ class PlaybackSession extends ChangeNotifier {
   // Only media identity and local playback preferences are retained, never
   // resolved URLs. Closing the session or changing accounts clears this cache.
   final _navigationCheckpoints =
-      <(VideoId?, String?, ContentPlaybackTarget?), _PlaybackCheckpoint>{};
+      <
+        (VideoId?, (String, String?)?, ContentPlaybackTarget?),
+        _PlaybackCheckpoint
+      >{};
   Object? _activeOwner;
   bool _ownerVisible = true;
   Duration? _openingPosition;
@@ -558,7 +561,7 @@ class PlaybackSession extends ChangeNotifier {
     final saved = _checkpoints[owner];
     final previous =
         saved?.videoId == video?.summary.id &&
-            saved?.cid == selected?.cid &&
+            saved?.partKey == selected?.playbackKey &&
             saved?.target == contentTarget
         ? saved
         : null;
@@ -568,7 +571,7 @@ class PlaybackSession extends ChangeNotifier {
     final preparing = media == null;
     final checkpoint = _PlaybackCheckpoint(
       videoId: video?.summary.id,
-      cid: selected?.cid,
+      partKey: selected?.playbackKey,
       target: contentTarget,
       scope: _scope,
       epoch: _epoch,
@@ -589,7 +592,7 @@ class PlaybackSession extends ChangeNotifier {
     );
     _checkpoints[owner] = checkpoint;
     if (_settings.navigationMode != WorkspaceNavigationMode.multipleTabs) {
-      final key = (video?.summary.id, selected?.cid, contentTarget);
+      final key = (video?.summary.id, selected?.playbackKey, contentTarget);
       _navigationCheckpoints.remove(key);
       _navigationCheckpoints[key] = checkpoint;
       // Sixteen back entries plus the current source while capturing a pop.
@@ -612,7 +615,7 @@ class PlaybackSession extends ChangeNotifier {
     if (_disposed || !_owners.contains(owner)) return;
     if (identical(_activeOwner, owner) &&
         detail?.summary.id == video?.summary.id &&
-        part?.cid == selected?.cid &&
+        part?.playbackKey == selected?.playbackKey &&
         contentTarget == target &&
         _scope == accountScope() &&
         _epoch == sessionEpoch() &&
@@ -636,21 +639,38 @@ class PlaybackSession extends ChangeNotifier {
       return;
     }
     final sameOwner = identical(_activeOwner, owner);
+    final switchingInteractiveNode =
+        sameOwner &&
+        sourceMatchesAccount &&
+        video?.isInteractive == true &&
+        detail?.summary.id == video?.summary.id &&
+        part?.playbackKey != selected?.playbackKey &&
+        (part?.interactiveEdgeId != null ||
+            selected?.interactiveEdgeId != null);
+    if (switchingInteractiveNode) {
+      sleepTimer.checkDeadline();
+      sleepTimer.acknowledgeElapsed();
+    }
     final sameKind = contentTarget.runtimeType == target.runtimeType;
     _captureOwner();
     final owned = _checkpoints[owner];
     final saved =
         owned?.videoId == video?.summary.id &&
-            owned?.cid == selected?.cid &&
+            owned?.partKey == selected?.playbackKey &&
             owned?.target == target
         ? owned
-        : _navigationCheckpoints[(video?.summary.id, selected?.cid, target)];
+        : _navigationCheckpoints[(
+            video?.summary.id,
+            selected?.playbackKey,
+            target,
+          )];
     final restored =
-        saved != null &&
+        !switchingInteractiveNode &&
+            saved != null &&
             saved.scope == accountScope() &&
             saved.epoch == sessionEpoch() &&
             saved.videoId == video?.summary.id &&
-            saved.cid == selected?.cid &&
+            saved.partKey == selected?.playbackKey &&
             saved.target == target
         ? saved
         : null;
@@ -692,10 +712,10 @@ class PlaybackSession extends ChangeNotifier {
       liveLine: restored?.liveLine,
       liveStream: restored?.liveStream,
       position:
-          position ??
+          (switchingInteractiveNode ? Duration.zero : position) ??
           (nextPlaying != null ? nextIntent?.position : restored?.position),
       desiredPlaying:
-          nextPlaying ??
+          (switchingInteractiveNode ? true : nextPlaying) ??
           restored?.desiredPlaying ??
           (target is LivePlaybackTarget ||
               (sameOwner ? _desiredPlaying : _settings.autoPlay)),
@@ -853,7 +873,7 @@ class PlaybackSession extends ChangeNotifier {
         _audioOnly ==
             (_listeningMode.enabled && target is! LivePlaybackTarget) &&
         detail?.summary.id == video?.summary.id &&
-        part?.cid == selected?.cid &&
+        part?.playbackKey == selected?.playbackKey &&
         contentTarget == target &&
         (_resolving || (error == null && media != null))) {
       return;
@@ -907,7 +927,7 @@ class PlaybackSession extends ChangeNotifier {
     _sourceCancellation = cancellation;
     final samePart =
         detail?.summary.id == video?.summary.id &&
-        part?.cid == selected?.cid &&
+        part?.playbackKey == selected?.playbackKey &&
         contentTarget == target;
     _audioQuality = audioQuality ?? (samePart ? _audioQuality : null);
     final requestedAudioQuality = _audioQuality;
@@ -2970,7 +2990,7 @@ class PlaybackSession extends ChangeNotifier {
 final class _PlaybackCheckpoint {
   const _PlaybackCheckpoint({
     required this.videoId,
-    required this.cid,
+    required this.partKey,
     required this.scope,
     required this.epoch,
     required this.position,
@@ -2987,7 +3007,7 @@ final class _PlaybackCheckpoint {
     this.recommendation,
   });
   final VideoId? videoId;
-  final String? cid;
+  final (String, String?)? partKey;
   final ContentPlaybackTarget? target;
   final String scope;
   final int epoch;

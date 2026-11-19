@@ -2177,6 +2177,7 @@ final class BiliApiClient {
     }
     return ApiVideoDetail(
       access: parseVideoAccess(data),
+      isInteractive: _int(_optionalMap(data['rights'])?['is_stein_gate']) == 1,
       aid: _id(data['aid'], 'video_detail'),
       bvid: _requiredString(data['bvid'], 'video_detail'),
       title: _requiredString(data['title'], 'video_detail'),
@@ -2198,6 +2199,80 @@ final class BiliApiClient {
       danmakuCount: _count(_optionalMap(data['stat'])?['danmaku']),
       publishedAt: _publishedAt(data['pubdate']),
     );
+  }
+
+  Future<String> getInteractiveVideoGraphVersion(
+    String bvid,
+    String cid, {
+    ApiRequestContext? context,
+  }) async {
+    const endpoint = 'interactive_video_graph';
+    _validateBvid(bvid);
+    final data = await _wbiJson(
+      '/x/player/wbi/v2',
+      {'bvid': bvid, 'cid': _positiveId(cid, endpoint)},
+      endpoint,
+      context,
+    );
+    return _positiveId(
+      _optionalMap(data['interaction'])?['graph_version'],
+      endpoint,
+    );
+  }
+
+  Future<List<ApiInteractiveVideoChoice>> getInteractiveVideoChoices(
+    String bvid,
+    String graphVersion, {
+    String? edgeId,
+    ApiRequestContext? context,
+  }) async {
+    const endpoint = 'interactive_video_edge';
+    _validateBvid(bvid);
+    final data = await _json(
+      _api.replace(
+        path: '/x/stein/edgeinfo_v2',
+        queryParameters: {
+          'bvid': bvid,
+          'graph_version': _positiveId(graphVersion, endpoint),
+          if (edgeId != null) 'edge_id': _positiveId(edgeId, endpoint),
+        },
+      ),
+      endpoint,
+      context,
+    );
+    if (_int(data['is_leaf']) == 1) return const [];
+    final edges = data['edges'];
+    if (edges == null) return const [];
+    final questionList = _map(edges, endpoint)['questions'];
+    if (questionList == null) return const [];
+    final question = _list(questionList, endpoint).firstOrNull;
+    if (question == null) return const [];
+    final choices = _list(_map(question, endpoint)['choices'], endpoint);
+    if (choices.length > 64) {
+      throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
+    }
+    return List.unmodifiable(
+      choices.map((value) {
+        final choice = _map(value, endpoint);
+        final label = _string(choice['option'])?.trim();
+        if (label == null || label.isEmpty || label.length > 512) {
+          throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
+        }
+        return ApiInteractiveVideoChoice(
+          edgeId: _positiveId(choice['id'], endpoint),
+          cid: _positiveId(choice['cid'], endpoint),
+          label: label,
+        );
+      }),
+    );
+  }
+
+  static String _positiveId(Object? value, String endpoint) {
+    final id = _id(value, endpoint);
+    if (!RegExp(r'^[1-9][0-9]*$').hasMatch(id)) {
+      throw ApiFailure(ApiFailureCategory.protocol, endpoint);
+    }
+    return id;
   }
 
   static String? _recommendationReason(Object? value) {

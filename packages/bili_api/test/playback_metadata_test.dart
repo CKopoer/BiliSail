@@ -6,6 +6,106 @@ import 'package:bili_api/bili_api.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test(
+    'interactive videos read the signed graph and unsigned node choices',
+    () async {
+      final transport = _Transport({
+        'aid': 42,
+        'bvid': 'BV1abc123456',
+        'title': 'Fixture',
+        'pages': [
+          {'cid': 101, 'page': 1},
+        ],
+        'rights': {'is_stein_gate': 1},
+        'interaction': {'graph_version': 321},
+        'edges': {
+          'questions': [
+            {
+              'choices': [
+                {'id': '9007199254740993', 'cid': 101, 'option': 'First'},
+                {'id': 12, 'cid': 101, 'option': 'Second'},
+              ],
+            },
+          ],
+        },
+      });
+      final api = BiliApiClient(transport: transport);
+      expect((await api.getVideoDetail('BV1abc123456')).isInteractive, isTrue);
+      final version = await api.getInteractiveVideoGraphVersion(
+        'BV1abc123456',
+        '101',
+      );
+      expect(version, '321');
+      final choices = await api.getInteractiveVideoChoices(
+        'BV1abc123456',
+        version,
+      );
+      expect(
+        choices.map((choice) => (choice.edgeId, choice.cid, choice.label)),
+        [('9007199254740993', '101', 'First'), ('12', '101', 'Second')],
+      );
+      await api.getInteractiveVideoChoices(
+        'BV1abc123456',
+        version,
+        edgeId: choices.first.edgeId,
+      );
+      final graph = transport.uris.firstWhere(
+        (uri) => uri.path == '/x/player/wbi/v2',
+      );
+      expect(graph.queryParameters, containsPair('bvid', 'BV1abc123456'));
+      expect(graph.queryParameters, containsPair('cid', '101'));
+      expect(graph.queryParameters['w_rid'], isNotEmpty);
+      final edges = transport.uris
+          .where((uri) => uri.path == '/x/stein/edgeinfo_v2')
+          .toList();
+      expect(edges.map((uri) => uri.queryParameters), [
+        {'bvid': 'BV1abc123456', 'graph_version': '321'},
+        {
+          'bvid': 'BV1abc123456',
+          'graph_version': '321',
+          'edge_id': '9007199254740993',
+        },
+      ]);
+    },
+  );
+
+  test(
+    'interactive leaf and malformed graph or choices stay distinct',
+    () async {
+      final leaf = BiliApiClient(transport: _Transport({'is_leaf': 1}));
+      expect(
+        await leaf.getInteractiveVideoChoices('BV1abc123456', '321'),
+        isEmpty,
+      );
+      final protocolFailure = isA<ApiFailure>().having(
+        (error) => error.category,
+        'category',
+        ApiFailureCategory.protocol,
+      );
+      await expectLater(
+        leaf.getInteractiveVideoGraphVersion('BV1abc123456', '101'),
+        throwsA(protocolFailure),
+      );
+      final malformed = BiliApiClient(
+        transport: _Transport({
+          'edges': {
+            'questions': [
+              {
+                'choices': [
+                  {'id': 10, 'cid': 0, 'option': 'Unavailable'},
+                ],
+              },
+            ],
+          },
+        }),
+      );
+      await expectLater(
+        malformed.getInteractiveVideoChoices('BV1abc123456', '321'),
+        throwsA(protocolFailure),
+      );
+    },
+  );
+
   test('one WBI metadata read supplies chapters and subtitle tracks', () async {
     final transport = _Transport({
       'view_points': [_chapter],

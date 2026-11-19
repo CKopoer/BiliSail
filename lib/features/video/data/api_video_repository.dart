@@ -7,12 +7,49 @@ import '../../../shared/data/video_access_mapper.dart';
 import '../../../core/network/api_requests.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
+import '../domain/interactive_video_repository.dart';
 import '../domain/video_repository.dart';
 
-class ApiVideoRepository implements VideoRepository {
+class ApiVideoRepository
+    implements VideoRepository, InteractiveVideoRepository {
   ApiVideoRepository(this.api, this.requests);
   final BiliApiClient api;
   final ApiRequests requests;
+
+  @override
+  Future<String> loadGraphVersion(
+    VideoId id,
+    String cid, {
+    required RequestCancellation cancellation,
+  }) => requests.run(
+    (context) =>
+        api.getInteractiveVideoGraphVersion(id.value, cid, context: context),
+    cancellation: cancellation,
+  );
+
+  @override
+  Future<List<InteractiveVideoChoice>> loadChoices(
+    VideoId id,
+    String graphVersion, {
+    String? edgeId,
+    required RequestCancellation cancellation,
+  }) => requests.run((context) async {
+    final choices = await api.getInteractiveVideoChoices(
+      id.value,
+      graphVersion,
+      edgeId: edgeId,
+      context: context,
+    );
+    return List.unmodifiable(
+      choices.map(
+        (choice) => InteractiveVideoChoice(
+          edgeId: choice.edgeId,
+          cid: choice.cid,
+          label: choice.label,
+        ),
+      ),
+    );
+  }, cancellation: cancellation);
 
   @override
   Future<VideoDetail> loadDetail(
@@ -22,6 +59,7 @@ class ApiVideoRepository implements VideoRepository {
     final detail = await api.getVideoDetail(id.value, context: context);
     final collection = detail.collection;
     return VideoDetail(
+      isInteractive: detail.isInteractive,
       aid: detail.aid,
       replyCount: detail.replyCount,
       collection: collection == null
