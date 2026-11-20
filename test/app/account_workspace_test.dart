@@ -195,9 +195,8 @@ void main() {
         await tester.pumpAndSettle();
 
         final location = router.routeInformationProvider.value.uri;
-        expect(location.path, address.location);
-        expect(location.queryParameters['comment_root_id'], '200');
-        expect(location.queryParameters['comment_secondary_id'], '202');
+        expect(location.path, '/messages');
+        expect(tester.state(find.byType(MessagesScreen)), same(inbox));
         expect(articles.reads, [address]);
         final article = find.byType(ArticleScreen);
         final panel = find.descendant(
@@ -218,7 +217,7 @@ void main() {
         expect(find.text('普通评论').hitTestable(), findsOneWidget);
 
         await tester.tap(
-          find.descendant(of: article, matching: findMaterialTooltip('返回')),
+          find.descendant(of: article, matching: findMaterialTooltip('关闭')),
         );
         await tester.pumpAndSettle();
         expect(router.routeInformationProvider.value.uri.path, '/messages');

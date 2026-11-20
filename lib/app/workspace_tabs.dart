@@ -1,5 +1,3 @@
-import '../domain/article_address.dart';
-
 /// An in-memory browsing workspace. Routes remain shareable without tab IDs.
 final class WorkspaceTab {
   const WorkspaceTab({
@@ -26,13 +24,7 @@ final class WorkspaceTab {
       location.pathSegments.length == 2 &&
       location.pathSegments.first == 'topic';
   bool get isDynamicDetail => location.path.startsWith('/dynamic/');
-  ArticleAddress? get articleAddress => switch (location.pathSegments) {
-    ['article', final id] => ArticleAddress(ArticleKind.column, id),
-    ['opus', final id] => ArticleAddress(ArticleKind.opus, id),
-    _ => null,
-  };
-  bool get hasOwnNavigation =>
-      isTopic || isDynamicDetail || articleAddress != null;
+  bool get hasOwnNavigation => isTopic || isDynamicDetail;
   bool get isBrowse => location.path == '/';
   bool get isAccount => location.path == '/me';
   bool get isMessages => location.path == '/messages';
@@ -59,7 +51,6 @@ final class WorkspaceTab {
     if (isProfile) return '用户主页 · ${location.pathSegments.last}';
     if (isTopic) return '话题 · ${location.pathSegments.last}';
     if (isDynamicDetail) return '动态详情';
-    if (articleAddress != null) return '专栏';
     return '浏览';
   }
 

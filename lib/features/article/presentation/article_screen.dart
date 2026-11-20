@@ -39,6 +39,7 @@ final class ArticleScreen extends ConsumerWidget {
     final state = address.isValid ? ref.watch(provider) : null;
     return ContentDetailPage(
       title: '专栏',
+      inDialog: true,
       action: state == null
           ? null
           : IconButton(

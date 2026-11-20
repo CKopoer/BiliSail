@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:bilisail/app/router.dart';
 import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/core/network/api_requests.dart';
+import 'package:bilisail/core/presentation/app_image_provider.dart';
+import 'package:bilisail/core/storage/image_byte_cache.dart';
 import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/article_address.dart';
 import 'package:bilisail/domain/comment_target.dart';
@@ -19,13 +23,17 @@ import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/comments/application/comments_controller.dart';
 import 'package:bilisail/features/comments/domain/comments_repository.dart';
 import 'package:bilisail/features/dynamic/application/dynamic_actions_controller.dart';
+import 'package:bilisail/features/image_viewer/application/image_viewer_controller.dart';
+import 'package:bilisail/features/image_viewer/domain/original_image.dart';
 import 'package:bilisail/features/settings/application/settings_controller.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/domain/settings_repository.dart';
 import 'package:bilisail/shared/ui/comments_panel.dart';
+import 'package:bilisail/shared/ui/app_network_image.dart';
 import 'package:bilisail/shared/ui/content_detail_page.dart';
 import 'package:bilisail/shared/ui/content_link_scope.dart';
 import 'package:bilisail/shared/ui/dynamic_post_interactions.dart';
+import 'package:bilisail/shared/ui/image_viewer.dart';
 import 'package:bilisail/shared/ui/post_author_header.dart';
 import 'package:bilisail/shared/ui/post_card_surface.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -60,7 +68,7 @@ void main() {
     },
   );
 
-  testWidgets('opens cv and opus bodies in their own workspace and returns', (
+  testWidgets('opens direct links and related articles as stacked dialogs', (
     tester,
   ) async {
     final auth = DynamicAuthFake(signedIn: false);
@@ -89,23 +97,27 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.byType(ArticleScreen), findsOneWidget);
-    expect(find.text('旧文章正文'), findsOneWidget);
+    expect(router.routeInformationProvider.value.uri.path, '/');
+    expect(find.text('旧文章正文').hitTestable(), findsOneWidget);
     await tester.tapAt(
       tester.getTopLeft(find.text('阅读新版图文')) + const Offset(12, 12),
     );
     await tester.pumpAndSettle();
-    expect(router.routeInformationProvider.value.uri.path, _opus.location);
-    expect(find.text('整篇图文正文'), findsOneWidget);
-    expect(find.text('旧文章正文'), findsNothing);
+    expect(router.routeInformationProvider.value.uri.path, '/');
+    expect(find.text('整篇图文正文').hitTestable(), findsOneWidget);
+    expect(find.text('旧文章正文').hitTestable(), findsNothing);
+    final opusDialog = find.byWidgetPredicate(
+      (widget) => widget is ArticleScreen && widget.address == _opus,
+    );
     await tester.tap(
-      find.descendant(
-        of: find.byType(ArticleScreen),
-        matching: findMaterialTooltip('返回'),
-      ),
+      find.descendant(of: opusDialog, matching: findMaterialTooltip('关闭')),
     );
     await tester.pumpAndSettle();
-    expect(router.routeInformationProvider.value.uri.path, _column.location);
-    expect(find.text('旧文章正文'), findsOneWidget);
+    expect(find.text('旧文章正文').hitTestable(), findsOneWidget);
+    await tester.tap(findMaterialTooltip('关闭').hitTestable());
+    await tester.pumpAndSettle();
+    expect(find.byType(ArticleScreen), findsNothing);
+    expect(router.routeInformationProvider.value.uri.path, '/');
     expect(repository.reads, [_column, _opus]);
   });
 
@@ -374,6 +386,75 @@ void main() {
     expect(comments.writes, isEmpty);
   });
 
+  testWidgets(
+    'article loads a resized preview and opens the original in the viewer',
+    (tester) async {
+      final source = Uri.https('i0.hdslb.com', '/bfs/new_dyn/article.png');
+      final bytes = base64Decode(
+        'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGMwCasA'
+        'IgYIBQAbNgQJ4mDIDgAAAABJRU5ErkJggg==',
+      );
+      final previews = <Uri>[];
+      final originals = _Originals(
+        OriginalImage(bytes: bytes, width: 2, height: 2),
+      );
+      final cache = AppImageCache(
+        ImageByteCache(
+          directory: () async => throw const FileSystemException('optional'),
+          loader: (uri, _) async {
+            previews.add(uri);
+            return bytes;
+          },
+        ),
+      );
+      try {
+        await _mountReader(
+          tester,
+          comments: DynamicCommentsFake(),
+          document: ArticleDocument(
+            url: _column.webUri,
+            title: '图文',
+            blocks: [ArticleBlock(ArticleBlockKind.image, image: source)],
+          ),
+          imageCache: cache,
+          originals: originals,
+        );
+        final pixels = find.descendant(
+          of: find.byType(AppNetworkImage),
+          matching: find.byType(RawImage),
+        );
+        for (
+          var attempt = 0;
+          attempt < 40 &&
+              !tester
+                  .widgetList<RawImage>(pixels)
+                  .any((raw) => raw.image != null);
+          attempt++
+        ) {
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 10)),
+          );
+          await tester.pump();
+        }
+        expect(tester.widget<RawImage>(pixels).image, isNotNull);
+        expect(previews, [Uri.parse('$source@1280w_1280h_0e.webp')]);
+        await tester.tap(find.bySemanticsLabel('查看图片 1'));
+        await tester.pumpAndSettle();
+        final viewer = tester.widget<ImageViewer>(find.byType(ImageViewer));
+        expect(viewer.request.images, [source]);
+        expect(viewer.request.initialIndex, 0);
+        expect(originals.sources, isEmpty);
+        await tester.tap(find.text('查看原图'));
+        await tester.pumpAndSettle();
+        expect(originals.sources, [source]);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        await cache.close();
+      }
+    },
+  );
+
   for (final accessMessage in [null, '仅粉丝可见']) {
     testWidgets(
       'closed or restricted articles do not load comments ($accessMessage)',
@@ -443,6 +524,8 @@ Future<void> _mountReader(
   VoidCallback? onLogin,
   ValueChanged<UserId>? onOpenUser,
   ValueChanged<Uri>? onOpenWeb,
+  AppImageCache? imageCache,
+  OriginalImageRepository? originals,
 }) async {
   await tester.binding.setSurfaceSize(size);
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -462,6 +545,8 @@ Future<void> _mountReader(
           _Repository((_, _) async => document),
         ),
         authRepositoryProvider.overrideWithValue(auth),
+        if (originals != null)
+          originalImageRepositoryProvider.overrideWithValue(originals),
         commentsRepositoryProvider(CommentTargetType.article)
             .overrideWithValue(comments),
       ],
@@ -469,7 +554,9 @@ Future<void> _mountReader(
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(context)
               .copyWith(textScaler: TextScaler.linear(scale)),
-          child: child!,
+          child: imageCache == null
+              ? child!
+              : AppImageCacheScope(cache: imageCache, child: child!),
         ),
         home: Scaffold(
           body: link == null
@@ -485,6 +572,21 @@ Future<void> _mountReader(
     ),
   );
   await tester.pumpAndSettle();
+}
+
+final class _Originals implements OriginalImageRepository {
+  _Originals(this.image);
+  final OriginalImage image;
+  final sources = <Uri>[];
+
+  @override
+  Future<OriginalImage> load(
+    Uri source,
+    RequestCancellation cancellation,
+  ) async {
+    sources.add(source);
+    return image;
+  }
 }
 
 ArticleDocument _longArticle({

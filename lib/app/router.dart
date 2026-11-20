@@ -11,6 +11,7 @@ import 'package:go_router/go_router.dart';
 
 import '../shared/ui/app_dialog.dart';
 import '../shared/ui/app_notice.dart';
+import '../domain/article_address.dart';
 import '../domain/video.dart';
 import '../features/downloads/domain/download_models.dart';
 import '../features/downloads/application/download_controller.dart';
@@ -168,6 +169,12 @@ GoRouter createBiliRouter({
             playbackWindowBuilder: playbackWindowBuilder,
             onActivateBrowser: onActivateBrowser,
             onExitRequested: onExitRequested,
+            onOpenArticle: (origin, address, link) => _showArticle(
+              origin,
+              address,
+              link,
+              ProviderScope.containerOf(context, listen: false),
+            ),
             pageScopeBuilder: (context, tab, child) => _WorkspacePageScope(
               tab: tab,
               observeAccount: accountBuilder != null,
@@ -296,21 +303,97 @@ final class _WorkspacePageScope extends ConsumerWidget {
   }
 }
 
-Future<void> _openWebLink(
-  BuildContext context,
-  WidgetRef ref,
-  Uri target,
-) async {
+Future<void> _openWebLink(BuildContext context, Uri target) async {
   if (WorkspaceLinkScope.openingInBackground) return;
   var opened = false;
   try {
-    opened = await ref.read(webLinkOpenerProvider)(target);
+    opened = await ProviderScope.containerOf(
+      context,
+      listen: false,
+    ).read(webLinkOpenerProvider)(target);
   } on PlatformException {
     opened = false;
   }
   if (context.mounted && !opened) {
     showAppNotice(context, '无法打开链接，请稍后重试');
   }
+}
+
+void _showArticle(
+  BuildContext context,
+  ArticleAddress address,
+  ContentLink link,
+  ProviderContainer container,
+) {
+  const routeName = 'article-reader';
+  final router = GoRouter.of(context);
+  void open(
+    BuildContext presenter,
+    ArticleAddress address,
+    ContentLink link, {
+    int depth = 1,
+  }) {
+    unawaited(
+      showAppDialog<void>(
+        context: presenter,
+        routeSettings: const RouteSettings(name: routeName),
+        builder: (dialogContext) {
+          void navigate(String location) {
+            Navigator.of(dialogContext)
+                .popUntil((route) => route.settings.name != routeName);
+            router.go(location);
+          }
+
+          return UncontrolledProviderScope(
+            container: container,
+            child: ProviderScope(
+              overrides: [
+                commentVideoNavigatorProvider.overrideWithValue(
+                  (video) => navigate('/video/${video.value}'),
+                ),
+              ],
+              child: ContentLinkScope(
+                link: link,
+                child: ArticleScreen(
+                  address: address,
+                  onLogin: () => showAppDialog<void>(
+                    context: dialogContext,
+                    builder: (_) => const AccountDialog(),
+                  ),
+                  onOpenUser: (user) => navigate('/user/${user.value}'),
+                  onOpenWeb: (target) => _openWebLink(dialogContext, target),
+                  onOpenLink: (target) {
+                    final location = messageWorkspaceLocation(target);
+                    if (location == null) {
+                      unawaited(_openWebLink(dialogContext, target));
+                      return;
+                    }
+                    final uri = Uri.parse(location);
+                    if (ArticleAddress.fromLocation(uri) case final next?) {
+                      final nextLink = ContentLink.fromUri(uri);
+                      if (next == address && nextLink == link) return;
+                      if (depth >= WorkspaceTabs.maximumTabs) {
+                        showAppNotice(
+                          dialogContext,
+                          '最多同时打开 ${WorkspaceTabs.maximumTabs} 篇专栏，请先关闭一篇',
+                        );
+                        return;
+                      }
+                      open(dialogContext, next, nextLink, depth: depth + 1);
+                    } else {
+                      navigate(location);
+                    }
+                  },
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  open(context, address, link);
 }
 
 final class _WorkspacePage extends ConsumerWidget {
@@ -743,27 +826,6 @@ final class _WorkspacePage extends ConsumerWidget {
               case '/history':
                 return HistoryScreen(key: PageStorageKey('history-${tab.id}'));
               default:
-                if (tab.articleAddress case final article?) {
-                  return ArticleScreen(
-                    address: article,
-                    onLogin: () => showAppDialog<void>(
-                      context: context,
-                      builder: (_) => const AccountDialog(),
-                    ),
-                    onOpenUser: (user) =>
-                        context.openWorkspaceLink('/user/${user.value}'),
-                    onOpenWeb: (target) => _openWebLink(context, ref, target),
-                    onOpenLink: (target) {
-                      if (context.openArticleLink(target)) return;
-                      final location = messageWorkspaceLocation(target);
-                      if (location != null) {
-                        context.openWorkspaceLink(location);
-                      } else {
-                        _openWebLink(context, ref, target);
-                      }
-                    },
-                  );
-                }
                 if (tab.isDynamicDetail) {
                   return DynamicDetailScreen(
                     id: uri.pathSegments.last,
@@ -793,7 +855,7 @@ final class _WorkspacePage extends ConsumerWidget {
                         );
                         return;
                       }
-                      await _openWebLink(context, ref, target);
+                      await _openWebLink(context, target);
                     },
                     onLogin: () => showAppDialog<void>(
                       context: context,
@@ -841,7 +903,7 @@ final class _WorkspacePage extends ConsumerWidget {
                         context.openWorkspaceLink(pgc);
                         return;
                       }
-                      await _openWebLink(context, ref, target);
+                      await _openWebLink(context, target);
                     },
                     onLogin: () => showAppDialog<void>(
                       context: context,
