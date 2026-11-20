@@ -166,7 +166,8 @@ final class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
       children: [
         LayoutBuilder(
           builder: (context, constraints) {
-            final compact = constraints.maxWidth < 600;
+            final actionsInHeading =
+                widget.showHeading && constraints.maxWidth >= 600;
             final actions = [
               IconButton(
                 tooltip: '刷新下载',
@@ -190,17 +191,15 @@ final class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (widget.showHeading || !compact)
+                if (widget.showHeading)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 12, 12, 4),
                     child: Row(
                       children: [
                         Expanded(
-                          child: widget.showHeading
-                              ? Text('下载', style: theme.textTheme.titleLarge)
-                              : const SizedBox.shrink(),
+                          child: Text('下载', style: theme.textTheme.titleLarge),
                         ),
-                        if (!compact) ...actions,
+                        if (actionsInHeading) ...actions,
                       ],
                     ),
                   ),
@@ -242,7 +241,10 @@ final class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
                           ),
                         ),
                       ),
-                      if (compact) ...[...actions, const SizedBox(width: 12)],
+                      if (!actionsInHeading) ...[
+                        ...actions,
+                        const SizedBox(width: 12),
+                      ],
                     ],
                   ),
                 ),
