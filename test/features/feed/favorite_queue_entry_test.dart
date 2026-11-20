@@ -15,6 +15,7 @@ import 'package:bilisail/features/feed/presentation/home_feed_cards.dart';
 import 'package:bilisail/features/video/application/playback_queue_controller.dart';
 import 'package:bilisail/features/video/application/watch_later_queue_registry.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
+import 'package:bilisail/shared/ui/content_search_field.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -435,19 +436,41 @@ void main() {
     },
   );
 
-  testWidgets('folder header fits narrow screens with large text', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(360, 800);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    await mount(tester, '我创建的收藏夹', scale: 2);
-    await tester.tap(find.text('测试收藏夹'));
-    await tester.pumpAndSettle();
-    expect(find.text('播放全部'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+  testWidgets(
+    'folder header groups search, sort and playback on wide screens',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await mount(tester, '我创建的收藏夹', scale: 2);
+      await tester.tap(find.text('测试收藏夹'));
+      await tester.pumpAndSettle();
+      final title = find.text('测试收藏夹');
+      final play = find.byKey(const ValueKey('favorite-play-all'));
+      final search = find.byKey(const ValueKey('favorite-content-search'));
+      final sort = find.byKey(const ValueKey('favorite-content-sort'));
+      expect(tester.widget(search), isA<ContentSearchField>());
+      expect(
+        tester.getTopLeft(search).dy,
+        greaterThan(tester.getBottomLeft(play).dy),
+      );
+      expect(tester.takeException(), isNull);
+
+      await tester.enterText(search, '保留搜索草稿');
+      tester.view.physicalSize = const Size(720, 800);
+      await tester.pumpAndSettle();
+      final rowCenter = tester.getCenter(title).dy;
+      for (final control in [search, sort, play]) {
+        expect(tester.getCenter(control).dy, closeTo(rowCenter, .01));
+      }
+      expect(
+        tester.widget<ContentSearchField>(search).controller.text,
+        '保留搜索草稿',
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
 
 final class _Repository

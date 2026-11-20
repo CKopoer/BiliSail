@@ -15,6 +15,7 @@ import 'package:bilisail/features/profile/presentation/profile_screen.dart';
 import 'package:bilisail/features/video/application/watch_later_queue_registry.dart';
 import 'package:bilisail/features/video/application/video_author_controller.dart';
 import 'package:bilisail/features/video/domain/watch_later_queue.dart';
+import 'package:bilisail/shared/ui/content_search_field.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -111,6 +112,21 @@ void main() {
           expect(tester.widget<TextButton>(button).onPressed, isNotNull);
           expect(tester.getRect(button).right, width - 16);
           expect(find.byIcon(Icons.playlist_play), findsOneWidget);
+          final search = find.byKey(const ValueKey('favorite-content-search'));
+          final sort = find.byKey(const ValueKey('favorite-content-sort'));
+          final title = find.text(_folder.title);
+          expect(tester.widget(search), isA<ContentSearchField>());
+          if (width >= 600) {
+            final rowCenter = tester.getCenter(title).dy;
+            for (final control in [search, sort, button]) {
+              expect(tester.getCenter(control).dy, closeTo(rowCenter, .01));
+            }
+          } else {
+            expect(
+              tester.getTopLeft(search).dy,
+              greaterThan(tester.getBottomLeft(button).dy),
+            );
+          }
           final reads = repository.folderCalls.length;
           expect(reads, 1);
           await tester.tap(playAll ? button : find.text('视频 2'));
