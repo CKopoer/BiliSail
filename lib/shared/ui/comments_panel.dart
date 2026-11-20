@@ -43,6 +43,7 @@ class CommentsPanel extends ConsumerStatefulWidget {
     this.onOpenUser,
     this.playbackPosition,
     this.composerOnly = false,
+    this.scrollToTopRequest = 0,
     this.onSent,
   });
   final CommentTarget target;
@@ -52,6 +53,7 @@ class CommentsPanel extends ConsumerStatefulWidget {
   final ValueChanged<UserId>? onOpenUser;
   final Duration? Function()? playbackPosition;
   final bool composerOnly;
+  final int scrollToTopRequest;
   final VoidCallback? onSent;
   @override
   ConsumerState<CommentsPanel> createState() => _CommentsPanelState();
@@ -91,6 +93,13 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
   @override
   void didUpdateWidget(covariant CommentsPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.scrollToTopRequest != oldWidget.scrollToTopRequest) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final scroll = _shownRoot == null ? _topScroll : _replyScroll;
+        if (scroll.hasClients && scroll.offset != 0) scroll.jumpTo(0);
+      });
+    }
     if (oldWidget.target != widget.target) {
       _linkCancellation?.cancel();
       _resetDraft();

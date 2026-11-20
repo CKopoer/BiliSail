@@ -216,6 +216,16 @@ void main() {
         expect(find.text('被定位的回复').hitTestable(), findsNothing);
         expect(find.text('普通评论').hitTestable(), findsOneWidget);
 
+        if (width < 900) {
+          expect(find.text('专栏评论').hitTestable(), findsOneWidget);
+          await tester.binding.handlePopRoute();
+          await tester.pumpAndSettle();
+          expect(
+            router.routeInformationProvider.value.uri.path,
+            address.location,
+          );
+          expect(find.text('专栏评论').hitTestable(), findsNothing);
+        }
         await tester.tap(
           find.descendant(of: article, matching: findMaterialTooltip('返回')),
         );

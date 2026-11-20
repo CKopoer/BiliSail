@@ -15,6 +15,7 @@ import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/features/article/application/article_provider.dart';
 import 'package:bilisail/features/article/domain/article_document.dart';
 import 'package:bilisail/features/article/domain/article_repository.dart';
+import 'package:bilisail/features/article/presentation/article_action_bar.dart';
 import 'package:bilisail/features/article/presentation/article_screen.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/auth/domain/auth_repository.dart';
@@ -200,6 +201,70 @@ void main() {
   );
 
   testWidgets(
+    'mouse thumb keeps a stable mapping across short and long article blocks',
+    (tester) async {
+      final blocks = List.generate(
+        200,
+        (i) => ArticleBlock(
+          ArticleBlockKind.paragraph,
+          text: [
+            (
+              text: List.filled(i % 80 < 30 ? 1 : 15, '正文第 $i 段').join('\n'),
+              link: null,
+              bold: false,
+              italic: false,
+              strike: false,
+            ),
+          ],
+        ),
+      );
+      await _mountReader(
+        tester,
+        comments: DynamicCommentsFake(),
+        document: ArticleDocument(
+          url: _column.webUri,
+          title: '文章',
+          blocks: blocks,
+          commentTarget: _commentTarget,
+        ),
+      );
+      final reader = find.byKey(const PageStorageKey('article-reading'));
+      final position = tester
+          .widget<CustomScrollView>(reader)
+          .controller!
+          .position;
+      final scrollbar = find
+          .ancestor(of: reader, matching: find.byType(Scrollbar))
+          .first;
+      final painter = _scrollbarPainter(tester, scrollbar);
+      final extent = position.maxScrollExtent;
+      final viewport = position.viewportDimension;
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      final start = tester.getTopRight(reader) + const Offset(-5, 10);
+      await mouse.addPointer(location: start);
+      await tester.pumpAndSettle();
+      await mouse.down(start);
+      await tester.pump();
+      expect(position.pixels, 0);
+      for (final dy in [70.0, 120.0, 130.0, -60.0, -40.0]) {
+        final before = position.pixels;
+        final thumbBefore = painter.getThumbScrollOffset();
+        await mouse.moveBy(Offset(0, dy));
+        await tester.pumpAndSettle();
+        expect(
+          position.pixels,
+          dy > 0 ? greaterThan(before) : lessThan(before),
+        );
+        expect(position.maxScrollExtent, closeTo(extent, .01));
+        expect(position.viewportDimension, viewport);
+        expect(painter.getThumbScrollOffset() - thumbBefore, closeTo(dy, 1));
+      }
+      await mouse.up();
+      await mouse.removePointer();
+    },
+  );
+
+  testWidgets(
     'wide article scrolls independently and keeps comments on resize',
     (tester) async {
       final comments = DynamicCommentsFake()
@@ -208,15 +273,21 @@ void main() {
             CommentEntry(id: '${i + 1}', author: '读者', message: '读者留言 $i'),
         ];
       await _mountReader(tester, comments: comments, document: _longArticle());
-      final reading = find.byKey(
-        const PageStorageKey('dynamic-detail-content'),
-      );
+      final reading = find.byKey(const PageStorageKey('article-reading'));
       final view = tester.widget<CustomScrollView>(reading);
       final panel = find.byType(CommentsPanel, skipOffstage: false);
       final panelState = tester.state(panel);
-      final nested = tester.state<NestedScrollViewState>(
-        find.byType(NestedScrollView),
+      final rightList = find.descendant(
+        of: panel,
+        matching: find.byType(ListView),
       );
+      final commentScroll = tester.widget<ListView>(rightList).controller!;
+      final footer = find.byType(ArticleActionBar);
+      final articleRect = tester.getRect(reading);
+      final panelRect = tester.getRect(panel);
+      expect(tester.getRect(footer).left, articleRect.left);
+      expect(tester.getRect(footer).right, articleRect.right);
+      expect(panelRect.bottom, articleRect.bottom);
       expect(tester.getRect(reading).right, tester.getRect(panel).left);
       expect(tester.widget<CommentsPanel>(panel).target, _commentTarget);
       expect(tester.widget<CommentsPanel>(panel).replyCount, 60);
@@ -234,55 +305,96 @@ void main() {
       expect(findMaterialTooltip('评论').hitTestable(), findsOneWidget);
       final readingOffset = view.controller!.offset;
       expect(readingOffset, greaterThan(280));
-      expect(nested.innerController.offset, 0);
+      expect(commentScroll.offset, 0);
 
       await tester.drag(panel, const Offset(0, -400));
       await tester.pumpAndSettle();
-      expect(nested.innerController.offset, greaterThan(200));
+      expect(commentScroll.offset, greaterThan(200));
       expect(view.controller!.offset, readingOffset);
-      final commentOffset = nested.innerController.offset;
+      final commentOffset = commentScroll.offset;
 
       await tester.binding.setSurfaceSize(const Size(390, 750));
       await tester.pumpAndSettle();
       expect(tester.state(panel), same(panelState));
-      expect(nested.outerController.offset, closeTo(readingOffset, 1));
-      expect(nested.innerController.offset, closeTo(commentOffset, 1));
-      expect(find.text('正文第 239 段'), findsNothing);
-
-      final detail = find.byType(NestedScrollView);
-      // Lazy paragraphs refine the estimated extent as the end comes into view.
-      await tester.drag(detail, const Offset(0, -12000));
+      expect(view.controller!.offset, closeTo(readingOffset, 1));
+      expect(find.text('最热').hitTestable(), findsNothing);
+      await tester.tap(findMaterialTooltip('评论').hitTestable());
       await tester.pumpAndSettle();
-      await tester.drag(detail, const Offset(0, -160));
+      expect(find.text('专栏评论').hitTestable(), findsOneWidget);
+      expect(tester.state(panel), same(panelState));
+      expect(commentScroll.offset, closeTo(commentOffset, 1));
+      await tester.binding.setSurfaceSize(const Size(1280, 750));
       await tester.pumpAndSettle();
-      expect(nested.outerController.position.extentAfter, lessThan(1));
-      expect(find.text('最热').hitTestable(), findsOneWidget);
+      expect(tester.getRect(panel), panelRect);
+      expect(tester.getRect(reading), articleRect);
+      expect(commentScroll.offset, closeTo(commentOffset, 1));
+      await tester.tap(findMaterialTooltip('评论').hitTestable());
+      await tester.pumpAndSettle();
+      expect(commentScroll.offset, 0);
+      expect(view.controller!.offset, closeTo(readingOffset, 1));
       expect(comments.reads, [_commentTarget.oid]);
       expect(tester.takeException(), isNull);
     },
   );
 
   testWidgets(
-    'reading down hides actions, scrolling back reveals them and comments jumps past a long article',
+    'narrow article shows persistent progress and opens comments on demand',
     (tester) async {
+      final comments = DynamicCommentsFake()..items = [];
       await _mountReader(
         tester,
         size: const Size(390, 750),
-        comments: DynamicCommentsFake()..items = [],
+        platform: TargetPlatform.android,
+        comments: comments,
         document: _longArticle(),
       );
       final action = findMaterialTooltip('评论').hitTestable();
+      final reading = find.byKey(const PageStorageKey('article-reading'));
+      final scrollbar = tester.widget<Scrollbar>(
+        find.ancestor(of: reading, matching: find.byType(Scrollbar)).first,
+      );
+      expect(scrollbar.thumbVisibility, isTrue);
+      expect(scrollbar.scrollbarOrientation, ScrollbarOrientation.right);
+      final position = tester
+          .widget<CustomScrollView>(reading)
+          .controller!
+          .position;
+      expect(scrollbar.controller!.position, same(position));
+      final painter = _scrollbarPainter(tester, find.byWidget(scrollbar));
+      final thumbTop = Offset(tester.getSize(reading).width - 5, 10);
+      expect(
+        painter.hitTestOnlyThumbInteractive(thumbTop, PointerDeviceKind.mouse),
+        isTrue,
+      );
       expect(action, findsOneWidget);
-      final reading = find.byType(NestedScrollView);
-      await tester.drag(reading, const Offset(0, -410));
+      position.jumpTo(position.maxScrollExtent);
       await tester.pumpAndSettle();
+      expect(find.text('正文第 239 段').hitTestable(), findsOneWidget);
+      expect(
+        painter.hitTestOnlyThumbInteractive(thumbTop, PointerDeviceKind.mouse),
+        isFalse,
+      );
+      expect(
+        painter.getThumbScrollOffset(),
+        greaterThan(position.viewportDimension * .7),
+      );
+      expect(find.byType(CommentsPanel, skipOffstage: false), findsNothing);
+      expect(comments.reads, isEmpty);
       expect(action, findsNothing);
       await tester.drag(reading, const Offset(0, 120));
       await tester.pumpAndSettle();
-      expect(action, findsOneWidget);
+      final offset = position.pixels;
+      expect(offset, greaterThan(0));
       await tester.tap(action);
       await tester.pumpAndSettle();
+      expect(find.text('专栏评论').hitTestable(), findsOneWidget);
       expect(find.text('最热').hitTestable(), findsOneWidget);
+      expect(find.byType(ArticleActionBar), findsNothing);
+      await tester.tap(findMaterialTooltip('返回'));
+      await tester.pumpAndSettle();
+      expect(position.pixels, offset);
+      expect(action, findsOneWidget);
+      expect(comments.reads, [_commentTarget.oid]);
     },
   );
 
@@ -381,42 +493,45 @@ void main() {
     expect(articles.lastWrite!.isCancelled, isTrue);
   });
 
-  testWidgets('shared post card stacks above comments at enlarged text', (
-    tester,
-  ) async {
-    UserId? openedAuthor;
-    Uri? openedUrl;
-    await _mountReader(
-      tester,
-      comments: DynamicCommentsFake()..items = [],
-      document: _longArticle(paragraphs: 1, commentCount: 0),
-      size: const Size(960, 820),
-      scale: 2,
-      onOpenUser: (id) => openedAuthor = id,
-      onOpenWeb: (url) => openedUrl = url,
-    );
-    final card = find.byType(PostCardSurface);
-    final author = find.byType(PostAuthorHeader);
-    final title = find.text('专栏标题');
-    final text = find.text('正文第 0 段');
-    final panel = find.byType(CommentsPanel);
-    expect(find.byType(Dialog), findsNothing);
-    expect(find.descendant(of: card, matching: author), findsOneWidget);
-    expect(
-      tester.getBottomLeft(author).dy,
-      lessThan(tester.getTopLeft(title).dy),
-    );
-    expect(
-      tester.getBottomLeft(text).dy,
-      lessThan(tester.getTopLeft(panel).dy),
-    );
-    expect(tester.getSize(panel).width, 960);
-    await tester.tap(find.text('专栏作者'));
-    expect(openedAuthor, const UserId('42'));
-    await tester.tap(find.byIcon(Icons.open_in_new_outlined));
-    expect(openedUrl, _column.webUri);
-    expect(tester.takeException(), isNull);
-  });
+  testWidgets(
+    'enlarged text uses the full width for both article and comments',
+    (tester) async {
+      UserId? openedAuthor;
+      Uri? openedUrl;
+      await _mountReader(
+        tester,
+        comments: DynamicCommentsFake()..items = [],
+        document: _longArticle(paragraphs: 1, commentCount: 0),
+        size: const Size(960, 820),
+        scale: 2,
+        onOpenUser: (id) => openedAuthor = id,
+        onOpenWeb: (url) => openedUrl = url,
+      );
+      final card = find.byType(PostCardSurface);
+      final author = find.byType(PostAuthorHeader);
+      final title = find.text('专栏标题');
+      final text = find.text('正文第 0 段');
+      final panel = find.byType(CommentsPanel);
+      expect(find.byType(Dialog), findsNothing);
+      expect(find.descendant(of: card, matching: author), findsOneWidget);
+      expect(
+        tester.getBottomLeft(author).dy,
+        lessThan(tester.getTopLeft(title).dy),
+      );
+      expect(text.hitTestable(), findsOneWidget);
+      expect(panel, findsNothing);
+      await tester.tap(findMaterialTooltip('评论'));
+      await tester.pumpAndSettle();
+      expect(tester.getSize(panel).width, 960);
+      await tester.tap(findMaterialTooltip('返回'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('专栏作者'));
+      expect(openedAuthor, const UserId('42'));
+      await tester.tap(find.byIcon(Icons.open_in_new_outlined));
+      expect(openedUrl, _column.webUri);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('guests can see empty comments and open login', (tester) async {
     var logins = 0;
@@ -543,10 +658,10 @@ void main() {
     );
     final target = find.text('锚点目标楼层').hitTestable();
     expect(target, findsOneWidget);
-    final nested = tester.state<NestedScrollViewState>(
-      find.byType(NestedScrollView),
-    );
-    nested.outerController.jumpTo(0);
+    await tester.tap(findMaterialTooltip('返回'));
+    await tester.pumpAndSettle();
+    expect(find.text('最热').hitTestable(), findsOneWidget);
+    await tester.tap(findMaterialTooltip('返回'));
     await tester.pumpAndSettle();
     expect(target, findsNothing);
     link.value = const ContentLink(
@@ -563,11 +678,21 @@ void main() {
   });
 }
 
+ScrollbarPainter _scrollbarPainter(WidgetTester tester, Finder scrollbar) =>
+    tester
+        .widgetList<CustomPaint>(
+          find.descendant(of: scrollbar, matching: find.byType(CustomPaint)),
+        )
+        .map((paint) => paint.foregroundPainter)
+        .whereType<ScrollbarPainter>()
+        .single;
+
 Future<void> _mountReader(
   WidgetTester tester, {
   required CommentsRepository comments,
   required ArticleDocument document,
   Size size = const Size(1280, 750),
+  TargetPlatform platform = TargetPlatform.windows,
   double scale = 1,
   ValueNotifier<ContentLink>? link,
   VoidCallback? onLogin,
@@ -600,6 +725,16 @@ Future<void> _mountReader(
             .overrideWithValue(comments),
       ],
       child: MaterialApp(
+        theme: ThemeData(
+          platform: platform,
+          scrollbarTheme: const ScrollbarThemeData(
+            thumbVisibility: WidgetStatePropertyAll(true),
+            thickness: WidgetStatePropertyAll(10),
+            mainAxisMargin: 0,
+            crossAxisMargin: 0,
+            minThumbLength: 18,
+          ),
+        ),
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(context)
               .copyWith(textScaler: TextScaler.linear(scale)),
