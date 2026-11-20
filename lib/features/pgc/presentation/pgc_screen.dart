@@ -22,6 +22,7 @@ import '../../../shared/ui/responsive_layout_scope.dart';
 import '../../../core/presentation/workspace_activity.dart';
 import '../../settings/domain/shortcut_settings.dart';
 import '../../../shared/ui/app_cover_image.dart';
+import '../../../shared/ui/workspace_link.dart';
 import '../../../shared/ui/app_notice.dart';
 import '../../../shared/ui/playback_page_layout.dart';
 import '../../../shared/ui/scroll_collapsing_header.dart';
@@ -786,47 +787,51 @@ final class _PgcRelatedSeasonTile extends StatelessWidget {
   final ValueChanged<PgcSeasonSummary>? onOpen;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 10),
-    child: InkWell(
-      key: ValueKey('pgc-related-${related.seasonId}'),
-      borderRadius: BorderRadius.circular(6),
-      onTap: onOpen == null ? null : () => onOpen?.call(related),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(5),
-            child: related.coverUrl == null
-                ? const SizedBox(
-                    width: 96,
-                    height: 54,
-                    child: ColoredBox(
-                      color: Colors.black12,
-                      child: Icon(Icons.movie_outlined),
+  Widget build(BuildContext context) {
+    final open = onOpen == null ? null : () => onOpen?.call(related);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: InkWell(
+        key: ValueKey('pgc-related-${related.seasonId}'),
+        borderRadius: BorderRadius.circular(6),
+        onTap: open,
+        onTertiaryTapUp: WorkspaceLinkScope.middleClick(context, open),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(5),
+              child: related.coverUrl == null
+                  ? const SizedBox(
+                      width: 96,
+                      height: 54,
+                      child: ColoredBox(
+                        color: Colors.black12,
+                        child: Icon(Icons.movie_outlined),
+                      ),
+                    )
+                  : AppCoverImage(
+                      url: related.coverUrl.toString(),
+                      width: 96,
+                      height: 54,
+                      fit: BoxFit.cover,
                     ),
-                  )
-                : AppCoverImage(
-                    url: related.coverUrl.toString(),
-                    width: 96,
-                    height: 54,
-                    fit: BoxFit.cover,
-                  ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                related.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  related.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }

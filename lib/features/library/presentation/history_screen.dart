@@ -1,6 +1,5 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../domain/app_failure.dart';
 import '../../../core/platform/external_links.dart';
@@ -12,6 +11,7 @@ import '../../../shared/ui/paged_scroll_viewport.dart';
 import '../../../shared/ui/responsive_card_grid.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/video_card.dart';
+import '../../../shared/ui/workspace_link.dart';
 import 'history_content_card.dart';
 import '../application/library_controller.dart';
 import '../domain/library_repository.dart';
@@ -490,9 +490,10 @@ final class _HistoryEntriesSliver extends ConsumerWidget {
                   if (!WorkspaceActivity.isActive(context)) return;
                   final location = entry.location;
                   if (!location.hasScheme) {
-                    context.go(location.toString());
+                    context.openWorkspaceLink(location.toString());
                     return;
                   }
+                  if (WorkspaceLinkScope.openingInBackground) return;
                   var opened = false;
                   try {
                     opened = await ref.read(externalLinkOpenerProvider)(
@@ -527,14 +528,17 @@ final class _HistoryEntriesSliver extends ConsumerWidget {
                     busy: writeBlocked,
                     onOpenAuthor: entry.authorId == null
                         ? null
-                        : () => context.go('/user/${entry.authorId?.value}'),
+                        : () => context.openWorkspaceLink(
+                            '/user/${entry.authorId?.value}',
+                          ),
                   );
                 }
                 final duration = entry.part?.duration.inMilliseconds ?? 0;
                 return VideoCard(
                   key: ValueKey(entry.identity),
                   video: video,
-                  onOpenUser: (id) => context.go('/user/${id.value}'),
+                  onOpenUser: (id) =>
+                      context.openWorkspaceLink('/user/${id.value}'),
                   menu: VideoCardMenu(
                     actions: const [VideoCardMenuAction.removeHistory],
                     busy: writeBlocked,

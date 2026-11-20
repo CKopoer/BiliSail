@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/presentation/public_image_variant.dart';
 import '../../domain/dynamic_post.dart';
 import 'app_network_image.dart';
+import 'workspace_link.dart';
 
 /// One renderer for major and additional cards, including forwarded content.
 class DynamicContentCardView extends StatelessWidget {
@@ -77,17 +78,21 @@ class DynamicContentCardView extends StatelessWidget {
                   Center(child: Icon(icon, color: scheme.outline)),
             ),
     );
+    final target = card.url;
+    final openLink =
+        card.kind == DynamicCardKind.reservation ||
+            target == null ||
+            onOpenLink == null
+        ? null
+        : () => onOpenLink!(target);
     return Material(
       color: scheme.surfaceContainerHighest.withValues(alpha: .55),
       borderRadius: BorderRadius.circular(10),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         // Consume reservation body taps so the parent dynamic stays closed too.
-        onTap: card.kind == DynamicCardKind.reservation
-            ? () {}
-            : card.url == null || onOpenLink == null
-            ? null
-            : () => onOpenLink!(card.url!),
+        onTap: card.kind == DynamicCardKind.reservation ? () {} : openLink,
+        onTertiaryTapUp: WorkspaceLinkScope.middleClick(context, openLink),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

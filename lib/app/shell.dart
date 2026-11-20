@@ -33,6 +33,7 @@ import '../shared/ui/bili_icons.dart';
 import '../shared/ui/shortcut_hint.dart';
 import '../shared/ui/app_notice.dart';
 import '../shared/ui/playback_navigation.dart';
+import '../shared/ui/workspace_link.dart';
 import '../shared/ui/app_dialog.dart';
 import '../shared/ui/paging_tab_strip.dart';
 import '../shared/ui/page_tab_style.dart';
@@ -483,6 +484,15 @@ final class _BiliAppShellState extends State<BiliAppShell>
     _commitWorkspace();
   }
 
+  void _openBackgroundTab(Uri location) {
+    if (!mounted || _dualTabs || _singlePage) return;
+    if (_workspace.tabs.length >= WorkspaceTabs.maximumTabs) {
+      showAppNotice(context, '最多打开 16 个标签页，请先关闭不用的标签');
+      return;
+    }
+    if (_workspace.addBackgroundTab(location)) setState(() {});
+  }
+
   void _selectTab(String id) {
     setState(() => _workspace.select(id));
     _commitWorkspace();
@@ -744,7 +754,10 @@ final class _BiliAppShellState extends State<BiliAppShell>
       dispatcher.configure(widget.shortcuts);
     }
     // Keyboard resizing changes geometry, not the cached pages' configuration.
-    final pages = Builder(builder: _pages);
+    final pages = WorkspaceLinkScope(
+      openBackground: _dualTabs || _singlePage ? null : _openBackgroundTab,
+      child: Builder(builder: _pages),
+    );
     final main = CommandTargetScope<Object>(
       scope: CommandScope.workspace,
       commands: {
@@ -1185,7 +1198,8 @@ final class _BiliAppShellState extends State<BiliAppShell>
       children: [
         Offstage(child: widget.child),
         for (final tab in _workspace.tabs)
-          if (!_desktopDual || tab.id != _workspace.playbackId)
+          if (_workspace.shouldMount(tab.id) &&
+              (!_desktopDual || tab.id != _workspace.playbackId))
             _page(context, tab, active: tab.id == _displayTab.id),
       ],
     );

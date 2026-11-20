@@ -13,6 +13,7 @@ import 'network_avatar.dart';
 import 'bili_icons.dart';
 import 'video_card.dart';
 import 'app_network_image.dart';
+import 'workspace_link.dart';
 
 /// Dynamic content; navigation and account actions belong to the owning feature.
 class DynamicPostCard extends StatelessWidget {
@@ -152,6 +153,19 @@ class _PostBody extends StatelessWidget {
             name: topic.name,
             url: topic.url,
           );
+    final openAuthor = userId != null && onOpenUser != null
+        ? () => onOpenUser!(userId)
+        : null;
+    final openTopic = topicTarget == null || onOpenLink == null
+        ? null
+        : () => onOpenLink!(topicTarget);
+    final openVideo = video == null || onOpenVideo == null
+        ? null
+        : () => onOpenVideo!(video);
+    final link = post.linkUrl;
+    final openLink = link != null && onOpenLink != null
+        ? () => onOpenLink!(link)
+        : null;
     final time = post.publishText.isNotEmpty
         ? post.publishText
         : post.publishedAt?.toLocal().toString().split('.').first ?? '';
@@ -163,9 +177,11 @@ class _PostBody extends StatelessWidget {
           children: [
             Expanded(
               child: InkWell(
-                onTap: userId != null && onOpenUser != null
-                    ? () => onOpenUser!(userId)
-                    : null,
+                onTap: openAuthor,
+                onTertiaryTapUp: WorkspaceLinkScope.middleClick(
+                  context,
+                  openAuthor,
+                ),
                 child: Row(
                   children: [
                     NetworkAvatar(
@@ -230,9 +246,11 @@ class _PostBody extends StatelessWidget {
                 color: scheme.primaryContainer,
                 borderRadius: BorderRadius.circular(8),
                 child: InkWell(
-                  onTap: topicTarget == null || onOpenLink == null
-                      ? null
-                      : () => onOpenLink!(topicTarget),
+                  onTap: openTopic,
+                  onTertiaryTapUp: WorkspaceLinkScope.middleClick(
+                    context,
+                    openTopic,
+                  ),
                   borderRadius: BorderRadius.circular(8),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
@@ -304,7 +322,11 @@ class _PostBody extends StatelessWidget {
             borderRadius: BorderRadius.circular(10),
             clipBehavior: Clip.antiAlias,
             child: InkWell(
-              onTap: onOpenVideo == null ? null : () => onOpenVideo!(video),
+              onTap: openVideo,
+              onTertiaryTapUp: WorkspaceLinkScope.middleClick(
+                context,
+                openVideo,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -458,9 +480,8 @@ class _PostBody extends StatelessWidget {
         if (post.contentCards.isEmpty && post.linkTitle.isNotEmpty) ...[
           const SizedBox(height: 12),
           InkWell(
-            onTap: post.linkUrl != null && onOpenLink != null
-                ? () => onOpenLink!(post.linkUrl!)
-                : null,
+            onTap: openLink,
+            onTertiaryTapUp: WorkspaceLinkScope.middleClick(context, openLink),
             child: Container(
               padding: const EdgeInsets.all(12),
               color: scheme.surfaceContainerHighest,
