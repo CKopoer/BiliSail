@@ -979,8 +979,9 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
       setState(() => _miniPlayer = true);
       await WidgetsBinding.instance.endOfFrame;
       if (!mounted || !_active || !identical(_miniRequest, request)) return;
+      // A non-opaque overlay keeps the playback page subscribed to the next
+      // item's details while the mini player covers the window.
       final overlay = OverlayEntry(
-        opaque: widget.window.hasDesktopWindow || _systemPip,
         maintainState: true,
         builder: (context) {
           final player = ListenableBuilder(
@@ -1001,7 +1002,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
             ),
           );
           return widget.window.hasDesktopWindow || _systemPip
-              ? Positioned.fill(child: player)
+              ? Positioned.fill(child: BlockSemantics(child: player))
               : Positioned.fill(
                   child: FloatingMiniPlayer(
                     aspectRatio: _miniAspectRatio,

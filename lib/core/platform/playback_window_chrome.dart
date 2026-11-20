@@ -18,7 +18,17 @@ class PlaybackWindowChrome extends StatelessWidget {
   final VoidCallback onClose;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, bounds) {
+      // The page keeps laying out behind the mini player at its smaller size.
+      if (bounds.maxWidth < 7 * desktopCaptionButtonWidth) {
+        return const SizedBox.shrink();
+      }
+      return _buildCaption();
+    },
+  );
+
+  Widget _buildCaption() => SizedBox(
     key: const ValueKey('playback-window-caption'),
     height: desktopCaptionHeight,
     child: Row(
