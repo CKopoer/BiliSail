@@ -28,11 +28,57 @@ final class ApiArticleBlock {
   final double? aspectRatio;
 }
 
+typedef ApiArticleCollectionRef = ({String id, String name, String count});
+typedef ApiArticleEntry = ({
+  String id,
+  bool opus,
+  String title,
+  String summary,
+  Uri? cover,
+  int? views,
+});
+
+final class ApiArticleCollection {
+  const ApiArticleCollection({
+    required this.name,
+    required this.entries,
+    required this.author,
+    this.authorMid,
+    this.cover,
+    this.words,
+    this.views,
+  });
+  final String name, author;
+  final String? authorMid;
+  final Uri? cover;
+  final int? words, views;
+  final List<ApiArticleEntry> entries;
+}
+
+final class ApiArticleStats {
+  const ApiArticleStats({
+    this.liked,
+    this.favorited,
+    this.likes,
+    this.favorites,
+    this.forwards,
+    this.comments,
+    this.likeForbidden = false,
+    this.forwardForbidden = false,
+  });
+  final bool? liked, favorited;
+  final int? likes, favorites, forwards, comments;
+  final bool likeForbidden, forwardForbidden;
+}
+
 final class ApiArticle {
   const ApiArticle({
     required this.url,
     required this.title,
     required this.blocks,
+    this.collection,
+    this.stats,
+    this.dynamicId,
     this.author = '',
     this.authorMid,
     this.authorAvatar,
@@ -46,7 +92,9 @@ final class ApiArticle {
 
   final Uri url;
   final String title, author;
-  final String? authorMid, accessMessage;
+  final String? authorMid, accessMessage, dynamicId;
+  final ApiArticleCollectionRef? collection;
+  final ApiArticleStats? stats;
   final Uri? authorAvatar;
   final DateTime? publishedAt;
   final List<ApiArticleBlock> blocks;

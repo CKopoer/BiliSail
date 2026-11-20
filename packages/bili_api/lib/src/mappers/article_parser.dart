@@ -40,6 +40,7 @@ final class ArticleParser {
         'module_content',
         'module_blocked',
         'module_stat',
+        'module_collection',
       ]) {
         if (module[key] case final Map<String, Object?> value) {
           modules[key] = value;
@@ -47,7 +48,11 @@ final class ArticleParser {
       }
     }
     final blocked = modules['module_blocked'];
-    final comments = articleMap(modules['module_stat']?['comment']);
+    final stats = modules['module_stat'];
+    final comments = articleMap(stats?['comment']);
+    final like = articleMap(stats?['like']);
+    final favorite = articleMap(stats?['favorite']);
+    final forward = articleMap(stats?['forward']);
     return _document(
       title: _text(modules['module_title']?['text']),
       author: modules['module_author'] ?? const {},
@@ -65,7 +70,22 @@ final class ArticleParser {
           ? parseWebCommentTarget(articleMap(item['basic']))
           : null,
       commentCount: blocked == null ? parseWebCount(comments['count']) : null,
-      commentForbidden: comments['forbidden'] == true,
+      commentForbidden: _disabled(comments),
+      dynamicId: id,
+      collection: _collectionRef(modules['module_collection']),
+      stats: stats == null
+          ? null
+          : ApiArticleStats(
+              liked: _status(like['status']),
+              likeForbidden: _disabled(like),
+              likes: parseWebCount(like['count']),
+              favorited: _disabled(favorite)
+                  ? null
+                  : _status(favorite['status']),
+              favorites: parseWebCount(favorite['count']),
+              forwardForbidden: _disabled(forward),
+              forwards: parseWebCount(forward['count']),
+            ),
     );
   }
 
@@ -90,6 +110,8 @@ final class ArticleParser {
       published: data['publish_time'],
       blocks: blocks,
       commentTarget: (oid: id, type: 12),
+      dynamicId: articleId(data['dyn_id_str']),
+      collection: _collectionRef(data['list'], fallbackId: data['list_id']),
     );
   }
 
@@ -99,6 +121,9 @@ final class ArticleParser {
     required Object? published,
     required List<ApiArticleBlock> blocks,
     String? accessMessage,
+    String? dynamicId,
+    ApiArticleCollectionRef? collection,
+    ApiArticleStats? stats,
     ({String oid, int type})? commentTarget,
     int? commentCount,
     bool commentForbidden = false,
@@ -109,6 +134,9 @@ final class ArticleParser {
     final timestamp = int.tryParse('$published');
     return ApiArticle(
       url: url,
+      dynamicId: dynamicId,
+      collection: collection,
+      stats: stats,
       title: title.trim(),
       author: _text(author['name']),
       authorMid: articleId(author['mid']),
@@ -123,6 +151,73 @@ final class ArticleParser {
       commentType: commentTarget?.type,
       commentCount: commentCount,
       commentForbidden: commentForbidden,
+    );
+  }
+
+  static bool _disabled(Map<String, Object?> action) =>
+      action['forbidden'] == true ||
+      action['disabled'] == true ||
+      action['hidden'] == true;
+
+  static bool? _status(Object? value) => switch (value) {
+    true || 1 || '1' || 'STATE_LIKE' => true,
+    false || 0 || '0' || 'STATE_NONE' || 'STATE_UNLIKE' => false,
+    _ => null,
+  };
+
+  static ApiArticleStats viewInfo(Map<String, Object?> data) {
+    final counts = articleMap(data['stats']);
+    return ApiArticleStats(
+      liked: _status(data['like']),
+      favorited: _status(data['favorite']),
+      likes: parseWebCount(counts['like']),
+      favorites: parseWebCount(counts['favorite']),
+      forwards: parseWebCount(counts['share']),
+      comments: parseWebCount(counts['reply']),
+      forwardForbidden: data['disable_share'] == true,
+    );
+  }
+
+  ApiArticleCollectionRef? _collectionRef(Object? value, {Object? fallbackId}) {
+    final list = articleMap(value);
+    final id = articleId(list['id']) ?? articleId(fallbackId);
+    return id == null
+        ? null
+        : (id: id, name: _text(list['name']), count: _text(list['count']));
+  }
+
+  ApiArticleCollection collection(Map<String, Object?> data, String id) {
+    final list = articleMap(data['list']);
+    final articles = data['articles'];
+    if (articleId(list['id']) != id ||
+        (articles != null && articles is! List)) {
+      throw ApiFailure(ApiFailureCategory.protocol, endpoint);
+    }
+    final entries = <ApiArticleEntry>[];
+    for (final raw in _list(articles)) {
+      final item = articleMap(raw);
+      final cvId = articleId(item['id']);
+      final opusId = articleId(item['dyn_id_str']);
+      final addressId = opusId ?? cvId;
+      if (addressId == null) continue;
+      entries.add((
+        id: addressId,
+        opus: opusId != null,
+        title: _text(item['title']),
+        summary: _text(item['summary']),
+        cover: _imageUri(_list(item['image_urls']).firstOrNull),
+        views: parseWebCount(articleMap(item['stats'])['view']),
+      ));
+    }
+    final author = articleMap(data['author']);
+    return ApiArticleCollection(
+      name: _text(list['name']),
+      cover: _imageUri(list['image_url']),
+      author: _text(author['name']),
+      authorMid: articleId(author['mid'] ?? list['mid']),
+      views: parseWebCount(list['read']),
+      words: parseWebCount(list['words']),
+      entries: List.unmodifiable(entries),
     );
   }
 

@@ -181,33 +181,12 @@ class DynamicPostMenu extends ConsumerWidget {
             if (!current.unavailable &&
                 current.authorId != null &&
                 const {11, 12, 17}.contains(current.commentTarget?.type.value))
-              item('分享至消息', Icons.forward_to_inbox, () async {
-                if (!auth.isSignedIn) {
-                  onLogin?.call();
-                  if (onLogin == null) showAppNotice(context, '请先登录后操作');
-                  return;
-                }
-                final scope = repo?.accountScope, epoch = repo?.sessionEpoch;
-                final user = await showAppDialog<DynamicMention>(
-                  context: context,
-                  builder: (_) => const DynamicMentionPicker(),
-                );
-                if (user == null ||
-                    !context.mounted ||
-                    repo?.accountScope != scope ||
-                    repo?.sessionEpoch != epoch) {
-                  return;
-                }
-                if (await confirm('分享至消息', '发送这条动态给 ${user.name}？') &&
-                    context.mounted &&
-                    repo?.accountScope == scope &&
-                    repo?.sessionEpoch == epoch) {
-                  await run(
-                    () => controller.shareMessage(current, UserId(user.id)),
-                    '已发送至消息',
-                  );
-                }
-              }),
+              item(
+                '分享至消息',
+                Icons.forward_to_inbox,
+                () =>
+                    sharePostToMessage(context, ref, current, onLogin: onLogin),
+              ),
             if (current.authorId != null && !own)
               item('临时屏蔽该UP主', Icons.visibility_off_outlined, () {
                 ref
@@ -717,4 +696,58 @@ class _DynamicPostSaveDialogState extends ConsumerState<DynamicPostSaveDialog> {
       ],
     ),
   );
+}
+
+Future<void> sharePostToMessage(
+  BuildContext context,
+  WidgetRef ref,
+  DynamicPost post, {
+  VoidCallback? onLogin,
+}) async {
+  if (!ref.read(authControllerProvider).isSignedIn) {
+    if (onLogin == null) {
+      showAppNotice(context, '请先登录后操作');
+    } else {
+      onLogin();
+    }
+    return;
+  }
+  final repo = ref.read(dynamicRepositoryProvider);
+  final scope = repo?.accountScope, epoch = repo?.sessionEpoch;
+  bool current() =>
+      context.mounted &&
+      repo != null &&
+      repo.accountScope == scope &&
+      repo.sessionEpoch == epoch;
+  final user = await showAppDialog<DynamicMention>(
+    context: context,
+    builder: (_) => const DynamicMentionPicker(),
+  );
+  if (user == null || !context.mounted || !current()) return;
+  final noun = post.commentTarget?.type.value == 12 ? '专栏' : '动态';
+  final confirmed = await showAppDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('分享至消息'),
+      content: Text('发送这条$noun给 ${user.name}？'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('确定'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true || !context.mounted || !current()) return;
+  final provider = dynamicManagementProvider(post.id);
+  final success = await ref
+      .read(provider.notifier)
+      .shareMessage(post, UserId(user.id));
+  if (!context.mounted || !current()) return;
+  final message = success ? '已发送至消息' : ref.read(provider).message;
+  if (message != null) showAppNotice(context, message);
 }

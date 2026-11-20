@@ -7,4 +7,14 @@ abstract interface class ArticleRepository {
     ArticleAddress address,
     RequestCancellation cancellation,
   );
+  Future<ArticleCollection> collection(
+    ArticleCollectionId id,
+    RequestCancellation cancellation,
+  );
+  Future<ArticleStats> viewInfo(String cvId, RequestCancellation cancellation);
+  Future<void> setFavorite(
+    ArticleAddress address,
+    bool favorite,
+    RequestCancellation cancellation,
+  );
 }

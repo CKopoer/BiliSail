@@ -9,8 +9,6 @@ import 'package:go_router/go_router.dart';
 
 import '../core/platform/window_caption.dart';
 import '../core/platform/window_size_policy.dart';
-import '../domain/article_address.dart';
-import '../domain/content_link.dart';
 import '../features/feed/domain/home_channel.dart';
 import '../features/search/presentation/search_category_bar.dart';
 import '../features/search/presentation/search_entry_header.dart';
@@ -157,7 +155,6 @@ final class BiliAppShell extends StatefulWidget {
     this.playbackWindowBuilder,
     this.onActivateBrowser,
     this.onExitRequested,
-    this.onOpenArticle,
   });
   final ShortcutSettings shortcuts;
   final AppIconPreference appIcon;
@@ -177,7 +174,6 @@ final class BiliAppShell extends StatefulWidget {
   final WorkspaceWindowBuilder? playbackWindowBuilder;
   final VoidCallback? onActivateBrowser;
   final Future<void> Function()? onExitRequested;
-  final OpenWorkspaceArticle? onOpenArticle;
   final String location;
   final Widget child;
   final WidgetBuilder? accountBuilder;
@@ -342,7 +338,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
     _workspace.setDualMode(_dualTabs);
     _workspace.setSingleMode(_singlePage);
     final uri = Uri.parse(widget.location);
-    if (!_openArticleRoute(uri)) _workspace.acceptRoute(uri);
+    _workspace.acceptRoute(uri);
     _rememberSection(_displayTab.location);
     _restoreSearch();
   }
@@ -367,7 +363,6 @@ final class _BiliAppShellState extends State<BiliAppShell>
     if (widget.navigationMode != oldWidget.navigationMode) _revealActiveTab();
     if (widget.location != oldWidget.location) {
       final uri = Uri.parse(widget.location);
-      if (_openArticleRoute(uri)) return;
       if (!_workspace.acceptRoute(uri)) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
@@ -382,24 +377,6 @@ final class _BiliAppShellState extends State<BiliAppShell>
       _revealActiveTab();
       if (_workspace.active.isPlayback) _windowActivation++;
     }
-  }
-
-  bool _openArticleRoute(Uri uri) {
-    final open = widget.onOpenArticle;
-    final address = ArticleAddress.fromLocation(uri);
-    if (open == null || address == null) return false;
-    final incomingLocation = widget.location;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || widget.location != incomingLocation) return;
-      // Direct links open above the current workspace (home on a cold start).
-      // Restore its URL so closing the dialog also clears the incoming link.
-      Router.neglect(
-        context,
-        () => context.go(_workspace.active.route.toString()),
-      );
-      open(context, address, ContentLink.fromUri(uri));
-    });
-    return true;
   }
 
   @override
@@ -781,7 +758,6 @@ final class _BiliAppShellState extends State<BiliAppShell>
     // Keyboard resizing changes geometry, not the cached pages' configuration.
     final pages = WorkspaceLinkScope(
       openBackground: _dualTabs || _singlePage ? null : _openBackgroundTab,
-      openArticle: widget.onOpenArticle,
       child: Builder(builder: _pages),
     );
     final main = CommandTargetScope<Object>(
@@ -1320,7 +1296,9 @@ final class _BiliAppShellState extends State<BiliAppShell>
                                       _desktopDual &&
                                           tab.id == _workspace.playbackId
                                       ? _playbackWindowBack
-                                      : view.isTopic
+                                      : view.isTopic ||
+                                            view.isArticle ||
+                                            view.isArticleCollection
                                       ? _gestureBack
                                       : () {
                                           _goBack();

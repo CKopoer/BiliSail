@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:bilisail/app/router.dart';
-import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/core/network/api_requests.dart';
 import 'package:bilisail/core/presentation/app_image_provider.dart';
 import 'package:bilisail/core/storage/image_byte_cache.dart';
@@ -11,7 +10,6 @@ import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/article_address.dart';
 import 'package:bilisail/domain/comment_target.dart';
 import 'package:bilisail/domain/content_link.dart';
-import 'package:bilisail/domain/dynamic_post.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/features/article/application/article_provider.dart';
@@ -30,9 +28,9 @@ import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/domain/settings_repository.dart';
 import 'package:bilisail/shared/ui/comments_panel.dart';
 import 'package:bilisail/shared/ui/app_network_image.dart';
-import 'package:bilisail/shared/ui/content_detail_page.dart';
+import 'package:bilisail/shared/ui/app_notice.dart';
+import 'package:flutter/gestures.dart';
 import 'package:bilisail/shared/ui/content_link_scope.dart';
-import 'package:bilisail/shared/ui/dynamic_post_interactions.dart';
 import 'package:bilisail/shared/ui/image_viewer.dart';
 import 'package:bilisail/shared/ui/post_author_header.dart';
 import 'package:bilisail/shared/ui/post_card_surface.dart';
@@ -68,58 +66,82 @@ void main() {
     },
   );
 
-  testWidgets('opens direct links and related articles as stacked dialogs', (
-    tester,
-  ) async {
-    final auth = DynamicAuthFake(signedIn: false);
-    addTearDown(auth.stream.close);
-    final repository = _Repository((address, _) async {
-      if (address == _column) {
-        return _document(address, '旧文章', '旧文章正文', linkLabel: '阅读新版图文');
-      }
-      expect(address, _opus);
-      return _document(address, '图文作品', '整篇图文正文');
-    });
-    final router = createBiliRouter(
-      initialLocation: _column.location,
-      playerBuilder: (_, _, _) => const SizedBox.shrink(),
-    );
-    addTearDown(router.dispose);
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          articleRepositoryProvider.overrideWithValue(repository),
-          authRepositoryProvider.overrideWithValue(auth),
-          settingsRepositoryProvider.overrideWithValue(const _Settings()),
-        ],
-        child: MaterialApp.router(routerConfig: router),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.byType(ArticleScreen), findsOneWidget);
-    expect(router.routeInformationProvider.value.uri.path, '/');
-    expect(find.text('旧文章正文').hitTestable(), findsOneWidget);
-    await tester.tapAt(
-      tester.getTopLeft(find.text('阅读新版图文')) + const Offset(12, 12),
-    );
-    await tester.pumpAndSettle();
-    expect(router.routeInformationProvider.value.uri.path, '/');
-    expect(find.text('整篇图文正文').hitTestable(), findsOneWidget);
-    expect(find.text('旧文章正文').hitTestable(), findsNothing);
-    final opusDialog = find.byWidgetPredicate(
-      (widget) => widget is ArticleScreen && widget.address == _opus,
-    );
-    await tester.tap(
-      find.descendant(of: opusDialog, matching: findMaterialTooltip('关闭')),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('旧文章正文').hitTestable(), findsOneWidget);
-    await tester.tap(findMaterialTooltip('关闭').hitTestable());
-    await tester.pumpAndSettle();
-    expect(find.byType(ArticleScreen), findsNothing);
-    expect(router.routeInformationProvider.value.uri.path, '/');
-    expect(repository.reads, [_column, _opus]);
-  });
+  testWidgets(
+    'opens direct links, collections and their articles as retained pages',
+    (tester) async {
+      final auth = DynamicAuthFake(signedIn: false);
+      addTearDown(auth.stream.close);
+      final repository = _Repository((address, _) async {
+        if (address == _column) {
+          return _document(address, '旧文章', '旧文章正文', linkLabel: '阅读新版图文');
+        }
+        expect(address, _opus);
+        return _document(address, '图文作品', '整篇图文正文');
+      });
+      final router = createBiliRouter(
+        initialLocation: _column.location,
+        playerBuilder: (_, _, _) => const SizedBox.shrink(),
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            articleRepositoryProvider.overrideWithValue(repository),
+            authRepositoryProvider.overrideWithValue(auth),
+            settingsRepositoryProvider.overrideWithValue(const _Settings()),
+          ],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(ArticleScreen), findsOneWidget);
+      expect(router.routeInformationProvider.value.uri.path, _column.location);
+      expect(find.byType(Dialog), findsNothing);
+      expect(find.text('旧文章正文').hitTestable(), findsOneWidget);
+      await tester.tap(find.text('示例文集'));
+      await tester.pumpAndSettle();
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        '/article-list/12',
+      );
+      expect(find.text('文集目录'), findsOneWidget);
+      final first = find.text('第一篇'), second = find.text('第二篇');
+      expect(
+        tester.getTopLeft(first).dy,
+        lessThan(tester.getTopLeft(second).dy),
+      );
+      await tester.tap(findMaterialTooltip('切换为倒序'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.getTopLeft(second).dy,
+        lessThan(tester.getTopLeft(first).dy),
+      );
+      await tester.tap(second);
+      await tester.pumpAndSettle();
+      expect(router.routeInformationProvider.value.uri.path, _opus.location);
+      expect(find.text('整篇图文正文').hitTestable(), findsOneWidget);
+      await tester.tap(findMaterialTooltip('返回').hitTestable().last);
+      await tester.pumpAndSettle();
+      expect(
+        tester.getTopLeft(second).dy,
+        lessThan(tester.getTopLeft(first).dy),
+      );
+      await tester.tap(findMaterialTooltip('返回').hitTestable().last);
+      await tester.pumpAndSettle();
+      expect(find.text('旧文章正文').hitTestable(), findsOneWidget);
+      await tester.tapAt(
+        tester.getTopLeft(find.text('阅读新版图文')) + const Offset(12, 12),
+      );
+      await tester.pumpAndSettle();
+      expect(router.routeInformationProvider.value.uri.path, _opus.location);
+      await tester.tap(findMaterialTooltip('返回').hitTestable().last);
+      await tester.pumpAndSettle();
+      await tester.tap(findMaterialTooltip('返回').hitTestable().last);
+      await tester.pumpAndSettle();
+      expect(router.routeInformationProvider.value.uri.path, '/');
+      expect(repository.reads, [_column, _opus, _opus]);
+    },
+  );
 
   testWidgets(
     'account transitions cancel older reads and retry uses the current session',
@@ -177,107 +199,6 @@ void main() {
     },
   );
 
-  testWidgets('article matches the dynamic dialog frame on a wide desktop', (
-    tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(1850, 1100));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    final auth = DynamicAuthFake(signedIn: false);
-    addTearDown(auth.stream.close);
-    final showArticle = ValueNotifier(false);
-    addTearDown(showArticle.dispose);
-    final comments = DynamicCommentsFake()..items = [];
-    final theme = BiliTheme.light();
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          authRepositoryProvider.overrideWithValue(auth),
-          articleRepositoryProvider.overrideWithValue(
-            _Repository((_, _) async => _longArticle(paragraphs: 1)),
-          ),
-          dynamicRepositoryProvider.overrideWithValue(DynamicRepositoryFake()),
-          commentsRepositoryProvider.overrideWith((_, _) => comments),
-        ],
-        child: MaterialApp(
-          theme: theme,
-          home: Scaffold(
-            body: ValueListenableBuilder(
-              valueListenable: showArticle,
-              builder: (_, reading, _) => reading
-                  ? ArticleScreen(
-                      address: _column,
-                      onOpenUser: (_) {},
-                      onOpenLink: (_) {},
-                      onOpenWeb: (_) {},
-                      onLogin: () {},
-                    )
-                  : SingleChildScrollView(
-                      child: InteractiveDynamicPostCard(
-                        post: DynamicPost(
-                          id: '100',
-                          title: '动态标题',
-                          text: '动态正文',
-                          commentTarget: const CommentTarget(
-                            '11',
-                            CommentTargetType.album,
-                          ),
-                        ),
-                      ),
-                    ),
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.tap(findMaterialTooltip('查看动态详情'));
-    await tester.pumpAndSettle();
-    final dialog = find.byType(Dialog);
-    final material = find.descendant(
-      of: dialog,
-      matching: find.byWidgetPredicate(
-        (widget) => widget is Material && widget.type == MaterialType.card,
-      ),
-    );
-    final frame = tester.getRect(material);
-    final panel = find.byType(CommentsPanel);
-    final panelRect = tester.getRect(panel);
-    final titleStyle = tester
-        .widget<Text>(find.descendant(of: dialog, matching: find.text('动态标题')))
-        .style;
-    final close = find.descendant(
-      of: dialog,
-      matching: find.byIcon(Icons.close),
-    );
-    final closeRect = tester.getRect(close);
-    final surface = tester.widget<Material>(material);
-    expect(frame.size, const Size(1280, 1000));
-    expect(surface.color, theme.colorScheme.surfaceContainerHigh);
-    final hoveredSurface = find.descendant(
-      of: find.descendant(of: dialog, matching: find.byType(PostCardSurface)),
-      matching: find.byWidgetPredicate(
-        (widget) => widget is InkWell && widget.onSecondaryTap != null,
-      ),
-    );
-    expect(
-      tester.widget<InkWell>(hoveredSurface).hoverColor,
-      Colors.transparent,
-    );
-
-    await tester.tap(close);
-    await tester.pumpAndSettle();
-    showArticle.value = true;
-    await tester.pumpAndSettle();
-
-    expect(tester.getRect(material), frame);
-    expect(tester.getRect(panel), panelRect);
-    expect(tester.getRect(close), closeRect);
-    final articleSurface = tester.widget<Material>(material);
-    expect(articleSurface.color, surface.color);
-    expect(articleSurface.shape, surface.shape);
-    expect(tester.widget<Text>(find.text('专栏标题')).style, titleStyle);
-    expect(tester.takeException(), isNull);
-  });
-
   testWidgets(
     'wide article scrolls independently and keeps comments on resize',
     (tester) async {
@@ -302,8 +223,17 @@ void main() {
       expect(find.text('正文第 239 段'), findsNothing);
       await tester.drag(reading, const Offset(0, -520));
       await tester.pumpAndSettle();
+      expect(findMaterialTooltip('评论').hitTestable(), findsNothing);
+      await tester.sendEventToBinding(
+        PointerScrollEvent(
+          position: tester.getCenter(reading),
+          scrollDelta: const Offset(0, -65),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(findMaterialTooltip('评论').hitTestable(), findsOneWidget);
       final readingOffset = view.controller!.offset;
-      expect(readingOffset, greaterThan(350));
+      expect(readingOffset, greaterThan(280));
       expect(nested.innerController.offset, 0);
 
       await tester.drag(panel, const Offset(0, -400));
@@ -332,6 +262,125 @@ void main() {
     },
   );
 
+  testWidgets(
+    'reading down hides actions, scrolling back reveals them and comments jumps past a long article',
+    (tester) async {
+      await _mountReader(
+        tester,
+        size: const Size(390, 750),
+        comments: DynamicCommentsFake()..items = [],
+        document: _longArticle(),
+      );
+      final action = findMaterialTooltip('评论').hitTestable();
+      expect(action, findsOneWidget);
+      final reading = find.byType(NestedScrollView);
+      await tester.drag(reading, const Offset(0, -410));
+      await tester.pumpAndSettle();
+      expect(action, findsNothing);
+      await tester.drag(reading, const Offset(0, 120));
+      await tester.pumpAndSettle();
+      expect(action, findsOneWidget);
+      await tester.tap(action);
+      await tester.pumpAndSettle();
+      expect(find.text('最热').hitTestable(), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'favorite uses the resolved CV address and dynamic actions use the post ID',
+    (tester) async {
+      final document = ArticleDocument(
+        url: _column.webUri,
+        title: '旧专栏',
+        blocks: const [],
+        dynamicId: _opus.id,
+        stats: const ArticleStats(liked: false, favorited: false, favorites: 8),
+      );
+      final articles = _Repository((_, _) async => document);
+      final dynamics = DynamicRepositoryFake();
+      final auth = DynamicAuthFake();
+      addTearDown(auth.stream.close);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            articleRepositoryProvider.overrideWithValue(articles),
+            authRepositoryProvider.overrideWithValue(auth),
+            dynamicRepositoryProvider.overrideWithValue(dynamics),
+          ],
+          child: MaterialApp(
+            builder: AppNoticeHost.builder,
+            home: Scaffold(
+              body: ArticleScreen(
+                address: _opus,
+                onOpenUser: (_) {},
+                onOpenLink: (_) {},
+                onOpenWeb: (_) {},
+                onLogin: () {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      articles.pending = Completer<void>();
+      await tester.tap(findMaterialTooltip('收藏'));
+      await tester.tap(findMaterialTooltip('收藏'));
+      await tester.pump();
+      expect(articles.writes, [(_column, true)]);
+      articles.pending!.complete();
+      await tester.pumpAndSettle();
+      expect(findMaterialTooltip('取消收藏'), findsOneWidget);
+      expect(find.text('9'), findsOneWidget);
+      await tester.tap(findMaterialTooltip('点赞'));
+      await tester.pumpAndSettle();
+      expect(dynamics.likes, [(_opus.id, true)]);
+      await tester.tap(findMaterialTooltip('转发'));
+      await tester.pumpAndSettle();
+      expect(dynamics.reposts, isEmpty);
+      await tester.enterText(find.byType(TextField), '推荐阅读');
+      await tester.tap(find.text('转发动态'));
+      await tester.pumpAndSettle();
+      expect(dynamics.reposts, [(_opus.id, '推荐阅读')]);
+    },
+  );
+
+  test('favorite locks uncertain writes and discards a previous session completion', () async {
+    final auth = DynamicAuthFake();
+    addTearDown(auth.stream.close);
+    final articles = _Repository((_, _) async => _longArticle());
+    var epoch = 0;
+    final container = ProviderContainer.test(
+      overrides: [
+        articleRepositoryProvider.overrideWithValue(articles),
+        authRepositoryProvider.overrideWithValue(auth),
+        sessionEpochProvider.overrideWithValue(() => epoch),
+      ],
+    );
+    final provider = articleFavoriteProvider(_column);
+    container.listen(provider, (_, _) {});
+    final controller = container.read(provider.notifier);
+    articles.pending = Completer<void>();
+    final result = controller.toggle(false, 4);
+    articles.pending!.completeError(
+      const AppFailure(AppFailureKind.timeout, '超时'),
+    );
+    expect(await result, contains('未确认'));
+    expect(container.read(provider).uncertain, isTrue);
+    await controller.toggle(false, 4);
+    expect(articles.writes, hasLength(1));
+
+    container.invalidate(provider);
+    articles.pending = Completer<void>();
+    final retry = container.read(provider.notifier).toggle(false, 4);
+    epoch++;
+    auth.change(const AuthState(status: AuthStatus.guest));
+    expect(container.read(provider).favorite, isNull);
+    articles.pending!.complete();
+    expect(await retry, isNull);
+    expect(container.read(provider).favorite, isNull);
+    expect(articles.lastWrite!.isCancelled, isTrue);
+  });
+
   testWidgets('shared post card stacks above comments at enlarged text', (
     tester,
   ) async {
@@ -351,7 +400,7 @@ void main() {
     final title = find.text('专栏标题');
     final text = find.text('正文第 0 段');
     final panel = find.byType(CommentsPanel);
-    expect(find.byType(ContentDetailPage), findsOneWidget);
+    expect(find.byType(Dialog), findsNothing);
     expect(find.descendant(of: card, matching: author), findsOneWidget);
     expect(
       tester.getBottomLeft(author).dy,
@@ -361,7 +410,7 @@ void main() {
       tester.getBottomLeft(text).dy,
       lessThan(tester.getTopLeft(panel).dy),
     );
-    expect(tester.getSize(panel).width, 936);
+    expect(tester.getSize(panel).width, 960);
     await tester.tap(find.text('专栏作者'));
     expect(openedAuthor, const UserId('42'));
     await tester.tap(find.byIcon(Icons.open_in_new_outlined));
@@ -629,6 +678,9 @@ ArticleDocument _document(
 }) => ArticleDocument(
   url: address.webUri,
   title: title,
+  collection: linkLabel == null
+      ? null
+      : const (id: ArticleCollectionId('12'), name: '示例文集', count: '2篇'),
   blocks: [
     ArticleBlock(
       ArticleBlockKind.paragraph,
@@ -661,7 +713,44 @@ final class _Settings implements SettingsRepository {
   Future<void> save(AppSettings settings) async {}
 }
 
-final class _Repository implements ArticleRepository {
+final class _Repository extends Fake implements ArticleRepository {
+  final writes = <(ArticleAddress, bool)>[];
+  Completer<void>? pending;
+  RequestCancellation? lastWrite;
+
+  @override
+  Future<void> setFavorite(
+    ArticleAddress address,
+    bool favorite,
+    RequestCancellation cancellation,
+  ) async {
+    lastWrite = cancellation;
+    writes.add((address, favorite));
+    await pending?.future;
+  }
+
+  @override
+  Future<ArticleStats> viewInfo(
+    String cvId,
+    RequestCancellation cancellation,
+  ) async => const ArticleStats();
+
+  @override
+  Future<ArticleCollection> collection(
+    ArticleCollectionId id,
+    RequestCancellation cancellation,
+  ) async {
+    expect(id.value, '12');
+    return const ArticleCollection(
+      name: '文集目录',
+      author: '作者',
+      entries: [
+        (address: _column, title: '第一篇', summary: '', cover: null, views: 1),
+        (address: _opus, title: '第二篇', summary: '', cover: null, views: 2),
+      ],
+    );
+  }
+
   _Repository(this.load);
   final Future<ArticleDocument> Function(ArticleAddress, RequestCancellation)
   load;

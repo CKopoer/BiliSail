@@ -1,22 +1,28 @@
 import 'package:flutter/gestures.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../../core/presentation/motion_preferences.dart';
 import '../../../core/presentation/public_image_variant.dart';
 import '../../../domain/app_failure.dart';
 import '../../../domain/article_address.dart';
 import '../../../domain/user.dart';
 import '../../../shared/ui/app_network_image.dart';
+import '../../../shared/ui/app_notice.dart';
 import '../../../shared/ui/comments_panel.dart';
-import '../../../shared/ui/content_detail_page.dart';
 import '../../../shared/ui/content_link_scope.dart';
 import '../../../shared/ui/dynamic_detail_layout.dart';
+import '../../../shared/ui/dynamic_post_menu.dart';
 import '../../../shared/ui/image_viewer.dart';
 import '../../../shared/ui/post_author_header.dart';
 import '../../../shared/ui/post_card_surface.dart';
 import '../../../shared/ui/state_view.dart';
+import '../../dynamic/application/dynamic_management_controller.dart';
 import '../application/article_provider.dart';
 import '../domain/article_document.dart';
+import 'article_action_bar.dart';
+import 'article_page_frame.dart';
 
 final class ArticleScreen extends ConsumerWidget {
   const ArticleScreen({
@@ -37,23 +43,95 @@ final class ArticleScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final provider = articleProvider(address);
     final state = address.isValid ? ref.watch(provider) : null;
-    return ContentDetailPage(
+    final document = state?.asData?.value;
+    final url = document?.url ?? address.webUri;
+    final post = document?.actionPost(document.stats);
+    final canMessage =
+        post != null &&
+        post.authorId != null &&
+        post.commentTarget?.type.value == 12;
+    final messageBusy =
+        canMessage &&
+        ref.watch(
+          dynamicManagementProvider(post.id).select((state) => state.busy),
+        );
+    final resolved = ArticleAddress.fromWebUri(url);
+    final saving =
+        resolved != null &&
+        ref.watch(
+          articleFavoriteProvider(resolved).select((state) => state.busy),
+        );
+    void refresh() {
+      if (resolved != null &&
+          ref.read(articleFavoriteProvider(resolved)).busy) {
+        return;
+      }
+      if (document?.statsCvId case final cvId?) {
+        ref.invalidate(articleInfoProvider(cvId));
+      }
+      if (resolved != null) ref.invalidate(articleFavoriteProvider(resolved));
+      ref.invalidate(provider);
+    }
+
+    return ArticlePageFrame(
       title: '专栏',
-      inDialog: true,
-      action: state == null
-          ? null
-          : IconButton(
-              tooltip: '在浏览器打开',
-              onPressed: () =>
-                  onOpenWeb(state.asData?.value.url ?? address.webUri),
-              icon: const Icon(Icons.open_in_new_outlined),
-            ),
+      actions: [
+        if (state != null) ...[
+          IconButton(
+            tooltip: '在浏览器打开',
+            onPressed: () => onOpenWeb(url),
+            icon: const Icon(Icons.open_in_new_outlined),
+          ),
+          PopupMenuButton<String>(
+            tooltip: '更多操作',
+            onSelected: (value) async {
+              switch (value) {
+                case 'copy':
+                  try {
+                    await Clipboard.setData(
+                      ClipboardData(text: url.toString()),
+                    );
+                    if (context.mounted) showAppNotice(context, '专栏链接已复制');
+                  } on PlatformException {
+                    if (context.mounted) showAppNotice(context, '复制失败，请重试');
+                  }
+                case 'message':
+                  if (post != null) {
+                    await sharePostToMessage(
+                      context,
+                      ref,
+                      post,
+                      onLogin: onLogin,
+                    );
+                  }
+                case 'refresh':
+                  refresh();
+              }
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: 'copy', child: Text('复制链接')),
+              if (canMessage)
+                PopupMenuItem(
+                  value: 'message',
+                  enabled: !messageBusy,
+                  child: const Text('分享至消息'),
+                ),
+              PopupMenuItem(
+                value: 'refresh',
+                enabled: !saving,
+                child: const Text('刷新'),
+              ),
+            ],
+          ),
+        ],
+      ],
       body: state == null
           ? const StateView.empty(message: '专栏地址无效')
           : state.when(
               skipLoadingOnReload: false,
               skipLoadingOnRefresh: false,
               data: (document) => _ArticleBody(
+                key: ValueKey(document),
                 storageKey: PageStorageKey(address.location),
                 document: document,
                 onOpenUser: onOpenUser,
@@ -70,8 +148,9 @@ final class ArticleScreen extends ConsumerWidget {
   }
 }
 
-final class _ArticleBody extends StatelessWidget {
+final class _ArticleBody extends StatefulWidget {
   const _ArticleBody({
+    super.key,
     required this.storageKey,
     required this.document,
     required this.onOpenUser,
@@ -86,7 +165,25 @@ final class _ArticleBody extends StatelessWidget {
   final VoidCallback onLogin;
 
   @override
+  State<_ArticleBody> createState() => _ArticleBodyState();
+}
+
+class _ArticleBodyState extends State<_ArticleBody> {
+  final _showBar = ValueNotifier(true);
+  int _commentRequest = 0;
+
+  @override
+  void dispose() {
+    _showBar.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final document = widget.document;
+    final onLogin = widget.onLogin,
+        onOpenUser = widget.onOpenUser,
+        onOpenLink = widget.onOpenLink;
     final blocks = document.blocks;
     final images = <Uri>[];
     final imageIndexes = <int, int>{};
@@ -160,6 +257,29 @@ final class _ArticleBody extends StatelessWidget {
                 ),
               ),
             ],
+            if (document.collection case final book?
+                when accessMessage == null) ...[
+              const SizedBox(height: 12),
+              SelectionContainer.disabled(
+                child: Material(
+                  color: Theme.of(context).colorScheme.surfaceContainer,
+                  borderRadius: BorderRadius.circular(10),
+                  clipBehavior: Clip.antiAlias,
+                  child: ListTile(
+                    leading: const Icon(Icons.collections_bookmark_outlined),
+                    title: Text(book.name.isEmpty ? '查看文集' : book.name),
+                    subtitle: Text(
+                      [
+                        '收录于文集',
+                        if (book.count.isNotEmpty) book.count,
+                      ].join(' · '),
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => onOpenLink(book.id.webUri),
+                  ),
+                ),
+              ),
+            ],
             if (accessMessage != null) ...[
               if (hasAuthor || hasTitle) const SizedBox(height: 12),
               Text(accessMessage, style: PostCardSurface.bodyStyleOf(context)),
@@ -172,24 +292,77 @@ final class _ArticleBody extends StatelessWidget {
       },
     );
     final card = PostCardSurface.sliver(sliver: body);
-    return SelectionArea(
-      child: DynamicDetailLayout.sliver(
-        key: storageKey,
-        commentLink: ContentLinkScope.of(context),
-        comments: comments == null
-            ? null
-            : SelectionContainer.disabled(child: comments),
-        sliver: SliverLayoutBuilder(
-          builder: (context, constraints) {
-            final width = constraints.crossAxisExtent;
-            if (width <= 800) return card;
-            return SliverPadding(
-              padding: EdgeInsets.symmetric(horizontal: (width - 800) / 2),
-              sliver: card,
-            );
-          },
+    final reading = Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1440),
+        child: SelectionArea(
+          child: DynamicDetailLayout.sliver(
+            commentRequest: _commentRequest,
+            key: widget.storageKey,
+            commentLink: ContentLinkScope.of(context),
+            comments: comments == null
+                ? null
+                : SelectionContainer.disabled(child: comments),
+            sliver: SliverLayoutBuilder(
+              builder: (context, constraints) {
+                final width = constraints.crossAxisExtent;
+                if (width <= 800) return card;
+                return SliverPadding(
+                  padding: EdgeInsets.symmetric(horizontal: (width - 800) / 2),
+                  sliver: card,
+                );
+              },
+            ),
+          ),
         ),
       ),
+    );
+    if (accessMessage != null) return reading;
+    return Column(
+      children: [
+        Expanded(
+          child: NotificationListener<ScrollUpdateNotification>(
+            onNotification: (notice) {
+              final delta = notice.scrollDelta;
+              if (notice.metrics.axis == Axis.vertical &&
+                  !notice.metrics.outOfRange &&
+                  delta != null &&
+                  delta != 0) {
+                _showBar.value = delta < 0;
+              }
+              return false;
+            },
+            child: reading,
+          ),
+        ),
+        ValueListenableBuilder<bool>(
+          valueListenable: _showBar,
+          child: ArticleActionBar(
+            document: document,
+            onLogin: onLogin,
+            onComments: target == null || document.commentForbidden
+                ? null
+                : () => setState(() => _commentRequest++),
+          ),
+          builder: (context, visible, child) => ClipRect(
+            child: AnimatedAlign(
+              duration: shouldReduceMotion(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 180),
+              curve: Curves.easeOut,
+              alignment: Alignment.topCenter,
+              heightFactor: visible ? 1 : 0,
+              child: ExcludeFocus(
+                excluding: !visible,
+                child: ExcludeSemantics(
+                  excluding: !visible,
+                  child: IgnorePointer(ignoring: !visible, child: child),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
