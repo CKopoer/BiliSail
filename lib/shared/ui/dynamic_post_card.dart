@@ -259,7 +259,10 @@ class _PostBody extends StatelessWidget {
           ),
         if (post.title.isNotEmpty) ...[
           const SizedBox(height: 12),
-          Text(post.title, style: Theme.of(context).textTheme.titleSmall),
+          Text(
+            post.title,
+            style: PostCardSurface.titleStyleOf(context, inDetail: inDetail),
+          ),
         ],
         if (post.text.isNotEmpty || post.spans.isNotEmpty) ...[
           const SizedBox(height: 12),

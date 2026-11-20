@@ -22,6 +22,16 @@ class PostCardSurface extends StatelessWidget {
       Theme.of(context).textTheme.bodyMedium
           ?.copyWith(fontSize: 15, height: 22 / 15);
 
+  static TextStyle? titleStyleOf(
+    BuildContext context, {
+    required bool inDetail,
+  }) {
+    final textTheme = Theme.of(context).textTheme;
+    return inDetail
+        ? textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)
+        : textTheme.titleSmall;
+  }
+
   @override
   Widget build(BuildContext context) {
     final color = Theme.of(context).colorScheme.surfaceContainerLow;
@@ -39,6 +49,8 @@ class PostCardSurface extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
+        // A reading card has no primary tap action, even if it has a menu.
+        hoverColor: onTap == null ? Colors.transparent : null,
         onLongPress: onMore,
         onSecondaryTap: onMore,
         child: Padding(padding: padding, child: child),

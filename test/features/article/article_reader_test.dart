@@ -1,11 +1,13 @@
 import 'dart:async';
 
 import 'package:bilisail/app/router.dart';
+import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/core/network/api_requests.dart';
 import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/article_address.dart';
 import 'package:bilisail/domain/comment_target.dart';
 import 'package:bilisail/domain/content_link.dart';
+import 'package:bilisail/domain/dynamic_post.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/features/article/application/article_provider.dart';
@@ -16,12 +18,14 @@ import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/comments/application/comments_controller.dart';
 import 'package:bilisail/features/comments/domain/comments_repository.dart';
+import 'package:bilisail/features/dynamic/application/dynamic_actions_controller.dart';
 import 'package:bilisail/features/settings/application/settings_controller.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/domain/settings_repository.dart';
 import 'package:bilisail/shared/ui/comments_panel.dart';
 import 'package:bilisail/shared/ui/content_detail_page.dart';
 import 'package:bilisail/shared/ui/content_link_scope.dart';
+import 'package:bilisail/shared/ui/dynamic_post_interactions.dart';
 import 'package:bilisail/shared/ui/post_author_header.dart';
 import 'package:bilisail/shared/ui/post_card_surface.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -29,6 +33,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../support/dynamic_fakes.dart';
+import '../../support/material_tooltip_finder.dart';
 
 const _column = ArticleAddress(ArticleKind.column, '789');
 const _commentTarget = CommentTarget('789', CommentTargetType.article);
@@ -92,7 +97,12 @@ void main() {
     expect(router.routeInformationProvider.value.uri.path, _opus.location);
     expect(find.text('整篇图文正文'), findsOneWidget);
     expect(find.text('旧文章正文'), findsNothing);
-    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.tap(
+      find.descendant(
+        of: find.byType(ArticleScreen),
+        matching: findMaterialTooltip('返回'),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(router.routeInformationProvider.value.uri.path, _column.location);
     expect(find.text('旧文章正文'), findsOneWidget);
@@ -154,6 +164,107 @@ void main() {
       expect(find.text('完整正文'), findsOneWidget);
     },
   );
+
+  testWidgets('article matches the dynamic dialog frame on a wide desktop', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1850, 1100));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final auth = DynamicAuthFake(signedIn: false);
+    addTearDown(auth.stream.close);
+    final showArticle = ValueNotifier(false);
+    addTearDown(showArticle.dispose);
+    final comments = DynamicCommentsFake()..items = [];
+    final theme = BiliTheme.light();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(auth),
+          articleRepositoryProvider.overrideWithValue(
+            _Repository((_, _) async => _longArticle(paragraphs: 1)),
+          ),
+          dynamicRepositoryProvider.overrideWithValue(DynamicRepositoryFake()),
+          commentsRepositoryProvider.overrideWith((_, _) => comments),
+        ],
+        child: MaterialApp(
+          theme: theme,
+          home: Scaffold(
+            body: ValueListenableBuilder(
+              valueListenable: showArticle,
+              builder: (_, reading, _) => reading
+                  ? ArticleScreen(
+                      address: _column,
+                      onOpenUser: (_) {},
+                      onOpenLink: (_) {},
+                      onOpenWeb: (_) {},
+                      onLogin: () {},
+                    )
+                  : SingleChildScrollView(
+                      child: InteractiveDynamicPostCard(
+                        post: DynamicPost(
+                          id: '100',
+                          title: '动态标题',
+                          text: '动态正文',
+                          commentTarget: const CommentTarget(
+                            '11',
+                            CommentTargetType.album,
+                          ),
+                        ),
+                      ),
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(findMaterialTooltip('查看动态详情'));
+    await tester.pumpAndSettle();
+    final dialog = find.byType(Dialog);
+    final material = find.descendant(
+      of: dialog,
+      matching: find.byWidgetPredicate(
+        (widget) => widget is Material && widget.type == MaterialType.card,
+      ),
+    );
+    final frame = tester.getRect(material);
+    final panel = find.byType(CommentsPanel);
+    final panelRect = tester.getRect(panel);
+    final titleStyle = tester
+        .widget<Text>(find.descendant(of: dialog, matching: find.text('动态标题')))
+        .style;
+    final close = find.descendant(
+      of: dialog,
+      matching: find.byIcon(Icons.close),
+    );
+    final closeRect = tester.getRect(close);
+    final surface = tester.widget<Material>(material);
+    expect(frame.size, const Size(1280, 1000));
+    expect(surface.color, theme.colorScheme.surfaceContainerHigh);
+    final hoveredSurface = find.descendant(
+      of: find.descendant(of: dialog, matching: find.byType(PostCardSurface)),
+      matching: find.byWidgetPredicate(
+        (widget) => widget is InkWell && widget.onSecondaryTap != null,
+      ),
+    );
+    expect(
+      tester.widget<InkWell>(hoveredSurface).hoverColor,
+      Colors.transparent,
+    );
+
+    await tester.tap(close);
+    await tester.pumpAndSettle();
+    showArticle.value = true;
+    await tester.pumpAndSettle();
+
+    expect(tester.getRect(material), frame);
+    expect(tester.getRect(panel), panelRect);
+    expect(tester.getRect(close), closeRect);
+    final articleSurface = tester.widget<Material>(material);
+    expect(articleSurface.color, surface.color);
+    expect(articleSurface.shape, surface.shape);
+    expect(tester.widget<Text>(find.text('专栏标题')).style, titleStyle);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'wide article scrolls independently and keeps comments on resize',
@@ -238,7 +349,7 @@ void main() {
       tester.getBottomLeft(text).dy,
       lessThan(tester.getTopLeft(panel).dy),
     );
-    expect(tester.getSize(panel).width, 960);
+    expect(tester.getSize(panel).width, 936);
     await tester.tap(find.text('专栏作者'));
     expect(openedAuthor, const UserId('42'));
     await tester.tap(find.byIcon(Icons.open_in_new_outlined));

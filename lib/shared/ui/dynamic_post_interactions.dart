@@ -9,6 +9,7 @@ import '../../domain/dynamic_post.dart';
 import '../../domain/user.dart';
 import '../../domain/video.dart';
 import 'app_notice.dart';
+import 'content_detail_page.dart';
 import 'dynamic_post_card.dart';
 import 'comments_panel.dart';
 import 'dynamic_detail_layout.dart';
@@ -222,49 +223,33 @@ class _DynamicDetailDialog extends StatelessWidget {
   final VoidCallback? onLogin;
 
   @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      insetPadding: const EdgeInsets.all(12),
-      clipBehavior: Clip.antiAlias,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1280, maxHeight: 1000),
-        child: SizedBox(
-          width: 1280,
-          child: Column(
-            children: [
-              const _DialogHeader(title: '动态详情'),
-              const Divider(height: 1),
-              Expanded(
-                child: DynamicDetailContent(
-                  post: post,
-                  focusComments: focusComments,
-                  onOpenUser: onOpenUser == null
-                      ? null
-                      : (id) {
-                          Navigator.pop(context);
-                          onOpenUser!(id);
-                        },
-                  onOpenVideo: onOpenVideo == null
-                      ? null
-                      : (video) {
-                          Navigator.pop(context);
-                          onOpenVideo!(video);
-                        },
-                  onOpenLink: onOpenLink == null
-                      ? null
-                      : (url) {
-                          Navigator.pop(context);
-                          onOpenLink!(url);
-                        },
-                  onLogin: onLogin,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => ContentDetailPage(
+    title: '动态详情',
+    inDialog: true,
+    body: DynamicDetailContent(
+      post: post,
+      focusComments: focusComments,
+      onOpenUser: onOpenUser == null
+          ? null
+          : (id) {
+              Navigator.pop(context);
+              onOpenUser!(id);
+            },
+      onOpenVideo: onOpenVideo == null
+          ? null
+          : (video) {
+              Navigator.pop(context);
+              onOpenVideo!(video);
+            },
+      onOpenLink: onOpenLink == null
+          ? null
+          : (url) {
+              Navigator.pop(context);
+              onOpenLink!(url);
+            },
+      onLogin: onLogin,
+    ),
+  );
 }
 
 class DynamicDetailContent extends ConsumerStatefulWidget {
