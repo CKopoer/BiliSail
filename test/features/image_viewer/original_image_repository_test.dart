@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -7,9 +8,110 @@ import 'package:bilisail/features/image_viewer/data/network_original_image_repos
 import 'package:bilisail/features/image_viewer/domain/original_image.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../core/storage/public_image_test_server.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final source = Uri.parse('https://i0.hdslb.com/long.png');
+  test('auto only downloads a confirmed small original and manual load still works', () async {
+    final server = await PublicImageTestServer.start();
+    addTearDown(server.close);
+    final png = _png(4, 6);
+    final oversizedLength =
+        NetworkOriginalImageRepository.automaticMaxBytes + 1;
+    final largePng = Uint8List(oversizedLength)..setAll(0, png);
+    server.onRequest = (request) {
+      final response = request.response;
+      if (request.method == 'HEAD') {
+        switch (request.uri.path) {
+          case '/large':
+            response.contentLength = oversizedLength;
+          case '/no-head':
+            response.statusCode = HttpStatus.methodNotAllowed;
+          case '/small':
+          case '/changed':
+            response.contentLength = png.length;
+        }
+      } else if (['/large', '/changed'].contains(request.uri.path)) {
+        response.contentLength = largePng.length;
+        response.add(largePng);
+      } else {
+        response.add(png);
+      }
+      unawaited(response.close());
+    };
+    await HttpOverrides.runWithHttpOverrides(() async {
+      final repository = NetworkOriginalImageRepository();
+      final loaded = await repository.loadAutomatically(
+        server.uri('/small'),
+        RequestCancellation(),
+      );
+      expect(loaded?.bytes, png);
+      expect(server.connections, 1);
+      for (final path in ['/large', '/unknown', '/no-head']) {
+        expect(
+          await repository.loadAutomatically(
+            server.uri(path),
+            RequestCancellation(),
+          ),
+          isNull,
+        );
+      }
+      expect(
+        await repository.loadAutomatically(
+          server.uri('/changed'),
+          RequestCancellation(),
+        ),
+        isNull,
+      );
+      expect(
+        server.requests.map((request) => (request.method, request.uri.path)),
+        [
+          ('HEAD', '/small'),
+          ('GET', '/small'),
+          ('HEAD', '/large'),
+          ('HEAD', '/unknown'),
+          ('HEAD', '/no-head'),
+          ('HEAD', '/changed'),
+          ('GET', '/changed'),
+        ],
+      );
+      expect(
+        (await repository.load(
+          server.uri('/no-head'),
+          RequestCancellation(),
+        )).bytes,
+        png,
+      );
+      expect(server.requests.last.method, 'GET');
+      final large = await repository.load(
+        server.uri('/large'),
+        RequestCancellation(),
+      );
+      expect(large.bytes.length, oversizedLength);
+    }, server);
+  });
+
+  test('cancelling the size probe prevents a late original download', () async {
+    final server = await PublicImageTestServer.start();
+    addTearDown(server.close);
+    final received = Completer<HttpRequest>();
+    server.onRequest = received.complete;
+    await HttpOverrides.runWithHttpOverrides(() async {
+      final cancellation = RequestCancellation();
+      final result = NetworkOriginalImageRepository().loadAutomatically(
+        server.uri('/cancelled'),
+        cancellation,
+      );
+      final failure = expectLater(result, throwsException);
+      final head = await received.future;
+      cancellation.cancel();
+      head.response.contentLength = 42;
+      await head.response.close();
+      await failure;
+      expect(server.requests.map((request) => request.method), ['HEAD']);
+    }, server);
+  });
   test(
     'album and private message CDN originals keep their URL and bytes',
     () async {

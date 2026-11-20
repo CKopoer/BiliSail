@@ -37,6 +37,15 @@ abstract interface class OriginalImageRepository {
   Future<OriginalImage> load(Uri source, RequestCancellation cancellation);
 }
 
+abstract interface class AutomaticOriginalImageRepository
+    implements OriginalImageRepository {
+  // An unverified or oversized original is left for an explicit user action.
+  Future<OriginalImage?> loadAutomatically(
+    Uri source,
+    RequestCancellation cancellation,
+  );
+}
+
 final class OriginalImageLimit implements Exception {
   const OriginalImageLimit();
 }

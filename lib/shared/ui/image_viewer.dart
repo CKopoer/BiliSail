@@ -317,10 +317,11 @@ class _ImageViewerState extends ConsumerState<ImageViewer>
       builder: (context, constraints) {
         final size = constraints.biggest;
         if (_viewport != size) {
+          final widthChanged = _viewport.width != size.width;
           _viewport = size;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
-            _resetSwipe();
+            if (widthChanged) _resetSwipe();
             _fit();
           });
         }
@@ -400,7 +401,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer>
               onPressed: () => ref
                   .read(imageViewerControllerProvider(widget.request).notifier)
                   .retry(),
-              child: const Text('重试'),
+              child: Text(state.originalRequested ? '查看原图' : '重试'),
             ),
           ],
         ),
@@ -548,6 +549,8 @@ class _ImageViewerState extends ConsumerState<ImageViewer>
                                 runSpacing: 8,
                                 children: [
                                   if (!state.isOriginal &&
+                                      (image != null ||
+                                          !state.originalRequested) &&
                                       widget.request.previewSource(
                                             state.index,
                                           ) !=

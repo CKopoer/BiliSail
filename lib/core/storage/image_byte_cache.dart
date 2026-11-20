@@ -81,7 +81,36 @@ final class PublicImageTransport {
   final _active = <HttpClient>{};
   bool _closed = false;
 
-  Future<Uint8List> load(Uri uri, ImageLoadRequest limits) async {
+  Future<int?> contentLength(Uri uri, ImageLoadRequest limits) =>
+      _request(uri, limits, 'HEAD', (response) async {
+        final length = response.contentLength;
+        await response.drain<void>();
+        return length > 0 ? length : null;
+      });
+
+  Future<Uint8List> load(Uri uri, ImageLoadRequest limits) =>
+      _request(uri, limits, 'GET', (response) async {
+        if (response.contentLength > limits.maxBytes) {
+          throw const ImageResponseTooLarge();
+        }
+        final bytes = BytesBuilder(copy: false);
+        await for (final chunk in response) {
+          limits.check();
+          if (bytes.length + chunk.length > limits.maxBytes) {
+            throw const ImageResponseTooLarge();
+          }
+          bytes.add(chunk);
+        }
+        if (bytes.isEmpty) throw const HttpException('Empty image response');
+        return bytes.takeBytes();
+      });
+
+  Future<T> _request<T>(
+    Uri uri,
+    ImageLoadRequest limits,
+    String method,
+    Future<T> Function(HttpClientResponse) read,
+  ) async {
     limits.check();
     if (_closed) throw const ImageLoadCancelled();
     if (!ImageByteCache.isPublicImageUri(uri)) {
@@ -111,11 +140,11 @@ final class PublicImageTransport {
     var successful = false;
     var sameOrigin = true;
     try {
-      final bytes = await (() async {
+      final result = await (() async {
         var target = uri;
         for (var redirect = 0; redirect <= 3; redirect++) {
           limits.check();
-          final request = await client.getUrl(target);
+          final request = await client.openUrl(method, target);
           limits.check();
           request.followRedirects = false;
           request.headers.set(
@@ -143,25 +172,13 @@ final class PublicImageTransport {
           if (response.statusCode != HttpStatus.ok) {
             throw const HttpException('Image response rejected');
           }
-          if (response.contentLength > limits.maxBytes) {
-            throw const ImageResponseTooLarge();
-          }
-          final bytes = BytesBuilder(copy: false);
-          await for (final chunk in response) {
-            limits.check();
-            if (bytes.length + chunk.length > limits.maxBytes) {
-              throw const ImageResponseTooLarge();
-            }
-            bytes.add(chunk);
-          }
-          if (bytes.isEmpty) throw const HttpException('Empty image response');
-          return bytes.takeBytes();
+          return read(response);
         }
         throw const HttpException('Image redirect limit exceeded');
       })().timeout(limits.timeout);
       limits.check();
       successful = true;
-      return bytes;
+      return result;
     } on TimeoutException {
       limits.cancel();
       rethrow;

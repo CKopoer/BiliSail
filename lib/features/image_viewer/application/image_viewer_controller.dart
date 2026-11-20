@@ -116,22 +116,30 @@ class ImageViewerController extends Notifier<ImageViewerState> {
 
   Future<void> _load(int next, {bool original = false}) async {
     if (next < 0 || next >= request.images.length) return;
+    final source = request.images[next];
     final preview = request.previewSource(next);
-    final originalRequested = original || preview == request.images[next];
-    if (state.loading &&
-        _read != null &&
+    final canPreview = preview != source;
+    final originalRequested = original || !canPreview;
+    if (_read != null &&
         next == state.index &&
-        state.originalRequested == originalRequested) {
+        (!original || state.originalRequested)) {
       return;
     }
-    // Keep the small preview visible while an explicitly requested original
-    // downloads. Switching pictures never carries pixels from the old index.
-    final retained = original && next == state.index ? state.image : null;
-    final retainedOriginal = retained != null && state.isOriginal;
+    final cached = original ? null : request.cachedPreview(next);
+    final repository = ref.read(originalImageRepositoryProvider);
+    final automatic =
+        !original &&
+            cached?.isOriginal != true &&
+            repository is AutomaticOriginalImageRepository
+        ? repository
+        : null;
+    final retained = original && next == state.index
+        ? state.image
+        : cached?.image;
+    final retainedOriginal = original && retained != null && state.isOriginal;
     _read?.cancel();
     final generation = ++_generation;
-    final cached = original ? null : request.cachedPreview(next);
-    if (cached != null) {
+    if (cached != null && automatic == null) {
       _read = null;
       state = ImageViewerState(
         index: next,
@@ -149,16 +157,38 @@ class ImageViewerController extends Notifier<ImageViewerState> {
       index: next,
       image: retained,
       exporting: _exporting,
-      originalRequested: originalRequested,
+      originalRequested: automatic != null || originalRequested,
       isOriginal: retainedOriginal,
     );
     try {
-      final image = await ref
-          .read(originalImageRepositoryProvider)
-          .load(
-            originalRequested ? request.images[next] : preview,
-            cancellation,
+      if (automatic != null) {
+        OriginalImage? upgraded;
+        try {
+          upgraded = await automatic.loadAutomatically(source, cancellation);
+        } on Exception {
+          if (retained == null && !canPreview) rethrow;
+        }
+        if (generation != _generation || cancellation.isCancelled) return;
+        if (upgraded != null || retained != null || !canPreview) {
+          state = ImageViewerState(
+            index: next,
+            loading: false,
+            image: upgraded ?? retained,
+            exporting: _exporting,
+            originalRequested: true,
+            isOriginal: upgraded != null,
+            message: upgraded == null && retained == null
+                ? '原图大小未知或超过自动加载上限，请手动查看'
+                : null,
           );
+          return;
+        }
+        state = ImageViewerState(index: next, exporting: _exporting);
+      }
+      final image = await repository.load(
+        originalRequested ? source : preview,
+        cancellation,
+      );
       if (generation != _generation || cancellation.isCancelled) return;
       state = ImageViewerState(
         index: next,

@@ -1,5 +1,17 @@
 # 首页刷新、自动分页与图片缓存
 
+## 2026-11-20：自动加载有界原图
+
+进入查看器或切到下一张时，先显示可复用的缓存缩略图，再检查当前原图的编码文件大小。参考 PiliPlus 的缩略图垫底交互，BiliSail 在发送原图 GET 前用同一无凭据公开传输检查 HEAD。HEAD 在 3 秒内给出大于零且不超过 8 MiB 的 Content-Length 时才自动下载，GET 的响应头和累计流量仍受 8 MiB 上限约束，成功时可复用同一来源的连接。尺寸由图片编码头校验，沿用既有 64 Mi 像素上限。[图片仓储](../../lib/features/image_viewer/data/network_original_image_repository.dart) · [公开图片传输](../../lib/core/storage/image_byte_cache.dart)
+
+超限、长度未知、探测超时或不支持 HEAD 时保留缓存缩略图。缓存未命中且自动加载无法完成时，使用可生成的 1280 像素 CDN 预览。没有独立预览时提供“查看原图”操作，手动请求沿用原有 32 MiB 上限。切图、关闭和账号变化撤销旧页探测及下载，原图首帧就绪前保留已绘制的缩略图。历史“显式请求原图”记录描述当时行为。[查看器控制器](../../lib/features/image_viewer/application/image_viewer_controller.dart) · [查看器组件](../../lib/shared/ui/image_viewer.dart)
+
+本地 TLS 回归检查普通原图、超限／未知长度／不支持 HEAD 时的请求序列、HEAD 后大小变化、取消和手动请求。组件回归覆盖拖动中的缓存相邻图、当前图自动升级、无缓存回退及无独立预览时的手动入口。[仓储测试](../../test/features/image_viewer/original_image_repository_test.dart) · [组件测试](../../test/features/image_viewer/image_viewer_test.dart)
+
+两个 `i0.hdslb.com` 的公开 PNG 样本经 HTTP/1.1 HEAD 返回 200，并分别提供 3461 和 12398 字节的 Content-Length。未从样本下载正文。
+
+148 项定向回归通过。`tool/check.ps1 -SkipPub` 的格式、静态分析与打包边界检查通过，根应用 5854 项通过、14 项跳过，四个独立包合计 1454 项通过、20 项跳过。其中 mux 的 10 项原生用例因未配置 `BILI_MUX_LIBRARY` 跳过。未构建应用或进行实机测试。
+
 ## 2026-11-20：查看器复用列表缩略图与连续滑动
 
 旧查看器只在抬手时读取横向位移并切换索引，拖动期间没有移动页面。评论区的 264 像素宽缩略图走共享图片缓存，查看器打开后通过独立仓储请求 1280 像素预览，因此已加载的缩略图也无法避免第二次网络请求。

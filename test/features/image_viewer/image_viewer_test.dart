@@ -558,7 +558,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('cached neighbor is painted during drag and reused on landing', (
+  testWidgets('cached pictures stay visible while automatic originals load', (
     tester,
   ) async {
     final bytes = await tester.runAsync(png);
@@ -569,7 +569,7 @@ void main() {
       width: 180,
       height: 280,
     );
-    final repository = _PendingRepository();
+    final repository = _AutomaticRepository();
     final sources = List.generate(
       2,
       (i) => Uri.https('i0.hdslb.com', '/$i.png'),
@@ -588,7 +588,10 @@ void main() {
         child: InputTestApp(home: ImageViewer(request: request)),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    expect(repository.autoReads.single.source, sources.first);
+    expect(find.bySemanticsLabel('预览图 1'), findsOneWidget);
+    expect(find.text('正在加载原图…'), findsOneWidget);
     final viewport = find.byType(InteractiveViewer);
     final viewportCenter = tester.getCenter(viewport);
     final drag = await tester.startGesture(viewportCenter);
@@ -614,11 +617,81 @@ void main() {
     expect(repository.sources, isEmpty);
 
     await drag.up();
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump();
     expect(find.text('2 / 2'), findsOneWidget);
     expect(tester.getCenter(adjacent).dx, closeTo(viewportCenter.dx, 1));
     expect(tester.widget<RawImage>(adjacentFrame).image, isNotNull);
     expect(repository.sources, isEmpty);
+    expect(repository.autoReads.first.cancellation.isCancelled, isTrue);
+    expect(repository.autoReads.last.source, sources.last);
+    repository.autoReads.first.result.complete(first);
+    await tester.pump();
+    expect(find.bySemanticsLabel('预览图 2'), findsOneWidget);
+    repository.autoReads.last.result.complete(second);
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('原图 2'), findsOneWidget);
+    expect(find.text('查看原图'), findsNothing);
+  });
+
+  testWidgets(
+    'when automatic original is deferred, load preview and offer manual original',
+    (tester) async {
+      final repository = _AutomaticRepository();
+      final sources = await _openViewer(
+        tester,
+        repository,
+        pending: true,
+        count: 1,
+        index: 0,
+      );
+      expect(repository.autoReads.single.source, sources.single);
+      expect(repository.sources, isEmpty);
+      repository.autoReads.single.result.complete(null);
+      await tester.pump();
+      expect(repository.sources, [preview(sources.single)]);
+      final image = (await _swipeRepository(tester)).image;
+      repository.reads.single.result.complete(image);
+      await tester.pumpAndSettle();
+      expect(find.bySemanticsLabel('预览图 1'), findsOneWidget);
+      await tester.tap(find.text('查看原图'));
+      await tester.pump();
+      expect(repository.sources, [preview(sources.single), sources.single]);
+      repository.reads.last.result.complete(image);
+      await tester.pumpAndSettle();
+      expect(find.bySemanticsLabel('原图 1'), findsOneWidget);
+    },
+  );
+
+  testWidgets('a source without a preview can still be selected manually', (
+    tester,
+  ) async {
+    final repository = _AutomaticRepository();
+    final source = Uri.https('message.biliimg.com', '/photo.jpg');
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          originalImageRepositoryProvider.overrideWithValue(repository),
+        ],
+        child: InputTestApp(
+          home: ImageViewer(request: ImageViewerRequest([source], 0)),
+        ),
+      ),
+    );
+    expect(repository.autoReads.single.source, source);
+    repository.autoReads.single.result.complete(null);
+    await tester.pumpAndSettle();
+    expect(repository.sources, isEmpty);
+    expect(find.text('原图大小未知或超过自动加载上限，请手动查看'), findsOneWidget);
+    await tester.tap(find.text('查看原图'));
+    await tester.pump();
+    expect(repository.sources, [source]);
+    repository.reads.single.result.complete(
+      (await _swipeRepository(tester)).image,
+    );
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('原图 1'), findsOneWidget);
   });
 
   testWidgets(
@@ -719,6 +792,28 @@ class _PendingRepository implements OriginalImageRepository {
     sources.add(source);
     final result = Completer<OriginalImage>();
     reads.add((cancellation: cancellation, result: result));
+    return result.future;
+  }
+}
+
+class _AutomaticRepository extends _PendingRepository
+    implements AutomaticOriginalImageRepository {
+  final autoReads =
+      <
+        ({
+          Uri source,
+          RequestCancellation cancellation,
+          Completer<OriginalImage?> result,
+        })
+      >[];
+
+  @override
+  Future<OriginalImage?> loadAutomatically(
+    Uri source,
+    RequestCancellation cancellation,
+  ) {
+    final result = Completer<OriginalImage?>();
+    autoReads.add((source: source, cancellation: cancellation, result: result));
     return result.future;
   }
 }
