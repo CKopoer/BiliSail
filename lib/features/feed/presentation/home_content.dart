@@ -11,7 +11,6 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../shared/ui/app_dialog.dart';
 import '../../../shared/ui/content_section_tabs.dart';
@@ -32,6 +31,7 @@ import '../../video/domain/watch_later_queue.dart';
 import '../../video/application/watch_later_queue_registry.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/app_notice.dart';
+import '../../../shared/ui/workspace_link.dart';
 import 'home_feed_cards.dart';
 import 'favorite_folder_edit_dialog.dart';
 import '../application/home_controller.dart';
@@ -412,8 +412,9 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
                       : item.description,
                 ),
         ],
-        onOpenUser: (id) => context.go('/user/${id.value}'),
-        onOpenVideo: (video) => context.go('/video/${video.id.value}'),
+        onOpenUser: (id) => context.openWorkspaceLink('/user/${id.value}'),
+        onOpenVideo: (video) =>
+            context.openWorkspaceLink('/video/${video.id.value}'),
         onOpenLink: _openDynamicLink,
         // Routes recreate callbacks on each navigation. Forward through this
         // State so cached cards use the latest action without a new delegate.
@@ -454,7 +455,8 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
                       ),
                     )
                   : null,
-              onOpenUser: (id) => context.go('/user/${id.value}'),
+              onOpenUser: (id) =>
+                  context.openWorkspaceLink('/user/${id.value}'),
               onTap: () => _open(item, visibleItems: items),
             );
           }
@@ -499,7 +501,7 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
           return VideoDynamicCard(
             key: key,
             entry: item,
-            onOpenUser: (id) => context.go('/user/${id.value}'),
+            onOpenUser: (id) => context.openWorkspaceLink('/user/${id.value}'),
             onTap: () => _open(item),
           );
         }
@@ -793,7 +795,7 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
       final seasonId = ids.first;
       final episodeId = ids.length == 2 ? ids.last : null;
       if (RegExp(r'^[1-9][0-9]*$').hasMatch(seasonId)) {
-        context.go(
+        context.openWorkspaceLink(
           Uri(
             path: '/pgc/season/$seasonId',
             queryParameters:
@@ -810,7 +812,7 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
     }
     if (entry.kind == HomeEntryKind.live) {
       if (RegExp(r'^[1-9][0-9]*$').hasMatch(entry.id)) {
-        context.go('/live/${entry.id}');
+        context.openWorkspaceLink('/live/${entry.id}');
       } else {
         showAppNotice(context, '直播房间地址无效');
       }
@@ -851,46 +853,47 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
               ],
             );
         if (queue != null && queue.indexOf(VideoId(entry.bvid!)) >= 0) {
-          context.go('/video/${entry.bvid}?queue=${queue.id}');
+          context.openWorkspaceLink('/video/${entry.bvid}?queue=${queue.id}');
           return;
         }
       }
-      context.go('/video/${entry.bvid}');
+      context.openWorkspaceLink('/video/${entry.bvid}');
       return;
     }
     final uri = entry.url;
     if (uri == null) return;
-    await _openLink(uri);
+    if (!WorkspaceLinkScope.openingInBackground) await _openLink(uri);
   }
 
   Future<void> _openDynamicLink(Uri uri) async {
     final query = dynamicSearchQuery(uri);
     if (query != null) {
-      context.go(
+      context.openWorkspaceLink(
         Uri(path: '/search', queryParameters: {'q': query}).toString(),
       );
       return;
     }
     final topic = dynamicTopicId(uri);
     if (topic != null) {
-      context.go('/topic/$topic');
+      context.openWorkspaceLink('/topic/$topic');
       return;
     }
     final video = dynamicVideo(uri);
     if (video != null) {
-      context.go('/video/${video.value}');
+      context.openWorkspaceLink('/video/${video.value}');
       return;
     }
     final pgc = dynamicPgcRoute(uri);
     if (pgc != null) {
-      context.go(pgc);
+      context.openWorkspaceLink(pgc);
       return;
     }
     final room = dynamicLiveRoom(uri);
     if (room != null) {
-      context.go('/live/${room.value}');
+      context.openWorkspaceLink('/live/${room.value}');
       return;
     }
+    if (WorkspaceLinkScope.openingInBackground) return;
     var opened = false;
     try {
       opened = await ref.read(webLinkOpenerProvider)(uri);
@@ -955,7 +958,7 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
       showAppNotice(context, '该视频不在当前收藏夹播放列表内，请刷新后重试');
       return;
     }
-    context.go(
+    context.openWorkspaceLink(
       Uri(
         path: '/video/${id.value}',
         queryParameters: {'queue': queue.id},
@@ -975,6 +978,10 @@ final class _EntryCard extends StatelessWidget {
       onTap: entry.kind == HomeEntryKind.video && entry.bvid == null
           ? null
           : onTap,
+      onTertiaryTapUp: WorkspaceLinkScope.middleClick(
+        context,
+        entry.bvid != null ? onTap : null,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1003,7 +1010,9 @@ final class _EntryCard extends StatelessWidget {
                     child: InkWell(
                       onTap: UserId.tryParse(entry.authorMid) == null
                           ? null
-                          : () => context.go('/user/${entry.authorMid}'),
+                          : () => context.openWorkspaceLink(
+                              '/user/${entry.authorMid}',
+                            ),
                       child: Row(
                         children: [
                           NetworkAvatar(

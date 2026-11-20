@@ -83,6 +83,84 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   for (final mode in WorkspaceNavigationMode.values) {
+    _workspaceTestWidgets('middle-clicking a search result in $mode', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1280, 900);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      const id = VideoId('BV1234567890');
+      final video = _videoWithTitle(id, '中键测试视频');
+      final loads = <VideoId>[];
+      final router = createBiliRouter(
+        initialLocation: '/search?q=测试',
+        playerBuilder: (_, _, _) => const SizedBox(),
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            settingsRepositoryProvider.overrideWithValue(
+              _SettingsRepository(navigationMode: mode),
+            ),
+            searchRepositoryProvider.overrideWithValue(
+              _SearchRepository(items: [SearchVideoEntry(video.summary)]),
+            ),
+            feedRepositoryProvider.overrideWithValue(_FeedRepository()),
+            homeRepositoryProvider.overrideWithValue(_HomeRepository()),
+            videoDetailProvider.overrideWith((ref, id) {
+              loads.add(id);
+              return video;
+            }),
+            relatedVideosProvider.overrideWith((ref, id) => const []),
+            videoTagsProvider.overrideWith((ref, id) => const []),
+          ],
+          child: InputTestApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final searchUri = router.routeInformationProvider.value.uri;
+      final searchPage = tester.element(find.byType(SearchScreen));
+      final result = find.text(video.summary.title);
+      final newTab = find.byKey(const ValueKey('workspace-tab-tab-2'));
+
+      final cancelled = await tester.startGesture(
+        tester.getCenter(result),
+        kind: PointerDeviceKind.mouse,
+        buttons: kMiddleMouseButton,
+      );
+      await cancelled.cancel();
+      await tester.pumpAndSettle();
+      expect(newTab, findsNothing);
+
+      await tester.tap(
+        result,
+        kind: PointerDeviceKind.mouse,
+        buttons: kMiddleMouseButton,
+      );
+      await tester.pumpAndSettle();
+      expect(router.routeInformationProvider.value.uri, searchUri);
+      expect(tester.element(find.byType(SearchScreen)), same(searchPage));
+      expect(find.byType(VideoScreen, skipOffstage: false), findsNothing);
+      expect(loads, isEmpty);
+
+      if (mode == WorkspaceNavigationMode.multipleTabs) {
+        expect(newTab, findsOneWidget);
+        await tester.tap(newTab);
+      } else {
+        expect(newTab, findsNothing);
+        await tester.tap(result, kind: PointerDeviceKind.mouse);
+      }
+      await tester.pumpAndSettle();
+      expect(router.routeInformationProvider.value.uri.path, '/video/$id');
+      expect(find.byType(VideoScreen), findsOneWidget);
+      expect(loads, [id]);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  for (final mode in WorkspaceNavigationMode.values) {
     _workspaceTestWidgets(
       'closing playback queue clears its route and retains the page in $mode',
       (tester) async {
@@ -3127,8 +3205,9 @@ final class _TagTestPlayerState extends State<_TagTestPlayer> {
 }
 
 final class _SearchRepository implements SearchRepository {
-  _SearchRepository({this.countsByQuery = const {}});
+  _SearchRepository({this.countsByQuery = const {}, this.items = const []});
   final Map<String, Map<SearchCategory, int>> countsByQuery;
+  final List<SearchEntry> items;
   final queries = <String>[];
   final cancellations = <RequestCancellation>[];
   final calls =
@@ -3163,7 +3242,7 @@ final class _SearchRepository implements SearchRepository {
       userType: userType,
     ));
     return SearchPage(
-      items: [],
+      items: items,
       hasMore: false,
       counts: countsByQuery[query] ?? const {},
     );

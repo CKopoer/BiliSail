@@ -13,6 +13,7 @@ import 'card_menu.dart';
 import 'scroll_aware_hover_region.dart';
 import 'video_card_feedback.dart';
 import 'text_measurement_cache.dart';
+import 'workspace_link.dart';
 export 'video_card_feedback.dart' show VideoCardFeedback;
 import '../../features/video/domain/video_card_interactions.dart';
 import '../../core/presentation/workspace_activity.dart';
@@ -304,6 +305,10 @@ final class _VideoCardState extends State<VideoCard> {
           clipBehavior: Clip.none,
           child: InkWell(
             onTap: widget.feedback == null ? () => widget.onTap() : null,
+            onTertiaryTapUp: WorkspaceLinkScope.middleClick(
+              context,
+              widget.feedback == null ? () => widget.onTap() : null,
+            ),
             onLongPress: widget.feedback == null ? _showMenu : null,
             hoverColor: Colors.transparent,
             hoverDuration: Duration.zero,
@@ -828,6 +833,9 @@ final class _AuthorMetadata extends StatelessWidget {
     final theme = Theme.of(context);
     final id = video.authorId;
     final openUser = onOpenUser;
+    final openAuthor = id != null && id.isValid && openUser != null
+        ? () => openUser(id)
+        : null;
     final timeLabel = commentTimeLabel(video.publishedAt ?? publishedAt);
     final dateText = timeLabel.isEmpty ? publishText : timeLabel;
     final metadataStyle = theme.textTheme.bodySmall?.copyWith(
@@ -842,9 +850,8 @@ final class _AuthorMetadata extends StatelessWidget {
     final author = ScrollAwareHoverRegion(
       onHover: onHover,
       child: InkWell(
-        onTap: id != null && id.isValid && openUser != null
-            ? () => openUser(id)
-            : null,
+        onTap: openAuthor,
+        onTertiaryTapUp: WorkspaceLinkScope.middleClick(context, openAuthor),
         hoverColor: Colors.transparent,
         hoverDuration: Duration.zero,
         child: Row(

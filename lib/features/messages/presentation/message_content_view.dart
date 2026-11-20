@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../../../shared/ui/workspace_link.dart';
 import '../domain/message_repository.dart';
 import 'message_rich_text.dart';
 import 'private_message_image.dart';
@@ -119,14 +120,16 @@ class _ContentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final target = card.targetUrl;
+    final open = target == null || onOpenTarget == null
+        ? null
+        : () => onOpenTarget?.call(target);
     return Material(
       color: Theme.of(context).colorScheme.surface,
       borderRadius: BorderRadius.circular(10),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: target == null || onOpenTarget == null
-            ? null
-            : () => onOpenTarget?.call(target),
+        onTap: open,
+        onTertiaryTapUp: WorkspaceLinkScope.middleClick(context, open),
         child: Padding(
           padding: const EdgeInsets.all(10),
           child: Column(

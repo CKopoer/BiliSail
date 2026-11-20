@@ -7,6 +7,7 @@ import '../../../domain/video.dart';
 import '../../../shared/ui/app_cover_image.dart';
 import '../../../shared/ui/live_card_cover.dart';
 import '../../../shared/ui/scroll_aware_hover_region.dart';
+import '../../../shared/ui/workspace_link.dart';
 import '../../live/domain/live_room.dart';
 import '../domain/home_repository.dart';
 
@@ -311,6 +312,7 @@ final class _LiveRoomCardState extends State<LiveRoomCard> {
           setState(() => _hovered = false);
           widget.onTap();
         },
+        onTertiaryTapUp: WorkspaceLinkScope.middleClick(context, widget.onTap),
         borderRadius: BorderRadius.circular(6),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

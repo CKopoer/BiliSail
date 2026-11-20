@@ -20,6 +20,7 @@ import 'dynamic_post_menu.dart';
 import 'dynamic_poll_dialog.dart';
 import 'dynamic_content_card.dart';
 import 'dynamic_reservation_card.dart';
+import 'workspace_link.dart';
 
 class InteractiveDynamicPostCard extends ConsumerWidget {
   const InteractiveDynamicPostCard({
@@ -75,6 +76,7 @@ class InteractiveDynamicPostCard extends ConsumerWidget {
     void link(Uri url) {
       final poll = dynamicPollId(url);
       if (poll != null) {
+        if (WorkspaceLinkScope.openingInBackground) return;
         unawaited(
           showDynamicPollDialog(
             context,

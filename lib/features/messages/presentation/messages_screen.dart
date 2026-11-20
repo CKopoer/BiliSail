@@ -13,6 +13,7 @@ import '../../../shared/ui/retained_tab_view.dart';
 import '../../../shared/ui/smooth_scroll_behavior.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/app_dialog.dart';
+import '../../../shared/ui/workspace_link.dart';
 import '../../auth/application/auth_controller.dart';
 import '../application/messages_controller.dart';
 import '../application/message_center_controller.dart';
@@ -1021,6 +1022,12 @@ class _NotificationRow extends ConsumerWidget {
     final user = entry.userId;
     final canReply = entry.replyContext != null;
     final target = entry.targetUrl;
+    final openTarget = target == null || onOpenTarget == null
+        ? null
+        : () => onOpenTarget?.call(target);
+    final openUser = user == null || onOpenUser == null
+        ? null
+        : () => onOpenUser?.call(user);
     final source = [
       entry.sourceTitle,
       entry.sourceText,
@@ -1028,16 +1035,17 @@ class _NotificationRow extends ConsumerWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: target != null && onOpenTarget != null
-            ? () => onOpenTarget?.call(target)
-            : !canReply
-            ? null
-            : () => showMessageReply(
-                context,
-                ref,
-                entry,
-                onOpenTarget: onOpenTarget,
-              ),
+        onTap:
+            openTarget ??
+            (canReply
+                ? () => showMessageReply(
+                    context,
+                    ref,
+                    entry,
+                    onOpenTarget: onOpenTarget,
+                  )
+                : null),
+        onTertiaryTapUp: WorkspaceLinkScope.middleClick(context, openTarget),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(4, 14, 4, 0),
           child: Column(
@@ -1047,7 +1055,11 @@ class _NotificationRow extends ConsumerWidget {
                 children: [
                   if (!entry.system) ...[
                     InkWell(
-                      onTap: user == null ? null : () => onOpenUser?.call(user),
+                      onTap: openUser,
+                      onTertiaryTapUp: WorkspaceLinkScope.middleClick(
+                        context,
+                        openUser,
+                      ),
                       child: NetworkAvatar(
                         url: entry.avatarUrl,
                         name: entry.title,
@@ -1119,15 +1131,21 @@ class _NotificationRow extends ConsumerWidget {
                                 style: theme.textTheme.labelSmall,
                               ),
                             if (canReply)
-                              TextButton.icon(
-                                onPressed: () => showMessageReply(
-                                  context,
-                                  ref,
-                                  entry,
-                                  onOpenTarget: onOpenTarget,
+                              GestureDetector(
+                                onTertiaryTapUp: (_) {},
+                                child: TextButton.icon(
+                                  onPressed: () => showMessageReply(
+                                    context,
+                                    ref,
+                                    entry,
+                                    onOpenTarget: onOpenTarget,
+                                  ),
+                                  icon: const Icon(
+                                    Icons.reply_rounded,
+                                    size: 17,
+                                  ),
+                                  label: const Text('回复'),
                                 ),
-                                icon: const Icon(Icons.reply_rounded, size: 17),
-                                label: const Text('回复'),
                               ),
                             if (entry.targetUrl case final target?)
                               TextButton(

@@ -1,6 +1,5 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/platform/external_links.dart';
@@ -11,6 +10,7 @@ import '../../../shared/ui/app_notice.dart';
 import '../../../domain/video.dart';
 import '../../../shared/ui/responsive_card_grid.dart';
 import '../../../shared/ui/video_card.dart';
+import '../../../shared/ui/workspace_link.dart';
 import '../application/feed_controller.dart';
 import '../application/recommendation_publication_time.dart';
 import '../domain/home_channel.dart';
@@ -122,7 +122,9 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
     }
 
     if (target == null) {
-      context.go(attributedRoute('/video/${widget.video.id.value}'));
+      context.openWorkspaceLink(
+        attributedRoute('/video/${widget.video.id.value}'),
+      );
       return;
     }
     final route = switch (target.kind) {
@@ -133,7 +135,7 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
       _ => null,
     };
     if (route != null) {
-      context.go(
+      context.openWorkspaceLink(
         attributedRoute(
           route,
           episode: target.kind == RecommendationTargetKind.episode
@@ -143,6 +145,7 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
       );
       return;
     }
+    if (WorkspaceLinkScope.openingInBackground) return;
     final url = target.url;
     if (url == null) {
       showAppNotice(context, '暂不支持打开此推荐类型');
@@ -210,7 +213,7 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
       key: ValueKey(widget.video.id),
       video: widget.video,
       onTap: _open,
-      onOpenUser: (id) => context.go('/user/${id.value}'),
+      onOpenUser: (id) => context.openWorkspaceLink('/user/${id.value}'),
       showRecommendationReason: widget.recommended,
       publishedAt: _publicationTime,
       feedback: feedback.rejected

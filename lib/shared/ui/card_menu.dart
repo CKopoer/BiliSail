@@ -41,8 +41,9 @@ class CardMenuButton extends StatelessWidget {
           ignoring: !visible,
           child: GestureDetector(
             key: anchorKey,
-            // Disabled nested actions still consume taps inside the card.
+            // Disabled nested actions still consume primary and middle clicks.
             onTap: () {},
+            onTertiaryTapUp: (_) {},
             excludeFromSemantics: true,
             child: IconButton(
               key: buttonKey,

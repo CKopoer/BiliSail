@@ -279,8 +279,9 @@ class _VideoCardCoverState extends State<VideoCardCover> {
     final uncertain =
         _scope?.interactions.isUncertain(widget.video.id) ?? false;
     return GestureDetector(
-      // Disabled add actions must still consume taps inside a clickable card.
+      // Disabled add actions still consume primary and middle clicks.
       onTap: () {},
+      onTertiaryTapUp: (_) {},
       excludeFromSemantics: true,
       child: Tooltip(
         message: added

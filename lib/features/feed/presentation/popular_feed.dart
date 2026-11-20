@@ -1,6 +1,5 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/presentation/workspace_activity.dart';
 import '../../../domain/app_failure.dart';
@@ -12,6 +11,7 @@ import '../../../shared/ui/retained_tab_view.dart';
 import '../../../shared/ui/smooth_scroll_behavior.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/video_grid.dart';
+import '../../../shared/ui/workspace_link.dart';
 import '../application/feed_controller.dart';
 import '../domain/feed_repository.dart';
 import '../domain/popular_feed.dart';
@@ -144,7 +144,8 @@ class _PopularPaneState extends ConsumerState<_PopularPane> {
   SliverVideoGrid? _grid;
   PopularSection get section => widget.section;
 
-  void _openVideo(VideoId id) => context.go('/video/${id.value}');
+  void _openVideo(VideoId id) =>
+      context.openWorkspaceLink('/video/${id.value}');
 
   Widget _itemsSliver(AsyncValue<List<VideoSummary>> value) {
     final items = value.asData?.value;
@@ -173,7 +174,8 @@ class _PopularPaneState extends ConsumerState<_PopularPane> {
               items: items,
               showRecommendationReason: section == PopularSection.weekly,
               onOpen: _openVideo,
-              onOpenUser: (id) => context.go('/user/${id.value}'),
+              onOpenUser: (id) =>
+                  context.openWorkspaceLink('/user/${id.value}'),
             ),
     );
   }

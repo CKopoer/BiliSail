@@ -9,12 +9,14 @@ import 'scroll_aware_hover_region.dart';
 import 'video_card.dart';
 import 'video_card_cover.dart';
 import 'video_card_menu_sheet.dart';
+import 'workspace_link.dart';
 
 final class HorizontalVideoCard extends StatefulWidget {
   const HorizontalVideoCard({
     super.key,
     required this.video,
     this.onTap,
+    this.opensWorkspaceLink = false,
     this.onOpenUser,
     this.selected = false,
     this.playCountText = '',
@@ -32,7 +34,7 @@ final class HorizontalVideoCard extends StatefulWidget {
   final VideoSummary video;
   final VoidCallback? onTap;
   final ValueChanged<UserId>? onOpenUser;
-  final bool selected;
+  final bool selected, opensWorkspaceLink;
   final String playCountText, danmakuCountText;
   final Widget? trailing;
   final bool showWatchLaterActions;
@@ -55,10 +57,14 @@ final class _HorizontalVideoCardState extends State<HorizontalVideoCard> {
     final onOpenUser = widget.onOpenUser;
     final canOpenAuthor =
         authorId != null && authorId.isValid && onOpenUser != null;
+    final openAuthor = canOpenAuthor ? () => onOpenUser(authorId) : null;
     return ScrollAwareHoverRegion(
       onHover: (hovered) => setState(() => _hovered = hovered),
       child: InkWell(
         onTap: widget.onTap,
+        onTertiaryTapUp: widget.opensWorkspaceLink
+            ? WorkspaceLinkScope.middleClick(context, widget.onTap)
+            : null,
         onLongPress: widget.showWatchLaterActions
             ? () => showVideoCardWatchLaterMenu(
                 context,
@@ -167,9 +173,12 @@ final class _HorizontalVideoCardState extends State<HorizontalVideoCard> {
                                   onHover: (hovered) =>
                                       setState(() => _authorHovered = hovered),
                                   child: InkWell(
-                                    onTap: canOpenAuthor
-                                        ? () => onOpenUser(authorId)
-                                        : null,
+                                    onTap: openAuthor,
+                                    onTertiaryTapUp:
+                                        WorkspaceLinkScope.middleClick(
+                                          context,
+                                          openAuthor,
+                                        ),
                                     onFocusChange: (focused) => setState(
                                       () => _authorFocused = focused,
                                     ),

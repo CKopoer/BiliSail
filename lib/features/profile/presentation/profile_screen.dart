@@ -24,6 +24,7 @@ import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/retained_tab_view.dart';
 import '../../../shared/ui/scroll_collapsing_header.dart';
 import '../../../shared/ui/user_follow_button.dart';
+import '../../../shared/ui/workspace_link.dart';
 import '../../auth/application/auth_controller.dart';
 import 'profile_header.dart';
 import 'profile_details_dialog.dart';
@@ -585,6 +586,7 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
       widget.onOpenLiveRoom!(room);
       return;
     }
+    if (WorkspaceLinkScope.openingInBackground) return;
     var opened = false;
     try {
       opened = await ref.read(webLinkOpenerProvider)(uri);

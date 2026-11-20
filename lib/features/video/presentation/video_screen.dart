@@ -1421,6 +1421,7 @@ final class _RelatedVideosSliverState
                 child: HorizontalVideoCard(
                   video: video,
                   onTap: onOpen == null ? null : () => onOpen(video),
+                  opensWorkspaceLink: true,
                   onOpenUser: onOpenUser,
                 ),
               );

@@ -7,6 +7,7 @@ import '../../../domain/video.dart';
 import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/video_card.dart';
 import '../../../shared/ui/user_follow_button.dart';
+import '../../../shared/ui/workspace_link.dart';
 import '../application/video_author_controller.dart';
 import '../domain/video_author_repository.dart';
 import 'video_staff_panel.dart';
@@ -48,10 +49,12 @@ final class VideoAuthorHeader extends ConsumerWidget {
             showMessage: false,
           );
     final userId = UserId.tryParse(video.authorMid) ?? video.summary.authorId;
+    final openAuthor = userId?.isValid == true && onOpenUser != null
+        ? () => onOpenUser!(userId!)
+        : null;
     final identity = InkWell(
-      onTap: userId?.isValid == true && onOpenUser != null
-          ? () => onOpenUser!(userId!)
-          : null,
+      onTap: openAuthor,
+      onTertiaryTapUp: WorkspaceLinkScope.middleClick(context, openAuthor),
       child: Row(
         children: [
           NetworkAvatar(

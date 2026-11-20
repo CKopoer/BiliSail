@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import 'app_cover_image.dart';
+import 'workspace_link.dart';
 
 final class SeasonCard extends StatelessWidget {
   const SeasonCard({
@@ -28,6 +29,7 @@ final class SeasonCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
+        onTertiaryTapUp: WorkspaceLinkScope.middleClick(context, onTap),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

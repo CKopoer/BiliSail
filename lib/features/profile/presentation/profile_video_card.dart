@@ -9,6 +9,7 @@ import '../../../shared/ui/video_card.dart';
 import '../../../shared/ui/video_card_cover.dart';
 import '../../../shared/ui/video_card_menu_sheet.dart';
 import '../../../shared/ui/scroll_aware_hover_region.dart';
+import '../../../shared/ui/workspace_link.dart';
 
 /// Space submissions keep their cover and metadata side by side.
 class ProfileVideoCard extends StatefulWidget {
@@ -45,6 +46,10 @@ class _ProfileVideoCardState extends State<ProfileVideoCard> {
           borderRadius: BorderRadius.circular(8),
           child: InkWell(
             onTap: widget.onTap,
+            onTertiaryTapUp: WorkspaceLinkScope.middleClick(
+              context,
+              widget.onTap,
+            ),
             onLongPress: () => showVideoCardWatchLaterMenu(
               context,
               video.id,
