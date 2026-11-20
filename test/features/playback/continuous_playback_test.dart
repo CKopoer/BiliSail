@@ -3,6 +3,7 @@ import '../../support/material_tooltip_finder.dart';
 import 'dart:async';
 
 import 'package:bili_player/bili_player.dart';
+import 'package:bilisail/core/platform/playback_window_chrome.dart';
 import 'package:bilisail/core/platform/window_service.dart';
 import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
@@ -750,6 +751,122 @@ void main() {
       });
     }
   }
+
+  testWidgets(
+    'watch later advances and wraps while the mini player stays open',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1200, 800);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final engine = _Engine();
+      final session = _session(engine);
+      final window = _Window(desktop: true);
+      addTearDown(session.close);
+      final a = _video(_a, [_parts.first]);
+      final b = _video(_b, [_third]);
+      final nextDetail = Completer<VideoDetail>();
+      final queue = WatchLaterQueue(
+        id: 'mini-loop',
+        scope: 'guest',
+        sessionEpoch: 0,
+        items: [
+          WatchLaterQueueItem(video: a.summary),
+          WatchLaterQueueItem(video: b.summary),
+        ],
+      );
+      var id = _a;
+      final settings = AppSettings(
+        playbackMode: PlaybackMode.listLoop,
+        danmakuEnabled: false,
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            playbackSessionProvider.overrideWithValue(session),
+            authControllerProvider.overrideWith(_Auth.new),
+            videoDetailProvider(_a).overrideWith((_) => a),
+            videoDetailProvider(_b).overrideWith((_) => nextDetail.future),
+            for (final video in [a, b]) ...[
+              relatedVideosProvider(video.summary.id).overrideWith((_) => []),
+              videoTagsProvider(video.summary.id).overrideWith((_) => []),
+            ],
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: Column(
+                children: [
+                  PlaybackWindowChrome(
+                    window: window,
+                    onBack: () {},
+                    onHome: () {},
+                    onClose: () {},
+                  ),
+                  Expanded(
+                    child: StatefulBuilder(
+                      builder: (_, update) => VideoScreen(
+                        id: id,
+                        queue: queue,
+                        onOpenQueueVideo: (next) => update(() => id = next),
+                        playerBuilder: (_, detail, part) => PlaybackPanel(
+                          detail: detail,
+                          part: part,
+                          settings: settings,
+                          window: window,
+                          onToggleComments: () {},
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await _frames(tester);
+      expect(engine.opens, 1);
+      expect(session.detail?.summary.id, _a);
+      expect(engine.options?.startPosition, const Duration(seconds: 8));
+
+      await tester.tap(findMaterialTooltip('迷你小窗'));
+      await _frames(tester);
+      tester.view.physicalSize = const Size(320, 180);
+      await _frames(tester);
+      final miniPlayer = find.byKey(const ValueKey('mini-player'));
+      final miniElement = tester.element(miniPlayer);
+      expect(window.miniPlayer.value, isTrue);
+
+      for (final (next, opens) in [(_b, 2), (_a, 3)]) {
+        engine.end();
+        if (next == _b) {
+          await _frames(tester);
+          expect(id, _b);
+          expect(session.detail?.summary.id, _a);
+          expect(tester.element(miniPlayer), same(miniElement));
+          nextDetail.complete(b);
+        }
+        await _frames(tester);
+        expect(session.detail?.summary.id, next);
+        expect(session.snapshots.value.phase, PlaybackPhase.playing);
+        expect(engine.opens, opens);
+        expect(engine.options?.startPosition, Duration.zero);
+        expect(window.miniPlayer.value, isTrue);
+        expect(tester.element(miniPlayer), same(miniElement));
+        expect(find.byType(VideoSurface), findsOneWidget);
+      }
+
+      await tester.tap(findMaterialTooltip('还原播放页'));
+      tester.view.physicalSize = const Size(1200, 800);
+      await _frames(tester);
+      expect(miniPlayer, findsNothing);
+      expect(window.miniPlayer.value, isFalse);
+      expect(session.detail?.summary.id, _a);
+      expect(session.snapshots.value.phase, PlaybackPhase.playing);
+      expect(engine.opens, 3);
+      expect(findMaterialTooltip('迷你小窗'), findsOneWidget);
+    },
+  );
 
   for (final mode in [PlaybackMode.singleLoop, PlaybackMode.listLoop]) {
     testWidgets('$mode repeats a standalone or offline source more than once', (
@@ -1928,9 +2045,16 @@ class _Progress extends Fake implements PlaybackProgressStore {
 }
 
 class _Window extends WindowService {
+  _Window({this.desktop = false});
+
+  final bool desktop;
   bool fullscreen = false;
   @override
+  bool get hasDesktopWindow => desktop;
+  @override
   bool get supportsBackgroundAudio => true;
+  @override
+  Future<void> setMiniPlayer(bool enabled) async => miniPlayer.value = enabled;
   @override
   Future<void> setFullScreen(
     bool value, {

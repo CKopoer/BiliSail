@@ -1,9 +1,12 @@
 import 'package:material_ui/material_ui.dart';
 
 const desktopCaptionHeight = 44.0;
+const desktopCaptionButtonWidth = 46.0;
 const desktopCaptionTextStyle = TextStyle(fontSize: 13);
 const desktopCaptionButtonStyle = ButtonStyle(
-  fixedSize: WidgetStatePropertyAll(Size(46, desktopCaptionHeight)),
+  fixedSize: WidgetStatePropertyAll(
+    Size(desktopCaptionButtonWidth, desktopCaptionHeight),
+  ),
   padding: WidgetStatePropertyAll(EdgeInsets.zero),
   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
   visualDensity: VisualDensity.standard,
