@@ -37,11 +37,13 @@ class LiveScreen extends ConsumerStatefulWidget {
     super.key,
     required this.roomId,
     required this.playerBuilder,
+    this.autoCollapseSidebar = false,
     this.onOpenUser,
     this.composerBuilder,
   });
 
   final String roomId;
+  final bool autoCollapseSidebar;
   final LivePlayerBuilder playerBuilder;
   final LiveComposerBuilder? composerBuilder;
   final ValueChanged<UserId>? onOpenUser;
@@ -58,7 +60,8 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
   final ScrollController _superChatScrollController = ScrollController();
   LiveController? _controller;
   bool? _lastActive;
-  bool _infoVisible = true;
+  bool? _infoVisibilityOverride;
+  bool _wide = false;
   int _tab = 0;
   String? _selectedSuperChatId;
   bool _followChat = true;
@@ -84,6 +87,9 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
       >{};
   List<LiveChatMessage>? _indexedMessages;
   Map<String, int> _messageIndices = const {};
+
+  bool get _infoVisible =>
+      _infoVisibilityOverride ?? !(_wide && widget.autoCollapseSidebar);
 
   bool get _foreground => !const {
     AppLifecycleState.hidden,
@@ -288,12 +294,12 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
       _playerWidget = _player(context, room);
     }
     final player = _playerWidget ??= _player(context, room);
-    final sidebar = _sidebar(context, room, controller);
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide =
             constraints.maxWidth >=
             ResponsiveLayoutScope.of(context).playbackSideBySideWidth;
+        _wide = wide;
         final playerWidth = _infoVisible && wide
             ? math.max(0.0, constraints.maxWidth - 380)
             : constraints.maxWidth;
@@ -326,7 +332,10 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
               height: infoHeight,
               child: ExcludeFocus(
                 excluding: !_infoVisible,
-                child: Offstage(offstage: !_infoVisible, child: sidebar),
+                child: Offstage(
+                  offstage: !_infoVisible,
+                  child: _sidebar(context, room, controller),
+                ),
               ),
             ),
             if (wide)
@@ -339,7 +348,8 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
                 child: PlaybackSidebarToggle(
                   tooltip: _infoVisible ? '收起直播信息' : '展开直播信息',
                   icon: _infoVisible ? Icons.chevron_right : Icons.chevron_left,
-                  onPressed: () => setState(() => _infoVisible = !_infoVisible),
+                  onPressed: () =>
+                      setState(() => _infoVisibilityOverride = !_infoVisible),
                 ),
               ),
           ],

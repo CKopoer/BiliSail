@@ -643,6 +643,12 @@ final class _SettingsCategoryPageState
                             '打开视频或影视时优先显示评论区；关闭时默认显示简介',
                           ),
                           _toggle(
+                            '自动收起播放页侧边栏',
+                            s.autoCollapsePlaybackSidebar,
+                            controller.setAutoCollapsePlaybackSidebar,
+                            '视频、影视和直播使用分栏布局时默认收起右侧信息，可手动展开',
+                          ),
+                          _toggle(
                             '自动播放',
                             s.autoPlay,
                             controller.setAutoPlay,

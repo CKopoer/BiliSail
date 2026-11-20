@@ -71,6 +71,7 @@ final class VideoScreen extends ConsumerStatefulWidget {
     required this.id,
     this.initialCid,
     this.defaultShowComments = false,
+    this.autoCollapseSidebar = false,
     this.onPartChanged,
     this.onOpenVideo,
     required this.playerBuilder,
@@ -88,6 +89,7 @@ final class VideoScreen extends ConsumerStatefulWidget {
   final VideoId id;
   final String? initialCid;
   final bool? defaultShowComments;
+  final bool autoCollapseSidebar;
   final ValueChanged<VideoPart>? onPartChanged;
   final ValueChanged<VideoSummary>? onOpenVideo;
   final VideoPlayerBuilder playerBuilder;
@@ -109,7 +111,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
   String? _selectedCid;
   ({int epoch, VideoPart part})? _interactivePart;
   int? _tab;
-  final _infoVisible = ValueNotifier(true);
+  final _infoVisibilityOverride = ValueNotifier<bool?>(null);
   bool _descriptionExpanded = false;
   bool _tagsRequested = false;
   bool _queueExpanded = true;
@@ -150,7 +152,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
       if (link.comment != null) {
         _tab = 1;
         _queueExpanded = false;
-        _infoVisible.value = true;
+        _infoVisibilityOverride.value = true;
       }
     }
     _syncQueue();
@@ -185,7 +187,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
       _retainedRegistry?.release(id);
     }
     _introScroll.dispose();
-    _infoVisible.dispose();
+    _infoVisibilityOverride.dispose();
     super.dispose();
   }
 
@@ -317,7 +319,9 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
             final wide =
                 width >=
                 ResponsiveLayoutScope.of(context).playbackSideBySideWidth;
-            void toggleInfo() => _infoVisible.value = !_infoVisible.value;
+            final defaultShowInfo = !(wide && widget.autoCollapseSidebar);
+            bool showInfo() => _infoVisibilityOverride.value ?? defaultShowInfo;
+            void toggleInfo() => _infoVisibilityOverride.value = !showInfo();
             return PlaybackPageCommands(
               previousPart: () => _changePart(video, selected, -1),
               nextPart: () => _changePart(video, selected, 1),
@@ -363,10 +367,10 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
               toggleInfo: toggleInfo,
               toggleDescription: transitioning
                   ? null
-                  : () => _toggleVideoDetails(0),
+                  : () => _toggleVideoDetails(0, showInfo()),
               toggleComments: transitioning
                   ? null
-                  : () => _toggleVideoDetails(1),
+                  : () => _toggleVideoDetails(1, showInfo()),
               child: Focus(
                 child: Builder(
                   builder: (context) {
@@ -687,33 +691,35 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                       builder: (context, constraints, listening) =>
                           PlaybackVideoDimensions(
                             builder: (context, dimensions) =>
-                                ValueListenableBuilder<bool>(
-                                  valueListenable: _infoVisible,
-                                  builder: (context, showInfo, _) =>
-                                      PlaybackPageLayout(
-                                        minimumInfoHeight: 480,
-                                        wide: wide,
-                                        showInfo: showInfo,
-                                        listening: listening,
-                                        dimensions: dimensions,
-                                        collapsedHeight:
-                                            listening &&
-                                                constraints.maxHeight.isFinite
-                                            ? PlaybackLayoutBuilder.listeningHeight(
-                                                constraints.maxHeight,
-                                              )
-                                            : constraints.maxWidth * 9 / 16,
-                                        contentKey: video.summary.id,
-                                        player: KeyedSubtree(
-                                          key: _playerKey,
-                                          child: playerContent,
-                                        ),
-                                        info: info,
-                                        toggleInfo: toggleInfo,
-                                        toggleTooltip: showInfo
-                                            ? '收起视频信息'
-                                            : '展开视频信息',
+                                ValueListenableBuilder<bool?>(
+                                  valueListenable: _infoVisibilityOverride,
+                                  builder: (context, override, _) {
+                                    final visible = override ?? defaultShowInfo;
+                                    return PlaybackPageLayout(
+                                      minimumInfoHeight: 480,
+                                      wide: wide,
+                                      showInfo: visible,
+                                      listening: listening,
+                                      dimensions: dimensions,
+                                      collapsedHeight:
+                                          listening &&
+                                              constraints.maxHeight.isFinite
+                                          ? PlaybackLayoutBuilder.listeningHeight(
+                                              constraints.maxHeight,
+                                            )
+                                          : constraints.maxWidth * 9 / 16,
+                                      contentKey: video.summary.id,
+                                      player: KeyedSubtree(
+                                        key: _playerKey,
+                                        child: playerContent,
                                       ),
+                                      info: info,
+                                      toggleInfo: toggleInfo,
+                                      toggleTooltip: visible
+                                          ? '收起视频信息'
+                                          : '展开视频信息',
+                                    );
+                                  },
                                 ),
                           ),
                     );
@@ -743,11 +749,11 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
         : page;
   }
 
-  void _toggleVideoDetails(int tab) {
+  void _toggleVideoDetails(int tab, bool showInfo) {
     final alreadyVisible =
-        _infoVisible.value && (widget.queue == null || !_queueExpanded);
+        showInfo && (widget.queue == null || !_queueExpanded);
     final currentTab = _tab ?? 0;
-    _infoVisible.value = true;
+    _infoVisibilityOverride.value = true;
     setState(() {
       // Keep the introductory pane and its description disclosure separate.
       final sameTab = currentTab == tab && alreadyVisible;

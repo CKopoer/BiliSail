@@ -87,15 +87,17 @@ final _season = PgcSeason(
 void main() {
   for (final pgc in [false, true]) {
     testWidgets(
-      '${pgc ? 'PGC' : 'video'} content link opens comments without selecting the tab',
+      '${pgc ? 'PGC' : 'video'} content link opens comments with sidebar auto-collapse on',
       (tester) async {
         final harness = await _mount(
           tester,
           pgc: pgc,
+          autoCollapseSidebar: true,
           link: const ContentLink(
             comment: CommentLocation('10', replyId: '11'),
           ),
         );
+        expect(findMaterialTooltip(pgc ? '收起影视信息' : '收起视频信息'), findsOneWidget);
         expect(find.text('评论详情'), findsOneWidget);
         expect(find.text('二级回复').hitTestable(), findsOneWidget);
         expect(harness.repo.locates, 1);
@@ -362,6 +364,7 @@ _mount(
   TargetPlatform platform = TargetPlatform.windows,
   bool pgc = false,
   bool detached = false,
+  bool autoCollapseSidebar = false,
   ContentLink link = const ContentLink(),
 }) async {
   tester.view.devicePixelRatio = 1;
@@ -424,11 +427,13 @@ _mount(
             child: switch (tab.location.path) {
               '/video/BV1ab411c7mD' => VideoScreen(
                 id: _id,
+                autoCollapseSidebar: autoCollapseSidebar,
                 playerBuilder: (_, _, _) =>
                     const SizedBox.expand(key: ValueKey('test-player')),
               ),
               '/pgc/1' => PgcScreen(
                 seasonId: '1',
+                autoCollapseSidebar: autoCollapseSidebar,
                 playerBuilder: (_, _, _) =>
                     const SizedBox.expand(key: ValueKey('test-player')),
                 commentsBuilder: (_, _, _) =>
