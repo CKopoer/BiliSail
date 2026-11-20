@@ -505,6 +505,92 @@ void main() {
       },
     );
   }
+  for (final (path, label, screenType) in [
+    ('/video/BV1234567890', '视频', VideoScreen),
+    ('/pgc/episode/123', '影视', PgcScreen),
+    ('/live/1024', '直播', LiveScreen),
+  ]) {
+    _workspaceTestWidgets('playback sidebar follows preference for $path', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1440, 900);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final auth = _AuthRepository();
+      addTearDown(auth.dispose);
+      final settings = _SettingsRepository(
+        navigationMode: WorkspaceNavigationMode.singlePage,
+      );
+      settings.settings = settings.settings.copyWith(
+        autoCollapsePlaybackSidebar: true,
+      );
+      final router = createBiliRouter(
+        initialLocation: path,
+        playerBuilder: (_, _, _) => const Text('测试播放器'),
+        pgcPlayerBuilder: (_, _, _) => const Text('测试播放器'),
+        livePlayerBuilder: (_, _) => const Text('测试播放器'),
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            settingsRepositoryProvider.overrideWithValue(settings),
+            authRepositoryProvider.overrideWithValue(auth),
+            videoRepositoryProvider.overrideWithValue(_VideoRepository()),
+            relatedVideosProvider.overrideWith((ref, id) async => []),
+            videoTagsProvider.overrideWith((ref, id) async => []),
+            pgcRepositoryProvider.overrideWithValue(_ContentPgcRepository()),
+            liveRepositoryProvider.overrideWithValue(_ContentLiveRepository()),
+            feedRepositoryProvider.overrideWithValue(_FeedRepository()),
+            homeRepositoryProvider.overrideWithValue(_HomeRepository()),
+          ],
+          child: InputTestApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final screen = find.byType(screenType);
+      final screenState = tester.state(screen);
+      final player = find.text('测试播放器');
+      final playerElement = tester.element(player);
+      final expand = findMaterialTooltip('展开$label信息');
+      final collapse = findMaterialTooltip('收起$label信息');
+      final info = find.byType(PlaybackInfoTabs);
+      expect(expand, findsOneWidget);
+      expect(info, findsNothing);
+
+      tester.view.physicalSize = const Size(390, 900);
+      await tester.pumpAndSettle();
+      expect(expand, findsNothing);
+      expect(info, findsOneWidget);
+      tester.view.physicalSize = const Size(1440, 900);
+      await tester.pumpAndSettle();
+      expect(expand, findsOneWidget);
+
+      final controller = ProviderScope.containerOf(tester.element(screen))
+          .read(settingsControllerProvider.notifier);
+      await controller.setAutoCollapsePlaybackSidebar(false);
+      await tester.pumpAndSettle();
+      expect(collapse, findsOneWidget);
+      expect(info, findsOneWidget);
+      await controller.setAutoCollapsePlaybackSidebar(true);
+      await tester.pumpAndSettle();
+      await tester.tap(expand);
+      await tester.pumpAndSettle();
+      expect(collapse, findsOneWidget);
+      expect(info, findsOneWidget);
+      tester.view.physicalSize = const Size(390, 900);
+      await tester.pumpAndSettle();
+      tester.view.physicalSize = const Size(1440, 900);
+      await tester.pumpAndSettle();
+      expect(collapse, findsOneWidget);
+      expect(tester.state(screen), same(screenState));
+      expect(tester.element(player), same(playerElement));
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    });
+  }
   for (final mode in [
     WorkspaceNavigationMode.singlePage,
     WorkspaceNavigationMode.dualTabs,

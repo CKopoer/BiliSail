@@ -61,6 +61,7 @@ void main() {
           wheelScrollDistanceMultiplier: 4,
           wheelScrollDurationMultiplier: 3,
           autoPlay: false,
+          autoCollapsePlaybackSidebar: true,
           videoCardHoverPlayback: !defaults.videoCardHoverPlayback,
           continuousPlayback: true,
           continuousRelatedPlayback: true,
@@ -116,6 +117,7 @@ void main() {
           defaults.shortcuts.keysFor(ShortcutAction.nextTab),
         );
         expect(settings.theme, AppThemePreference.system);
+        expect(settings.autoCollapsePlaybackSidebar, isFalse);
         expect(settings.rememberPlaybackRate, isTrue);
         expect(settings.defaultDynamicTab, DynamicPageTab.dynamic);
         expect(settings.checkPrereleaseUpdates, isFalse);

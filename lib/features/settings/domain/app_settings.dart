@@ -103,6 +103,7 @@ final class AppSettings {
     this.autoPlay = true,
     this.backgroundPlayback = true,
     this.defaultShowComments = false,
+    this.autoCollapsePlaybackSidebar = false,
     this.videoCardHoverPlayback = true,
     bool? continuousPlayback,
     this.continuousRelatedPlayback = false,
@@ -211,6 +212,7 @@ final class AppSettings {
        autoPlay = true,
        backgroundPlayback = true,
        defaultShowComments = false,
+       autoCollapsePlaybackSidebar = false,
        continuousPlayback = false,
        continuousRelatedPlayback = false,
        playbackMode = PlaybackMode.pause,
@@ -297,6 +299,7 @@ final class AppSettings {
   final bool autoPlay;
   final bool backgroundPlayback;
   final bool defaultShowComments;
+  final bool autoCollapsePlaybackSidebar;
   final bool videoCardHoverPlayback;
   final bool continuousPlayback;
   final bool continuousRelatedPlayback;
@@ -401,6 +404,7 @@ final class AppSettings {
     bool? autoPlay,
     bool? backgroundPlayback,
     bool? defaultShowComments,
+    bool? autoCollapsePlaybackSidebar,
     bool? videoCardHoverPlayback,
     bool? continuousPlayback,
     bool? continuousRelatedPlayback,
@@ -493,6 +497,8 @@ final class AppSettings {
     autoPlay: autoPlay ?? this.autoPlay,
     backgroundPlayback: backgroundPlayback ?? this.backgroundPlayback,
     defaultShowComments: defaultShowComments ?? this.defaultShowComments,
+    autoCollapsePlaybackSidebar:
+        autoCollapsePlaybackSidebar ?? this.autoCollapsePlaybackSidebar,
     videoCardHoverPlayback:
         videoCardHoverPlayback ?? this.videoCardHoverPlayback,
     playbackMode:

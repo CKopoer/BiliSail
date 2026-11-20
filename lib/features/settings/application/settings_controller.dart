@@ -191,6 +191,8 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
       update((current) => current.copyWith(backgroundPlayback: value));
   Future<void> setDefaultShowComments(bool value) =>
       update((current) => current.copyWith(defaultShowComments: value));
+  Future<void> setAutoCollapsePlaybackSidebar(bool value) =>
+      update((current) => current.copyWith(autoCollapsePlaybackSidebar: value));
   Future<void> setVideoCardHoverPlayback(bool value) =>
       update((current) => current.copyWith(videoCardHoverPlayback: value));
 

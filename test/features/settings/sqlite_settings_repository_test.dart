@@ -549,6 +549,31 @@ void main() {
     expect(database.schemaVersion, 3);
   });
   test(
+    'playback sidebar collapse defaults off and persists both choices',
+    () async {
+      expect(AppSettings().autoCollapsePlaybackSidebar, isFalse);
+      expect(const AppSettings.defaults().autoCollapsePlaybackSidebar, isFalse);
+      expect((await repository.load()).autoCollapsePlaybackSidebar, isFalse);
+
+      for (final snapshot in [
+        {'sidebarCollapsed': true},
+        {'sidebarCollapsed': true, 'autoCollapsePlaybackSidebar': 'true'},
+      ]) {
+        await database.writeSetting('preferences.v1', jsonEncode(snapshot));
+        final loaded = await repository.load();
+        expect(loaded.autoCollapsePlaybackSidebar, isFalse);
+        for (final enabled in [true, false]) {
+          await repository.save(
+            loaded.copyWith(autoCollapsePlaybackSidebar: enabled),
+          );
+          final reloaded = await SqliteSettingsRepository(database).load();
+          expect(reloaded.autoCollapsePlaybackSidebar, enabled);
+          expect(reloaded.sidebarCollapsed, isTrue);
+        }
+      }
+    },
+  );
+  test(
     'sidebar preferences migrate independently and persist all choices',
     () async {
       expect((await repository.load()).sidebarStyle, SidebarStyle.automatic);

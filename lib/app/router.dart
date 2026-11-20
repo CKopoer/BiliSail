@@ -647,6 +647,13 @@ final class _WorkspacePage extends ConsumerWidget {
             ),
           )
         : false;
+    final autoCollapseSidebar =
+        (tab.isVideo || tab.isPgc || tab.isLive) &&
+        ref.watch(
+          settingsControllerProvider.select(
+            (settings) => settings.value?.autoCollapsePlaybackSidebar ?? false,
+          ),
+        );
     if (tab.isVideo) {
       final id = VideoId(tab.location.pathSegments.last);
       final title = id.isValid
@@ -839,6 +846,7 @@ final class _WorkspacePage extends ConsumerWidget {
                       builder: (_) => const AccountDialog(),
                     ),
                     defaultShowComments: defaultShowComments,
+                    autoCollapseSidebar: autoCollapseSidebar,
                     seasonId: uri.pathSegments[1] == 'season' ? id : null,
                     episodeId: uri.pathSegments[1] == 'episode'
                         ? id
@@ -887,6 +895,7 @@ final class _WorkspacePage extends ConsumerWidget {
                   return LiveScreen(
                     key: PageStorageKey('live-${tab.id}'),
                     roomId: uri.pathSegments.last,
+                    autoCollapseSidebar: autoCollapseSidebar,
                     composerBuilder: liveComposerBuilder,
                     playerBuilder: (context, room) => _workspacePlayer(
                       context,
@@ -970,6 +979,7 @@ final class _WorkspacePage extends ConsumerWidget {
                       ? VideoScreen(
                           key: PageStorageKey('video-${tab.id}'),
                           defaultShowComments: defaultShowComments,
+                          autoCollapseSidebar: autoCollapseSidebar,
                           id: id,
                           queue: queue?.indexOf(id) == -1 ? null : queue,
                           initialCid: uri.queryParameters['cid'],

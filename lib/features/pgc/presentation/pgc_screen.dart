@@ -54,6 +54,7 @@ final class PgcScreen extends ConsumerStatefulWidget {
     this.seasonId,
     this.episodeId,
     this.defaultShowComments = false,
+    this.autoCollapseSidebar = false,
     required this.playerBuilder,
     this.onEpisodeChanged,
     this.onOpenSeason,
@@ -64,6 +65,7 @@ final class PgcScreen extends ConsumerStatefulWidget {
 
   final String? seasonId, episodeId;
   final bool? defaultShowComments;
+  final bool autoCollapseSidebar;
   final PgcPlayerBuilder playerBuilder;
   final ValueChanged<PgcEpisode>? onEpisodeChanged;
   final ValueChanged<PgcSeasonSummary>? onOpenSeason;
@@ -78,8 +80,12 @@ final class PgcScreen extends ConsumerStatefulWidget {
 final class _PgcScreenState extends ConsumerState<PgcScreen> {
   late PgcLocator _locator;
   int? _tab;
-  bool _infoVisible = true;
+  bool? _infoVisibilityOverride;
+  bool _wide = false;
   ContentLink? _contentLink;
+
+  bool get _infoVisible =>
+      _infoVisibilityOverride ?? !(_wide && widget.autoCollapseSidebar);
 
   @override
   void didChangeDependencies() {
@@ -89,7 +95,7 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
       _contentLink = link;
       if (link.comment != null) {
         _tab = 1;
-        _infoVisible = true;
+        _infoVisibilityOverride = true;
       }
     }
   }
@@ -201,6 +207,8 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
     return CommandOutcome.completed;
   }
 
+  void _toggleInfo() => setState(() => _infoVisibilityOverride = !_infoVisible);
+
   Widget _buildPage(BuildContext context) {
     final defaultShowComments = widget.defaultShowComments;
     if (_tab == null && defaultShowComments != null) {
@@ -232,22 +240,22 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
       onCompleted: () => _stepEpisode(season, selected, 1, completed: true),
       onLoopCompleted: () =>
           _stepEpisode(season, selected, 1, completed: true, loop: true),
-      toggleInfo: () => setState(() => _infoVisible = !_infoVisible),
+      toggleInfo: _toggleInfo,
       toggleDescription: () => setState(() {
-        _infoVisible = !_infoVisible || tab != 0;
+        _infoVisibilityOverride = !_infoVisible || tab != 0;
         _tab = 0;
       }),
       toggleComments: () => setState(() {
         _tab = _infoVisible && tab == 1 ? 0 : 1;
-        _infoVisible = true;
+        _infoVisibilityOverride = true;
       }),
       child: WidthLayoutBuilder(
         builder: (context, width) {
           final wide =
               width >=
               ResponsiveLayoutScope.of(context).playbackSideBySideWidth;
+          _wide = wide;
           final showInfo = _infoVisible;
-          void toggleInfo() => setState(() => _infoVisible = !_infoVisible);
           final info = Material(
             color: Theme.of(context).colorScheme.surface,
             child: Column(
@@ -300,7 +308,7 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
                         ],
                         itemKey: (tab) =>
                             ValueKey('pgc-tab-${tab == 0 ? '简介' : '评论'}'),
-                        trailing: _menu(context, season, selected, toggleInfo),
+                        trailing: _menu(context, season, selected, _toggleInfo),
                         pageBuilder: (context, tab, active) {
                           if (tab == 0) {
                             _introScroll.configure(
@@ -382,7 +390,7 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
                     contentKey: season.id,
                     player: player,
                     info: info,
-                    toggleInfo: toggleInfo,
+                    toggleInfo: _toggleInfo,
                     toggleTooltip: showInfo ? '收起影视信息' : '展开影视信息',
                   ),
                 ),

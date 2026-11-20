@@ -167,6 +167,10 @@ class SqliteSettingsRepository implements SettingsRepository {
       autoPlay: boolean('autoPlay', true),
       backgroundPlayback: boolean('backgroundPlayback', true),
       defaultShowComments: boolean('defaultShowComments', false),
+      autoCollapsePlaybackSidebar: boolean(
+        'autoCollapsePlaybackSidebar',
+        false,
+      ),
       videoCardHoverPlayback: boolean(
         'videoCardHoverPlayback',
         defaultVideoCardHoverPlayback,
@@ -363,6 +367,7 @@ class SqliteSettingsRepository implements SettingsRepository {
         'autoPlay': value.autoPlay,
         'backgroundPlayback': value.backgroundPlayback,
         'defaultShowComments': value.defaultShowComments,
+        'autoCollapsePlaybackSidebar': value.autoCollapsePlaybackSidebar,
         'videoCardHoverPlayback': value.videoCardHoverPlayback,
         'continuousPlayback': value.continuousPlayback,
         'continuousRelatedPlayback': value.continuousRelatedPlayback,

@@ -180,6 +180,40 @@ void main() {
     });
   }
 
+  for (final failSave in [false, true]) {
+    testWidgets(
+      'playback sidebar setting saves or rolls back (failure: $failSave)',
+      (tester) async {
+        final repository = _SettingsRepository()..failSave = failSave;
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              settingsRepositoryProvider.overrideWithValue(repository),
+            ],
+            child: MaterialApp(
+              builder: AppNoticeHost.builder,
+              home: const Scaffold(
+                body: SettingsScreen(category: SettingsCategory.playback),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final toggle = find.widgetWithText(SwitchListTile, '自动收起播放页侧边栏');
+        expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+        await tester.ensureVisible(toggle);
+        await tester.pumpAndSettle();
+        await tester.tap(toggle);
+        await tester.pumpAndSettle();
+        expect(repository.settings.autoCollapsePlaybackSidebar, !failSave);
+        expect(tester.widget<SwitchListTile>(toggle).value, !failSave);
+        if (failSave) {
+          expect(find.text('设置保存失败，请重试'), findsOneWidget);
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
   for (final player in [false, true]) {
     testWidgets(
       'custom rates are editable from settings entry player=$player',
