@@ -164,7 +164,9 @@ final class ArticleParser {
             if (image != null) yield image;
           }
         case 3:
-          yield const ApiArticleBlock(ApiArticleBlockKind.divider);
+          final photo = articleMap(articleMap(paragraph['line'])['pic']);
+          yield _image(photo['url'], photo['width'], photo['height']) ??
+              const ApiArticleBlock(ApiArticleBlockKind.divider);
         case 5:
           final list = articleMap(paragraph['list']);
           for (final row in _list(list['items'])) {
@@ -314,11 +316,9 @@ final class ArticleParser {
               );
             } else {
               final attr = node.attributes;
-              final image = _image(
-                attr['data-src'] ?? attr['src'],
-                attr['width'],
-                attr['height'],
-              );
+              final image =
+                  _image(attr['data-src'], attr['width'], attr['height']) ??
+                  _image(attr['src'], attr['width'], attr['height']);
               if (image != null) blocks.add(image);
             }
             continue;
@@ -468,8 +468,13 @@ final class ArticleParser {
   ) => ApiArticleBlock(kind, text: List.unmodifiable(text));
 
   ApiArticleBlock? _image(Object? value, Object? width, Object? height) {
-    final image = _imageUri(value);
-    if (image == null) return null;
+    final uri = _imageUri(value);
+    if (uri == null) return null;
+    // HTML can already include a CDN thumbnail suffix. Keep signed URLs intact.
+    final originalPath = !uri.hasQuery && !uri.hasFragment
+        ? _imageTransform.firstMatch(uri.path)?.group(1)
+        : null;
+    final image = originalPath == null ? uri : uri.replace(path: originalPath);
     final w = double.tryParse('$width') ?? 0;
     final h = double.tryParse('$height') ?? 0;
     final ratio = w / h;
@@ -480,16 +485,21 @@ final class ArticleParser {
     );
   }
 
+  static final _imageTransform = RegExp(
+    r'^(.*\.(?:jpg|jpeg|png|webp|gif|avif))@(?:\d+[a-z]+_?)+(?:\.[a-z0-9]+)?$',
+    caseSensitive: false,
+  );
+
   Uri? _imageUri(Object? value) {
     final uri = _link(value);
     if (uri == null ||
-        uri.scheme != 'https' ||
-        uri.port != 443 ||
-        !(uri.host.endsWith('.hdslb.com') ||
-            uri.host.endsWith('.biliimg.com'))) {
+        uri.hasPort ||
+        !(uri.host == 'hdslb.com' ||
+            uri.host.endsWith('.hdslb.com') ||
+            uri.host == 'album.biliimg.com')) {
       return null;
     }
-    return uri;
+    return uri.scheme == 'http' ? uri.replace(scheme: 'https') : uri;
   }
 
   Uri? _link(Object? value) {

@@ -5,15 +5,24 @@ import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../domain/article_address.dart';
+import '../../domain/content_link.dart';
+
+typedef OpenWorkspaceArticle = void Function(
+  BuildContext context,
+  ArticleAddress address,
+  ContentLink link,
+);
 
 class WorkspaceLinkScope extends InheritedWidget {
   const WorkspaceLinkScope({
     super.key,
     required this.openBackground,
+    this.openArticle,
     required super.child,
   });
 
   final ValueChanged<Uri>? openBackground;
+  final OpenWorkspaceArticle? openArticle;
   static final _backgroundKey = Object();
 
   static ValueChanged<Uri>? _backgroundOpener(BuildContext context) => context
@@ -37,7 +46,8 @@ class WorkspaceLinkScope extends InheritedWidget {
 
   @override
   bool updateShouldNotify(WorkspaceLinkScope oldWidget) =>
-      openBackground != oldWidget.openBackground;
+      openBackground != oldWidget.openBackground ||
+      openArticle != oldWidget.openArticle;
 }
 
 extension WorkspaceLinkNavigation on BuildContext {
@@ -49,6 +59,14 @@ extension WorkspaceLinkNavigation on BuildContext {
   }
 
   void openWorkspaceLink(String location) {
+    final scope = getInheritedWidgetOfExactType<WorkspaceLinkScope>();
+    if (scope?.openArticle case final open?) {
+      final uri = Uri.parse(location);
+      if (ArticleAddress.fromLocation(uri) case final address?) {
+        open(this, address, ContentLink.fromUri(uri));
+        return;
+      }
+    }
     final background =
         Zone.current[WorkspaceLinkScope._backgroundKey] as ValueChanged<Uri>?;
     if (background != null) {

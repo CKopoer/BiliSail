@@ -17,6 +17,15 @@ final class ArticleAddress {
     kind == ArticleKind.opus ? '/opus/$id' : '/read/cv$id',
   );
 
+  static ArticleAddress? fromLocation(Uri uri) {
+    if (uri.hasScheme || uri.hasAuthority) return null;
+    return switch (uri.pathSegments) {
+      ['article', final id] => ArticleAddress(ArticleKind.column, id),
+      ['opus', final id] => ArticleAddress(ArticleKind.opus, id),
+      _ => null,
+    };
+  }
+
   static ArticleAddress? fromWebUri(Uri uri) {
     if (uri.scheme != 'https' ||
         uri.port != 443 ||

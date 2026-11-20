@@ -10,6 +10,99 @@ const _opus = '/x/polymer/web-dynamic/v1/opus/detail';
 const _id = '12345678901234567890';
 
 void main() {
+  test(
+    'upgrades unsigned public article image URLs and keeps source order',
+    () async {
+      final transport = _Transport({
+        _opus: {
+          'item': {
+            'id_str': _id,
+            'modules': [
+              {
+                'module_content': {
+                  'paragraphs': [
+                    {
+                      'para_type': 2,
+                      'pic': {
+                        'pics': [
+                          {
+                            'url':
+                                'http://i0.hdslb.com/bfs/new_dyn/article.png',
+                            'width': 1080,
+                            'height': 1920,
+                          },
+                          {'url': 'http://i0.hdslb.com:8080/bfs/blocked.png'},
+                          {
+                            'url':
+                                'http://i0.hdslb.com.bad.test/bfs/blocked.png',
+                          },
+                          {'url': 'https://fake.biliimg.com/bfs/blocked.png'},
+                        ],
+                      },
+                    },
+                    {
+                      'para_type': 3,
+                      'line': {
+                        'pic': {
+                          'url': '//i0.hdslb.com/bfs/article/line.png',
+                          'width': 800,
+                          'height': 20,
+                        },
+                      },
+                    },
+                    {'para_type': 3},
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      });
+      final article = await ArticleClient(
+        BiliApiClient(transport: transport),
+      ).read(_id, opus: true);
+      expect(article.blocks.map((block) => block.kind), [
+        ApiArticleBlockKind.image,
+        ApiArticleBlockKind.image,
+        ApiArticleBlockKind.divider,
+      ]);
+      expect(
+        article.blocks[0].image.toString(),
+        'https://i0.hdslb.com/bfs/new_dyn/article.png',
+      );
+      expect(article.blocks[0].aspectRatio, 1080 / 1920);
+      expect(
+        article.blocks[1].image.toString(),
+        'https://i0.hdslb.com/bfs/article/line.png',
+      );
+    },
+  );
+
+  test(
+    'uses valid HTML image sources and recovers untransformed originals',
+    () async {
+      final transport = _Transport({
+        _legacy: {
+          'id': '123',
+          'content':
+              '<img data-src="data:image/png;base64,fake" '
+              'src="http://i0.hdslb.com/bfs/article/a.png@640w_1e.webp">'
+              '<img data-src="//album.biliimg.com/bfs/album/b.jpg" '
+              'src="//i0.hdslb.com/bfs/placeholder.png">'
+              '<img src="https://i0.hdslb.com/bfs/article/c.png@640w.webp?sign=fixture">',
+        },
+      });
+      final article = await ArticleClient(
+        BiliApiClient(transport: transport),
+      ).read('123', opus: false);
+      expect(article.blocks.map((block) => block.image.toString()), [
+        'https://i0.hdslb.com/bfs/article/a.png',
+        'https://album.biliimg.com/bfs/album/b.jpg',
+        'https://i0.hdslb.com/bfs/article/c.png@640w.webp?sign=fixture',
+      ]);
+    },
+  );
+
   test('reads legacy HTML into inert, ordered document blocks', () async {
     final transport = _Transport({
       _legacy: {
