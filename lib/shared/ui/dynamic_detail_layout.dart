@@ -79,14 +79,10 @@ class _DynamicDetailLayoutState extends State<DynamicDetailLayout> {
     });
   }
 
-  Widget _contentSliver({required bool wide}) =>
-      widget.sliver ??
-      SliverToBoxAdapter(
-        child: Padding(
-          padding: EdgeInsets.all(wide ? 12 : 8),
-          child: widget.content,
-        ),
-      );
+  Widget _contentSliver({required bool wide}) => SliverPadding(
+    padding: EdgeInsets.all(wide ? 12 : 8),
+    sliver: widget.sliver ?? SliverToBoxAdapter(child: widget.content),
+  );
 
   Widget _readingView() => widget.sliver == null
       ? SingleChildScrollView(
