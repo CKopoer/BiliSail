@@ -541,6 +541,26 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+    'an 18-picture gallery opens at the tapped index and pages to the end',
+    (tester) async {
+      final repository = await _swipeRepository(tester);
+      final sources = await _openViewer(
+        tester,
+        repository,
+        count: 18,
+        index: 16,
+      );
+      expect(find.text('17 / 18'), findsOneWidget);
+      expect(repository.sources, [preview(sources[16])]);
+
+      await tester.drag(find.byType(InteractiveViewer), const Offset(-120, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('18 / 18'), findsOneWidget);
+      expect(repository.sources, [preview(sources[16]), preview(sources.last)]);
+    },
+  );
+
   testWidgets('a single original remains pannable without image paging', (
     tester,
   ) async {
