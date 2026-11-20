@@ -1,5 +1,9 @@
 # 第三方来源与分发检查
 
+## 2026-11-20 专栏正文解析
+
+[html 0.15.7](https://pub.dev/packages/html/versions/0.15.7) 用于在 Dart 中解析旧版专栏的 HTML 正文。该包按 MIT 许可分发，传递依赖 [csslib 1.0.2](https://pub.dev/packages/csslib/versions/1.0.2) 使用 BSD-3-Clause。两者均为纯 Dart，包内原始 LICENSE 由 Flutter notices 收集。
+
 ## 2026-11-15 桌面滚轮平滑动画
 
 新增精确依赖 [scroll_animator 0.3.0](https://pub.dev/packages/scroll_animator/versions/0.3.0)（BSD-3-Clause，Copyright 2024 Kamil Szczęk），仅依赖 Flutter，无新增原生二进制。采用公共 `ChromiumEaseInOut`／`ScrollAnimation` 接口，包内原始 LICENSE 由 Flutter notices 收集；两个 Chromium 移植文件相同的原始 BSD-3-Clause 头部（Copyright 2015 The Chromium Authors）另存于 [Chromium 许可](assets/licenses/scroll_animator_chromium.txt)，随资产打包并登记到应用许可证页。归档 SHA-256、嵌套滚动适配与验证边界见[滚轮动画切换](docs/validation/scroll-animation-switch-2026-11-15.md)。没有复制 PureLive 应用源码或资源。

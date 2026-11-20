@@ -1,3 +1,4 @@
+import '../../../domain/article_address.dart';
 import '../../../domain/user.dart';
 import '../../../domain/video.dart';
 import '../../live/domain/live_room.dart';
@@ -22,6 +23,7 @@ enum SearchCategory {
       SearchOrder.latest,
       SearchOrder.danmaku,
       SearchOrder.favorites,
+      SearchOrder.comments,
     ],
     article => const [
       SearchOrder.relevance,
@@ -39,7 +41,9 @@ enum SearchCategory {
     ],
     _ => const [SearchOrder.relevance],
   };
-  bool get hasDurationFilter => this == all || this == video;
+  bool get hasVideoFilters => this == all || this == video;
+  bool get hasArticleFilters => this == article;
+  bool get hasUserFilters => this == user;
 }
 
 enum SearchOrder {
@@ -74,10 +78,89 @@ enum SearchDuration {
 enum SearchUserType {
   any('全部用户'),
   uploader('UP主'),
-  ordinary('普通用户');
+  ordinary('普通用户'),
+  verified('认证用户');
 
   const SearchUserType(this.label);
   final String label;
+}
+
+enum SearchVideoZone {
+  any('全部分区', null),
+  animation('动画', 1),
+  anime('番剧', 13),
+  chineseAnimation('国创', 167),
+  music('音乐', 3),
+  dance('舞蹈', 129),
+  gaming('游戏', 4),
+  knowledge('知识', 36),
+  technology('科技', 188),
+  sports('运动', 234),
+  cars('汽车', 223),
+  life('生活', 160),
+  food('美食', 221),
+  animals('动物', 217),
+  remix('鬼畜', 119),
+  fashion('时尚', 115),
+  news('资讯', 202),
+  entertainment('娱乐', 5),
+  filmAndTv('影视', 181),
+  documentary('纪录片', 177),
+  movies('电影', 23),
+  television('电视', 11);
+
+  const SearchVideoZone(this.label, this.id);
+  final String label;
+  final int? id;
+}
+
+enum SearchArticleZone {
+  any('全部分区', null),
+  animation('动画', 2),
+  gaming('游戏', 1),
+  filmAndTv('影视', 28),
+  life('生活', 3),
+  interests('兴趣', 29),
+  lightNovels('轻小说', 16),
+  technology('科技', 17),
+  notes('笔记', 41);
+
+  const SearchArticleZone(this.label, this.id);
+  final String label;
+  final int? id;
+}
+
+enum SearchPublicationPeriod {
+  any('不限'),
+  day('最近一天'),
+  week('最近一周'),
+  halfYear('最近半年'),
+  customRange('自定义日期');
+
+  const SearchPublicationPeriod(this.label);
+  final String label;
+}
+
+final class SearchPublicationRange {
+  SearchPublicationRange({required DateTime start, required DateTime end})
+    : start = DateTime(start.year, start.month, start.day),
+      end = DateTime(end.year, end.month, end.day) {
+    if (this.end.isBefore(this.start)) {
+      throw ArgumentError('Publication range ends before it starts');
+    }
+  }
+
+  final DateTime start;
+  final DateTime end;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SearchPublicationRange &&
+      other.start == start &&
+      other.end == end;
+
+  @override
+  int get hashCode => Object.hash(start, end);
 }
 
 final class SearchPage {
@@ -179,13 +262,13 @@ final class SearchLiveEntry extends SearchEntry {
 final class ArticleId {
   const ArticleId(this.value);
   final String value;
-  Uri get url => Uri.https('www.bilibili.com', '/read/cv$value');
 }
 
 final class SearchArticleEntry extends SearchEntry {
   const SearchArticleEntry({
     required this.id,
     required this.title,
+    this.address,
     this.author = '',
     this.authorId,
     this.coverUrl,
@@ -197,6 +280,9 @@ final class SearchArticleEntry extends SearchEntry {
     this.publishedAt,
   });
   final ArticleId id;
+  final ArticleAddress? address;
+  ArticleAddress get readAddress =>
+      address ?? ArticleAddress(ArticleKind.column, id.value);
   final String title, author, description, section;
   final UserId? authorId;
   final Uri? coverUrl;

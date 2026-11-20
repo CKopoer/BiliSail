@@ -1,10 +1,8 @@
 import 'package:material_ui/material_ui.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/platform/external_links.dart';
-import '../../../shared/ui/app_cover_image.dart';
-import '../../../shared/ui/live_card_cover.dart';
-import '../../../shared/ui/scroll_aware_hover_region.dart';
+import '../../../shared/ui/catalog_card_cover.dart';
+import '../../../shared/ui/live_room_tile.dart';
+import '../../../shared/ui/responsive_card_grid.dart';
 import '../../../shared/ui/bili_badges.dart';
 import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/video_card.dart';
@@ -13,7 +11,7 @@ import '../../../shared/ui/highlighted_text.dart';
 import '../../../shared/ui/workspace_link.dart';
 import '../domain/search_result.dart';
 
-final class SearchResults extends ConsumerWidget {
+final class SearchResults extends StatelessWidget {
   const SearchResults({
     super.key,
     required this.items,
@@ -27,7 +25,7 @@ final class SearchResults extends ConsumerWidget {
   final ValueChanged<SearchCategory> onCategory;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     // Partition models once per result update; card creation stays in builders.
     final users = items.whereType<SearchUserEntry>().toList(growable: false);
     final videos = items.whereType<SearchVideoEntry>().toList(growable: false);
@@ -56,7 +54,6 @@ final class SearchResults extends ConsumerWidget {
             if (category == SearchCategory.all)
               SliverToBoxAdapter(child: _section(context, type)),
             _SliverResultGrid(
-              minWidth: 440,
               items: media
                   .where((item) => item.category == type)
                   .toList(growable: false),
@@ -68,9 +65,28 @@ final class SearchResults extends ConsumerWidget {
         if (lives.isNotEmpty) ...[
           if (category == SearchCategory.all)
             SliverToBoxAdapter(child: _section(context, SearchCategory.live)),
-          _SliverResultGrid(
-            items: lives,
-            itemBuilder: (context, item) => _LiveCard(item: item, query: query),
+          SliverResponsiveCardGrid(
+            itemCount: lives.length,
+            itemBuilder: (context, index) {
+              final item = lives[index];
+              final author = item.authorId;
+              return LiveRoomTile(
+                key: ValueKey(item.key),
+                roomId: item.id,
+                title: item.title,
+                author: item.author,
+                coverUrl: item.coverUrl,
+                popularity: item.online?.toString() ?? '',
+                area: item.area,
+                isLive: item.isLive,
+                highlightQuery: query,
+                onOpen: () =>
+                    context.openWorkspaceLink('/live/${item.id.value}'),
+                onOpenAuthor: author == null
+                    ? null
+                    : () => context.openWorkspaceLink('/user/${author.value}'),
+              );
+            },
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 28)),
         ],
@@ -79,18 +95,16 @@ final class SearchResults extends ConsumerWidget {
             SliverToBoxAdapter(
               child: _section(context, SearchCategory.article),
             ),
-          SliverList.builder(
-            itemCount: articles.length,
-            itemBuilder: (context, index) => Padding(
-              key: ValueKey(articles[index].key),
-              padding: const EdgeInsets.only(bottom: 18),
-              child: _ArticleCard(
-                item: articles[index],
-                query: query,
-                onOpen: () => _openArticle(context, ref, articles[index]),
-              ),
+          _SliverResultGrid(
+            items: articles,
+            itemBuilder: (context, item) => _ArticleCard(
+              item: item,
+              query: query,
+              onOpen: () =>
+                  context.openWorkspaceLink(item.readAddress.location),
             ),
           ),
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
         ],
         if (videos.isNotEmpty) ...[
           if (category == SearchCategory.all &&
@@ -98,7 +112,6 @@ final class SearchResults extends ConsumerWidget {
             SliverToBoxAdapter(child: _section(context, SearchCategory.video)),
           SliverVideoGrid(
             items: videos.map((item) => item.video).toList(growable: false),
-            showUpBadge: true,
             highlightQuery: query,
             onOpen: (id) => context.openWorkspaceLink('/video/${id.value}'),
             onOpenUser: (id) => context.openWorkspaceLink('/user/${id.value}'),
@@ -121,30 +134,13 @@ final class SearchResults extends ConsumerWidget {
       ],
     ),
   );
-
-  Future<void> _openArticle(
-    BuildContext context,
-    WidgetRef ref,
-    SearchArticleEntry item,
-  ) async {
-    final opened = await ref.read(externalLinkOpenerProvider)(item.id.url);
-    if (!opened && context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('无法打开专栏，请检查系统浏览器')));
-    }
-  }
 }
 
-/// Search media/live keep their existing widths and natural card heights.
+/// Rows of results with a cover beside the text need wider columns.
 final class _SliverResultGrid<T extends SearchEntry> extends StatefulWidget {
-  const _SliverResultGrid({
-    required this.items,
-    required this.itemBuilder,
-    this.minWidth = 245,
-  });
+  const _SliverResultGrid({required this.items, required this.itemBuilder});
   final List<T> items;
   final Widget Function(BuildContext, T) itemBuilder;
-  final double minWidth;
   @override
   State<_SliverResultGrid<T>> createState() => _SliverResultGridState<T>();
 }
@@ -158,8 +154,7 @@ final class _SliverResultGridState<T extends SearchEntry>
   void didUpdateWidget(_SliverResultGrid<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.items, widget.items) ||
-        oldWidget.itemBuilder != widget.itemBuilder ||
-        oldWidget.minWidth != widget.minWidth) {
+        oldWidget.itemBuilder != widget.itemBuilder) {
       _rows = null;
     }
   }
@@ -168,9 +163,10 @@ final class _SliverResultGridState<T extends SearchEntry>
   Widget build(BuildContext context) => SliverLayoutBuilder(
     builder: (context, constraints) {
       const spacing = 20.0;
+      const minWidth = 440.0;
       final minimum = MediaQuery.textScalerOf(context)
-          .scale(widget.minWidth)
-          .clamp(widget.minWidth, widget.minWidth * 1.5);
+          .scale(minWidth)
+          .clamp(minWidth, minWidth * 1.5);
       final columns =
           ((constraints.crossAxisExtent + spacing) / (minimum + spacing))
               .floor()
@@ -316,7 +312,6 @@ final class _UserCard extends StatelessWidget {
               const SizedBox(height: 20),
               VideoGrid(
                 items: user.videos,
-                showUpBadge: true,
                 highlightQuery: query,
                 onOpen: (id) => context.openWorkspaceLink('/video/${id.value}'),
                 onOpenUser: (id) =>
@@ -352,10 +347,9 @@ final class _MediaCard extends StatelessWidget {
         children: [
           SizedBox(
             width: 108,
-            child: _Cover(
-              url: item.coverUrl,
+            child: AspectRatio(
               aspectRatio: 3 / 4,
-              badge: item.badge,
+              child: CatalogCardCover(url: item.coverUrl, badge: item.badge),
             ),
           ),
           const SizedBox(width: 16),
@@ -414,81 +408,6 @@ final class _MediaCard extends StatelessWidget {
   }
 }
 
-final class _LiveCard extends StatefulWidget {
-  const _LiveCard({required this.item, required this.query});
-  final SearchLiveEntry item;
-  final String query;
-  @override
-  State<_LiveCard> createState() => _LiveCardState();
-}
-
-final class _LiveCardState extends State<_LiveCard> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final author = widget.item.authorId;
-    void openRoom() {
-      setState(() => _hovered = false);
-      context.openWorkspaceLink('/live/${widget.item.id.value}');
-    }
-
-    final openAuthor = author == null
-        ? null
-        : () => context.openWorkspaceLink('/user/${author.value}');
-    return ScrollAwareHoverRegion(
-      onHover: (hovered) => setState(() => _hovered = hovered),
-      child: _TapCard(
-        onTap: openRoom,
-        opensWorkspaceLink: true,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AspectRatio(
-              aspectRatio: 16 / 9,
-              child: LiveCardCover(
-                roomId: widget.item.id,
-                hovered: _hovered,
-                previewEnabled: widget.item.isLive != false,
-                child: _Cover(
-                  url: widget.item.coverUrl,
-                  left: '${compactCount(widget.item.online)} 人气',
-                  right: widget.item.area,
-                  badge: widget.item.isLive == false
-                      ? '未开播'
-                      : widget.item.isLive == true
-                      ? '直播中'
-                      : '直播',
-                ),
-              ),
-            ),
-            const SizedBox(height: 9),
-            HighlightedText(
-              widget.item.title,
-              query: widget.query,
-              maxLines: 2,
-            ),
-            const SizedBox(height: 6),
-            InkWell(
-              onTap: openAuthor,
-              onTertiaryTapUp: WorkspaceLinkScope.middleClick(
-                context,
-                openAuthor,
-              ),
-              child: Text(
-                widget.item.author,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 final class _ArticleCard extends StatelessWidget {
   const _ArticleCard({
     required this.item,
@@ -510,7 +429,10 @@ final class _ArticleCard extends StatelessWidget {
             if (item.coverUrl != null) ...[
               SizedBox(
                 width: constraints.maxWidth < 500 ? 100 : 180,
-                child: _Cover(url: item.coverUrl),
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: CatalogCardCover(url: item.coverUrl),
+                ),
               ),
               const SizedBox(width: 16),
             ],
@@ -550,7 +472,7 @@ final class _ArticleCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 5),
                   Text(
-                    '在浏览器阅读 ↗',
+                    '阅读专栏',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.primary,
                     ),
@@ -586,130 +508,6 @@ final class _TapCard extends StatelessWidget {
       child: child,
     ),
   );
-}
-
-final class _Cover extends StatelessWidget {
-  const _Cover({
-    this.url,
-    this.left = '',
-    this.right = '',
-    this.badge = '',
-    this.aspectRatio = 16 / 9,
-  });
-  final Uri? url;
-  final String left, right, badge;
-  final double aspectRatio;
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final source = url;
-    final fallback = ColoredBox(
-      color: theme.colorScheme.surfaceContainerHighest,
-      child: Center(
-        child: Icon(
-          Icons.image_outlined,
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-      ),
-    );
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(6),
-      child: AspectRatio(
-        aspectRatio: aspectRatio,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (source != null && source.host.isNotEmpty)
-              AppCoverImage(
-                url: source.toString(),
-                fit: BoxFit.cover,
-                excludeFromSemantics: true,
-                errorBuilder: (_, _, _) => fallback,
-              )
-            else
-              fallback,
-            if (left.isNotEmpty || right.isNotEmpty) ...[
-              const Align(
-                alignment: Alignment.bottomCenter,
-                child: SizedBox(
-                  height: 50,
-                  width: double.infinity,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [Colors.transparent, Color(0xB3000000)],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                left: 8,
-                right: 8,
-                bottom: 6,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        left,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                    if (right.isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 100),
-                        child: Text(
-                          right,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-            if (badge.isNotEmpty)
-              Positioned(
-                top: 6,
-                right: 6,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    child: Text(
-                      badge,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: theme.colorScheme.onPrimary,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 String _dateLabel(DateTime value) {

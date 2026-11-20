@@ -4,6 +4,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../domain/article_address.dart';
+
 class WorkspaceLinkScope extends InheritedWidget {
   const WorkspaceLinkScope({
     super.key,
@@ -39,6 +41,13 @@ class WorkspaceLinkScope extends InheritedWidget {
 }
 
 extension WorkspaceLinkNavigation on BuildContext {
+  bool openArticleLink(Uri target) {
+    final article = ArticleAddress.fromWebUri(target);
+    if (article == null) return false;
+    openWorkspaceLink(article.location);
+    return true;
+  }
+
   void openWorkspaceLink(String location) {
     final background =
         Zone.current[WorkspaceLinkScope._backgroundKey] as ValueChanged<Uri>?;

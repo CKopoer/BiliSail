@@ -55,6 +55,10 @@ void main() {
               builder: (_, _) => const Scaffold(body: HistoryScreen()),
             ),
             GoRoute(
+              path: '/article/:id',
+              builder: (_, state) => Text('专栏 ${state.pathParameters['id']}'),
+            ),
+            GoRoute(
               path: '/live/:id',
               builder: (_, state) => Text('房间 ${state.pathParameters['id']}'),
             ),
@@ -89,7 +93,10 @@ void main() {
         await tester.ensureVisible(find.text('专栏历史'));
         await tester.tap(find.text('专栏历史'));
         await tester.pumpAndSettle();
-        expect(browser.single.toString(), 'https://www.bilibili.com/read/cv12');
+        expect(find.text('专栏 12'), findsOneWidget);
+        expect(browser, isEmpty);
+        router.go('/history');
+        await tester.pumpAndSettle();
         await tester.tap(findMaterialTooltip('历史记录操作').last);
         await tester.pumpAndSettle();
         await tester.tap(find.text('删除记录'));

@@ -287,6 +287,9 @@ final class _SearchRepository implements SearchRepository {
     required SearchOrder order,
     required SearchDuration duration,
     required SearchUserType userType,
+    SearchVideoZone videoZone = SearchVideoZone.any,
+    SearchArticleZone articleZone = SearchArticleZone.any,
+    SearchPublicationRange? publicationRange,
     required RequestCancellation cancellation,
   }) async => SearchPage(
     items: [for (final video in dpiVideos) SearchVideoEntry(video)],

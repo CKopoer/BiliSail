@@ -58,6 +58,9 @@ void main() {
       'https://www.bilibili.com/bangumi/play/ep123#reply': '/pgc/episode/123',
       'https://www.bilibili.com/bangumi/play/ss456': '/pgc/season/456',
       'https://live.bilibili.com/123': '/live/123',
+      'https://www.bilibili.com/read/cv123': '/article/123',
+      'https://www.bilibili.com/opus/9007199254740993123':
+          '/opus/9007199254740993123',
       'https://space.bilibili.com/9007199254740993/': '/user/9007199254740993',
     };
     for (final entry in cases.entries) {
@@ -91,7 +94,7 @@ void main() {
         'https://www.bilibili.com/video/BV17x411w7KC/extra',
         'https://www.bilibili.com/video/not-a-video',
         'https://www.bilibili.com/bangumi/play/ep0',
-        'https://www.bilibili.com/read/cv123',
+        'https://www.bilibili.com/read/cv0',
         'https://t.bilibili.com/123/extra',
         'https://t.bilibili.com.evil.example/123',
         'https://t.bilibili.com/vote/h5/index?vote_id=123',

@@ -19,6 +19,10 @@ final class SearchState {
     this.order = SearchOrder.relevance,
     this.duration = SearchDuration.any,
     this.userType = SearchUserType.any,
+    this.videoZone = SearchVideoZone.any,
+    this.articleZone = SearchArticleZone.any,
+    this.publicationPeriod = SearchPublicationPeriod.any,
+    this.publicationRange,
     this.counts = const {},
     this.items = const AsyncData([]),
     this.hasMore = false,
@@ -31,10 +35,21 @@ final class SearchState {
   final SearchOrder order;
   final SearchDuration duration;
   final SearchUserType userType;
+  final SearchVideoZone videoZone;
+  final SearchArticleZone articleZone;
+  final SearchPublicationPeriod publicationPeriod;
+  final SearchPublicationRange? publicationRange;
   final Map<SearchCategory, int> counts;
   final AsyncValue<List<SearchEntry>> items;
   final bool hasMore, loadingMore;
   final Object? pageError;
+
+  bool get hasFilters =>
+      duration != SearchDuration.any ||
+      userType != SearchUserType.any ||
+      videoZone != SearchVideoZone.any ||
+      articleZone != SearchArticleZone.any ||
+      publicationPeriod != SearchPublicationPeriod.any;
 
   SearchState copyWith({
     String? query,
@@ -42,6 +57,10 @@ final class SearchState {
     SearchOrder? order,
     SearchDuration? duration,
     SearchUserType? userType,
+    SearchVideoZone? videoZone,
+    SearchArticleZone? articleZone,
+    SearchPublicationPeriod? publicationPeriod,
+    SearchPublicationRange? publicationRange,
     Map<SearchCategory, int>? counts,
     AsyncValue<List<SearchEntry>>? items,
     bool? hasMore,
@@ -54,6 +73,12 @@ final class SearchState {
     order: order ?? this.order,
     duration: duration ?? this.duration,
     userType: userType ?? this.userType,
+    videoZone: videoZone ?? this.videoZone,
+    articleZone: articleZone ?? this.articleZone,
+    publicationPeriod: publicationPeriod ?? this.publicationPeriod,
+    publicationRange: publicationPeriod == SearchPublicationPeriod.any
+        ? null
+        : publicationRange ?? this.publicationRange,
     counts: counts ?? this.counts,
     items: items ?? this.items,
     hasMore: hasMore ?? this.hasMore,
@@ -92,6 +117,9 @@ final class SearchController extends Notifier<SearchState> {
         order: SearchOrder.relevance,
         duration: SearchDuration.any,
         userType: SearchUserType.any,
+        videoZone: SearchVideoZone.any,
+        articleZone: SearchArticleZone.any,
+        publicationPeriod: SearchPublicationPeriod.any,
       ),
     );
   }
@@ -103,18 +131,69 @@ final class SearchController extends Notifier<SearchState> {
     return _reload(state.copyWith(order: order));
   }
 
-  Future<void> selectDuration(SearchDuration duration) {
-    if (duration == state.duration || !state.category.hasDurationFilter) {
-      return Future.value();
+  Future<void> applyFilters({
+    required SearchCategory category,
+    required SearchOrder order,
+    SearchDuration duration = SearchDuration.any,
+    SearchUserType userType = SearchUserType.any,
+    SearchVideoZone videoZone = SearchVideoZone.any,
+    SearchArticleZone articleZone = SearchArticleZone.any,
+    SearchPublicationPeriod publicationPeriod = SearchPublicationPeriod.any,
+    SearchPublicationRange? publicationRange,
+  }) async {
+    if (category != state.category ||
+        !category.orders.contains(order) ||
+        (!category.hasVideoFilters &&
+            (duration != SearchDuration.any ||
+                videoZone != SearchVideoZone.any ||
+                publicationPeriod != SearchPublicationPeriod.any)) ||
+        (!category.hasArticleFilters && articleZone != SearchArticleZone.any) ||
+        (!category.hasUserFilters && userType != SearchUserType.any) ||
+        (publicationPeriod == SearchPublicationPeriod.customRange) !=
+            (publicationRange != null)) {
+      return;
     }
-    return _reload(state.copyWith(duration: duration));
+    final range = switch (publicationPeriod) {
+      SearchPublicationPeriod.any => null,
+      SearchPublicationPeriod.customRange => publicationRange,
+      _ => _presetRange(publicationPeriod, DateTime.now()),
+    };
+    if (state.order == order &&
+        state.duration == duration &&
+        state.userType == userType &&
+        state.videoZone == videoZone &&
+        state.articleZone == articleZone &&
+        state.publicationPeriod == publicationPeriod &&
+        state.publicationRange == range) {
+      return;
+    }
+    await _reload(
+      state.copyWith(
+        order: order,
+        duration: duration,
+        userType: userType,
+        videoZone: videoZone,
+        articleZone: articleZone,
+        publicationPeriod: publicationPeriod,
+        publicationRange: range,
+      ),
+    );
   }
 
-  Future<void> selectUserType(SearchUserType userType) {
-    if (userType == state.userType || state.category != SearchCategory.user) {
-      return Future.value();
-    }
-    return _reload(state.copyWith(userType: userType));
+  static SearchPublicationRange _presetRange(
+    SearchPublicationPeriod period,
+    DateTime now,
+  ) {
+    final daysBefore = switch (period) {
+      SearchPublicationPeriod.day => 0,
+      SearchPublicationPeriod.week => 6,
+      SearchPublicationPeriod.halfYear => 179,
+      _ => throw ArgumentError.value(period),
+    };
+    return SearchPublicationRange(
+      start: DateTime(now.year, now.month, now.day - daysBefore),
+      end: now,
+    );
   }
 
   Future<SearchPage> _request(
@@ -130,6 +209,9 @@ final class SearchController extends Notifier<SearchState> {
         order: request.order,
         duration: request.duration,
         userType: request.userType,
+        videoZone: request.videoZone,
+        articleZone: request.articleZone,
+        publicationRange: request.publicationRange,
         cancellation: cancellation,
       );
 
@@ -159,7 +241,7 @@ final class SearchController extends Notifier<SearchState> {
       _page = 1;
       state = state.copyWith(
         items: AsyncData(_unique(result.items)),
-        counts: Map.unmodifiable({...state.counts, ...result.counts}),
+        counts: _categoryCounts(request, result),
         hasMore: result.hasMore,
       );
     } catch (error, stackTrace) {
@@ -198,7 +280,7 @@ final class SearchController extends Notifier<SearchState> {
         items: AsyncData(merged),
         // A repeated/empty page must not trigger an endless scroll-load loop.
         hasMore: result.hasMore && merged.length > current.length,
-        counts: Map.unmodifiable({...state.counts, ...result.counts}),
+        counts: _categoryCounts(request, result),
         loadingMore: false,
       );
     } catch (error) {
@@ -208,6 +290,19 @@ final class SearchController extends Notifier<SearchState> {
         pageError: _cancelled(error) ? null : error,
       );
     }
+  }
+
+  Map<SearchCategory, int> _categoryCounts(
+    SearchState request,
+    SearchPage result,
+  ) {
+    // Category badges describe the keyword, even while the list is filtered.
+    if (request.hasFilters ||
+        (request.category == SearchCategory.all &&
+            request.order != SearchOrder.relevance)) {
+      return state.counts;
+    }
+    return Map.unmodifiable({...state.counts, ...result.counts});
   }
 
   static List<SearchEntry> _unique(Iterable<SearchEntry> items) {

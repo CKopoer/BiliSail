@@ -1,4 +1,6 @@
 export 'src/api_client.dart';
+export 'src/clients/article_client.dart';
+export 'src/models/article_models.dart';
 export 'src/app_profile.dart' show AppDeviceInfo;
 export 'src/clients/cast_client.dart';
 export 'src/clients/app_recommendation_client.dart';

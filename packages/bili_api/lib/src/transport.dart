@@ -22,6 +22,15 @@ abstract interface class ApiTransport {
   });
 }
 
+abstract interface class ApiHeadTransport {
+  Future<ApiHttpResponse> head(
+    Uri uri, {
+    required Map<String, String> headers,
+    required Duration timeout,
+    ApiCancellation? cancellation,
+  });
+}
+
 /// Optional bounded reads stop receiving once the decompressed byte cap is hit.
 abstract interface class ApiBoundedTransport {
   Future<ApiHttpResponse> getBounded(
@@ -69,6 +78,7 @@ abstract interface class ApiMultipartTransport {
 final class DioApiTransport
     implements
         ApiTransport,
+        ApiHeadTransport,
         ApiFormTransport,
         ApiJsonTransport,
         ApiMultipartTransport,
@@ -161,6 +171,20 @@ final class DioApiTransport
   );
 
   @override
+  Future<ApiHttpResponse> head(
+    Uri uri, {
+    required Map<String, String> headers,
+    required Duration timeout,
+    ApiCancellation? cancellation,
+  }) => _send(
+    uri,
+    headers: headers,
+    timeout: timeout,
+    cancellation: cancellation,
+    method: 'HEAD',
+  );
+
+  @override
   Future<ApiHttpResponse> postForm(
     Uri uri, {
     required Map<String, String> fields,
@@ -180,6 +204,7 @@ final class DioApiTransport
     required Map<String, String> headers,
     required Duration timeout,
     ApiCancellation? cancellation,
+    String? method,
     Object? body,
     String contentType = Headers.formUrlEncodedContentType,
   }) async {
@@ -195,7 +220,7 @@ final class DioApiTransport
             data: body,
             cancelToken: token,
             options: Options(
-              method: body == null ? 'GET' : 'POST',
+              method: method ?? (body == null ? 'GET' : 'POST'),
               contentType: body == null ? null : contentType,
               headers: headers,
               responseType: ResponseType.bytes,

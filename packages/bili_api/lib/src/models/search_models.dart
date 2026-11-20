@@ -91,6 +91,7 @@ final class ApiSearchArticle extends ApiSearchItem {
   const ApiSearchArticle({
     required this.id,
     required this.title,
+    this.url,
     this.author = '',
     this.authorMid,
     this.coverUrl,
@@ -103,7 +104,7 @@ final class ApiSearchArticle extends ApiSearchItem {
   });
   final String id, title, author, description, category;
   final String? authorMid;
-  final Uri? coverUrl;
+  final Uri? url, coverUrl;
   final int? views, likes, replies;
   final DateTime? publishedAt;
 }

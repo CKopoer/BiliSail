@@ -25,6 +25,7 @@ import '../features/messages/presentation/messages_screen.dart';
 import '../features/profile/application/profile_controller.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/dynamic/presentation/dynamic_detail_screen.dart';
+import '../features/article/presentation/article_screen.dart';
 import '../features/dynamic/application/dynamic_topic_controller.dart';
 import '../features/dynamic/domain/dynamic_link.dart';
 import '../features/dynamic/presentation/dynamic_topic_screen.dart';
@@ -208,6 +209,8 @@ GoRouter createBiliRouter({
           '/topic/:id',
           '/dynamic/:id',
           '/dynamic/resource/:id',
+          '/article/:id',
+          '/opus/:id',
           '/history',
           '/messages',
           '/settings',
@@ -290,6 +293,23 @@ final class _WorkspacePageScope extends ConsumerWidget {
       ],
       child: child,
     );
+  }
+}
+
+Future<void> _openWebLink(
+  BuildContext context,
+  WidgetRef ref,
+  Uri target,
+) async {
+  if (WorkspaceLinkScope.openingInBackground) return;
+  var opened = false;
+  try {
+    opened = await ref.read(webLinkOpenerProvider)(target);
+  } on PlatformException {
+    opened = false;
+  }
+  if (context.mounted && !opened) {
+    showAppNotice(context, '无法打开链接，请稍后重试');
   }
 }
 
@@ -723,6 +743,23 @@ final class _WorkspacePage extends ConsumerWidget {
               case '/history':
                 return HistoryScreen(key: PageStorageKey('history-${tab.id}'));
               default:
+                if (tab.articleAddress case final article?) {
+                  return ArticleScreen(
+                    address: article,
+                    onOpenUser: (user) =>
+                        context.openWorkspaceLink('/user/${user.value}'),
+                    onOpenWeb: (target) => _openWebLink(context, ref, target),
+                    onOpenLink: (target) {
+                      if (context.openArticleLink(target)) return;
+                      final location = messageWorkspaceLocation(target);
+                      if (location != null) {
+                        context.openWorkspaceLink(location);
+                      } else {
+                        _openWebLink(context, ref, target);
+                      }
+                    },
+                  );
+                }
                 if (tab.isDynamicDetail) {
                   return DynamicDetailScreen(
                     id: uri.pathSegments.last,
@@ -752,16 +789,7 @@ final class _WorkspacePage extends ConsumerWidget {
                         );
                         return;
                       }
-                      if (WorkspaceLinkScope.openingInBackground) return;
-                      var opened = false;
-                      try {
-                        opened = await ref.read(webLinkOpenerProvider)(target);
-                      } on PlatformException {
-                        opened = false;
-                      }
-                      if (context.mounted && !opened) {
-                        showAppNotice(context, '无法打开链接，请稍后重试');
-                      }
+                      await _openWebLink(context, ref, target);
                     },
                     onLogin: () => showAppDialog<void>(
                       context: context,
@@ -778,6 +806,7 @@ final class _WorkspacePage extends ConsumerWidget {
                     onOpenVideo: (video) =>
                         context.openWorkspaceLink('/video/${video.id.value}'),
                     onOpenLink: (target) async {
+                      if (context.openArticleLink(target)) return;
                       final query = dynamicSearchQuery(target);
                       if (query != null) {
                         context.openWorkspaceLink(
@@ -808,16 +837,7 @@ final class _WorkspacePage extends ConsumerWidget {
                         context.openWorkspaceLink(pgc);
                         return;
                       }
-                      if (WorkspaceLinkScope.openingInBackground) return;
-                      var opened = false;
-                      try {
-                        opened = await ref.read(webLinkOpenerProvider)(target);
-                      } on PlatformException {
-                        opened = false;
-                      }
-                      if (context.mounted && !opened) {
-                        showAppNotice(context, '无法打开链接，请稍后重试');
-                      }
+                      await _openWebLink(context, ref, target);
                     },
                     onLogin: () => showAppDialog<void>(
                       context: context,

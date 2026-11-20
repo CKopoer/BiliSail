@@ -1,6 +1,7 @@
 import '../../../domain/user.dart';
 import '../../../domain/video.dart';
 import '../../../domain/content_link.dart';
+import '../../../domain/article_address.dart';
 
 /// Resolves supported public message links without fetching or following them.
 String? messageWorkspaceLocation(Uri target) {
@@ -12,6 +13,7 @@ String? messageWorkspaceLocation(Uri target) {
   final parts = target.pathSegments.where((part) => part.isNotEmpty).toList();
   final host = target.host;
   const webHosts = {'www.bilibili.com', 'bilibili.com', 'm.bilibili.com'};
+  final article = ArticleAddress.fromWebUri(target);
   final dynamicId = switch (parts) {
     [final id] when host == 't.bilibili.com' => id,
     ['dynamic' || 'opus', final id] when webHosts.contains(host) => id,
@@ -25,8 +27,14 @@ String? messageWorkspaceLocation(Uri target) {
     final path = byResourceId
         ? '/dynamic/resource/$dynamicId'
         : '/dynamic/$dynamicId';
-    return _contentLocation(path, target, playback: false);
+    final location = _contentLocation(path, target, playback: false);
+    // Comment notifications need the dynamic detail's anchored reply panel.
+    if (article != null && !byResourceId && location == path) {
+      return article.location;
+    }
+    return location;
   }
+  if (article != null) return article.location;
   if (host == 'www.bilibili.com' || host == 'bilibili.com') {
     if (parts case ['video', final id] when VideoId(id).isValid) {
       return _contentLocation('/video/$id', target);

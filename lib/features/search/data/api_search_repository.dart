@@ -3,6 +3,7 @@ import 'package:bili_api/bili_api.dart';
 import '../../../shared/data/video_access_mapper.dart';
 
 import '../../../core/network/api_requests.dart';
+import '../../../domain/article_address.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/user.dart';
 import '../../../domain/video.dart';
@@ -25,8 +26,15 @@ class ApiSearchRepository implements SearchRepository {
     required SearchOrder order,
     required SearchDuration duration,
     required SearchUserType userType,
+    SearchVideoZone videoZone = SearchVideoZone.any,
+    SearchArticleZone articleZone = SearchArticleZone.any,
+    SearchPublicationRange? publicationRange,
     required RequestCancellation cancellation,
   }) => requests.run((context) async {
+    final end = publicationRange?.end;
+    final nextDay = end == null
+        ? null
+        : DateTime(end.year, end.month, end.day + 1);
     final result = await client.search(
       query,
       type: _type(category),
@@ -49,6 +57,14 @@ class ApiSearchRepository implements SearchRepository {
           : 0,
       duration: duration.index,
       userType: userType.index,
+      videoZoneId: videoZone.id,
+      articleZoneId: articleZone.id,
+      publishedFromSeconds: publicationRange == null
+          ? null
+          : publicationRange.start.millisecondsSinceEpoch ~/ 1000,
+      publishedThroughSeconds: nextDay == null
+          ? null
+          : nextDay.millisecondsSinceEpoch ~/ 1000 - 1,
       context: context,
     );
     return SearchPage(
@@ -127,6 +143,10 @@ class ApiSearchRepository implements SearchRepository {
     ),
     ApiSearchArticle() => SearchArticleEntry(
       id: ArticleId(item.id),
+      address: switch (item.url) {
+        final url? => ArticleAddress.fromWebUri(url),
+        _ => null,
+      },
       title: item.title,
       author: item.author,
       authorId: UserId.tryParse(item.authorMid),

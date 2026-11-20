@@ -226,6 +226,9 @@ final class _PagingRepository implements SearchRepository {
     required SearchOrder order,
     required SearchDuration duration,
     required SearchUserType userType,
+    SearchVideoZone videoZone = SearchVideoZone.any,
+    SearchArticleZone articleZone = SearchArticleZone.any,
+    SearchPublicationRange? publicationRange,
     required RequestCancellation cancellation,
   }) async {
     if (page == 1) {
@@ -257,6 +260,9 @@ final class _Repository implements SearchRepository {
     required SearchOrder order,
     required SearchDuration duration,
     required SearchUserType userType,
+    SearchVideoZone videoZone = SearchVideoZone.any,
+    SearchArticleZone articleZone = SearchArticleZone.any,
+    SearchPublicationRange? publicationRange,
     required RequestCancellation cancellation,
   }) async => SearchPage(
     items: [for (var index = 0; index < 500; index++) _entry(category, index)],

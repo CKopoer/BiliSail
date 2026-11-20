@@ -342,53 +342,52 @@ void main() {
   );
 
   test(
-    'all sorting/filtering preserves user preview and replaces unranked videos',
+    'all video sorting or filtering uses the typed endpoint from page one',
     () async {
-      for (final (order, duration) in [
-        ('totalrank', 0),
-        ('click', 0),
-        ('totalrank', 4),
+      for (final (order, duration, zone, start, end) in [
+        ('scores', 0, null, null, null),
+        ('totalrank', 4, null, null, null),
+        ('totalrank', 0, 36, null, null),
+        ('totalrank', 0, null, 1700000000, 1700100000),
+        ('stow', 3, 36, 1700000000, 1700100000),
       ]) {
-        final page = await _client((uri) {
-          if (uri.path.endsWith('/all/v2')) {
-            expect(uri.queryParameters['order'], 'totalrank');
-            expect(uri.queryParameters['duration'], '0');
-            return {
-              'pageinfo': {
-                'bili_user': {'numResults': 1},
-              },
-              'result': [
-                {
-                  'result_type': 'bili_user',
-                  'data': [_user],
-                },
-                {
-                  'result_type': 'video',
-                  'data': [_video],
-                },
-              ],
-            };
-          }
-          expect(uri.queryParameters['order'], order);
-          expect(uri.queryParameters['duration'], '$duration');
+        final transport = _Transport((uri) {
+          expect(uri.path, '/x/web-interface/wbi/search/type');
+          expect(uri.queryParameters, containsPair('search_type', 'video'));
+          expect(uri.queryParameters, containsPair('order', order));
+          expect(uri.queryParameters, containsPair('duration', '$duration'));
+          expect(uri.queryParameters['tids'], zone?.toString());
+          expect(uri.queryParameters['pubtime_begin_s'], start?.toString());
+          expect(uri.queryParameters['pubtime_end_s'], end?.toString());
+          expect(uri.queryParameters['category_id'], isNull);
+          expect(uri.queryParameters['user_type'], isNull);
+          expect(uri.queryParameters['w_rid'], isNotEmpty);
           return {
             'numPages': 2,
             'numResults': 25,
-            'result': [
-              {..._video, 'title': 'ranked'},
-            ],
+            'result': [_video],
           };
-        }).search('query', order: order, duration: duration);
+        });
+        final client = SearchClient(BiliApiClient(transport: transport));
+        for (var page = 1; page <= 2; page++) {
+          final result = await client.search(
+            'query',
+            page: page,
+            order: order,
+            duration: duration,
+            videoZoneId: zone,
+            publishedFromSeconds: start,
+            publishedThroughSeconds: end,
+          );
+          expect(result.items.single, isA<ApiSearchVideo>());
+          expect(result.hasMore, page == 1);
+        }
         expect(
-          page.items.whereType<ApiSearchUser>().single.videos,
-          hasLength(1),
+          transport.calls
+              .where((uri) => !uri.path.endsWith('/nav'))
+              .map((uri) => uri.queryParameters['page']),
+          ['1', '2'],
         );
-        expect(
-          page.items.whereType<ApiSearchVideo>().single.video.title,
-          'ranked',
-        );
-        expect(page.counts[ApiSearchType.video], 25);
-        expect(page.hasMore, isTrue);
       }
     },
   );
@@ -450,31 +449,44 @@ void main() {
     },
   );
 
-  test('user and article have distinct order parameters', () async {
-    await _client((uri) {
-      expect(uri.queryParameters['order'], 'fans');
-      expect(uri.queryParameters['order_sort'], '1');
-      expect(uri.queryParameters['user_type'], '1');
-      return {
-        'result': [_user],
-        'numPages': 1,
-      };
-    }).search(
-      'query',
-      type: ApiSearchType.user,
-      order: 'fans',
-      orderSort: 1,
-      userType: 1,
-    );
-    await _client((uri) {
-      expect(uri.queryParameters['order'], 'scores');
-      expect(uri.queryParameters.containsKey('duration'), isFalse);
-      return {
-        'result': [_article],
-        'numPages': 1,
-      };
-    }).search('query', type: ApiSearchType.article, order: 'scores');
-  });
+  test(
+    'user and article have distinct sorting and filtering parameters',
+    () async {
+      await _client((uri) {
+        expect(uri.queryParameters['order'], 'fans');
+        expect(uri.queryParameters['order_sort'], '1');
+        expect(uri.queryParameters['user_type'], '3');
+        expect(uri.queryParameters['category_id'], isNull);
+        expect(uri.queryParameters['tids'], isNull);
+        return {
+          'result': [_user],
+          'numPages': 1,
+        };
+      }).search(
+        'query',
+        type: ApiSearchType.user,
+        order: 'fans',
+        orderSort: 1,
+        userType: 3,
+      );
+      await _client((uri) {
+        expect(uri.queryParameters['order'], 'scores');
+        expect(uri.queryParameters['category_id'], '17');
+        expect(uri.queryParameters['duration'], isNull);
+        expect(uri.queryParameters['tids'], isNull);
+        expect(uri.queryParameters['user_type'], isNull);
+        return {
+          'result': [_article],
+          'numPages': 1,
+        };
+      }).search(
+        'query',
+        type: ApiSearchType.article,
+        order: 'scores',
+        articleZoneId: 17,
+      );
+    },
+  );
 
   test('PGC search type and season IDs stay distinct from media IDs', () async {
     for (final type in [ApiSearchType.bangumi, ApiSearchType.film]) {
@@ -562,6 +574,30 @@ void main() {
     );
     await expectLater(
       client.search('query', type: ApiSearchType.article, duration: 1),
+      throwsArgumentError,
+    );
+    await expectLater(
+      client.search('query', type: ApiSearchType.article, videoZoneId: 1),
+      throwsArgumentError,
+    );
+    await expectLater(
+      client.search('query', type: ApiSearchType.video, articleZoneId: 2),
+      throwsArgumentError,
+    );
+    await expectLater(
+      client.search(
+        'query',
+        type: ApiSearchType.video,
+        publishedFromSeconds: 1,
+      ),
+      throwsArgumentError,
+    );
+    await expectLater(
+      client.search(
+        'query',
+        publishedFromSeconds: 2,
+        publishedThroughSeconds: 1,
+      ),
       throwsArgumentError,
     );
     await expectLater(
