@@ -767,64 +767,49 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
                   ],
                   if (widget.section == ProfileSection.folders &&
                       folderId != null)
-                    Row(
-                      children: [
-                        IconButton(
-                          tooltip: '返回收藏夹',
-                          onPressed: controller.closeFolder,
-                          icon: const Icon(Icons.arrow_back),
-                        ),
-                        Expanded(
-                          child: Text(
-                            folderTitle ?? '',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Consumer(
-                          builder: (context, ref, _) {
-                            final loading = ref.watch(
-                              profileControllerProvider(widget.id)
-                                  .select((s) => s.queueLoading),
-                            );
-                            return TextButton.icon(
-                              key: const ValueKey('profile-favorite-play-all'),
-                              onPressed:
-                                  loading ||
-                                      widget.onOpenPlaylist == null ||
-                                      !list.items.any(
-                                        (entry) =>
-                                            entry.video?.id.isValid == true,
-                                      )
-                                  ? null
-                                  : () => _playFavorites(),
-                              icon: loading
-                                  ? const SizedBox.square(
-                                      dimension: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
+                    FavoriteContentToolbar(
+                      title: folderTitle ?? '',
+                      onBack: controller.closeFolder,
+                      backTooltip: '返回收藏夹',
+                      filter: folderFilter,
+                      onChanged: list.isHidden
+                          ? null
+                          : (filter) {
+                              if (filter == folderFilter) return;
+                              if (scrollController.hasClients) {
+                                scrollController.jumpTo(
+                                  scrollController.position.minScrollExtent,
+                                );
+                              }
+                              controller.filterFavorites(filter);
+                            },
+                      playAll: Consumer(
+                        builder: (context, ref, _) {
+                          final loading = ref.watch(
+                            profileControllerProvider(widget.id)
+                                .select((s) => s.queueLoading),
+                          );
+                          return TextButton.icon(
+                            key: const ValueKey('profile-favorite-play-all'),
+                            onPressed:
+                                loading ||
+                                    widget.onOpenPlaylist == null ||
+                                    !list.items.any(
+                                      (entry) =>
+                                          entry.video?.id.isValid == true,
                                     )
-                                  : const Icon(Icons.playlist_play),
-                              label: const Text('播放全部'),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  if (folderId != null && !list.isHidden)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: FavoriteContentToolbar(
-                        filter: folderFilter,
-                        onChanged: (filter) {
-                          if (filter == folderFilter) return;
-                          if (scrollController.hasClients) {
-                            scrollController.jumpTo(
-                              scrollController.position.minScrollExtent,
-                            );
-                          }
-                          controller.filterFavorites(filter);
+                                ? null
+                                : () => _playFavorites(),
+                            icon: loading
+                                ? const SizedBox.square(
+                                    dimension: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.playlist_play),
+                            label: const Text('播放全部'),
+                          );
                         },
                       ),
                     ),

@@ -5,6 +5,7 @@ import '../../../shared/ui/retained_tab_view.dart';
 
 import '../../../shared/ui/bili_badges.dart';
 import '../../../shared/ui/app_cover_image.dart';
+import '../../../shared/ui/content_search_field.dart';
 import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/video_card.dart';
 import '../domain/profile_repository.dart';
@@ -717,37 +718,12 @@ class _ProfileVideoToolbarState extends State<ProfileVideoToolbar> {
         ),
       ),
     );
-    final search = TextField(
+    final search = ContentSearchField(
       key: const ValueKey('profile-video-search'),
       controller: keywordController,
       focusNode: _searchFocus,
-      textInputAction: TextInputAction.search,
-      style: theme.textTheme.bodyMedium,
-      decoration: InputDecoration(
-        hintText: '搜索投稿',
-        filled: true,
-        fillColor: theme.colorScheme.surfaceContainerLow,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-        prefixIcon: const Icon(Icons.search, size: 18),
-        isDense: true,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 12,
-          vertical: 10,
-        ),
-        suffixIcon: IconButton(
-          tooltip: '搜索投稿',
-          onPressed: () => onSearch(keywordController.text),
-          icon: const Icon(Icons.search, size: 20),
-        ),
-      ),
-      onSubmitted: onSearch,
+      hintText: '搜索投稿',
+      onSearch: onSearch,
     );
     return LayoutBuilder(
       builder: (context, constraints) {

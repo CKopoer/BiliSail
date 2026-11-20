@@ -5,6 +5,7 @@ import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/features/live/domain/live_room.dart';
 import 'package:bilisail/features/profile/domain/profile_repository.dart';
 import 'package:bilisail/features/profile/presentation/profile_header.dart';
+import 'package:bilisail/shared/ui/content_search_field.dart';
 import 'package:bilisail/shared/ui/app_cover_image.dart';
 import 'package:bilisail/shared/ui/bili_badges.dart';
 import 'package:bilisail/shared/ui/user_decoration_image.dart';
@@ -474,7 +475,10 @@ void main() {
         );
         await tester.pump(const Duration(milliseconds: 200));
         expect(keyword.text, '保留搜索草稿');
-        expect(tester.widget<TextField>(search).controller, same(keyword));
+        expect(
+          tester.widget<ContentSearchField>(search).controller,
+          same(keyword),
+        );
         update(() => loading = false);
         await tester.pumpAndSettle();
         expect(tester.widget<TextButton>(play).onPressed, isNotNull);

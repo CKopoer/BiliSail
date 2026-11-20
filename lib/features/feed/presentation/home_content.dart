@@ -274,65 +274,51 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
                     if ((_folder != null || favoriteRequest != null) &&
                         !liveBrowse)
                       SliverToBoxAdapter(
-                        child: Row(
-                          children: [
-                            if (_folder != null)
-                              IconButton(
-                                tooltip: '返回列表',
-                                onPressed: () => setState(() => _folder = null),
-                                icon: const Icon(Icons.arrow_back),
-                              ),
-                            Expanded(
-                              child: Text(
-                                folderTitle,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            if (favoriteRequest != null)
-                              TextButton.icon(
-                                key: const ValueKey('favorite-play-all'),
-                                onPressed:
-                                    favoriteQueue!.isLoading ||
-                                        feed.items.asData?.value.isNotEmpty !=
-                                            true
-                                    ? null
-                                    : () => _playFavorites(favoriteRequest),
-                                icon: favoriteQueue.isLoading
-                                    ? const SizedBox.square(
-                                        dimension: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Icon(Icons.playlist_play),
-                                label: Text(
-                                  favoriteQueue.isLoading ? '加载中' : '播放全部',
+                        child: FavoriteContentToolbar(
+                          title: folderTitle,
+                          onBack: _folder == null
+                              ? null
+                              : () => setState(() => _folder = null),
+                          playAll: favoriteRequest == null
+                              ? null
+                              : TextButton.icon(
+                                  key: const ValueKey('favorite-play-all'),
+                                  onPressed:
+                                      favoriteQueue!.isLoading ||
+                                          feed.items.asData?.value.isNotEmpty !=
+                                              true
+                                      ? null
+                                      : () => _playFavorites(favoriteRequest),
+                                  icon: favoriteQueue.isLoading
+                                      ? const SizedBox.square(
+                                          dimension: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Icon(Icons.playlist_play),
+                                  label: Text(
+                                    favoriteQueue.isLoading ? '加载中' : '播放全部',
+                                  ),
                                 ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    if (supportsFavoriteFilters)
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 4, bottom: 8),
-                          child: FavoriteContentToolbar(
-                            filter: favoriteFilter,
-                            allowAllFolders: query.section == '默认收藏夹',
-                            onChanged: (filter) {
-                              if (filter == favoriteFilter) return;
-                              if (scrollController.hasClients) {
-                                scrollController.jumpTo(
-                                  scrollController.position.minScrollExtent,
-                                );
-                              }
-                              ref.invalidate(
-                                favoritePlaybackQueueProvider(favoriteRequest),
-                              );
-                              controller.filterFavorites(filter);
-                            },
-                          ),
+                          filter: favoriteFilter,
+                          allowAllFolders: query.section == '默认收藏夹',
+                          onChanged: !supportsFavoriteFilters
+                              ? null
+                              : (filter) {
+                                  if (filter == favoriteFilter) return;
+                                  if (scrollController.hasClients) {
+                                    scrollController.jumpTo(
+                                      scrollController.position.minScrollExtent,
+                                    );
+                                  }
+                                  ref.invalidate(
+                                    favoritePlaybackQueueProvider(
+                                      favoriteRequest,
+                                    ),
+                                  );
+                                  controller.filterFavorites(filter);
+                                },
                         ),
                       ),
                     feed.items.when(
