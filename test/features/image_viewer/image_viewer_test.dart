@@ -321,7 +321,20 @@ void main() {
         await tester.pumpAndSettle();
       }
 
-      await swipe(const Offset(-120, 0));
+      final initialCenter = tester.getCenter(viewport);
+      final drag = await tester.startGesture(initialCenter);
+      await drag.moveBy(const Offset(-80, 0));
+      await tester.pump();
+      expect(tester.getCenter(viewport).dx, closeTo(initialCenter.dx - 80, 1));
+      expect(find.text('2 / 3'), findsOneWidget);
+      await drag.moveBy(const Offset(-40, 0));
+      await tester.pump();
+      await drag.up();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 45));
+      expect(tester.getCenter(viewport).dx, lessThan(initialCenter.dx - 120));
+      expect(find.text('2 / 3'), findsOneWidget);
+      await tester.pumpAndSettle();
       expect(find.text('3 / 3'), findsOneWidget);
       expect(repository.sources, [preview(sources[1]), preview(sources[2])]);
       await swipe(const Offset(-120, 0));
@@ -521,6 +534,8 @@ void main() {
     final loading = find.text('正在加载预览图…');
     await tester.drag(loading, const Offset(-120, 0));
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump();
     expect(find.text('3 / 3'), findsOneWidget);
     expect(repository.reads.first.cancellation.isCancelled, isTrue);
     final image = (await _swipeRepository(tester)).image;
@@ -533,12 +548,77 @@ void main() {
     expect(failure, findsOneWidget);
     await tester.drag(failure, const Offset(120, 0));
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump();
     expect(find.text('2 / 3'), findsOneWidget);
     repository.reads[2].result.complete(image);
     await tester.pumpAndSettle();
     expect(find.byType(InteractiveViewer), findsOneWidget);
     expect(loading, findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('cached neighbor is painted during drag and reused on landing', (
+    tester,
+  ) async {
+    final bytes = await tester.runAsync(png);
+    if (bytes == null) throw StateError('PNG missing');
+    final first = OriginalImage(bytes: bytes, width: 420, height: 240);
+    final second = OriginalImage(
+      bytes: Uint8List.fromList(bytes),
+      width: 180,
+      height: 280,
+    );
+    final repository = _PendingRepository();
+    final sources = List.generate(
+      2,
+      (i) => Uri.https('i0.hdslb.com', '/$i.png'),
+    );
+    final request = ImageViewerRequest(
+      sources,
+      0,
+      findPreview: (source) =>
+          (image: source == sources[0] ? first : second, isOriginal: false),
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          originalImageRepositoryProvider.overrideWithValue(repository),
+        ],
+        child: InputTestApp(home: ImageViewer(request: request)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final viewport = find.byType(InteractiveViewer);
+    final viewportCenter = tester.getCenter(viewport);
+    final drag = await tester.startGesture(viewportCenter);
+    await drag.moveBy(Offset(-tester.getSize(viewport).width * .7, 0));
+    await tester.pump();
+    final adjacent = find.byWidgetPredicate(
+      (widget) => widget is Image && widget.semanticLabel == '预览图 2',
+    );
+    final adjacentFrame = find.descendant(
+      of: adjacent,
+      matching: find.byType(RawImage),
+    );
+    for (var attempt = 0; attempt < 30; attempt++) {
+      if (tester.widget<RawImage>(adjacentFrame).image != null) break;
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
+      );
+      await tester.pump();
+    }
+    expect(tester.widget<RawImage>(adjacentFrame).image, isNotNull);
+    expect(tester.getCenter(adjacent).dx, greaterThan(viewportCenter.dx));
+    expect(find.text('1 / 2'), findsOneWidget);
+    expect(repository.sources, isEmpty);
+
+    await drag.up();
+    await tester.pumpAndSettle();
+    expect(find.text('2 / 2'), findsOneWidget);
+    expect(tester.getCenter(adjacent).dx, closeTo(viewportCenter.dx, 1));
+    expect(tester.widget<RawImage>(adjacentFrame).image, isNotNull);
+    expect(repository.sources, isEmpty);
   });
 
   testWidgets(

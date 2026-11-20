@@ -130,6 +130,7 @@ final class AppNetworkImage extends StatefulWidget {
     this.cacheWidth,
     this.cacheHeight,
     this.maxRetries = 0,
+    this.viewerOriginal,
   }) : assert(maxRetries >= 0);
   final String url;
   final double? width, height;
@@ -141,6 +142,8 @@ final class AppNetworkImage extends StatefulWidget {
   final bool excludeFromSemantics;
   final String? semanticLabel;
   final int? cacheWidth, cacheHeight;
+  // The untransformed source for an image that opens in the shared viewer.
+  final Uri? viewerOriginal;
 
   /// Additional attempts for failed valid URLs, paused outside the viewport.
   ///
@@ -166,7 +169,7 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
   int _loadRetries = 0;
   bool _hasFrame = false;
   ImageProvider<Object>? _provider;
-  (AppImageCache?, int?, String, int?, int?)? _providerConfiguration;
+  (AppImageCache?, int?, String, int?, int?, Uri?)? _providerConfiguration;
   Widget? _image;
   _RetainedImageProvider? _source;
   int _attempt = 0;
@@ -210,7 +213,8 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
     // and activate/deactivate own ancestry changes; layout owns size changes.
     if (oldWidget.url != widget.url ||
         oldWidget.cacheWidth != widget.cacheWidth ||
-        oldWidget.cacheHeight != widget.cacheHeight) {
+        oldWidget.cacheHeight != widget.cacheHeight ||
+        oldWidget.viewerOriginal != widget.viewerOriginal) {
       _stopWaiting();
       _resetLoadRetries();
       _hasFrame = false;
@@ -489,6 +493,7 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
       widget.url,
       widget.cacheWidth,
       widget.cacheHeight,
+      widget.viewerOriginal,
     );
     if (_providerConfiguration == configuration) return _provider;
     _resetLoadRetries();
@@ -519,6 +524,7 @@ final class _AppNetworkImageState extends State<AppNetworkImage> {
             url: normalized,
             cacheWidth: widget.cacheWidth,
             cacheHeight: widget.cacheHeight,
+            viewerOriginal: widget.viewerOriginal,
           );
     return _provider = provider;
   }

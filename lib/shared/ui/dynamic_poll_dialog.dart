@@ -124,6 +124,7 @@ class _DynamicPollDialogState extends ConsumerState<DynamicPollDialog> {
                                         ),
                                         child: AppNetworkImage(
                                           url: image.toString(),
+                                          viewerOriginal: image,
                                           height: 140,
                                           fit: BoxFit.contain,
                                           cacheWidth: 600,

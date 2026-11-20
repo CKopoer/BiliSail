@@ -21,14 +21,20 @@ final imageViewerControllerProvider = NotifierProvider.autoDispose
       ImageViewerController.new,
     );
 
+typedef ImageViewerPreview = ({OriginalImage image, bool isOriginal});
+
 final class ImageViewerRequest {
-  ImageViewerRequest(List<Uri> images, int index)
+  ImageViewerRequest(List<Uri> images, int index, {this.findPreview})
     : images = List.unmodifiable(images),
       initialIndex = index {
     if (this.images.isEmpty) throw ArgumentError.value(images, 'images');
   }
   final List<Uri> images;
   final int initialIndex;
+  final ImageViewerPreview? Function(Uri)? findPreview;
+
+  ImageViewerPreview? cachedPreview(int index) =>
+      findPreview?.call(images[index]);
 
   Uri previewSource(int index) =>
       publicImageThumbnail(images[index], width: 1280, resizeAnimated: true);
@@ -124,6 +130,19 @@ class ImageViewerController extends Notifier<ImageViewerState> {
     final retainedOriginal = retained != null && state.isOriginal;
     _read?.cancel();
     final generation = ++_generation;
+    final cached = original ? null : request.cachedPreview(next);
+    if (cached != null) {
+      _read = null;
+      state = ImageViewerState(
+        index: next,
+        loading: false,
+        image: cached.image,
+        exporting: _exporting,
+        originalRequested: cached.isOriginal,
+        isOriginal: cached.isOriginal,
+      );
+      return;
+    }
     final cancellation = RequestCancellation();
     _read = cancellation;
     state = ImageViewerState(

@@ -1,5 +1,17 @@
 # 首页刷新、自动分页与图片缓存
 
+## 2026-11-20：查看器复用列表缩略图与连续滑动
+
+旧查看器只在抬手时读取横向位移并切换索引，拖动期间没有移动页面。评论区的 264 像素宽缩略图走共享图片缓存，查看器打开后通过独立仓储请求 1280 像素预览，因此已加载的缩略图也无法避免第二次网络请求。
+
+只读核对 PiliPlus `217fb54f51f6764176319bbdedab2a7522d75401`。评论把原地址与尺寸交给网格，网格使用 `CachedNetworkImage` 请求默认 `@10q.webp`，按显示尺寸限制解码。查看器默认画质为 100，主图请求原地址，首帧未就绪时用同一缩略图 URL 从共享缓存加载垫图。连续横滑由 `PageView.builder` 承接。其锁文件固定 `cached_network_image_ce` 4.11.1，提交 `b1597d6d58ad3bc5bcf2d93022bc893add7ce66b`。本项目独立实现缩略图交接与连续翻页，沿用已有图片依赖。[评论配图](../../../PiliPlus/lib/pages/video/reply/widgets/reply_item_grpc.dart) · [列表图片](../../../PiliPlus/lib/common/widgets/image/network_img_layer.dart) · [缩略图 URL](../../../PiliPlus/lib/utils/image_utils.dart) · [查看器](../../../PiliPlus/lib/common/widgets/image_viewer/gallery_viewer.dart) · [画质默认值](../../../PiliPlus/lib/utils/storage_pref.dart) · [锁文件](../../../PiliPlus/pubspec.lock)
+
+BiliSail 的评论、动态配图、投票配图及空间图片把已加载的字节和尺寸按原地址交给共享查看器。共享图片缓存的这部分仅在内存保留最近使用的 64 项，总量最多 8 MiB，关闭图片缓存、账号变化或退出时清除。命中时直接显示列表已加载的版本，未命中时沿用 1280 像素 CDN 预览。原图由“查看原图”显式请求，首帧就绪前继续显示预览。[共享图片提供器](../../lib/core/presentation/app_image_provider.dart) · [查看器控制器](../../lib/features/image_viewer/application/image_viewer_controller.dart)
+
+适应窗口缩放时，当前页与相邻页一起随手指横移。松手达到原有阈值时滑入相邻页，短拖或取消时滑回；已缓存的相邻图参与滑动，未缓存时显示加载状态，落位后再开始读取。放大平移、双指缩放、首尾边界、减少动画设置和当前窗口归属沿用已有交互。离线回归检查拖动与落位的中间帧、相邻图解码与复用、评论 GIF、动态缩略图、账号缓存隔离以及切图时取消迟到读取。[共享查看器](../../lib/shared/ui/image_viewer.dart) · [查看器回归](../../test/features/image_viewer/image_viewer_test.dart) · [评论回归](../../test/features/video/comment_rich_content_test.dart)
+
+164 项定向回归与改动文件的格式、静态分析通过。仓库检查脚本分阶段执行，根应用 5853 项通过、14 项跳过，四个独立包共 1454 项通过、20 项跳过，其中 mux 的 10 项原生用例未配置 `BILI_MUX_LIBRARY`。仓库级格式检查受同期播放面板改动阻塞。未构建应用或进行实机测试。
+
 ## 2026-11-08：先预览再查看原图
 
 为避免点开大图时立即等待完整原图，[共享图片预览](../../lib/shared/ui/image_viewer.dart)现在先请求最大边 1280 像素、等比且不裁剪的公开 CDN 预览。无 query/fragment、无已有变换的 `hdslb.com` JPG/JPEG/PNG/WebP/GIF 使用 `@1280w_1280h_0e.webp`；GIF 保留动画，不选取单帧。签名地址、已有变换、其他主机和协议仍沿用原有地址，不猜测或剥离参数；这些无法安全生成另一预览地址的图片保持直接加载，不显示无效的原图升级按钮。此调整覆盖评论、动态、私信及空间中使用共享预览的入口。

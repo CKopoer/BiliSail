@@ -13,10 +13,12 @@ class NetworkAvatar extends StatelessWidget {
     this.pendantUrl,
     this.name = '',
     this.radius = 18,
+    this.opensViewer = false,
   });
   final Uri? url, pendantUrl;
   final String name;
   final double radius;
+  final bool opensViewer;
 
   static const _edges = [48, 64, 96, 128, 160, 240, 320, 480, 640, 960, 1280];
 
@@ -59,6 +61,7 @@ class NetworkAvatar extends StatelessWidget {
                   width: edge,
                   height: edge,
                 ).toString(),
+                viewerOriginal: opensViewer ? source : null,
                 cacheWidth: edge,
                 cacheHeight: edge,
                 fit: BoxFit.cover,

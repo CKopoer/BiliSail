@@ -263,6 +263,7 @@ class _CommentRichContentState extends State<CommentRichContent> {
                                   // full GIF, which can exceed the byte-cache limit.
                                   resizeAnimated: true,
                                 ).toString(),
+                                viewerOriginal: comment.pictures[index],
                                 cacheWidth: 264,
                                 cacheHeight: 264,
                                 width: 88,

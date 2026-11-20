@@ -15,6 +15,7 @@ final class AppCoverImage extends StatelessWidget {
     this.errorBuilder,
     this.frameBuilder,
     this.excludeFromSemantics = false,
+    this.opensViewer = false,
   });
 
   final String url;
@@ -23,6 +24,7 @@ final class AppCoverImage extends StatelessWidget {
   final ImageErrorWidgetBuilder? errorBuilder;
   final ImageFrameBuilder? frameBuilder;
   final bool excludeFromSemantics;
+  final bool opensViewer;
 
   // Buckets let nearby card sizes share a URL rather than downloading a new
   // variant at every pixel during window resizing. Keep the decode edge bounded.
@@ -47,6 +49,7 @@ final class AppCoverImage extends StatelessWidget {
               ? url
               : publicImageThumbnail(source, width: thumbnailWidth).toString(),
           cacheWidth: thumbnailWidth,
+          viewerOriginal: opensViewer ? source : null,
           maxRetries: 3,
           fit: fit,
           errorBuilder: errorBuilder,

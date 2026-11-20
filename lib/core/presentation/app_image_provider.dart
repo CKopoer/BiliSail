@@ -5,6 +5,13 @@ import 'package:flutter/painting.dart';
 
 import '../storage/image_byte_cache.dart';
 
+typedef CachedImagePreview = ({
+  Uint8List bytes,
+  int width,
+  int height,
+  bool isOriginal,
+});
+
 /// Flutter's decoded LRU cache is shared across tabs while the byte cache can
 /// survive process restarts. The app composition root owns both lifetimes.
 final class AppImageCache extends ChangeNotifier {
@@ -16,7 +23,52 @@ final class AppImageCache extends ChangeNotifier {
   final ImageByteCache bytes;
   final ImageCache decoded;
   final Map<AppImageProvider, _ImageDemand> _demands = {};
+  final _viewerPreviews = <Uri, CachedImagePreview>{};
+  static const _viewerPreviewBudget = 8 * 1024 * 1024;
+  int _viewerPreviewBytes = 0;
   bool get enabled => bytes.enabled;
+
+  static Uri _https(Uri uri) =>
+      uri.scheme == 'http' ? uri.replace(scheme: 'https') : uri;
+
+  CachedImagePreview? previewFor(Uri original) {
+    if (!enabled) return null;
+    final key = _https(original);
+    final preview = _viewerPreviews.remove(key);
+    if (preview != null) _viewerPreviews[key] = preview;
+    return preview;
+  }
+
+  void _rememberPreview(
+    Uri original,
+    Uri source,
+    Uint8List bytes,
+    int width,
+    int height,
+  ) {
+    if (!enabled || bytes.length > _viewerPreviewBudget) return;
+    final key = _https(original);
+    _viewerPreviewBytes -= _viewerPreviews.remove(key)?.bytes.length ?? 0;
+    while (_viewerPreviews.length >= 64 ||
+        _viewerPreviewBytes + bytes.length > _viewerPreviewBudget) {
+      _viewerPreviewBytes -= _viewerPreviews
+          .remove(_viewerPreviews.keys.first)!
+          .bytes
+          .length;
+    }
+    _viewerPreviews[key] = (
+      bytes: bytes.asUnmodifiableView(),
+      width: width,
+      height: height,
+      isOriginal: key == source,
+    );
+    _viewerPreviewBytes += bytes.length;
+  }
+
+  void _clearPreviews() {
+    _viewerPreviews.clear();
+    _viewerPreviewBytes = 0;
+  }
 
   AppImageConsumer _acquireConsumer(
     AppImageProvider provider,
@@ -76,6 +128,7 @@ final class AppImageCache extends ChangeNotifier {
     if (value == bytes.enabled) return;
     bytes.enabled = value;
     if (!value) {
+      _clearPreviews();
       decoded.clear();
       decoded.clearLiveImages();
     }
@@ -86,6 +139,7 @@ final class AppImageCache extends ChangeNotifier {
   Future<void> changeScope(String scope) async {
     if (scope == bytes.scope) return;
     final cleanup = bytes.changeScope(scope);
+    _clearPreviews();
     decoded.clear();
     decoded.clearLiveImages();
     notifyListeners();
@@ -94,12 +148,14 @@ final class AppImageCache extends ChangeNotifier {
 
   Future<void> clearSession(String oldScope) async {
     bytes.invalidateSession();
+    _clearPreviews();
     decoded.clear();
     decoded.clearLiveImages();
     if (oldScope != 'guest') await bytes.clearScope(oldScope);
   }
 
   Future<void> close() async {
+    _clearPreviews();
     decoded.clear();
     decoded.clearLiveImages();
     await bytes.close();
@@ -160,11 +216,13 @@ final class AppImageProvider extends ImageProvider<AppImageProvider> {
     required this.url,
     this.cacheWidth,
     this.cacheHeight,
+    this.viewerOriginal,
   }) : generation = cache.bytes.generation;
   final AppImageCache cache;
   final String url;
   final int generation;
   final int? cacheWidth, cacheHeight;
+  final Uri? viewerOriginal;
 
   AppImageConsumer acquireConsumer(ImageLoadPriority priority) =>
       cache._acquireConsumer(this, priority);
@@ -261,13 +319,18 @@ final class AppImageProvider extends ImageProvider<AppImageProvider> {
       final uri = Uri.parse(url);
       final result = await load(uri);
       try {
-        return await _decode(result, decode, demand);
+        return await _decode(uri, result, decode, demand);
       } on Exception {
         demand?.check();
         if (generation != cache.bytes.generation) rethrow;
         if (cache.enabled) await cache.bytes.invalidate(uri);
         if (!result.fromDisk) rethrow;
-        return await _decode(await load(uri, skipDisk: true), decode, demand);
+        return await _decode(
+          uri,
+          await load(uri, skipDisk: true),
+          decode,
+          demand,
+        );
       }
     } catch (_) {
       // Failed pending completers must not poison future mounts of this URL.
@@ -279,6 +342,7 @@ final class AppImageProvider extends ImageProvider<AppImageProvider> {
   }
 
   Future<ui.Codec> _decode(
+    Uri source,
     CachedImageBytes result,
     ImageDecoderCallback decode,
     _ImageDemand? demand,
@@ -289,9 +353,11 @@ final class AppImageProvider extends ImageProvider<AppImageProvider> {
       buffer.dispose();
       throw const ImageLoadCancelled();
     }
+    (int, int)? dimensions;
     final codec = await decode(
       buffer,
       getTargetSize: (width, height) {
+        dimensions = (width, height);
         // Prevent large public images from retaining full-resolution decoded
         // surfaces. A stable size also gives identical URLs identical keys.
         final targetWidth = (cacheWidth ?? 1280).clamp(1, 1280);
@@ -310,6 +376,12 @@ final class AppImageProvider extends ImageProvider<AppImageProvider> {
       codec.dispose();
       throw const ImageLoadCancelled();
     }
+    if ((viewerOriginal, dimensions) case (
+      final original?,
+      (final w, final h),
+    )) {
+      cache._rememberPreview(original, source, result.bytes, w, h);
+    }
     return codec;
   }
 
@@ -320,10 +392,17 @@ final class AppImageProvider extends ImageProvider<AppImageProvider> {
       url == other.url &&
       generation == other.generation &&
       cacheWidth == other.cacheWidth &&
-      cacheHeight == other.cacheHeight;
+      cacheHeight == other.cacheHeight &&
+      viewerOriginal == other.viewerOriginal;
   @override
-  int get hashCode =>
-      Object.hash(cache, url, generation, cacheWidth, cacheHeight);
+  int get hashCode => Object.hash(
+    cache,
+    url,
+    generation,
+    cacheWidth,
+    cacheHeight,
+    viewerOriginal,
+  );
   @override
   String toString() =>
       'AppImageProvider(public image, generation: $generation)';

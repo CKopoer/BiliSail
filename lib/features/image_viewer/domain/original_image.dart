@@ -12,6 +12,13 @@ final class OriginalImage {
   final Uint8List bytes;
   final int width, height;
 
+  static bool acceptsDimensions(int width, int height) =>
+      width > 0 &&
+      height > 0 &&
+      width <= 262144 &&
+      height <= 262144 &&
+      width * height <= 64 * 1024 * 1024;
+
   // Bound decoded textures separately from the encoded original, which is
   // retained unchanged for saving and copying. Keep the original layout size.
   double get _previewScale => math.min(
