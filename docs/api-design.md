@@ -186,7 +186,13 @@ ApiPage<T> { items, nextCursor, hasMore }
 
 影视与直播已按用户本轮要求提前接入 Web 详情/播放/历史聊天；上述 M3/M4 定位仍是整体路线。实际已实现端点、取消与权限语义、游客烟测见 [影视与直播内置播放](validation/content-playback.md)。官方影视侧栏及 SC 快照端点、容量和前序验证见 [影视侧栏与直播 SC](validation/pgc-live-sidebar.md)。后续剧集弹幕/发送、直播实时连接与消息、SC 合并及当前分区列表协议见 [影视与直播弹幕修复](validation/pgc-live-danmaku.md)。
 
-搜索现已接入七类 Web 搜索；综合接口用于混合模块与分类总数，视频排序/筛选/分页固定使用 `search/type`，不依赖综合接口对 `order` 的忽略行为。各类参数与实测见 [搜索分类与排序](validation/search-categories.md)。
+搜索接入七类 Web 搜索。默认综合首屏读取 `/x/web-interface/wbi/search/all/v2` 的混合模块与分类总数，视频条目及后续分页来自 `/x/web-interface/wbi/search/type?search_type=video`。综合页启用视频排序或筛选后从第一页起直接读取该视频接口，清除条件后恢复混合结果。分类标签继续显示当前关键词最近取得的未筛选计数。各分类原有端点及游客观测见 [搜索分类与排序](validation/search-categories.md)。
+
+2026-11-20 搜索筛选继续使用 `api.bilibili.com` Web GET、WBI、可选 Cookie 及 JSON，沿用现有页码、账号隔离、请求取消和有界只读重试。综合／视频支持 `order=scores` 评论排序、`duration` 时长、`tids` 视频分区，以及 `pubtime_begin_s`／`pubtime_end_s` 发布日期。日期使用本地日历，发送起始日零点到结束日最后一秒的 Unix 时间戳。预设和自定义范围在应用筛选时确认，分页、刷新及重试复用同一参数。专栏分区使用 `category_id`，用户类型增加 `user_type=3` 认证用户。分类变化重置筛选，筛选变化取消旧请求并从第一页加载。
+
+筛选字段只读核对 PiliPlus `217fb54f51f6764176319bbdedab2a7522d75401` 的 `lib/http/search.dart`、`lib/pages/search_panel` 和 `lib/models/common/search`。本项目独立实现筛选状态及请求映射。本轮新增字段由离线用例覆盖。游客抽查科技专栏分区返回 20 条结果，其余筛选未逐项在线验证。
+
+2026-11-20 搜索专栏、历史专栏与动态中的专栏链接接入应用内阅读。以 CV 号打开时先向 `https://www.bilibili.com/read/cv{id}/` 发送不携带凭据的单次 HEAD，根据官方重定向识别迁移后的 opus ID。正文使用 `api.bilibili.com` 的 Web GET，WBI 签名、Cookie 可选、JSON 响应、无分页。旧专栏调用 `/x/article/view`，参数为 `id`、`gaia_source=main_web`、`web_location=333.976`。新版图文调用 `/x/polymer/web-dynamic/v1/opus/detail`，参数为 `id`、`timezone_offset=-480` 和 `features`。服务端明确返回旧专栏 ID 时可回读一次，本次读取共享取消、会话边界与总时限。
 
 ## 5. 会话与凭据
 

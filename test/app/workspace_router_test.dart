@@ -1756,6 +1756,7 @@ void main() {
         await tester.tap(find.byKey(const ValueKey('search-more-filters')));
         await tester.pumpAndSettle();
         await tester.tap(find.text('60分钟以上'));
+        await tester.tap(find.text('应用筛选'));
         await tester.pumpAndSettle();
         final priorSignal = search.cancellations.last;
         await tester.tap(find.byKey(const ValueKey('search-category-user')));
@@ -1868,7 +1869,10 @@ void main() {
         final uri = router.routeInformationProvider.value.uri;
         expect(uri.path, '/search');
         expect(uri.queryParameters['q'], tag);
-        expect(find.text('“$tag” 的搜索结果'), findsOneWidget);
+        expect(
+          tester.widget<SearchScreen>(find.byType(SearchScreen)).query,
+          tag,
+        );
         await tester.binding.handlePopRoute();
         await tester.pumpAndSettle();
         if (mode == WorkspaceNavigationMode.dualTabs) {
@@ -1991,7 +1995,10 @@ void main() {
       await tester.pumpAndSettle();
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
-      expect(find.text('“cat” 的搜索结果'), findsOneWidget);
+      expect(
+        tester.widget<SearchScreen>(find.byType(SearchScreen)).query,
+        'cat',
+      );
       expect(search.queries, ['cat', 'dog']);
       final signals = search.cancellations.toList();
       await tester.binding.handlePopRoute();
@@ -2965,7 +2972,10 @@ void main() {
         findsOneWidget,
       );
       expect(find.byKey(const ValueKey('workspace-tab-tab-16')), findsNothing);
-      expect(find.text('“query14” 的搜索结果'), findsOneWidget);
+      expect(
+        tester.widget<SearchScreen>(find.byType(SearchScreen)).query,
+        'query14',
+      );
       final field = tester.widget<TextField>(
         find.byKey(const ValueKey('workspace-search')),
       );
@@ -3002,14 +3012,23 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(search.queries, ['cat']);
-      expect(find.text('“cat” 的搜索结果'), findsOneWidget);
+      expect(
+        tester.widget<SearchScreen>(find.byType(SearchScreen)).query,
+        'cat',
+      );
       router.go('/search?q=dog');
       await tester.pumpAndSettle();
       expect(search.queries, ['cat', 'dog']);
-      expect(find.text('“dog” 的搜索结果'), findsOneWidget);
+      expect(
+        tester.widget<SearchScreen>(find.byType(SearchScreen)).query,
+        'dog',
+      );
       await tester.tap(find.byKey(const ValueKey('workspace-tab-tab-1')));
       await tester.pumpAndSettle();
-      expect(find.text('“cat” 的搜索结果'), findsOneWidget);
+      expect(
+        tester.widget<SearchScreen>(find.byType(SearchScreen)).query,
+        'cat',
+      );
       expect(search.queries, ['cat', 'dog']);
       expect(
         search.cancellations.every((signal) => !signal.isCancelled),
@@ -3021,7 +3040,10 @@ void main() {
       expect(search.cancellations.last.isCancelled, isFalse);
       router.go('/search?q=dog');
       await tester.pumpAndSettle();
-      expect(find.text('“dog” 的搜索结果'), findsOneWidget);
+      expect(
+        tester.widget<SearchScreen>(find.byType(SearchScreen)).query,
+        'dog',
+      );
       expect(find.byKey(const ValueKey('workspace-tab-tab-3')), findsNothing);
       expect(search.cancellations[1].isCancelled, isFalse);
       expect(search.queries, ['cat', 'dog']);
@@ -3069,10 +3091,16 @@ void main() {
       expect(oldSignals.every((signal) => signal.isCancelled), isTrue);
       expect(search.queries.where((query) => query == 'cat').length, 2);
       expect(search.queries.where((query) => query == 'dog').length, 2);
-      expect(find.text('“dog” 的搜索结果'), findsOneWidget);
+      expect(
+        tester.widget<SearchScreen>(find.byType(SearchScreen)).query,
+        'dog',
+      );
       await tester.tap(find.byKey(const ValueKey('workspace-tab-tab-1')));
       await tester.pumpAndSettle();
-      expect(find.text('“cat” 的搜索结果'), findsOneWidget);
+      expect(
+        tester.widget<SearchScreen>(find.byType(SearchScreen)).query,
+        'cat',
+      );
       expect(search.queries.length, 4);
     },
   );
@@ -3229,6 +3257,9 @@ final class _SearchRepository implements SearchRepository {
     required SearchOrder order,
     required SearchDuration duration,
     required SearchUserType userType,
+    SearchVideoZone videoZone = SearchVideoZone.any,
+    SearchArticleZone articleZone = SearchArticleZone.any,
+    SearchPublicationRange? publicationRange,
     required RequestCancellation cancellation,
   }) async {
     queries.add(query);

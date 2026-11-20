@@ -90,6 +90,10 @@ final class SearchClient {
     int orderSort = 0,
     int duration = 0,
     int userType = 0,
+    int? videoZoneId,
+    int? articleZoneId,
+    int? publishedFromSeconds,
+    int? publishedThroughSeconds,
     ApiRequestContext? context,
   }) async {
     final orders = switch (type) {
@@ -99,6 +103,7 @@ final class SearchClient {
         'pubdate',
         'dm',
         'stow',
+        'scores',
       },
       ApiSearchType.article => const {
         'totalrank',
@@ -110,6 +115,11 @@ final class SearchClient {
       ApiSearchType.user => const {'totalrank', 'fans', 'level'},
       _ => const {'totalrank'},
     };
+    final videoOptions =
+        duration != 0 ||
+        videoZoneId != null ||
+        publishedFromSeconds != null ||
+        publishedThroughSeconds != null;
     if (keyword.trim().isEmpty ||
         page < 1 ||
         !orders.contains(order) ||
@@ -118,23 +128,34 @@ final class SearchClient {
         duration < 0 ||
         duration > 4 ||
         userType < 0 ||
-        userType > 2 ||
-        (duration != 0 &&
+        userType > 3 ||
+        (videoOptions &&
             type != ApiSearchType.all &&
             type != ApiSearchType.video) ||
+        (videoZoneId != null && videoZoneId <= 0) ||
+        (articleZoneId != null &&
+            (type != ApiSearchType.article || articleZoneId <= 0)) ||
+        (publishedFromSeconds == null) != (publishedThroughSeconds == null) ||
+        (publishedFromSeconds != null &&
+            publishedThroughSeconds != null &&
+            (publishedFromSeconds < 0 ||
+                publishedFromSeconds > publishedThroughSeconds)) ||
         (userType != 0 && type != ApiSearchType.user)) {
       throw ArgumentError('Invalid search options');
     }
     final all = type == ApiSearchType.all;
-    // All/v2 ranks mixed modules but ignores video order/duration in live
-    // responses. Subsequent pages contain only the independently ranked videos.
-    if (all && page > 1) {
+    // All/v2 supplies mixed modules for default relevance. Custom video
+    // options and subsequent pages use the video endpoint directly.
+    if (all && (page > 1 || order != 'totalrank' || videoOptions)) {
       return search(
         keyword,
         type: ApiSearchType.video,
         page: page,
         order: order,
         duration: duration,
+        videoZoneId: videoZoneId,
+        publishedFromSeconds: publishedFromSeconds,
+        publishedThroughSeconds: publishedThroughSeconds,
         context: context,
       );
     }
@@ -158,6 +179,12 @@ final class SearchClient {
         },
         if (all || type == ApiSearchType.video)
           'duration': all ? '0' : '$duration',
+        if (videoZoneId != null) 'tids': '$videoZoneId',
+        if (articleZoneId != null) 'category_id': '$articleZoneId',
+        if (publishedFromSeconds != null)
+          'pubtime_begin_s': '$publishedFromSeconds',
+        if (publishedThroughSeconds != null)
+          'pubtime_end_s': '$publishedThroughSeconds',
         if (type == ApiSearchType.live) 'cover_type': 'user_cover',
         'highlight': '1',
       },
@@ -189,8 +216,6 @@ final class SearchClient {
       final videoPage = await search(
         keyword,
         type: ApiSearchType.video,
-        order: order,
-        duration: duration,
         context: context,
       );
       items.removeWhere((item) => item is ApiSearchVideo);
@@ -313,6 +338,10 @@ final class SearchClient {
           yield ApiSearchArticle(
             id: _id(item['id']),
             title: _requiredText(item['title']),
+            url:
+                _uri(item['arcurl']) ??
+                _uri(item['url']) ??
+                _uri(item['jump_url']),
             author: _clean(item['author']),
             authorMid: _optionalId(item['mid']),
             coverUrl: _uri(images.firstOrNull),

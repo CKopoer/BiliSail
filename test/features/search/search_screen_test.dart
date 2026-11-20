@@ -68,7 +68,9 @@ void main() {
       expect(repository.calls.last.order, SearchOrder.favorites);
       await tester.tap(find.byKey(const ValueKey('search-more-filters')));
       await tester.pumpAndSettle();
+      expect(find.byType(Dialog), findsOneWidget);
       await tester.tap(find.text('60分钟以上'));
+      await tester.tap(find.text('应用筛选'));
       await tester.pumpAndSettle();
       expect(repository.calls.last.duration, SearchDuration.overSixty);
       expect(repository.calls.last.page, 1);
@@ -79,6 +81,15 @@ void main() {
       await tester.tap(find.text('最多评论'));
       await tester.pumpAndSettle();
       expect(repository.calls.last.order, SearchOrder.comments);
+      await tester.tap(find.byKey(const ValueKey('search-more-filters')));
+      await tester.pumpAndSettle();
+      final articleZone = SearchArticleZone.values.last;
+      final articleZoneChoice = find.text(articleZone.label);
+      await tester.ensureVisible(articleZoneChoice);
+      await tester.tap(articleZoneChoice);
+      await tester.tap(find.text('应用筛选'));
+      await tester.pumpAndSettle();
+      expect(repository.calls.last.articleZone, articleZone);
       await tester.tap(find.byKey(const ValueKey('search-category-user')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('粉丝数由低到高'));
@@ -86,9 +97,14 @@ void main() {
       expect(repository.calls.last.order, SearchOrder.fansAscending);
       await tester.tap(find.byKey(const ValueKey('search-more-filters')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('UP主'));
+      final type = SearchUserType.values.last;
+      await tester.tap(find.text(type.label));
+      await tester.tap(find.text('应用筛选'));
       await tester.pumpAndSettle();
-      expect(repository.calls.last.userType, SearchUserType.uploader);
+      expect(repository.calls.last.userType, type);
+      await tester.tap(find.byKey(const ValueKey('search-category-film')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('search-more-filters')), findsNothing);
     },
   );
 
@@ -127,7 +143,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('测试专栏', findRichText: true));
       await tester.pumpAndSettle();
-      expect(urls.single, Uri.parse('https://www.bilibili.com/read/cv789'));
+      expect(router.routeInformationProvider.value.uri.path, '/article/789');
+      expect(urls, isEmpty);
     },
   );
 
@@ -137,7 +154,7 @@ void main() {
   ]) {
     for (final mouseDrag in [false, true]) {
       testWidgets(
-        'search strips reach later options with ${mouseDrag ? 'mouse drag' : 'wheel'} at $size scale $scale',
+        'search categories reach later tabs with ${mouseDrag ? 'mouse drag' : 'wheel'} at $size scale $scale',
         (tester) async {
           final repository = _Repository();
           await _mount(tester, repository, size: size, scale: scale);
@@ -166,47 +183,23 @@ void main() {
             await tester.pumpAndSettle();
           }
 
-          final orders = find.byKey(const ValueKey('search-order-strip'));
           final categories = find.byKey(
             const ValueKey('search-category-strip'),
           );
           final list = tester
               .widget<CustomScrollView>(find.byType(CustomScrollView))
               .controller!;
-          expect(position(orders).maxScrollExtent, greaterThan(0));
-          await move(orders);
-          expect(position(orders).pixels, position(orders).maxScrollExtent);
-          expect(list.offset, 0);
-          expect(position(categories).pixels, 0);
-          await tester.tap(find.text('最多收藏'));
-          await tester.pumpAndSettle();
-          expect(repository.calls.last.order, SearchOrder.favorites);
-
-          await tester.tap(find.byKey(const ValueKey('search-more-filters')));
-          await tester.pumpAndSettle();
-          final filters = find.byKey(const ValueKey('search-filter-strip'));
-          expect(position(filters).maxScrollExtent, greaterThan(0));
-          await move(filters);
-          expect(position(filters).pixels, position(filters).maxScrollExtent);
-          expect(position(orders).pixels, position(orders).maxScrollExtent);
-          await tester.tap(find.text('60分钟以上'));
-          await tester.pumpAndSettle();
-          expect(repository.calls.last.duration, SearchDuration.overSixty);
-          expect(repository.calls.last.page, 1);
-          await move(filters, forward: false);
-          expect(position(filters).pixels, 0);
-          await tester.tap(find.text('全部时长'));
-          await tester.pumpAndSettle();
-          expect(repository.calls.last.duration, SearchDuration.any);
-          await move(orders, forward: false);
-          expect(position(orders).pixels, 0);
-
+          expect(
+            find.byKey(const ValueKey('search-order-strip')),
+            findsNothing,
+          );
           expect(position(categories).maxScrollExtent, greaterThan(0));
           await move(categories);
           expect(
             position(categories).pixels,
             position(categories).maxScrollExtent,
           );
+          expect(list.offset, 0);
           await tester.tap(find.byKey(const ValueKey('search-category-user')));
           await tester.pumpAndSettle();
           expect(repository.calls.last.category, SearchCategory.user);
@@ -221,6 +214,162 @@ void main() {
       );
     }
   }
+
+  testWidgets('resizing a search keeps the sort and result viewport', (
+    tester,
+  ) async {
+    final repository = _Repository();
+    await _mount(tester, repository, size: const Size(760, 800), scale: 2);
+    final user = find.byKey(const ValueKey('search-category-user'));
+    await tester.ensureVisible(user);
+    await tester.tap(user);
+    await tester.pumpAndSettle();
+    final strip = find.byKey(const ValueKey('search-order-strip'));
+    final position = tester
+        .state<ScrollableState>(
+          find.descendant(of: strip, matching: find.byType(Scrollable)),
+        )
+        .position;
+    expect(position.maxScrollExtent, greaterThan(0));
+    await tester.sendEventToBinding(
+      PointerScrollEvent(
+        kind: PointerDeviceKind.mouse,
+        position: tester.getCenter(strip),
+        scrollDelta: const Offset(0, 2000),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(position.pixels, position.maxScrollExtent);
+    await tester.tap(find.text(SearchOrder.levelAscending.label));
+    await tester.pumpAndSettle();
+    expect(repository.calls.last.order, SearchOrder.levelAscending);
+    final requests = repository.calls.length;
+    ScrollController? resultScroll() => tester
+        .widget<CustomScrollView>(find.byType(CustomScrollView))
+        .controller;
+    final controller = resultScroll();
+
+    tester.view.physicalSize = const Size(760 - 1, 800);
+    await tester.pumpAndSettle();
+    expect(strip, findsNothing);
+    expect(find.text(SearchOrder.levelAscending.label), findsOneWidget);
+    expect(resultScroll(), same(controller));
+
+    tester.view.physicalSize = const Size(1440, 900);
+    await tester.pumpAndSettle();
+    expect(strip, findsOneWidget);
+    expect(repository.calls.length, requests);
+    expect(resultScroll(), same(controller));
+    expect(tester.takeException(), isNull);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+
+  testWidgets('compact filter sheet applies a draft once and supports reset', (
+    tester,
+  ) async {
+    final repository = _Repository();
+    await _mount(tester, repository, size: const Size(320, 568), scale: 2);
+    final open = find.byKey(const ValueKey('search-more-filters'));
+    final options = find.byKey(const ValueKey('search-filter-options'));
+    final apply = find.text('应用筛选');
+    final lastZone = SearchVideoZone.values.last;
+    Future<void> choose(String label) async {
+      final option = find.descendant(of: options, matching: find.text(label));
+      await tester.ensureVisible(option);
+      await tester.tap(option);
+      await tester.pumpAndSettle();
+    }
+
+    await tester.tap(open);
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(apply.hitTestable(), findsOneWidget);
+    expect(
+      tester
+          .state<ScrollableState>(
+            find.descendant(of: options, matching: find.byType(Scrollable)),
+          )
+          .position
+          .maxScrollExtent,
+      greaterThan(0),
+    );
+    final callsBefore = repository.calls.length;
+    await choose(SearchOrder.comments.label);
+    await choose(SearchDuration.overSixty.label);
+    await choose(SearchPublicationPeriod.week.label);
+    await choose(lastZone.label);
+    expect(repository.calls.length, callsBefore);
+    await tester.tap(apply);
+    await tester.pumpAndSettle();
+    expect(repository.calls.length, callsBefore + 1);
+    final applied = repository.calls.last;
+    expect(applied.category, SearchCategory.all);
+    expect(applied.order, SearchOrder.comments);
+    expect(applied.duration, SearchDuration.overSixty);
+    expect(applied.videoZone, lastZone);
+    expect(applied.publicationRange, isNotNull);
+    expect(applied.page, 1);
+    expect(find.text('筛选 (4)'), findsOneWidget);
+
+    await tester.tap(open);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('重置'));
+    await tester.tap(find.byTooltip('关闭筛选'));
+    await tester.pumpAndSettle();
+    expect(repository.calls.length, callsBefore + 1);
+    expect(find.text('筛选 (4)'), findsOneWidget);
+
+    await tester.tap(open);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('重置'));
+    await tester.tap(apply);
+    await tester.pumpAndSettle();
+    expect(repository.calls.length, callsBefore + 2);
+    expect(repository.calls.last.order, SearchOrder.relevance);
+    expect(repository.calls.last.duration, SearchDuration.any);
+    expect(repository.calls.last.videoZone, SearchVideoZone.any);
+    expect(repository.calls.last.publicationRange, isNull);
+    expect(find.text('筛选'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('custom publication range is confirmed with the filter draft', (
+    tester,
+  ) async {
+    final repository = _Repository();
+    await _mount(tester, repository, size: const Size(360, 640));
+    final open = find.byKey(const ValueKey('search-more-filters'));
+    await tester.tap(open);
+    await tester.pumpAndSettle();
+    final dateChoice = find.text(SearchPublicationPeriod.customRange.label);
+    await tester.ensureVisible(dateChoice);
+    await tester.tap(dateChoice);
+    await tester.pumpAndSettle();
+    final picker = find.byType(DateRangePickerDialog);
+    await tester.tap(
+      find.byTooltip(
+        MaterialLocalizations.of(tester.element(picker))
+            .inputDateModeButtonLabel,
+      ),
+    );
+    await tester.pumpAndSettle();
+    final fields = find.descendant(
+      of: picker,
+      matching: find.byType(TextField),
+    );
+    expect(fields, findsNWidgets(2));
+    await tester.enterText(fields.first, '1/10/2025');
+    await tester.enterText(fields.last, '2/15/2025');
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+    expect(repository.calls.last.publicationRange, isNull);
+    await tester.tap(find.text('应用筛选'));
+    await tester.pumpAndSettle();
+    final range = repository.calls.last.publicationRange;
+    expect(range?.start, DateTime(2025, 1, 10));
+    expect(range?.end, DateTime(2025, 2, 15));
+    expect(find.text('筛选 (1)'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   for (final (count, label) in [(14010, '1.4万'), (0, '0'), (null, '—')]) {
     testWidgets(
@@ -240,6 +389,7 @@ void main() {
         final card = find.byType(VideoCard);
         expect(card, findsOneWidget);
         expect(tester.widget<VideoCard>(card).video.danmakuCount, count);
+        expect(find.byType(BiliUpBadge), findsNothing);
         expect(
           find.descendant(of: card, matching: find.text(label)),
           findsOneWidget,
@@ -265,6 +415,10 @@ void main() {
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
         expect(find.text('全部时长'), findsOneWidget);
+        await _snapshot(
+          tester,
+          '${size.width.toInt()}-${scale.toInt()}-filters',
+        );
       },
     );
   }
@@ -355,7 +509,7 @@ void main() {
       expect(last.right, closeTo(width - inset, .01));
       expect(last.top, first.top);
       expect(next.top - first.bottom, closeTo(compact ? 16 : 24, .01));
-      expect(find.byType(BiliUpBadge), findsNWidgets(cards.evaluate().length));
+      expect(find.byType(BiliUpBadge), findsNothing);
       await _snapshot(tester, '${width.toInt()}-video-grid');
       expect(tester.takeException(), isNull);
     });
@@ -421,6 +575,7 @@ Future<GoRouter> _mount(
               '/video/:id',
               '/pgc/season/:id',
               '/live/:id',
+              '/article/:id',
             ])
               GoRoute(
                 path: path,
@@ -569,12 +724,18 @@ final class _Call {
     this.duration,
     this.userType,
     this.page,
+    this.videoZone,
+    this.articleZone,
+    this.publicationRange,
   );
   final SearchCategory category;
   final SearchOrder order;
   final SearchDuration duration;
   final SearchUserType userType;
   final int page;
+  final SearchVideoZone videoZone;
+  final SearchArticleZone articleZone;
+  final SearchPublicationRange? publicationRange;
 }
 
 final class _Repository implements SearchRepository {
@@ -587,9 +748,23 @@ final class _Repository implements SearchRepository {
     required SearchOrder order,
     required SearchDuration duration,
     required SearchUserType userType,
+    SearchVideoZone videoZone = SearchVideoZone.any,
+    SearchArticleZone articleZone = SearchArticleZone.any,
+    SearchPublicationRange? publicationRange,
     required RequestCancellation cancellation,
   }) async {
-    calls.add(_Call(category, order, duration, userType, page));
+    calls.add(
+      _Call(
+        category,
+        order,
+        duration,
+        userType,
+        page,
+        videoZone,
+        articleZone,
+        publicationRange,
+      ),
+    );
     return SearchPage(
       items: _items
           .where(

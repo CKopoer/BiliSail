@@ -125,7 +125,7 @@ void main() {
     expect(transport.requests, hasLength(1));
     expect(result.items.map((e) => e.location.toString()), [
       '/live/12',
-      'https://www.bilibili.com/read/cv12',
+      '/article/12',
       'https://www.bilibili.com/read/readlist/rl13',
       'https://www.bilibili.com/cheese/play/ep14',
     ]);

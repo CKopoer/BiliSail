@@ -85,10 +85,7 @@ final class WatchHistoryEntry {
   final String? deletionKey;
   Uri get location => switch (type) {
     HistoryContentType.live => Uri(path: '/live/$contentId'),
-    HistoryContentType.article => Uri.https(
-      'www.bilibili.com',
-      '/read/cv$contentId',
-    ),
+    HistoryContentType.article => Uri(path: '/article/$contentId'),
     HistoryContentType.articleList => Uri.https(
       'www.bilibili.com',
       '/read/readlist/rl$contentId',

@@ -284,7 +284,7 @@
 | [连续滚轮时序优化](validation/wheel-scroll-timing-2026-10-31.md) | 真实输入时间与帧对齐、有界输入缓冲、两列／六列滚轮信号 Profile 对照 |
 | [macOS 触控板滑动返回](validation/macos-trackpad-back.md) | 松手返回、阈值取消、左侧箭头、横向列表与播放器进度条隔离 |
 | [API 端点验证](validation/api-endpoints.md) | 首版端点、协议与在线只读烟测 |
-| [搜索分类与排序](validation/search-categories.md) | 七类搜索、综合页 UP 主、分类排序、筛选与旧响应隔离 |
+| [搜索分类与排序](validation/search-categories.md) | 七类搜索、宽窄屏组合筛选、共享直播卡和应用内专栏阅读 |
 | [共享视频卡片](validation/shared-video-cards.md) | 推荐理由、搜索/视频动态显示差异、16:9 封面与宽屏网格 |
 | [DPI 与文字缩放](validation/dpi-adaptation.md) | 大字体列数、触摸全文与 Windows 工作区约束修复，像素比例／字号矩阵与实机未验项 |
 | [视频卡悬停预览](validation/video-card-hover.md) | 官方客户端式封面放大、悬停视频自动播放、稍后再看与网页接口核对 |

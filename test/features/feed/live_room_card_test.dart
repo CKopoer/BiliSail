@@ -1,10 +1,81 @@
 import 'package:bilisail/app/theme.dart';
+import 'package:bilisail/domain/user.dart';
+import 'package:bilisail/features/live/domain/live_room.dart';
+import 'package:bilisail/features/search/domain/search_result.dart';
+import 'package:bilisail/features/search/presentation/search_results.dart';
+import 'package:bilisail/shared/ui/live_room_tile.dart';
 import 'package:bilisail/features/feed/domain/home_repository.dart';
 import 'package:bilisail/features/feed/presentation/home_feed_cards.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 void main() {
+  for (final (width, columns) in [(360.0, 2), (1280.0, 4)]) {
+    testWidgets('search live rooms share the channel grid at $width', (
+      tester,
+    ) async {
+      tester.view.physicalSize = Size(width, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final router = GoRouter(
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (context, state) => Scaffold(
+              body: CustomScrollView(
+                slivers: [
+                  SearchResults(
+                    items: [
+                      for (var i = 1; i <= columns + 1; i++)
+                        SearchLiveEntry(
+                          id: RoomId('$i'),
+                          title: '直播标题$i',
+                          author: '主播$i',
+                          authorId: UserId('$i'),
+                          online: 12345,
+                          isLive: i.isEven,
+                        ),
+                    ],
+                    category: SearchCategory.live,
+                    query: '标题',
+                    onCategory: (_) {},
+                  ),
+                ],
+              ),
+            ),
+          ),
+          for (final path in ['/user/:id', '/live/:id'])
+            GoRoute(path: path, builder: (_, state) => Text(state.uri.path)),
+        ],
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpAndSettle();
+      final tiles = find.byType(LiveRoomTile);
+      final first = tester.getRect(tiles.first);
+      expect(
+        tester.getTopRight(tiles.at(columns - 1)),
+        Offset(width, first.top),
+      );
+      expect(
+        tester.getTopLeft(tiles.at(columns)).dy,
+        greaterThan(first.bottom),
+      );
+      expect(find.text('♨ 1.2万'), findsNWidgets(columns + 1));
+      expect(find.text('未开播'), findsWidgets);
+      expect(find.text('直播中'), findsWidgets);
+      await tester.tap(find.text('主播1'));
+      await tester.pumpAndSettle();
+      expect(find.text('/user/1'), findsOneWidget);
+      router.go('/');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('直播标题2', findRichText: true));
+      await tester.pumpAndSettle();
+      expect(find.text('/live/2'), findsOneWidget);
+    });
+  }
   testWidgets(
     'live popularity uses the shared video count units without thousands',
     (tester) async {

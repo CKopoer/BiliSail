@@ -150,10 +150,54 @@ final class BiliApiClient {
       '/x/web-interface/suggest',
       '/x/relation/followings/search',
       '/x/player/wbi/v2',
+      '/x/article/view',
+      '/x/polymer/web-dynamic/v1/opus/detail',
     }.contains(path)) {
       throw ArgumentError('Unsupported WBI endpoint');
     }
     return _wbiJson(path, parameters, endpoint, context);
+  }
+
+  /// Probes the canonical article URL without sending credentials or following it.
+  Future<Uri?> articleRedirect(String id, {ApiRequestContext? context}) async {
+    if (!RegExp(r'^[1-9][0-9]{0,127}$').hasMatch(id)) {
+      throw ArgumentError('Invalid article ID');
+    }
+    const endpoint = 'article_redirect';
+    final active = boundedReadContext(context);
+    final epoch = _sessionProvider?.sessionEpoch;
+    final deadline = active.deadline!;
+    void check() =>
+        _checkDecodeContext(active, epoch, deadline, endpoint: endpoint);
+    check();
+    if (_transport is! ApiHeadTransport) return null;
+    final uri = Uri.https('www.bilibili.com', '/read/cv$id/');
+    final remaining = deadline.difference(_clock());
+    final limit = remaining < _readAttemptTimeout
+        ? remaining
+        : _readAttemptTimeout;
+    try {
+      final response = await _readAttempt(
+        uri,
+        endpoint,
+        const {'User-Agent': 'Mozilla/5.0'},
+        limit,
+        active.cancellation,
+        head: true,
+      );
+      check();
+      if (!const {301, 302, 303, 307, 308}.contains(response.statusCode)) {
+        return null;
+      }
+      final location = response.header('location').firstOrNull;
+      final parsed = location == null ? null : Uri.tryParse(location);
+      return parsed == null ? null : uri.resolveUri(parsed);
+    } on ApiFailure catch (error) {
+      check();
+      if (error.category == ApiFailureCategory.cancelled) rethrow;
+      // Legacy article reads remain available when the migration probe fails.
+      return null;
+    }
   }
 
   /// Live Web connection discovery shares the account's WBI key single-flight.
@@ -3340,12 +3384,20 @@ final class BiliApiClient {
     Duration timeout,
     ApiCancellation? cancellation, {
     int? maxBytes,
+    bool head = false,
   }) async {
     final attemptCancellation = ApiCancellation();
     final removeListener = cancellation?.onCancel(attemptCancellation.cancel);
     try {
       final transport = _transport;
-      final read = maxBytes != null && transport is ApiBoundedTransport
+      final read = head
+          ? (transport as ApiHeadTransport).head(
+              uri,
+              headers: headers,
+              timeout: timeout,
+              cancellation: attemptCancellation,
+            )
+          : maxBytes != null && transport is ApiBoundedTransport
           ? (transport as ApiBoundedTransport).getBounded(
               uri,
               headers: headers,
