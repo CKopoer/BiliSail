@@ -10,7 +10,11 @@ import 'package:bilisail/features/pgc/data/api_pgc_repository.dart';
 import 'package:bilisail/features/pgc/domain/pgc_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-ApiHttpResponse _response(String id, {String title = '本篇'}) => ApiHttpResponse(
+ApiHttpResponse _response(
+  String id, {
+  String title = '本篇',
+  bool empty = false,
+}) => ApiHttpResponse(
   200,
   Uint8List.fromList(
     utf8.encode(
@@ -20,7 +24,7 @@ ApiHttpResponse _response(String id, {String title = '本篇'}) => ApiHttpRespon
           'season_id': id,
           'title': title,
           'episodes': [
-            for (var i = 1; i <= 12; i++)
+            for (var i = 1; !empty && i <= 12; i++)
               {
                 'id': '${id}00$i',
                 'title': '$i',
@@ -41,16 +45,19 @@ final class _Read {
   final Uri uri;
   final ApiCancellation? cancellation;
   final result = Completer<ApiHttpResponse>();
-  void complete({String? seasonId, String title = '本篇'}) => result.complete(
-    _response(
-      seasonId ?? uri.queryParameters['season_id'] ?? '42',
-      title: title,
-    ),
-  );
+  void complete({String? seasonId, String title = '本篇', bool empty = false}) =>
+      result.complete(
+        _response(
+          seasonId ?? uri.queryParameters['season_id'] ?? '42',
+          title: title,
+          empty: empty,
+        ),
+      );
 }
 
 final class _Transport implements ApiTransport {
   final reads = <_Read>[];
+  void Function(_Read)? onRead;
   @override
   Future<ApiHttpResponse> get(
     Uri uri, {
@@ -60,6 +67,7 @@ final class _Transport implements ApiTransport {
   }) {
     final read = _Read(uri, cancellation);
     reads.add(read);
+    onRead?.call(read);
     return read.result.future;
   }
 }
@@ -98,6 +106,39 @@ void main() {
     refresh: refresh,
     cancellation: cancellation ?? RequestCancellation(),
   );
+
+  test(
+    'episode detail recovers from an empty list and caches the result',
+    () async {
+      const episodeId = PgcEpisodeId('42002');
+      transport.onRead = (request) {
+        request.complete(empty: transport.reads.length == 1);
+      };
+
+      final season = await repository.detail(
+        episodeId: episodeId,
+        cancellation: RequestCancellation(),
+      );
+      expect(season.episode(episodeId)?.playable, isTrue);
+      expect(transport.reads.map((r) => r.uri.queryParameters), [
+        {'ep_id': episodeId.value},
+        {'ep_id': episodeId.value},
+      ]);
+      expect(await read('42'), same(season));
+      expect(transport.reads, hasLength(2));
+    },
+  );
+
+  test('season-only empty detail does not mask episodes on reopen', () async {
+    transport.onRead = (request) {
+      request.complete(empty: transport.reads.length == 1);
+    };
+
+    expect((await read('42')).episodes, isEmpty);
+    expect(transport.reads, hasLength(1));
+    expect((await read('42')).episodes, isNotEmpty);
+    expect(transport.reads, hasLength(2));
+  });
 
   test(
     'concurrent season reads share one request and episode links reuse result',

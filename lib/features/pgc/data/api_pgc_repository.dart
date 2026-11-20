@@ -127,6 +127,7 @@ final class ApiPgcRepository implements PgcRepository {
         final result = await client.getSeason(
           seasonId: seasonId?.value,
           episodeId: episodeId?.value,
+          requireEpisodes: episodeId != null,
           context: context,
         );
         return mapApiPgcSeason(result);
@@ -136,7 +137,9 @@ final class ApiPgcRepository implements PgcRepository {
           epoch != sessionEpoch) {
         throw _cancelled;
       }
-      if (generation == _cacheGeneration) {
+      // A season-only request may legitimately have no published episodes.
+      // Do not cache that result, so reopening can see a newly available list.
+      if (generation == _cacheGeneration && season.episodes.isNotEmpty) {
         _evict(season.id);
         _cache[season.id] = _SeasonCacheEntry(season, _clock().add(cacheTtl));
         for (final episode in season.episodes) {
