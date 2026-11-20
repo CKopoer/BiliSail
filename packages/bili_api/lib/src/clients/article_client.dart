@@ -68,6 +68,64 @@ final class ArticleClient {
     ).legacy(data, id);
   }
 
+  Future<ApiArticleCollection> collection(
+    String id, {
+    ApiRequestContext? context,
+  }) async {
+    if (!isArticleId(id)) throw ArgumentError('Invalid article collection ID');
+    const endpoint = 'article_list';
+    final uri = Uri.https('api.bilibili.com', '/x/article/list/web/articles', {
+      'id': id,
+      'web_location': '333.1400',
+    });
+    final data = await api.requestJson(uri, endpoint, context: context);
+    return ArticleParser(uri, endpoint).collection(data, id);
+  }
+
+  Future<ApiArticleStats> viewInfo(
+    String cvId, {
+    ApiRequestContext? context,
+  }) async {
+    if (!isArticleId(cvId)) throw ArgumentError('Invalid article ID');
+    final data = await api.requestWbiJson(
+      '/x/article/viewinfo',
+      {'id': cvId, 'mobi_app': 'pc', 'from': 'web', 'gaia_source': 'main_web'},
+      'article_viewinfo',
+      context: context,
+    );
+    return ArticleParser.viewInfo(data);
+  }
+
+  Future<void> setFavorite(
+    String id, {
+    required bool opus,
+    required bool favorite,
+    ApiRequestContext? context,
+  }) async {
+    if (!isArticleId(id)) throw ArgumentError('Invalid article ID');
+    if (opus) {
+      await api.submitDynamicJson(
+        '/x/community/cosmo/interface/simple_action',
+        'opus_favorite',
+        {
+          'entity': {
+            'object_id_str': id,
+            'type': {'biz': 2},
+          },
+          'action': favorite ? 3 : 4,
+        },
+        context: context,
+      );
+    } else {
+      await api.submitForm(
+        favorite ? '/x/article/favorites/add' : '/x/article/favorites/del',
+        'article_favorite',
+        {'id': id},
+        context: context,
+      );
+    }
+  }
+
   static String? _redirectOpusId(Uri? uri) {
     if (uri == null ||
         uri.scheme != 'https' ||

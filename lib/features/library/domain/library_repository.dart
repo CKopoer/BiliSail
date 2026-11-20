@@ -1,3 +1,4 @@
+import '../../../domain/article_address.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
 import '../../../domain/user.dart';
@@ -86,9 +87,8 @@ final class WatchHistoryEntry {
   Uri get location => switch (type) {
     HistoryContentType.live => Uri(path: '/live/$contentId'),
     HistoryContentType.article => Uri(path: '/article/$contentId'),
-    HistoryContentType.articleList => Uri.https(
-      'www.bilibili.com',
-      '/read/readlist/rl$contentId',
+    HistoryContentType.articleList => Uri.parse(
+      ArticleCollectionId(contentId ?? '').location,
     ),
     HistoryContentType.course => Uri.https(
       'www.bilibili.com',

@@ -11,6 +11,116 @@ const _id = '12345678901234567890';
 
 void main() {
   test(
+    'collection preserves server order, decimal IDs and empty collections',
+    () async {
+      const path = '/x/article/list/web/articles';
+      final transport = _Transport({
+        path: {
+          'list': {'id': '17', 'name': '目录', 'read': '1.2万'},
+          'author': {'mid': 42, 'name': '作者'},
+          'articles': [
+            {
+              'id': 12,
+              'dyn_id_str': _id,
+              'title': '图文',
+              'image_urls': ['//i0.hdslb.com/image.jpg'],
+            },
+            {'id': '33', 'title': '专栏'},
+            {'id': -1, 'title': '无效'},
+          ],
+        },
+      });
+      final client = ArticleClient(BiliApiClient(transport: transport));
+      final collection = await client.collection('17');
+      expect(collection.name, '目录');
+      expect(collection.authorMid, '42');
+      expect(collection.views, 12000);
+      expect(collection.entries.map((e) => (e.id, e.opus)), [
+        (_id, true),
+        ('33', false),
+      ]);
+      expect(collection.entries.first.cover?.scheme, 'https');
+      expect(transport.getCalls.single.queryParameters['id'], '17');
+      transport.data[path] = {
+        'list': {'id': 17},
+        'articles': null,
+      };
+      expect((await client.collection('17')).entries, isEmpty);
+      await expectLater(client.collection('18'), throwsA(isA<ApiFailure>()));
+    },
+  );
+
+  test(
+    'view info reads personal state separately from public totals',
+    () async {
+      final transport = _Transport({
+        '/x/article/viewinfo': {
+          'like': 0,
+          'favorite': true,
+          'stats': {'like': 1, 'favorite': 20, 'reply': 9, 'share': 4},
+        },
+      });
+      final info = await ArticleClient(
+        BiliApiClient(transport: transport),
+      ).viewInfo('12');
+      expect(
+        (
+          info.liked,
+          info.likes,
+          info.favorited,
+          info.favorites,
+          info.comments,
+          info.forwards,
+        ),
+        (false, 1, true, 20, 9, 4),
+      );
+      expect(transport.getCalls.last.queryParameters['w_rid'], isNotEmpty);
+    },
+  );
+
+  test(
+    'favorites select CV form or opus JSON, use CSRF and send each write once',
+    () async {
+      final transport = _Transport({});
+      final api = BiliApiClient(transport: transport);
+      final client = ArticleClient(api);
+      await expectLater(
+        client.setFavorite(_id, opus: true, favorite: true),
+        throwsA(isA<ApiFailure>()),
+      );
+      expect(transport.posts, isEmpty);
+      api.cookieJar.receive(Uri.https('api.bilibili.com', '/'), [
+        'SESSDATA=fixture; Path=/; Secure',
+        'bili_jct=fixture-csrf; Path=/; Secure',
+      ]);
+      for (final add in [true, false]) {
+        await client.setFavorite('12', opus: false, favorite: add);
+        expect(
+          transport.posts.last.$1.path,
+          '/x/article/favorites/${add ? 'add' : 'del'}',
+        );
+        expect(transport.posts.last.$2, {'id': '12', 'csrf': 'fixture-csrf'});
+        await client.setFavorite(_id, opus: true, favorite: add);
+        expect(
+          transport.posts.last.$1.path,
+          '/x/community/cosmo/interface/simple_action',
+        );
+        expect(transport.posts.last.$1.queryParameters, {
+          'csrf': 'fixture-csrf',
+        });
+        expect(transport.posts.last.$2, {
+          'action': add ? 3 : 4,
+          'entity': {
+            'object_id_str': _id,
+            'type': {'biz': 2},
+          },
+        });
+      }
+      expect(transport.posts, hasLength(4));
+    },
+  );
+
+  test(
     'upgrades unsigned public article image URLs and keeps source order',
     () async {
       final transport = _Transport({
@@ -128,6 +238,7 @@ void main() {
     final document = await ArticleClient(api).read('123', opus: false);
     expect(document.title, '旧版标题');
     expect(document.authorMid, '42');
+    expect(document.dynamicId, _id);
     expect(document.authorAvatar?.host, 'i0.hdslb.com');
     expect(document.publishedAt?.millisecondsSinceEpoch, 1700000000000);
     expect(document.url.path, '/read/cv123');
@@ -174,6 +285,7 @@ void main() {
             },
             'modules': [
               {
+                'module_collection': {'id': '17', 'name': '作品集', 'count': '2篇'},
                 'module_title': {'text': '图文标题'},
               },
               {
@@ -189,6 +301,9 @@ void main() {
               {
                 'module_stat': {
                   'comment': {'count': '1.2万', 'forbidden': false},
+                  'forward': {'count': 5, 'forbidden': true},
+                  'favorite': {'count': 8, 'status': true},
+                  'like': {'count': 15, 'status': 'STATE_LIKE'},
                 },
               },
             ],
@@ -225,6 +340,11 @@ void main() {
       for (final article in [migrated, direct]) {
         expect(article.commentOid, '9007199254740993123');
         expect(article.commentType, 17);
+        expect(article.dynamicId, _id);
+        expect(article.collection, (id: '17', name: '作品集', count: '2篇'));
+        expect(article.stats?.forwardForbidden, isTrue);
+        expect(article.stats?.liked, isTrue);
+        expect(article.stats?.favorited, isTrue);
         expect(article.commentCount, 12000);
         expect(article.commentForbidden, isFalse);
       }
@@ -457,7 +577,12 @@ const _paragraphs = [
   },
 ];
 
-final class _Transport implements ApiTransport, ApiHeadTransport {
+final class _Transport
+    implements
+        ApiTransport,
+        ApiHeadTransport,
+        ApiFormTransport,
+        ApiJsonTransport {
   _Transport(this.data, {this.location, this.pendingHead});
 
   final Map<String, Object> data;
@@ -466,6 +591,34 @@ final class _Transport implements ApiTransport, ApiHeadTransport {
   final headCalls = <Uri>[];
   final headHeaders = <Map<String, String>>[];
   final getCalls = <Uri>[];
+
+  final posts = <(Uri, Map<String, Object?>)>[];
+  ApiHttpResponse _record(Uri uri, Map<String, Object?> body) {
+    posts.add((uri, body));
+    return ApiHttpResponse(
+      200,
+      Uint8List.fromList(utf8.encode('{"code":0}')),
+      const {},
+    );
+  }
+
+  @override
+  Future<ApiHttpResponse> postForm(
+    Uri uri, {
+    required Map<String, String> fields,
+    required Map<String, String> headers,
+    required Duration timeout,
+    ApiCancellation? cancellation,
+  }) async => _record(uri, fields);
+
+  @override
+  Future<ApiHttpResponse> postJson(
+    Uri uri, {
+    required Map<String, Object?> body,
+    required Map<String, String> headers,
+    required Duration timeout,
+    ApiCancellation? cancellation,
+  }) async => _record(uri, body);
 
   @override
   Future<ApiHttpResponse> get(

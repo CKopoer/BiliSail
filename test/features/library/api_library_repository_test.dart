@@ -126,7 +126,7 @@ void main() {
     expect(result.items.map((e) => e.location.toString()), [
       '/live/12',
       '/article/12',
-      'https://www.bilibili.com/read/readlist/rl13',
+      '/article-list/13',
       'https://www.bilibili.com/cheese/play/ep14',
     ]);
     expect(result.items.map((e) => e.type), [

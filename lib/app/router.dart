@@ -27,6 +27,7 @@ import '../features/profile/application/profile_controller.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/dynamic/presentation/dynamic_detail_screen.dart';
 import '../features/article/presentation/article_screen.dart';
+import '../features/article/presentation/article_collection_screen.dart';
 import '../features/dynamic/application/dynamic_topic_controller.dart';
 import '../features/dynamic/domain/dynamic_link.dart';
 import '../features/dynamic/presentation/dynamic_topic_screen.dart';
@@ -169,12 +170,6 @@ GoRouter createBiliRouter({
             playbackWindowBuilder: playbackWindowBuilder,
             onActivateBrowser: onActivateBrowser,
             onExitRequested: onExitRequested,
-            onOpenArticle: (origin, address, link) => _showArticle(
-              origin,
-              address,
-              link,
-              ProviderScope.containerOf(context, listen: false),
-            ),
             pageScopeBuilder: (context, tab, child) => _WorkspacePageScope(
               tab: tab,
               observeAccount: accountBuilder != null,
@@ -218,6 +213,7 @@ GoRouter createBiliRouter({
           '/dynamic/resource/:id',
           '/article/:id',
           '/opus/:id',
+          '/article-list/:id',
           '/history',
           '/messages',
           '/settings',
@@ -317,83 +313,6 @@ Future<void> _openWebLink(BuildContext context, Uri target) async {
   if (context.mounted && !opened) {
     showAppNotice(context, '无法打开链接，请稍后重试');
   }
-}
-
-void _showArticle(
-  BuildContext context,
-  ArticleAddress address,
-  ContentLink link,
-  ProviderContainer container,
-) {
-  const routeName = 'article-reader';
-  final router = GoRouter.of(context);
-  void open(
-    BuildContext presenter,
-    ArticleAddress address,
-    ContentLink link, {
-    int depth = 1,
-  }) {
-    unawaited(
-      showAppDialog<void>(
-        context: presenter,
-        routeSettings: const RouteSettings(name: routeName),
-        builder: (dialogContext) {
-          void navigate(String location) {
-            Navigator.of(dialogContext)
-                .popUntil((route) => route.settings.name != routeName);
-            router.go(location);
-          }
-
-          return UncontrolledProviderScope(
-            container: container,
-            child: ProviderScope(
-              overrides: [
-                commentVideoNavigatorProvider.overrideWithValue(
-                  (video) => navigate('/video/${video.value}'),
-                ),
-              ],
-              child: ContentLinkScope(
-                link: link,
-                child: ArticleScreen(
-                  address: address,
-                  onLogin: () => showAppDialog<void>(
-                    context: dialogContext,
-                    builder: (_) => const AccountDialog(),
-                  ),
-                  onOpenUser: (user) => navigate('/user/${user.value}'),
-                  onOpenWeb: (target) => _openWebLink(dialogContext, target),
-                  onOpenLink: (target) {
-                    final location = messageWorkspaceLocation(target);
-                    if (location == null) {
-                      unawaited(_openWebLink(dialogContext, target));
-                      return;
-                    }
-                    final uri = Uri.parse(location);
-                    if (ArticleAddress.fromLocation(uri) case final next?) {
-                      final nextLink = ContentLink.fromUri(uri);
-                      if (next == address && nextLink == link) return;
-                      if (depth >= WorkspaceTabs.maximumTabs) {
-                        showAppNotice(
-                          dialogContext,
-                          '最多同时打开 ${WorkspaceTabs.maximumTabs} 篇专栏，请先关闭一篇',
-                        );
-                        return;
-                      }
-                      open(dialogContext, next, nextLink, depth: depth + 1);
-                    } else {
-                      navigate(location);
-                    }
-                  },
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  open(context, address, link);
 }
 
 final class _WorkspacePage extends ConsumerWidget {
@@ -826,6 +745,37 @@ final class _WorkspacePage extends ConsumerWidget {
               case '/history':
                 return HistoryScreen(key: PageStorageKey('history-${tab.id}'));
               default:
+                if (tab.isArticleCollection) {
+                  return ArticleCollectionScreen(
+                    id: ArticleCollectionId(uri.pathSegments.last),
+                    onOpenUser: (user) =>
+                        context.openWorkspaceLink('/user/${user.value}'),
+                    onOpenArticle: (address) =>
+                        context.openWorkspaceLink(address.location),
+                    onOpenWeb: (target) => _openWebLink(context, target),
+                  );
+                }
+                if (ArticleAddress.fromLocation(uri) case final address?) {
+                  return ArticleScreen(
+                    key: ValueKey(address),
+                    address: address,
+                    onOpenUser: (user) =>
+                        context.openWorkspaceLink('/user/${user.value}'),
+                    onOpenLink: (target) {
+                      final location = messageWorkspaceLocation(target);
+                      if (location != null) {
+                        context.openWorkspaceLink(location);
+                      } else {
+                        unawaited(_openWebLink(context, target));
+                      }
+                    },
+                    onOpenWeb: (target) => _openWebLink(context, target),
+                    onLogin: () => showAppDialog<void>(
+                      context: context,
+                      builder: (_) => const AccountDialog(),
+                    ),
+                  );
+                }
                 if (tab.isDynamicDetail) {
                   return DynamicDetailScreen(
                     id: uri.pathSegments.last,

@@ -195,8 +195,8 @@ void main() {
         await tester.pumpAndSettle();
 
         final location = router.routeInformationProvider.value.uri;
-        expect(location.path, '/messages');
-        expect(tester.state(find.byType(MessagesScreen)), same(inbox));
+        expect(location.path, address.location);
+        expect(find.byType(Dialog), findsNothing);
         expect(articles.reads, [address]);
         final article = find.byType(ArticleScreen);
         final panel = find.descendant(
@@ -217,7 +217,7 @@ void main() {
         expect(find.text('普通评论').hitTestable(), findsOneWidget);
 
         await tester.tap(
-          find.descendant(of: article, matching: findMaterialTooltip('关闭')),
+          find.descendant(of: article, matching: findMaterialTooltip('返回')),
         );
         await tester.pumpAndSettle();
         expect(router.routeInformationProvider.value.uri.path, '/messages');
@@ -859,7 +859,12 @@ final class _NotificationDynamics extends DynamicRepositoryFake {
   }
 }
 
-final class _NotificationArticles implements ArticleRepository {
+final class _NotificationArticles extends Fake implements ArticleRepository {
+  @override
+  Future<ArticleStats> viewInfo(
+    String cvId,
+    RequestCancellation cancellation,
+  ) async => const ArticleStats();
   _NotificationArticles(this.target);
   final CommentTarget target;
   final reads = <ArticleAddress>[];

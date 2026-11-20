@@ -12,6 +12,7 @@ class DynamicDetailLayout extends StatefulWidget {
     required this.content,
     required this.comments,
     this.focusComments = false,
+    this.commentRequest = 0,
   }) : sliver = null,
        commentLink = null;
 
@@ -20,11 +21,13 @@ class DynamicDetailLayout extends StatefulWidget {
     required this.sliver,
     required this.comments,
     this.commentLink,
+    this.commentRequest = 0,
   }) : content = null,
        focusComments = false;
 
   final Widget? content, sliver, comments;
   final bool focusComments;
+  final int commentRequest;
   final ContentLink? commentLink;
 
   @override
@@ -36,6 +39,20 @@ class _DynamicDetailLayoutState extends State<DynamicDetailLayout> {
   final _reading = ScrollController();
   Object? _focused;
   bool? _wide;
+
+  @override
+  void didUpdateWidget(covariant DynamicDetailLayout oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.commentRequest == oldWidget.commentRequest) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final inner = _nested.currentState?.innerController;
+      if (inner != null && inner.hasClients && inner.offset != 0) {
+        inner.jumpTo(0);
+      }
+      if (_wide == false) _focusComments(_focused);
+    });
+  }
 
   @override
   void dispose() {
@@ -64,7 +81,7 @@ class _DynamicDetailLayoutState extends State<DynamicDetailLayout> {
     });
   }
 
-  void _focusComments(Object focus, {int attempts = 4}) {
+  void _focusComments(Object? focus, {int attempts = 4}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _wide != false || _focused != focus) return;
       final controller = _nested.currentState?.outerController;

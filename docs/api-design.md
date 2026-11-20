@@ -196,6 +196,17 @@ ApiPage<T> { items, nextCursor, hasMore }
 
 2026-11-20 搜索专栏、历史专栏与动态中的专栏链接接入应用内阅读。以 CV 号打开时先向 `https://www.bilibili.com/read/cv{id}/` 发送不携带凭据的单次 HEAD，根据官方重定向识别迁移后的 opus ID。正文使用 `api.bilibili.com` 的 Web GET，WBI 签名、Cookie 可选、JSON 响应、无分页。旧专栏调用 `/x/article/view`，参数为 `id`、`gaia_source=main_web`、`web_location=333.976`。新版图文调用 `/x/polymer/web-dynamic/v1/opus/detail`，参数为 `id`、`timezone_offset=-480` 和 `features`。服务端明确返回旧专栏 ID 时可回读一次，本次读取共享取消、会话边界与总时限。
 
+2026-11-21 增加专栏文集与互动。下列端点均位于 `api.bilibili.com`，返回 JSON。GET 允许游客访问、无分页，沿用 Web 读请求的取消、总时限和有界重试。POST 要求 Web 会话和 CSRF，每次用户操作发送一次。
+
+| 能力 | 方法与路径 | 参数 |
+| --- | --- | --- |
+| 文集目录 | GET `/x/article/list/web/articles` | `id` 为文集号，`web_location=333.1400`，无 WBI |
+| 专栏互动状态 | GET `/x/article/viewinfo` | CV 号 `id`、`mobi_app=pc`、`from=web`、`gaia_source=main_web`，WBI 签名；独立加载，个人点赞、收藏状态与公共计数分别读取 |
+| 旧专栏收藏／取消 | POST `/x/article/favorites/add`、`/x/article/favorites/del` | 表单 `id`、`csrf`，无 WBI |
+| 图文作品收藏／取消 | POST `/x/community/cosmo/interface/simple_action` | 查询 CSRF，JSON `entity.object_id_str` 为 opus ID、`entity.type.biz=2`、`action=3/4`，无 WBI |
+
+动态点赞、转发与消息分享沿用现有协议，评论沿用响应指定的业务身份。交互和参考来源见[应用内专栏阅读](validation/article-reader-2026-11-20.md)。
+
 ## 5. 会话与凭据
 
 普通视频云端进度使用 Web GET `/x/player/wbi/v2`；2026-11-09 修复影视续播，PGC 改读 GET `/pgc/view/web/season` 的 `user_status.progress`（`last_ep_id` 十进制 ID，`last_time` 秒），仅恢复匹配剧集的位置。两类点播继续 POST `/x/click-interface/web/heartbeat`：本地优先、云端仅在本地缺失时补充，上报使用已有 Web Cookie/CSRF，单次写入不重放，不使用参考实现的 App 签名。字段单位、容量、取消和验证边界见 [云端播放进度](validation/cloud-playback-progress.md)和[番剧续播修复](validation/pgc-resume-2026-11-09.md)。上表 `/x/v2/history/report` 保留参考源码定位，不是本项目的 Web 上报端点。

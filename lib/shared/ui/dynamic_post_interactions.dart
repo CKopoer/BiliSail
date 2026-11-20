@@ -58,19 +58,8 @@ class InteractiveDynamicPostCard extends ConsumerWidget {
         ),
       );
     }
-    void share() {
-      final container = ProviderScope.containerOf(context);
-      unawaited(
-        showAppDialog<void>(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) => UncontrolledProviderScope(
-            container: container,
-            child: _ShareDialog(post: current, onLogin: onLogin),
-          ),
-        ),
-      );
-    }
+    void share() =>
+        unawaited(showDynamicShareDialog(context, current, onLogin: onLogin));
 
     void login() =>
         onLogin != null ? onLogin!() : showAppNotice(context, '请先登录后操作');
@@ -341,8 +330,26 @@ class _DialogHeader extends StatelessWidget {
   );
 }
 
+Future<void> showDynamicShareDialog(
+  BuildContext context,
+  DynamicPost post, {
+  Uri? articleUrl,
+  VoidCallback? onLogin,
+}) {
+  final container = ProviderScope.containerOf(context, listen: false);
+  return showAppDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => UncontrolledProviderScope(
+      container: container,
+      child: _ShareDialog(post: post, articleUrl: articleUrl, onLogin: onLogin),
+    ),
+  );
+}
+
 class _ShareDialog extends ConsumerStatefulWidget {
-  const _ShareDialog({required this.post, this.onLogin});
+  const _ShareDialog({required this.post, this.articleUrl, this.onLogin});
+  final Uri? articleUrl;
   final DynamicPost post;
   final VoidCallback? onLogin;
   @override
@@ -367,7 +374,10 @@ class _ShareDialogState extends ConsumerState<_ShareDialog> {
       provider.select((value) => (value.accountScope, value.sessionEpoch)),
       (_, _) => _text.clear(),
     );
-    final url = Uri.https('t.bilibili.com', '/${widget.post.id}').toString();
+    final article = widget.articleUrl != null;
+    final url =
+        (widget.articleUrl ?? Uri.https('t.bilibili.com', '/${widget.post.id}'))
+            .toString();
     return PopScope(
       canPop: !state.busy,
       child: Dialog(
@@ -381,12 +391,20 @@ class _ShareDialogState extends ConsumerState<_ShareDialog> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _DialogHeader(title: '分享动态', busy: state.busy),
+                  _DialogHeader(
+                    title: article ? '转发专栏' : '分享动态',
+                    busy: state.busy,
+                  ),
                   TextButton.icon(
                     onPressed: () async {
                       try {
                         await Clipboard.setData(ClipboardData(text: url));
-                        if (context.mounted) showAppNotice(context, '动态链接已复制');
+                        if (context.mounted) {
+                          showAppNotice(
+                            context,
+                            article ? '专栏链接已复制' : '动态链接已复制',
+                          );
+                        }
                       } on PlatformException {
                         if (context.mounted) {
                           showAppNotice(context, '复制失败，请稍后重试');
@@ -394,7 +412,7 @@ class _ShareDialogState extends ConsumerState<_ShareDialog> {
                       }
                     },
                     icon: const Icon(Icons.copy),
-                    label: const Text('复制动态链接'),
+                    label: Text(article ? '复制专栏链接' : '复制动态链接'),
                   ),
                   const Divider(),
                   TextField(

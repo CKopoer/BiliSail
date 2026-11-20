@@ -152,6 +152,7 @@ final class BiliApiClient {
       '/x/relation/followings/search',
       '/x/player/wbi/v2',
       '/x/article/view',
+      '/x/article/viewinfo',
       '/x/polymer/web-dynamic/v1/opus/detail',
     }.contains(path)) {
       throw ArgumentError('Unsupported WBI endpoint');
@@ -697,6 +698,8 @@ final class BiliApiClient {
       '/x/topic/fav/sub/add',
       '/x/topic/fav/sub/cancel',
       '/x/topic/report',
+      '/x/article/favorites/add',
+      '/x/article/favorites/del',
     }.contains(path)) {
       throw ArgumentError('Unsupported mutation');
     }
@@ -837,6 +840,7 @@ final class BiliApiClient {
   }) {
     if (!const {
       '/x/dynamic/feed/dyn/thumb',
+      '/x/community/cosmo/interface/simple_action',
       '/x/dynamic/feed/reserve/click',
       '/x/dynamic/feed/create/dyn',
       '/x/vote/create',
