@@ -746,6 +746,10 @@ final class _WorkspacePage extends ConsumerWidget {
                 if (tab.articleAddress case final article?) {
                   return ArticleScreen(
                     address: article,
+                    onLogin: () => showAppDialog<void>(
+                      context: context,
+                      builder: (_) => const AccountDialog(),
+                    ),
                     onOpenUser: (user) =>
                         context.openWorkspaceLink('/user/${user.value}'),
                     onOpenWeb: (target) => _openWebLink(context, ref, target),

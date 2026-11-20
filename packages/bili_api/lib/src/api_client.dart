@@ -13,6 +13,7 @@ import 'models/dynamic_composer_models.dart';
 import 'models/pgc_models.dart';
 import 'mappers/video_access_parser.dart';
 import 'mappers/dash_audio_parser.dart';
+import 'mappers/web_comment_target.dart';
 import 'transport.dart';
 import 'wbi.dart';
 import 'app_profile.dart';
@@ -1921,7 +1922,7 @@ final class BiliApiClient {
   }
 
   static void _validateCommentType(int type) {
-    if (!const {1, 11, 12, 14, 17, 33}.contains(type)) {
+    if (!supportedWebCommentTypes.contains(type)) {
       throw ArgumentError.value(type, 'commentType');
     }
   }

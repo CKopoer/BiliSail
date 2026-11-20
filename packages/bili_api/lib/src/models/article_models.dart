@@ -38,6 +38,10 @@ final class ApiArticle {
     this.authorAvatar,
     this.publishedAt,
     this.accessMessage,
+    this.commentOid,
+    this.commentType,
+    this.commentCount,
+    this.commentForbidden = false,
   });
 
   final Uri url;
@@ -46,4 +50,7 @@ final class ApiArticle {
   final Uri? authorAvatar;
   final DateTime? publishedAt;
   final List<ApiArticleBlock> blocks;
+  final String? commentOid;
+  final int? commentType, commentCount;
+  final bool commentForbidden;
 }

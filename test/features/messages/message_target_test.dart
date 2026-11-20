@@ -59,6 +59,12 @@ void main() {
       'https://www.bilibili.com/bangumi/play/ss456': '/pgc/season/456',
       'https://live.bilibili.com/123': '/live/123',
       'https://www.bilibili.com/read/cv123': '/article/123',
+      'https://www.bilibili.com/read/cv123?comment_secondary_id=11&from=x#reply10':
+          '/article/123?comment_root_id=10&comment_secondary_id=11',
+      'https://www.bilibili.com/read/cv123?root=0&comment_secondary_id=11':
+          '/article/123',
+      'https://www.bilibili.com/opus/456?type=2&rpid=10':
+          '/dynamic/resource/456?comment_root_id=10',
       'https://www.bilibili.com/opus/9007199254740993123':
           '/opus/9007199254740993123',
       'https://space.bilibili.com/9007199254740993/': '/user/9007199254740993',
@@ -72,7 +78,7 @@ void main() {
     const cases = {
       'https://t.bilibili.com/9007199254740993123':
           '/dynamic/9007199254740993123',
-      'https://www.bilibili.com/opus/9007199254740993123?comment_root_id=10&comment_secondary_id=11&from=message': '/dynamic/9007199254740993123?comment_root_id=10&comment_secondary_id=11',
+      'https://www.bilibili.com/opus/9007199254740993123?comment_root_id=10&comment_secondary_id=11&from=message': '/opus/9007199254740993123?comment_root_id=10&comment_secondary_id=11',
       'https://m.bilibili.com/h5/dynamic/9007199254740993123/?p=2&t=3#reply20':
           '/dynamic/9007199254740993123?comment_root_id=20',
       'https://t.bilibili.com/456?type=2&root=10':

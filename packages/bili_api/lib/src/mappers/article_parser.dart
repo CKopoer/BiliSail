@@ -5,6 +5,8 @@ import 'package:html/parser.dart' as parser;
 
 import '../models.dart';
 import '../models/article_models.dart';
+import 'web_comment_target.dart';
+import 'web_count.dart';
 
 Map<String, Object?> articleMap(Object? value) =>
     value is Map<String, Object?> ? value : const {};
@@ -37,6 +39,7 @@ final class ArticleParser {
         'module_author',
         'module_content',
         'module_blocked',
+        'module_stat',
       ]) {
         if (module[key] case final Map<String, Object?> value) {
           modules[key] = value;
@@ -44,6 +47,7 @@ final class ArticleParser {
       }
     }
     final blocked = modules['module_blocked'];
+    final comments = articleMap(modules['module_stat']?['comment']);
     return _document(
       title: _text(modules['module_title']?['text']),
       author: modules['module_author'] ?? const {},
@@ -57,6 +61,11 @@ final class ArticleParser {
               _text(blocked['title']),
               _text(blocked['hint_message']),
             ].where((value) => value.trim().isNotEmpty).join('\n'),
+      commentTarget: blocked == null
+          ? parseWebCommentTarget(articleMap(item['basic']))
+          : null,
+      commentCount: blocked == null ? parseWebCount(comments['count']) : null,
+      commentForbidden: comments['forbidden'] == true,
     );
   }
 
@@ -80,6 +89,7 @@ final class ArticleParser {
       author: articleMap(data['author']),
       published: data['publish_time'],
       blocks: blocks,
+      commentTarget: (oid: id, type: 12),
     );
   }
 
@@ -89,6 +99,9 @@ final class ArticleParser {
     required Object? published,
     required List<ApiArticleBlock> blocks,
     String? accessMessage,
+    ({String oid, int type})? commentTarget,
+    int? commentCount,
+    bool commentForbidden = false,
   }) {
     if (blocks.isEmpty && accessMessage == null) {
       throw ApiFailure(ApiFailureCategory.protocol, endpoint);
@@ -106,6 +119,10 @@ final class ArticleParser {
           : null,
       accessMessage: accessMessage == '' ? '当前账号暂时无法阅读这篇内容' : accessMessage,
       blocks: List.unmodifiable(blocks),
+      commentOid: commentTarget?.oid,
+      commentType: commentTarget?.type,
+      commentCount: commentCount,
+      commentForbidden: commentForbidden,
     );
   }
 

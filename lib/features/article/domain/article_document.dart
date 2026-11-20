@@ -1,3 +1,4 @@
+import '../../../domain/comment_target.dart';
 import '../../../domain/user.dart';
 
 enum ArticleBlockKind { paragraph, heading, quote, code, divider, image }
@@ -34,6 +35,9 @@ final class ArticleDocument {
     this.authorAvatar,
     this.publishedAt,
     this.accessMessage,
+    this.commentTarget,
+    this.commentCount,
+    this.commentForbidden = false,
   });
 
   final Uri url;
@@ -43,4 +47,7 @@ final class ArticleDocument {
   final DateTime? publishedAt;
   final String? accessMessage;
   final List<ArticleBlock> blocks;
+  final CommentTarget? commentTarget;
+  final int? commentCount;
+  final bool commentForbidden;
 }

@@ -13,11 +13,12 @@ String? messageWorkspaceLocation(Uri target) {
   final parts = target.pathSegments.where((part) => part.isNotEmpty).toList();
   final host = target.host;
   const webHosts = {'www.bilibili.com', 'bilibili.com', 'm.bilibili.com'};
-  final article = ArticleAddress.fromWebUri(target);
+  final article = ArticleAddress.workspaceLocation(target);
+  if (article != null) return article;
   final dynamicId = switch (parts) {
     [final id] when host == 't.bilibili.com' => id,
-    ['dynamic' || 'opus', final id] when webHosts.contains(host) => id,
-    ['mobile' || 'h5' || 'v', 'dynamic' || 'opus', final id]
+    ['dynamic', final id] when webHosts.contains(host) => id,
+    ['mobile' || 'h5' || 'v', 'dynamic', final id]
         when webHosts.contains(host) =>
       id,
     _ => null,
@@ -27,14 +28,8 @@ String? messageWorkspaceLocation(Uri target) {
     final path = byResourceId
         ? '/dynamic/resource/$dynamicId'
         : '/dynamic/$dynamicId';
-    final location = _contentLocation(path, target, playback: false);
-    // Comment notifications need the dynamic detail's anchored reply panel.
-    if (article != null && !byResourceId && location == path) {
-      return article.location;
-    }
-    return location;
+    return _contentLocation(path, target, playback: false);
   }
-  if (article != null) return article.location;
   if (host == 'www.bilibili.com' || host == 'bilibili.com') {
     if (parts case ['video', final id] when VideoId(id).isValid) {
       return _contentLocation('/video/$id', target);
@@ -60,16 +55,9 @@ String _contentLocation(String path, Uri target, {bool playback = true}) {
       value != null && RegExp(r'^[1-9][0-9]{0,29}$').hasMatch(value)
       ? value
       : null;
-  final root =
-      id(query['comment_root_id']) ??
-      id(query['root']) ??
-      id(query['rpid']) ??
-      id(RegExp(r'^reply([1-9][0-9]*)$').firstMatch(target.fragment)?[1]);
-  final secondary = id(query['comment_secondary_id']);
-  final comments = <String, String>{
-    'comment_root_id': ?root,
-    if (root != null) 'comment_secondary_id': ?secondary,
-  };
+  final comments =
+      CommentLocation.fromWebUri(target)?.queryParameters ??
+      const <String, String>{};
   String location(Map<String, String> parameters) => parameters.isEmpty
       ? path
       : Uri(path: path, queryParameters: parameters).toString();

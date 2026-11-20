@@ -4,6 +4,24 @@ final class CommentLocation {
   final String rootId;
   final String? replyId;
   String get focusId => replyId ?? rootId;
+
+  static CommentLocation? fromWebUri(Uri uri) {
+    final query = uri.queryParameters;
+    final root =
+        _id(query['comment_root_id']) ??
+        _id(query['root']) ??
+        _id(query['rpid']) ??
+        _id(RegExp(r'^reply([1-9][0-9]*)$').firstMatch(uri.fragment)?[1]);
+    return root == null
+        ? null
+        : CommentLocation(root, replyId: _id(query['comment_secondary_id']));
+  }
+
+  Map<String, String> get queryParameters => {
+    'comment_root_id': rootId,
+    'comment_secondary_id': ?replyId,
+  };
+
   @override
   bool operator ==(Object other) =>
       other is CommentLocation &&
@@ -23,16 +41,12 @@ final class ContentLink {
 
   factory ContentLink.fromUri(Uri uri) {
     final query = uri.queryParameters;
-    String? id(String? value) =>
-        value != null && RegExp(r'^[1-9][0-9]{0,29}$').hasMatch(value)
-        ? value
-        : null;
-    final root = id(query['comment_root_id']);
-    final secondary = id(query['comment_secondary_id']);
+    final root = _id(query['comment_root_id']);
+    final secondary = _id(query['comment_secondary_id']);
     final milliseconds = int.tryParse(query['start_progress'] ?? '');
     final part = int.tryParse(query['p'] ?? '');
     return ContentLink(
-      requestId: id(query['message_request']),
+      requestId: _id(query['message_request']),
       comment: root == null ? null : CommentLocation(root, replyId: secondary),
       position:
           milliseconds != null &&
@@ -54,3 +68,8 @@ final class ContentLink {
   @override
   int get hashCode => Object.hash(comment, position, page, requestId);
 }
+
+String? _id(String? value) =>
+    value != null && RegExp(r'^[1-9][0-9]{0,29}$').hasMatch(value)
+    ? value
+    : null;

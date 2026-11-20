@@ -104,20 +104,11 @@ DynamicPost mapDynamicPost(ApiDynamicPost p) {
     linkDescription: p.linkDescription,
     linkCoverUrl: p.linkCoverUrl,
     linkUrl: p.linkUrl,
-    commentTarget: p.commentOid == null || p.commentType == null
-        ? null
-        : _target(p.commentOid!, p.commentType!),
+    commentTarget: CommentTarget.fromTypeValue(p.commentOid, p.commentType),
     liked: p.liked,
     commentForbidden: p.commentForbidden,
     repostForbidden: p.repostForbidden,
     likeForbidden: p.likeForbidden,
     unavailable: p.unavailable,
   );
-}
-
-CommentTarget? _target(String oid, int value) {
-  for (final type in CommentTargetType.values) {
-    if (type.value == value) return CommentTarget(oid, type);
-  }
-  return null;
 }

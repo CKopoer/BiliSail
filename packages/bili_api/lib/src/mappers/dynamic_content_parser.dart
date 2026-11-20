@@ -290,7 +290,7 @@ List<ApiDynamicContentCard> _contentCards(
               : _text(match['title'], fallback: label),
         ),
         description: kind == ApiDynamicCardKind.vote
-            ? '${_number(value['join_num']) ?? 0}人参与'
+            ? '${parseWebCount(value['join_num']) ?? 0}人参与'
             : _join([
                 value['desc_first'],
                 value['desc_second'],
@@ -310,7 +310,7 @@ List<ApiDynamicContentCard> _contentCards(
                 value['desc3'],
                 value['desc'],
                 if (reserve == null)
-                  if (_number(value['reserve_total']) case final total?)
+                  if (parseWebCount(value['reserve_total']) case final total?)
                     '$total人预约',
               ]),
         badge: ended ? '已结束' : label,
