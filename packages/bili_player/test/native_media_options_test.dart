@@ -30,7 +30,7 @@ void main() {
     );
     expect(vod['cache-secs'], '32.000');
     expect(vod['demuxer-hysteresis-secs'], '21.333');
-    expect(vod['demuxer-max-bytes'], '4194304');
+    expect(vod['demuxer-max-bytes'], '8388608');
     expect(vod['demuxer-max-back-bytes'], '4194304');
     final live = nativeCacheOptions(live: true, window: null, rate: 1);
     expect(live.containsKey('cache-secs'), false);
