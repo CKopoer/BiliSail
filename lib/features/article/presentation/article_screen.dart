@@ -8,11 +8,12 @@ import '../../../domain/article_address.dart';
 import '../../../domain/user.dart';
 import '../../../shared/ui/app_network_image.dart';
 import '../../../shared/ui/comments_panel.dart';
+import '../../../shared/ui/content_detail_page.dart';
 import '../../../shared/ui/content_link_scope.dart';
 import '../../../shared/ui/dynamic_detail_layout.dart';
 import '../../../shared/ui/image_viewer.dart';
-import '../../../shared/ui/network_avatar.dart';
-import '../../../shared/ui/playback_navigation.dart';
+import '../../../shared/ui/post_author_header.dart';
+import '../../../shared/ui/post_card_surface.dart';
 import '../../../shared/ui/state_view.dart';
 import '../application/article_provider.dart';
 import '../domain/article_document.dart';
@@ -36,53 +37,34 @@ final class ArticleScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final provider = articleProvider(address);
     final state = address.isValid ? ref.watch(provider) : null;
-    return Column(
-      children: [
-        Row(
-          children: [
-            IconButton(
-              tooltip: '返回',
-              onPressed:
-                  PlaybackNavigation.maybeOf(context)?.onBack ??
-                  () => Navigator.of(context).maybePop(),
-              icon: const Icon(Icons.arrow_back),
+    return ContentDetailPage(
+      title: '专栏',
+      action: state == null
+          ? null
+          : IconButton(
+              tooltip: '在浏览器打开',
+              onPressed: () =>
+                  onOpenWeb(state.asData?.value.url ?? address.webUri),
+              icon: const Icon(Icons.open_in_new_outlined),
             ),
-            Expanded(
-              child: Text('专栏', style: Theme.of(context).textTheme.titleMedium),
-            ),
-            if (state != null)
-              IconButton(
-                tooltip: '在浏览器打开',
-                onPressed: () =>
-                    onOpenWeb(state.asData?.value.url ?? address.webUri),
-                icon: const Icon(Icons.open_in_new_outlined),
+      body: state == null
+          ? const StateView.empty(message: '专栏地址无效')
+          : state.when(
+              skipLoadingOnReload: false,
+              skipLoadingOnRefresh: false,
+              data: (document) => _ArticleBody(
+                storageKey: PageStorageKey(address.location),
+                document: document,
+                onOpenUser: onOpenUser,
+                onOpenLink: onOpenLink,
+                onLogin: onLogin,
               ),
-          ],
-        ),
-        const Divider(height: 1),
-        Expanded(
-          child: state == null
-              ? const StateView.empty(message: '专栏地址无效')
-              : state.when(
-                  skipLoadingOnReload: false,
-                  skipLoadingOnRefresh: false,
-                  data: (document) => _ArticleBody(
-                    storageKey: PageStorageKey(address.location),
-                    document: document,
-                    onOpenUser: onOpenUser,
-                    onOpenLink: onOpenLink,
-                    onLogin: onLogin,
-                  ),
-                  loading: () => const StateView.loading(message: '正在加载专栏…'),
-                  error: (error, _) => StateView.error(
-                    message: error is AppFailure
-                        ? error.message
-                        : '专栏加载失败，请稍后再试',
-                    onAction: () => ref.invalidate(provider),
-                  ),
-                ),
-        ),
-      ],
+              loading: () => const StateView.loading(message: '正在加载专栏…'),
+              error: (error, _) => StateView.error(
+                message: error is AppFailure ? error.message : '专栏加载失败，请稍后再试',
+                onAction: () => ref.invalidate(provider),
+              ),
+            ),
     );
   }
 }
@@ -116,8 +98,11 @@ final class _ArticleBody extends StatelessWidget {
     }
     final date = document.publishedAt;
     final authorId = document.authorId;
+    final hasAuthor = document.author.isNotEmpty || date != null;
+    final hasTitle = document.title.isNotEmpty;
+    final accessMessage = document.accessMessage;
     final target = document.commentTarget;
-    final comments = document.accessMessage != null
+    final comments = accessMessage != null
         ? null
         : target == null || document.commentForbidden
         ? Center(
@@ -141,16 +126,32 @@ final class _ArticleBody extends StatelessWidget {
           final block = blocks[index - 1];
           final photo = imageIndexes[index - 1];
           return Padding(
-            padding: const EdgeInsets.only(bottom: 16),
+            padding: EdgeInsets.only(bottom: index < blocks.length ? 12 : 0),
             child: photo == null
                 ? _TextBlock(block: block, onOpenLink: onOpenLink)
                 : _ArticleImage(block: block, images: images, index: photo),
           );
         }
         return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (document.title.isNotEmpty)
+            if (hasAuthor)
+              Material(
+                type: MaterialType.transparency,
+                child: PostAuthorHeader(
+                  name: document.author,
+                  avatarUrl: document.authorAvatar,
+                  subtitle: date == null
+                      ? ''
+                      : MaterialLocalizations.of(context)
+                            .formatCompactDate(date.toLocal()),
+                  onOpenAuthor: document.author.isEmpty || authorId == null
+                      ? null
+                      : () => onOpenUser(authorId),
+                ),
+              ),
+            if (hasTitle) ...[
+              if (hasAuthor) const SizedBox(height: 12),
               Semantics(
                 header: true,
                 child: Text(
@@ -158,51 +159,19 @@ final class _ArticleBody extends StatelessWidget {
                   style: theme.textTheme.headlineSmall,
                 ),
               ),
-            if (document.author.isNotEmpty || date != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Wrap(
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 12,
-                  runSpacing: 4,
-                  children: [
-                    if (document.author.isNotEmpty)
-                      if (authorId != null)
-                        TextButton.icon(
-                          onPressed: () => onOpenUser(authorId),
-                          icon: NetworkAvatar(
-                            url: document.authorAvatar,
-                            name: document.author,
-                            radius: 14,
-                          ),
-                          label: Text(document.author),
-                        )
-                      else
-                        Text(
-                          document.author,
-                          style: theme.textTheme.bodyMedium,
-                        ),
-                    if (date != null)
-                      Text(
-                        MaterialLocalizations.of(context)
-                            .formatCompactDate(date.toLocal()),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            if (document.accessMessage case final message?)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 20),
-                child: Text(message, style: theme.textTheme.bodyLarge),
-              ),
-            if (document.title.isNotEmpty) const SizedBox(height: 8),
+            ],
+            if (accessMessage != null) ...[
+              if (hasAuthor || hasTitle) const SizedBox(height: 12),
+              Text(accessMessage, style: PostCardSurface.bodyStyleOf(context)),
+            ],
+            if (blocks.isNotEmpty &&
+                (hasAuthor || hasTitle || accessMessage != null))
+              const SizedBox(height: 12),
           ],
         );
       },
     );
+    final card = PostCardSurface.sliver(sliver: body);
     return SelectionArea(
       child: DynamicDetailLayout.sliver(
         key: storageKey,
@@ -213,10 +182,10 @@ final class _ArticleBody extends StatelessWidget {
         sliver: SliverLayoutBuilder(
           builder: (context, constraints) {
             final width = constraints.crossAxisExtent;
-            final inset = 20.0 + (width > 800 ? (width - 800) / 2 : 0);
+            if (width <= 800) return card;
             return SliverPadding(
-              padding: EdgeInsets.fromLTRB(inset, 24, inset, 40),
-              sliver: body,
+              padding: EdgeInsets.symmetric(horizontal: (width - 800) / 2),
+              sliver: card,
             );
           },
         ),
@@ -301,7 +270,7 @@ final class _TextBlockState extends State<_TextBlock> {
   Widget build(BuildContext context) {
     final block = widget.block;
     final theme = Theme.of(context);
-    final style = theme.textTheme.bodyLarge?.copyWith(height: 1.55);
+    final style = PostCardSurface.bodyStyleOf(context);
     if (block.kind == ArticleBlockKind.divider) return const Divider();
     if (block.kind == ArticleBlockKind.code) {
       return DecoratedBox(

@@ -6,6 +6,7 @@ import '../../domain/user.dart';
 import '../../features/dynamic/domain/dynamic_link.dart';
 import 'app_network_image.dart';
 import 'image_viewer.dart';
+import 'post_card_surface.dart';
 
 /// Expansion belongs to the retained list, rather than to an evictable row.
 class DynamicPostExpansionState {
@@ -71,8 +72,7 @@ class _DynamicPostTextState extends State<DynamicPostText> {
 
   @override
   Widget build(BuildContext context) {
-    final style = Theme.of(context).textTheme.bodyMedium
-        ?.copyWith(fontSize: 15, height: 22 / 15);
+    final style = PostCardSurface.bodyStyleOf(context);
     _disposeRecognizers();
     final parts = widget.post.spans;
     var remaining = 32768;

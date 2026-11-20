@@ -9,8 +9,9 @@ import 'image_viewer.dart';
 import 'dynamic_content_card.dart';
 import 'dynamic_post_text.dart';
 export 'dynamic_post_text.dart' show DynamicPostExpansionState;
-import 'network_avatar.dart';
 import 'bili_icons.dart';
+import 'post_author_header.dart';
+import 'post_card_surface.dart';
 import 'video_card.dart';
 import 'app_network_image.dart';
 import 'workspace_link.dart';
@@ -75,38 +76,29 @@ class DynamicPostCard extends StatelessWidget {
   final Widget Function(DynamicPost, DynamicContentCard)? contentCardBuilder;
 
   @override
-  Widget build(BuildContext context) => Material(
-    color: Theme.of(context).colorScheme.surfaceContainerLow,
-    borderRadius: BorderRadius.circular(12),
-    clipBehavior: Clip.antiAlias,
-    child: InkWell(
-      onTap: onOpenDetail,
-      onLongPress: onMore,
-      onSecondaryTap: onMore,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: _PostBody(
-          post: post,
-          contentCardBuilder: contentCardBuilder,
-          inDetail: inDetail,
-          onOpenDetail: onOpenDetail,
-          layoutOnly: _layoutOnly,
-          expansionState: expansionState,
-          onOpenUser: onOpenUser,
-          onOpenVideo: onOpenVideo,
-          onOpenLink: onOpenLink,
-          onMore: onMore,
-          actions: _DynamicActions(
-            post: post,
-            onShare: onShare,
-            onComment: onComment,
-            onLike: onLike,
-            liked: liked ?? post.liked,
-            likeCount: likeCount ?? post.likeCount,
-            repostCount: repostCount ?? post.repostCount,
-            busy: busy,
-          ),
-        ),
+  Widget build(BuildContext context) => PostCardSurface(
+    onTap: onOpenDetail,
+    onMore: onMore,
+    child: _PostBody(
+      post: post,
+      contentCardBuilder: contentCardBuilder,
+      inDetail: inDetail,
+      onOpenDetail: onOpenDetail,
+      layoutOnly: _layoutOnly,
+      expansionState: expansionState,
+      onOpenUser: onOpenUser,
+      onOpenVideo: onOpenVideo,
+      onOpenLink: onOpenLink,
+      onMore: onMore,
+      actions: _DynamicActions(
+        post: post,
+        onShare: onShare,
+        onComment: onComment,
+        onLike: onLike,
+        liked: liked ?? post.liked,
+        likeCount: likeCount ?? post.likeCount,
+        repostCount: repostCount ?? post.repostCount,
+        busy: busy,
       ),
     ),
   );
@@ -176,47 +168,17 @@ class _PostBody extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: InkWell(
-                onTap: openAuthor,
-                onTertiaryTapUp: WorkspaceLinkScope.middleClick(
-                  context,
-                  openAuthor,
-                ),
-                child: Row(
-                  children: [
-                    NetworkAvatar(
-                      url: layoutOnly ? null : post.authorAvatarUrl,
-                      pendantUrl: layoutOnly ? null : post.authorPendantUrl,
-                      name: post.authorName,
-                      radius: depth == 0 ? 20 : 14,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            post.authorName.isEmpty ? '动态' : post.authorName,
-                            style: Theme.of(context).textTheme.titleSmall
-                                ?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                  height: 1.25,
-                                ),
-                          ),
-                          if (time.isNotEmpty || post.actionText.isNotEmpty)
-                            Text(
-                              [
-                                time,
-                                post.actionText,
-                              ].where((s) => s.isNotEmpty).join(' · '),
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(height: 1.25),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+              child: PostAuthorHeader(
+                name: post.authorName,
+                fallbackName: '动态',
+                subtitle: [
+                  time,
+                  post.actionText,
+                ].where((s) => s.isNotEmpty).join(' · '),
+                avatarUrl: layoutOnly ? null : post.authorAvatarUrl,
+                pendantUrl: layoutOnly ? null : post.authorPendantUrl,
+                avatarRadius: depth == 0 ? 20 : 14,
+                onOpenAuthor: openAuthor,
               ),
             ),
             if (depth == 0 && !inDetail)

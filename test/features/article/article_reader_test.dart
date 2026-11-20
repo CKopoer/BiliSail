@@ -7,6 +7,7 @@ import 'package:bilisail/domain/article_address.dart';
 import 'package:bilisail/domain/comment_target.dart';
 import 'package:bilisail/domain/content_link.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/features/article/application/article_provider.dart';
 import 'package:bilisail/features/article/domain/article_document.dart';
 import 'package:bilisail/features/article/domain/article_repository.dart';
@@ -19,7 +20,10 @@ import 'package:bilisail/features/settings/application/settings_controller.dart'
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/domain/settings_repository.dart';
 import 'package:bilisail/shared/ui/comments_panel.dart';
+import 'package:bilisail/shared/ui/content_detail_page.dart';
 import 'package:bilisail/shared/ui/content_link_scope.dart';
+import 'package:bilisail/shared/ui/post_author_header.dart';
+import 'package:bilisail/shared/ui/post_card_surface.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -192,7 +196,11 @@ void main() {
       expect(nested.innerController.offset, closeTo(commentOffset, 1));
       expect(find.text('正文第 239 段'), findsNothing);
 
-      await tester.drag(find.byType(NestedScrollView), const Offset(0, -24000));
+      final detail = find.byType(NestedScrollView);
+      // Lazy paragraphs refine the estimated extent as the end comes into view.
+      await tester.drag(detail, const Offset(0, -12000));
+      await tester.pumpAndSettle();
+      await tester.drag(detail, const Offset(0, -160));
       await tester.pumpAndSettle();
       expect(nested.outerController.position.extentAfter, lessThan(1));
       expect(find.text('最热').hitTestable(), findsOneWidget);
@@ -200,6 +208,43 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('shared post card stacks above comments at enlarged text', (
+    tester,
+  ) async {
+    UserId? openedAuthor;
+    Uri? openedUrl;
+    await _mountReader(
+      tester,
+      comments: DynamicCommentsFake()..items = [],
+      document: _longArticle(paragraphs: 1, commentCount: 0),
+      size: const Size(960, 820),
+      scale: 2,
+      onOpenUser: (id) => openedAuthor = id,
+      onOpenWeb: (url) => openedUrl = url,
+    );
+    final card = find.byType(PostCardSurface);
+    final author = find.byType(PostAuthorHeader);
+    final title = find.text('专栏标题');
+    final text = find.text('正文第 0 段');
+    final panel = find.byType(CommentsPanel);
+    expect(find.byType(ContentDetailPage), findsOneWidget);
+    expect(find.descendant(of: card, matching: author), findsOneWidget);
+    expect(
+      tester.getBottomLeft(author).dy,
+      lessThan(tester.getTopLeft(title).dy),
+    );
+    expect(
+      tester.getBottomLeft(text).dy,
+      lessThan(tester.getTopLeft(panel).dy),
+    );
+    expect(tester.getSize(panel).width, 960);
+    await tester.tap(find.text('专栏作者'));
+    expect(openedAuthor, const UserId('42'));
+    await tester.tap(find.byIcon(Icons.open_in_new_outlined));
+    expect(openedUrl, _column.webUri);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('guests can see empty comments and open login', (tester) async {
     var logins = 0;
@@ -285,6 +330,8 @@ Future<void> _mountReader(
   double scale = 1,
   ValueNotifier<ContentLink>? link,
   VoidCallback? onLogin,
+  ValueChanged<UserId>? onOpenUser,
+  ValueChanged<Uri>? onOpenWeb,
 }) async {
   await tester.binding.setSurfaceSize(size);
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -292,9 +339,9 @@ Future<void> _mountReader(
   addTearDown(auth.stream.close);
   final reader = ArticleScreen(
     address: _column,
-    onOpenUser: (_) {},
+    onOpenUser: onOpenUser ?? (_) {},
     onOpenLink: (_) {},
-    onOpenWeb: (_) {},
+    onOpenWeb: onOpenWeb ?? (_) {},
     onLogin: onLogin ?? () {},
   );
   await tester.pumpWidget(
@@ -337,6 +384,9 @@ ArticleDocument _longArticle({
 }) => ArticleDocument(
   url: _column.webUri,
   title: '专栏标题',
+  author: '专栏作者',
+  authorId: const UserId('42'),
+  publishedAt: DateTime(2026, 11, 20),
   blocks: List.generate(
     paragraphs,
     (index) => ArticleBlock(
