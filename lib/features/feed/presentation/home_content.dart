@@ -14,9 +14,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/ui/app_dialog.dart';
 import '../../../shared/ui/content_section_tabs.dart';
+import '../../../shared/ui/favorite_content_toolbar.dart';
 import '../../../core/platform/external_links.dart';
 import '../../../core/network/api_requests.dart';
 import '../../../domain/app_failure.dart';
+import '../../../domain/favorite_content_filter.dart';
 import '../../../domain/video.dart';
 import '../../../core/presentation/workspace_activity.dart';
 import '../../../core/input/input_stroke.dart';
@@ -125,6 +127,7 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
     if (_accountScope != scope) {
       _accountScope = scope;
       _dynamicAuthor = null;
+      _folder = null;
       _visitedQueries.clear();
       _clearBodyCache();
     }
@@ -180,10 +183,15 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
         ? dynamicAuthorFeedProvider((query: query, authorId: author))
         : homeControllerProvider(query);
     final feed = ref.watch(provider);
+    final controller = ref.read(provider.notifier);
+    final favoriteFilter = controller.favoriteFilter;
+    final folderTitle = favoriteFilter.searchesAllFolders
+        ? '我的全部收藏'
+        : _folder?.title ?? widget.section;
     final favoriteRequest = _favoriteRequest =
         widget.channel == HomeChannel.favorites &&
             (_folder != null || widget.section == '默认收藏夹')
-        ? (query: query, title: _folder?.title ?? widget.section)
+        ? (query: query, title: folderTitle)
         : null;
     final favoriteQueue = favoriteRequest == null
         ? null
@@ -193,7 +201,10 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
       // body. Release its models and callbacks; paging errors still carry data.
       _clearBodyCache();
     }
-    final controller = ref.read(provider.notifier);
+    final supportsFavoriteFilters =
+        repository is HomeFavoriteContentRepository &&
+        favoriteRequest != null &&
+        _folder?.kind != HomeEntryKind.collection;
     Future<void> refresh() => Future.wait([
       controller.refresh(),
       if (isDynamic) ref.read(dynamicAuthorsProvider(scope).notifier).refresh(),
@@ -214,7 +225,7 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
           },
       },
       child: PagedScrollViewport(
-        key: ValueKey((query, _dynamicAuthor)),
+        key: ValueKey((query, _dynamicAuthor, favoriteFilter)),
         keepScrollOffset: _dynamicAuthor == null,
         active: widget.active,
         canLoadMore:
@@ -272,7 +283,11 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
                                 icon: const Icon(Icons.arrow_back),
                               ),
                             Expanded(
-                              child: Text(_folder?.title ?? widget.section),
+                              child: Text(
+                                folderTitle,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                             if (favoriteRequest != null)
                               TextButton.icon(
@@ -298,6 +313,28 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
                           ],
                         ),
                       ),
+                    if (supportsFavoriteFilters)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 4, bottom: 8),
+                          child: FavoriteContentToolbar(
+                            filter: favoriteFilter,
+                            allowAllFolders: query.section == '默认收藏夹',
+                            onChanged: (filter) {
+                              if (filter == favoriteFilter) return;
+                              if (scrollController.hasClients) {
+                                scrollController.jumpTo(
+                                  scrollController.position.minScrollExtent,
+                                );
+                              }
+                              ref.invalidate(
+                                favoritePlaybackQueueProvider(favoriteRequest),
+                              );
+                              controller.filterFavorites(filter);
+                            },
+                          ),
+                        ),
+                      ),
                     feed.items.when(
                       loading: () => const SliverToBoxAdapter(
                         child: SizedBox(
@@ -312,8 +349,12 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
                         ),
                       ),
                       data: (items) => items.isEmpty
-                          ? const SliverToBoxAdapter(
-                              child: StateView.empty(message: '这里暂时没有内容'),
+                          ? SliverToBoxAdapter(
+                              child: StateView.empty(
+                                message: favoriteFilter.keyword.isEmpty
+                                    ? '这里暂时没有内容'
+                                    : '没有找到匹配的收藏视频',
+                              ),
                             )
                           : _itemsSliver(
                               items,
@@ -678,12 +719,14 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
     required bool deleteFolder,
   }) async {
     final epoch = ref.read(sessionEpochProvider)();
+    final filter = controller.favoriteFilter;
     bool current() =>
         mounted &&
         widget.active &&
         widget.isSignedIn &&
         WorkspaceActivity.isActive(context) &&
         _bodyQuery == query &&
+        controller.favoriteFilter == filter &&
         ref.read(homeRepositoryProvider).accountScope == query.scope &&
         ref.read(sessionEpochProvider)() == epoch;
     if (!current()) return;
@@ -922,11 +965,11 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
   }) async {
     final provider = favoritePlaybackQueueProvider(request);
     if (ref.read(provider).isLoading) return;
+    final controller = ref.read(homeControllerProvider(request.query).notifier);
+    final filter = controller.favoriteFilter;
     final origin = initial == null
         ? (page: 1, cursor: null, reconcile: false)
-        : ref
-              .read(homeControllerProvider(request.query).notifier)
-              .queuePageFor(initial);
+        : controller.queuePageFor(initial);
     if (origin == null) {
       showAppNotice(context, '该视频已不在当前列表，请刷新后重试');
       return;
@@ -938,11 +981,13 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
           cursor: origin.cursor,
           initial: initial,
           reconcile: origin.reconcile,
+          filter: filter,
         );
     if (!mounted ||
         !widget.active ||
         !WorkspaceActivity.isActive(context) ||
-        _favoriteRequest != request) {
+        _favoriteRequest != request ||
+        controller.favoriteFilter != filter) {
       return;
     }
     if (queue == null) {

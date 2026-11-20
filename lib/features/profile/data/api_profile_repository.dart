@@ -312,7 +312,15 @@ class ApiProfileRepository
         ProfileSection.folders =>
           folderId == null
               ? client.loadFolders(id.value, page: page, context: context)
-              : client.loadFolderVideos(folderId, page: page, context: context),
+              : client.loadFolderVideos(
+                  folderId,
+                  page: page,
+                  order:
+                      ApiFavoriteOrder.values.asNameMap()[order] ??
+                      ApiFavoriteOrder.recentlySaved,
+                  keyword: keyword,
+                  context: context,
+                ),
         ProfileSection.following => client.loadRelations(
           id.value,
           followers: false,

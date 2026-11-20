@@ -35,6 +35,12 @@
 
 最后验证：2026-10-06，列表与 `info` 已用本机已有 Web 会话只读验证；POST 仅做脱敏 fake transport 验证，未对真实账号提交修改。服务端权限、认证和风控错误按类别反馈；仍未在线验证所有业务失败码及写入结果。
 
+## 收藏夹搜索与排序（2026-11-20）
+
+「我的 → 我的收藏」与本人／其他 UP 主主页的收藏夹内，使用同一套搜索栏和排序菜单，支持按最近收藏、最多播放、最近投稿查看。默认收藏夹可通过搜索框左侧的范围菜单切换当前夹或我的全部视频收藏。搜索词和排序交给服务端，切换条件从第一页开始，清除搜索后回到夹内列表。播放全部和点开单个视频沿用当前条件，播放页继续分页时保留进入时的搜索词和排序。
+
+只读参考 PiliPlus 提交 `217fb54f51f6764176319bbdedab2a7522d75401` 的 [收藏入口](https://github.com/bggRGjQaUbCoE/PiliPlus/blob/217fb54f51f6764176319bbdedab2a7522d75401/lib/pages/fav/view.dart)、[收藏详情](https://github.com/bggRGjQaUbCoE/PiliPlus/blob/217fb54f51f6764176319bbdedab2a7522d75401/lib/pages/fav_detail/view.dart)和[请求参数](https://github.com/bggRGjQaUbCoE/PiliPlus/blob/217fb54f51f6764176319bbdedab2a7522d75401/lib/http/fav.dart)，独立实现哔帆的工具栏和分页状态。主页继续检查收藏可见性，取消收藏操作绑定具体的自有收藏夹。离线验证覆盖参数编码、无结果、旧请求取消、窄屏及放大文字、本人和 UP 主主页及播放队列翻页。待用真实登录会话和客户端窗口确认。
+
 ## 来源与采用范围
 
 视觉依据为用户本轮截图。只读查看相邻 UWP 的 [FavoriteAPI.cs](../../../biliuwp-lite/src/BiliLite.UWP/Models/Requests/Api/User/FavoriteAPI.cs)、[FollowAPI.cs](../../../biliuwp-lite/src/BiliLite.UWP/Models/Requests/Api/User/FollowAPI.cs)、[FavoriteDetailViewModel.cs](../../../biliuwp-lite/src/BiliLite.UWP/ViewModels/Favourites/FavoriteDetailViewModel.cs)，以及 kernel 的 [MyClient.cs](../../../bili-kernel/src/Services/Services.User/Core/MyClient.cs)、[VideoFavoriteGalleryResponse.cs](../../../bili-kernel/src/Services/Services.User/Core/Models/VideoFavoriteGalleryResponse.cs)、[FavoriteAdapter.cs](../../../bili-kernel/src/Services/Services.User/Core/Adapters/FavoriteAdapter.cs)。快照及许可边界见 [参考文档](../references.md)。仅借鉴协议、类型和交互职责，独立编写 Dart/Flutter；未复制新增源码/schema/资源，未修改相邻仓库。参考 App 追番/追剧方法未迁入，使用已有 Web 追番端点的两种类型。

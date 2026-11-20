@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/app_failure.dart';
+import '../../../domain/favorite_content_filter.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
 import '../../../domain/user.dart';
@@ -66,6 +67,20 @@ final class HomeController extends Notifier<HomeState> {
   static const _maxPagesWithoutNewItems = 3;
   final HomeQuery query;
   final UserId? authorId;
+  FavoriteContentFilter _favoriteFilter = defaultFavoriteContentFilter;
+  FavoriteContentFilter get favoriteFilter => _favoriteFilter;
+
+  Future<void> filterFavorites(FavoriteContentFilter filter) async {
+    if (filter == _favoriteFilter ||
+        query.channel != HomeChannel.favorites ||
+        query.folderId?.startsWith('ugc:') == true ||
+        (query.folderId == null && query.section != '默认收藏夹') ||
+        ref.read(homeRepositoryProvider) is! HomeFavoriteContentRepository) {
+      return;
+    }
+    _favoriteFilter = filter;
+    await refresh();
+  }
 
   Future<HomePage> _load(
     HomeRepository repository, {
@@ -86,8 +101,9 @@ final class HomeController extends Notifier<HomeState> {
         cancellation: cancellation,
       );
     }
-    return repository.load(
+    return repository.loadWithFavoriteFilter(
       query,
+      filter: _favoriteFilter,
       page: page,
       cursor: cursor,
       cancellation: cancellation,
@@ -325,6 +341,7 @@ final class HomeController extends Notifier<HomeState> {
 
   bool canRemoveFavorite(HomeEntry entry) =>
       query.channel == HomeChannel.favorites &&
+      !_favoriteFilter.searchesAllFolders &&
       (query.section == '默认收藏夹' || query.section == '我创建的收藏夹') &&
       (query.folderId != null || query.section == '默认收藏夹') &&
       query.folderId?.startsWith('ugc:') != true &&
@@ -383,6 +400,7 @@ final class HomeController extends Notifier<HomeState> {
     if (_uncertainRemovals.contains(key)) throw const UnknownWriteOutcome();
     final repository = ref.read(homeRepositoryProvider);
     final epoch = ref.read(sessionEpochProvider)();
+    final filter = _favoriteFilter;
     final cancellation = RequestCancellation();
     _removals[key] = cancellation;
     state = state.withUnsubscribing(_pending);
@@ -395,6 +413,10 @@ final class HomeController extends Notifier<HomeState> {
       if (!current()) return false;
       await write(repository, cancellation);
       if (!current()) return false;
+      if (filter != _favoriteFilter) {
+        await refresh();
+        return current();
+      }
       _removedEntries.add(key);
       if (_removedEntries.length > maxFavoriteEntries) {
         _removedEntries.remove(_removedEntries.first);
