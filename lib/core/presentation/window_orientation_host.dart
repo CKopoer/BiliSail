@@ -37,7 +37,7 @@ class _WindowOrientationHostState extends State<WindowOrientationHost>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    widget.window.fullScreenOrientation.addListener(_presentationChanged);
+    widget.window.fullScreenListenable.addListener(_presentationChanged);
   }
 
   void _presentationChanged() {
@@ -78,10 +78,10 @@ class _WindowOrientationHostState extends State<WindowOrientationHost>
   void didUpdateWidget(covariant WindowOrientationHost oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.window, widget.window)) {
-      oldWidget.window.fullScreenOrientation.removeListener(
+      oldWidget.window.fullScreenListenable.removeListener(
         _presentationChanged,
       );
-      widget.window.fullScreenOrientation.addListener(_presentationChanged);
+      widget.window.fullScreenListenable.addListener(_presentationChanged);
       unawaited(oldWidget.window.clearDisplayOrientationPolicy());
     }
     if (!identical(oldWidget.window, widget.window) ||
@@ -93,7 +93,7 @@ class _WindowOrientationHostState extends State<WindowOrientationHost>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    widget.window.fullScreenOrientation.removeListener(_presentationChanged);
+    widget.window.fullScreenListenable.removeListener(_presentationChanged);
     unawaited(widget.window.clearDisplayOrientationPolicy());
     super.dispose();
   }
@@ -114,12 +114,14 @@ class _WindowOrientationHostState extends State<WindowOrientationHost>
         final available = constraints.biggest;
         var viewport = available;
         final display = WindowSizePolicy.displaySize(View.of(context));
-        if (available.isFinite &&
+        // The Navigator must fill the native fullscreen view. The player
+        // fits the picture independently of its controls and danmaku.
+        if (!widget.window.isFullScreen &&
+            available.isFinite &&
             !available.isEmpty &&
             !display.isEmpty &&
             display.isFinite) {
-          final portrait = switch (widget.window.fullScreenOrientation.value ??
-              widget.orientation) {
+          final portrait = switch (widget.orientation) {
             AppOrientationPreference.automatic => null,
             AppOrientationPreference.portrait => true,
             AppOrientationPreference.landscape => false,

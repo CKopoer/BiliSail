@@ -201,7 +201,7 @@ class WindowService {
   Future<void> toggleWindowMaximized() async {
     if (!canToggleWindowMaximized ||
         _closing ||
-        _fullScreen ||
+        isFullScreen ||
         miniPlayer.value) {
       return;
     }
@@ -444,7 +444,7 @@ class WindowService {
     await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
   }
 
-  bool _fullScreen = false;
+  final _fullScreen = ValueNotifier(false);
   bool? _browsePortrait;
   AppOrientationPreference _orientationPreference =
       AppOrientationPreference.automatic;
@@ -452,13 +452,11 @@ class WindowService {
   FullScreenOrientation? _mobileFullScreenOrientation;
   FullScreenOrientation? _appliedMobileOrientation;
   Future<void> _orientationCommands = Future<void>.value();
-  final _fullScreenOrientation = ValueNotifier<AppOrientationPreference?>(null);
-  ValueListenable<AppOrientationPreference?> get fullScreenOrientation =>
-      _fullScreenOrientation;
+  ValueListenable<bool> get fullScreenListenable => _fullScreen;
   Size? _desktopWindowSize;
   Size? _desktopDisplaySize;
   (Size, Size, AppOrientationPreference)? _lastDesktopResize;
-  bool get isFullScreen => _fullScreen;
+  bool get isFullScreen => _fullScreen.value;
   bool get allowsAutomaticRotation =>
       _orientationPreference == AppOrientationPreference.automatic;
   bool get keepsBrowsePortrait => switch (_orientationPreference) {
@@ -495,8 +493,7 @@ class WindowService {
     final operation = _orientationCommands.then((_) async {
       if (_orientationPreference == AppOrientationPreference.automatic ||
           _desktopWindowSize == null ||
-          _fullScreen ||
-          _fullScreenOrientation.value != null) {
+          isFullScreen) {
         _lastDesktopResize = null;
         return;
       }
@@ -524,14 +521,11 @@ class WindowService {
         return;
       }
       final request = (size, display, preference);
-      if (_lastDesktopResize == request ||
-          miniPlayer.value ||
-          _fullScreen ||
-          _fullScreenOrientation.value != null) {
+      if (_lastDesktopResize == request || miniPlayer.value || isFullScreen) {
         return;
       }
-      // Fit the swapped rectangle within the display. Fullscreen/maximized
-      // windows retain their native state; the host constrains their viewport.
+      // Fit the swapped rectangle within the display. Maximized browsing
+      // windows retain their native state and use the host's constrained viewport.
       final swapped = size.width == size.height
           ? (portrait
                 ? Size(size.width * 9 / 16, size.height)
@@ -686,7 +680,7 @@ class WindowService {
       if (_isViewAvailable?.call() == false) return;
       // The native fullscreen transition may replace the normal placement.
       // Capture before entering; fullscreen frames never become restore bounds.
-      if (value && !_fullScreen) await capturePlaybackGeometry();
+      if (value && !isFullScreen) await capturePlaybackGeometry();
       if (_closing || _isViewAvailable?.call() == false) {
         return;
       }
@@ -711,15 +705,7 @@ class WindowService {
             .timeout(const Duration(seconds: 2));
       }
     }
-    _fullScreen = value;
-    _fullScreenOrientation.value = value
-        ? switch (orientation) {
-            FullScreenOrientation.portrait => AppOrientationPreference.portrait,
-            FullScreenOrientation.landscape =>
-              AppOrientationPreference.landscape,
-            null => AppOrientationPreference.automatic,
-          }
-        : null;
+    _fullScreen.value = value;
   }
 }
 

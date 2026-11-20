@@ -773,6 +773,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
 
   void _updateFullScreenOrientation() {
     _syncDeviceOrientation();
+    if (widget.window.hasDesktopWindow) return;
     _scheduleAutoFullScreen();
     final request = _fullScreenRequest;
     if (request == null || !_fullScreen || !_active) {
@@ -792,7 +793,9 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     _shortcuts.cancel();
     final request = Object();
     final providerContainer = ProviderScope.containerOf(context);
-    _fullScreenOrientation = _preferredFullScreenOrientation;
+    _fullScreenOrientation = widget.window.hasDesktopWindow
+        ? null
+        : _preferredFullScreenOrientation;
     _fullScreenRequest = request;
     _landscapeRotationPending = false;
     // While portrait browsing is locked, only physical posture can confirm a
@@ -1792,41 +1795,6 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
     return overlay;
   }
 
-  Widget _buildVideoPicture(BuildContext context, AppSettings settings) {
-    final session = widget.session;
-    final picture = PlayerPicture(
-      controller: widget.picture,
-      child: VideoSurface(engine: session.engine),
-    );
-    if (!widget.fullScreen ||
-        Theme.of(context).platform != TargetPlatform.windows) {
-      return picture;
-    }
-    return PlaybackSnapshotBuilder(
-      snapshots: session.snapshots,
-      select: (snapshot) => snapshot.videoDimensions,
-      builder: (context, snapshot) => LayoutBuilder(
-        builder: (context, constraints) {
-          final dimensions = snapshot.videoDimensions;
-          final hasSideBars =
-              dimensions != null &&
-              dimensions.width > 0 &&
-              dimensions.height > 0 &&
-              constraints.maxWidth * dimensions.height >
-                  constraints.maxHeight * dimensions.width;
-          // Isolate the native texture pass when its fitted picture leaves
-          // side bars. The danmaku is then painted in the viewport's pass.
-          return ClipRect(
-            clipBehavior: settings.danmakuEnabled && hasSideBars
-                ? Clip.antiAliasWithSaveLayer
-                : Clip.none,
-            child: picture,
-          );
-        },
-      ),
-    );
-  }
-
   Widget _buildPlayer(BuildContext context) {
     final session = widget.session;
     return InputProtection(
@@ -1935,7 +1903,10 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                           context,
                           layers: [
                             if (widget.active)
-                              _buildVideoPicture(context, settings),
+                              PlayerPicture(
+                                controller: widget.picture,
+                                child: VideoSurface(engine: session.engine),
+                              ),
                             if (widget.active &&
                                 settings.danmakuEnabled &&
                                 !session.isResolving &&

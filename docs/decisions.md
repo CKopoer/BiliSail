@@ -661,6 +661,8 @@ media_kit 常规 seek 保留原生播放意图和缓存；只有取消已阻塞�
 
 **决定（2026-11-17）**：按用户要求，将现有“应用方向”设置扩展到所有平台，沿用 `AppSettings.orientation`、即时保存与回退机制，各平台缺省均为自动，保留有效旧选择。应用方向只约束普通页面；播放全屏始终按视频尺寸自动选横屏／竖屏，退出后恢复最新的应用设置。移动端继续通过系统方向接口执行；桌面普通窗口请求调整宽高，最大化／全屏等状态通过统一视口约束保持普通页面设置或视频方向，独立播放窗口继承同一应用选择并使用自己的窗口端口。自动模式按窗口尺寸／原有移动策略自适应，固定模式不替换页面、Navigator 或播放器。实现和验证边界见[应用方向与自适应旋转](validation/adaptive-window-rotation.md)。
 
+**修订（2026-11-20）**：桌面播放全屏使用原生窗口的完整视口，视频画面在视口内按比例适配。应用方向只约束普通页面，退出播放全屏后恢复。移动端按视频尺寸申请全屏方向。复现与回归见[桌面全屏播放器宽度](validation/adaptive-window-rotation.md#桌面全屏播放器宽度2026-11-20)。
+
 ## D98：Windows 恢复使用 Impeller
 
 **决定（2026-11-19）**：按用户要求移除 Windows runner 的 Skia 覆盖，使用 Flutter 3.50.0 在 Windows 上默认启用的 Impeller（OpenGLES，经 ANGLE）。配置作用于 runner 启动的 Flutter 引擎。此前的全屏弹幕对照数据来自 Flutter 3.47.6，保留在[历史对照记录](validation/windows-skia-playback-2026-11-01.md)。[Flutter 渲染器文档](https://docs.flutter.dev/perf/impeller#windows)
