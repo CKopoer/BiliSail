@@ -13,41 +13,67 @@ final class SearchFilterToolbar extends ConsumerWidget {
 
   final SearchState result;
 
+  bool _matchesSearch(BuildContext context, WidgetRef ref) {
+    if (!WorkspaceActivity.isActive(context)) return false;
+    final current = ref.read(searchControllerProvider);
+    return current.query == result.query && current.category == result.category;
+  }
+
+  Future<void> _pickOrder(BuildContext context, WidgetRef ref) async {
+    final order = await _showSearchSheet<SearchOrder>(
+      context,
+      (sheetContext) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const _SheetHeader(title: '排序方式', closeTooltip: '关闭排序'),
+          const Divider(),
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+              child: Column(
+                children: [
+                  for (final order in result.category.orders)
+                    ListTile(
+                      title: Text(order.label),
+                      selected: result.order == order,
+                      trailing: result.order == order
+                          ? const Icon(Icons.check_rounded)
+                          : null,
+                      onTap: () {
+                        if (ModalRoute.of(sheetContext)?.isCurrent == true) {
+                          Navigator.of(sheetContext).pop(order);
+                        }
+                      },
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (order == null || !context.mounted || !_matchesSearch(context, ref)) {
+      return;
+    }
+    await ref.read(searchControllerProvider.notifier).selectOrder(order);
+  }
+
   Future<void> _edit(BuildContext context, WidgetRef ref, bool wide) async {
     final selection = wide
         ? await showAppDialog<_SearchFilterSelection>(
             context: context,
             builder: (context) => Dialog(
               constraints: const BoxConstraints(maxWidth: 680),
-              child: _SearchFilterEditor(result: result, wide: wide),
+              child: _SearchFilterEditor(result: result, wide: true),
             ),
           )
-        : await showModalBottomSheet<_SearchFilterSelection>(
-            context: context,
-            useRootNavigator: true,
-            useSafeArea: true,
-            isScrollControlled: true,
-            showDragHandle: true,
-            constraints: const BoxConstraints(maxWidth: 640),
-            builder: (context) => LayoutBuilder(
-              builder: (context, constraints) => ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: constraints.maxHeight * .9,
-                ),
-                child: SafeArea(
-                  top: false,
-                  child: _SearchFilterEditor(result: result, wide: wide),
-                ),
-              ),
-            ),
+        : await _showSearchSheet<_SearchFilterSelection>(
+            context,
+            (_) => _SearchFilterEditor(result: result, wide: false),
           );
     if (selection == null ||
         !context.mounted ||
-        !WorkspaceActivity.isActive(context)) {
-      return;
-    }
-    final current = ref.read(searchControllerProvider);
-    if (current.query != result.query || current.category != result.category) {
+        !_matchesSearch(context, ref)) {
       return;
     }
     await ref
@@ -64,6 +90,19 @@ final class SearchFilterToolbar extends ConsumerWidget {
         );
   }
 
+  String _filterLabel(BuildContext context, SearchFilterField field) =>
+      switch (field) {
+        SearchFilterField.duration => result.duration.label,
+        SearchFilterField.videoZone => result.videoZone.label,
+        SearchFilterField.articleZone => result.articleZone.label,
+        SearchFilterField.userType => result.userType.label,
+        SearchFilterField.publicationPeriod => _publicationLabel(
+          context,
+          result.publicationPeriod,
+          result.publicationRange,
+        ),
+      };
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final orders = result.category.orders;
@@ -72,96 +111,168 @@ final class SearchFilterToolbar extends ConsumerWidget {
     }
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final details = [
-      if (result.duration != SearchDuration.any) result.duration.label,
-      if (result.videoZone != SearchVideoZone.any) result.videoZone.label,
-      if (result.articleZone != SearchArticleZone.any) result.articleZone.label,
-      if (result.publicationPeriod != SearchPublicationPeriod.any)
-        _publicationLabel(
-          context,
-          result.publicationPeriod,
-          result.publicationRange,
-        ),
-      if (result.userType != SearchUserType.any) result.userType.label,
-    ];
-    final activeCount = details.length + (result.order == orders.first ? 0 : 1);
-    final activeDetails = details.join(' · ');
-    final detailStyle = theme.textTheme.bodySmall?.copyWith(
-      color: colors.onSurfaceVariant,
-    );
+    final filters = result.activeFilters;
+    final count = filters.length + (result.order == orders.first ? 0 : 1);
+    final controller = ref.read(searchControllerProvider.notifier);
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= 760;
         final inset = constraints.maxWidth < 600 ? 12.0 : 28.0;
         return Padding(
-          padding: EdgeInsets.fromLTRB(inset, 6, inset, 4),
-          child: Material(
-            color: colors.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(10),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+          padding: EdgeInsets.fromLTRB(inset, 4, inset, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                spacing: 8,
                 children: [
-                  Row(
-                    spacing: 8,
-                    children: [
-                      Expanded(
-                        child: wide
-                            ? _SearchOrderStrip(
-                                key: ValueKey(result.category),
-                                orders: orders,
-                                selected: result.order,
-                                onSelected: ref
-                                    .read(searchControllerProvider.notifier)
-                                    .selectOrder,
-                              )
-                            : Padding(
-                                padding: const EdgeInsets.only(left: 4),
-                                child: Text(
-                                  [result.order.label, ...details].join(' · '),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: detailStyle,
+                  Expanded(
+                    child: wide
+                        ? _SearchOrderStrip(
+                            key: ValueKey(result.category),
+                            orders: orders,
+                            selected: result.order,
+                            onSelected: controller.selectOrder,
+                          )
+                        : Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              key: const ValueKey('search-quick-order'),
+                              onPressed: () => _pickOrder(context, ref),
+                              style: TextButton.styleFrom(
+                                foregroundColor: colors.onSurface,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
                                 ),
                               ),
-                      ),
-                      TextButton.icon(
-                        key: const ValueKey('search-more-filters'),
-                        onPressed: () => _edit(context, ref, wide),
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          minimumSize: const Size(48, 48),
-                          visualDensity: VisualDensity.standard,
-                          foregroundColor: activeCount == 0
-                              ? colors.onSurface
-                              : colors.primary,
-                        ),
-                        icon: const Icon(Icons.tune_rounded, size: 20),
-                        label: Text(
-                          activeCount == 0 ? '筛选' : '筛选 ($activeCount)',
-                        ),
-                      ),
-                    ],
+                              iconAlignment: IconAlignment.end,
+                              icon: const Icon(
+                                Icons.expand_more_rounded,
+                                size: 18,
+                              ),
+                              label: Text(
+                                result.order.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
                   ),
-                  if (wide && details.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-                      child: Text(
-                        activeDetails,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: detailStyle,
-                      ),
+                  TextButton.icon(
+                    key: const ValueKey('search-more-filters'),
+                    onPressed: () => _edit(context, ref, wide),
+                    style: TextButton.styleFrom(
+                      backgroundColor: colors.surfaceContainerLow,
+                      foregroundColor: colors.onSurface,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
                     ),
+                    icon: const Icon(Icons.tune_rounded, size: 18),
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      spacing: 6,
+                      children: [
+                        const Text('筛选'),
+                        if (count > 0)
+                          Badge(
+                            backgroundColor: colors.primaryContainer,
+                            textColor: colors.onPrimaryContainer,
+                            label: Text('$count'),
+                          ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
-            ),
+              if (filters.isNotEmpty)
+                Wrap(
+                  spacing: 6,
+                  children: [
+                    for (final field in filters)
+                      _ActiveFilterChip(
+                        label: _filterLabel(context, field),
+                        onRemove: () => controller.removeFilter(field),
+                      ),
+                  ],
+                ),
+              const Divider(),
+            ],
           ),
         );
       },
     );
   }
+}
+
+Future<T?> _showSearchSheet<T>(BuildContext context, WidgetBuilder builder) =>
+    showModalBottomSheet<T>(
+      context: context,
+      useRootNavigator: true,
+      useSafeArea: true,
+      isScrollControlled: true,
+      showDragHandle: true,
+      constraints: const BoxConstraints(maxWidth: 640),
+      builder: (context) => LayoutBuilder(
+        builder: (context, constraints) => ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: constraints.maxHeight * .9),
+          child: SafeArea(top: false, child: builder(context)),
+        ),
+      ),
+    );
+
+final class _ActiveFilterChip extends StatelessWidget {
+  const _ActiveFilterChip({required this.label, required this.onRemove});
+
+  final String label;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Tooltip(
+      message: '移除筛选：$label',
+      child: TextButton.icon(
+        onPressed: onRemove,
+        iconAlignment: IconAlignment.end,
+        icon: const Icon(Icons.close_rounded, size: 14),
+        label: Text(label),
+        style: TextButton.styleFrom(
+          foregroundColor: theme.colorScheme.onPrimaryContainer,
+          backgroundColor: theme.colorScheme.primaryContainer,
+          textStyle: theme.textTheme.labelMedium,
+          minimumSize: const Size(0, 28),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        ),
+      ),
+    );
+  }
+}
+
+final class _SheetHeader extends StatelessWidget {
+  const _SheetHeader({required this.title, required this.closeTooltip});
+
+  final String title, closeTooltip;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(20, 4, 8, 4),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+        ),
+        IconButton(
+          tooltip: closeTooltip,
+          onPressed: () {
+            if (ModalRoute.of(context)?.isCurrent == true) {
+              Navigator.of(context).pop();
+            }
+          },
+          icon: const Icon(Icons.close_rounded),
+        ),
+      ],
+    ),
+  );
 }
 
 final class _SearchOrderStrip extends StatelessWidget {
@@ -178,7 +289,6 @@ final class _SearchOrderStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     return ScrollConfiguration(
       behavior: const SmoothScrollBehavior(horizontalMouseWheel: true).copyWith(
         dragDevices: {
@@ -194,21 +304,10 @@ final class _SearchOrderStrip extends StatelessWidget {
           spacing: 4,
           children: [
             for (final order in orders)
-              Semantics(
+              _FilterOption(
+                label: order.label,
                 selected: order == selected,
-                child: TextButton(
-                  onPressed: () => onSelected(order),
-                  style: TextButton.styleFrom(
-                    foregroundColor: order == selected
-                        ? colors.onPrimaryContainer
-                        : colors.onSurfaceVariant,
-                    backgroundColor: order == selected
-                        ? colors.primaryContainer
-                        : null,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                  ),
-                  child: Text(order.label),
-                ),
+                onPressed: () => onSelected(order),
               ),
           ],
         ),
@@ -315,24 +414,11 @@ final class _SearchFilterEditorState extends State<_SearchFilterEditor> {
   @override
   Widget build(BuildContext context) {
     final category = widget.result.category;
-    final theme = Theme.of(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 8, 4),
-          child: Row(
-            children: [
-              Expanded(child: Text('搜索筛选', style: theme.textTheme.titleMedium)),
-              IconButton(
-                tooltip: '关闭筛选',
-                onPressed: _dismiss,
-                icon: const Icon(Icons.close_rounded),
-              ),
-            ],
-          ),
-        ),
+        const _SheetHeader(title: '搜索筛选', closeTooltip: '关闭筛选'),
         const Divider(),
         Flexible(
           child: SingleChildScrollView(
@@ -340,7 +426,7 @@ final class _SearchFilterEditorState extends State<_SearchFilterEditor> {
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              spacing: 16,
+              spacing: 10,
               children: [
                 _FilterGroup(
                   title: '排序',
@@ -431,28 +517,84 @@ final class _FilterGroup<T> extends StatelessWidget {
   final ValueChanged<T> onSelected;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    spacing: 6,
-    children: [
-      Semantics(
-        header: true,
-        child: Text(title, style: Theme.of(context).textTheme.titleSmall),
+  Widget build(BuildContext context) {
+    final heading = Semantics(
+      header: true,
+      child: Text(title, style: Theme.of(context).textTheme.titleSmall),
+    );
+    final options = Wrap(
+      spacing: 4,
+      children: [
+        for (final choice in choices)
+          _FilterOption(
+            label: label(choice),
+            selected: choice == selected,
+            onPressed: () => onSelected(choice),
+          ),
+      ],
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final labelWidth = MediaQuery.textScalerOf(context).scale(14) * 5;
+        if (constraints.maxWidth >= 600 &&
+            labelWidth < constraints.maxWidth / 4) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: labelWidth,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: heading,
+                ),
+              ),
+              Expanded(child: options),
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [heading, options],
+        );
+      },
+    );
+  }
+}
+
+final class _FilterOption extends StatelessWidget {
+  const _FilterOption({
+    required this.label,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Semantics(
+      selected: selected,
+      child: TextButton(
+        onPressed: onPressed,
+        style: TextButton.styleFrom(
+          foregroundColor: selected
+              ? colors.onPrimaryContainer
+              : colors.onSurface,
+          backgroundColor: selected ? colors.primaryContainer : null,
+          minimumSize: const Size(0, 32),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          textStyle: theme.textTheme.labelLarge?.copyWith(
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+          ),
+        ),
+        child: Text(label),
       ),
-      Wrap(
-        spacing: 8,
-        runSpacing: 4,
-        children: [
-          for (final choice in choices)
-            ChoiceChip(
-              label: Text(label(choice)),
-              selected: choice == selected,
-              onSelected: (_) => onSelected(choice),
-            ),
-        ],
-      ),
-    ],
-  );
+    );
+  }
 }
 
 String _publicationLabel(

@@ -12,6 +12,14 @@ final searchRepositoryProvider = Provider<SearchRepository>(
 final searchControllerProvider =
     NotifierProvider<SearchController, SearchState>(SearchController.new);
 
+enum SearchFilterField {
+  duration,
+  publicationPeriod,
+  videoZone,
+  articleZone,
+  userType,
+}
+
 final class SearchState {
   const SearchState({
     this.query = '',
@@ -44,12 +52,16 @@ final class SearchState {
   final bool hasMore, loadingMore;
   final Object? pageError;
 
-  bool get hasFilters =>
-      duration != SearchDuration.any ||
-      userType != SearchUserType.any ||
-      videoZone != SearchVideoZone.any ||
-      articleZone != SearchArticleZone.any ||
-      publicationPeriod != SearchPublicationPeriod.any;
+  List<SearchFilterField> get activeFilters => [
+    if (duration != SearchDuration.any) SearchFilterField.duration,
+    if (publicationPeriod != SearchPublicationPeriod.any)
+      SearchFilterField.publicationPeriod,
+    if (videoZone != SearchVideoZone.any) SearchFilterField.videoZone,
+    if (articleZone != SearchArticleZone.any) SearchFilterField.articleZone,
+    if (userType != SearchUserType.any) SearchFilterField.userType,
+  ];
+
+  bool get hasFilters => activeFilters.isNotEmpty;
 
   SearchState copyWith({
     String? query,
@@ -129,6 +141,27 @@ final class SearchController extends Notifier<SearchState> {
       return Future.value();
     }
     return _reload(state.copyWith(order: order));
+  }
+
+  Future<void> removeFilter(SearchFilterField field) {
+    if (!state.activeFilters.contains(field)) return Future.value();
+    return _reload(switch (field) {
+      SearchFilterField.duration => state.copyWith(
+        duration: SearchDuration.any,
+      ),
+      SearchFilterField.publicationPeriod => state.copyWith(
+        publicationPeriod: SearchPublicationPeriod.any,
+      ),
+      SearchFilterField.videoZone => state.copyWith(
+        videoZone: SearchVideoZone.any,
+      ),
+      SearchFilterField.articleZone => state.copyWith(
+        articleZone: SearchArticleZone.any,
+      ),
+      SearchFilterField.userType => state.copyWith(
+        userType: SearchUserType.any,
+      ),
+    });
   }
 
   Future<void> applyFilters({

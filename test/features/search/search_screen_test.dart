@@ -90,6 +90,10 @@ void main() {
       await tester.tap(find.text('应用筛选'));
       await tester.pumpAndSettle();
       expect(repository.calls.last.articleZone, articleZone);
+      await tester.tap(find.byTooltip('移除筛选：${articleZone.label}'));
+      await tester.pumpAndSettle();
+      expect(repository.calls.last.articleZone, SearchArticleZone.any);
+      expect(repository.calls.last.order, SearchOrder.comments);
       await tester.tap(find.byKey(const ValueKey('search-category-user')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('粉丝数由低到高'));
@@ -102,6 +106,10 @@ void main() {
       await tester.tap(find.text('应用筛选'));
       await tester.pumpAndSettle();
       expect(repository.calls.last.userType, type);
+      await tester.tap(find.byTooltip('移除筛选：${type.label}'));
+      await tester.pumpAndSettle();
+      expect(repository.calls.last.userType, SearchUserType.any);
+      expect(repository.calls.last.order, SearchOrder.fansAscending);
       await tester.tap(find.byKey(const ValueKey('search-category-film')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('search-more-filters')), findsNothing);
@@ -308,7 +316,8 @@ void main() {
     expect(applied.videoZone, lastZone);
     expect(applied.publicationRange, isNotNull);
     expect(applied.page, 1);
-    expect(find.text('筛选 (4)'), findsOneWidget);
+    final count = find.descendant(of: open, matching: find.text('4'));
+    expect(count, findsOneWidget);
 
     await tester.tap(open);
     await tester.pumpAndSettle();
@@ -316,14 +325,43 @@ void main() {
     await tester.tap(find.byTooltip('关闭筛选'));
     await tester.pumpAndSettle();
     expect(repository.calls.length, callsBefore + 1);
-    expect(find.text('筛选 (4)'), findsOneWidget);
+    expect(count, findsOneWidget);
+
+    final quickOrder = find.byKey(const ValueKey('search-quick-order'));
+    await tester.tap(quickOrder);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('关闭排序'));
+    await tester.pumpAndSettle();
+    expect(repository.calls.length, callsBefore + 1);
+    await tester.tap(quickOrder);
+    await tester.pumpAndSettle();
+    final latest = find.widgetWithText(ListTile, SearchOrder.latest.label);
+    await tester.ensureVisible(latest);
+    await tester.tap(latest);
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(repository.calls.length, callsBefore + 2);
+    expect(repository.calls.last.order, SearchOrder.latest);
+    expect(repository.calls.last.duration, applied.duration);
+    expect(repository.calls.last.videoZone, applied.videoZone);
+    expect(repository.calls.last.publicationRange, applied.publicationRange);
+
+    await tester.tap(find.byTooltip('移除筛选：${applied.duration.label}'));
+    await tester.tap(find.byTooltip('移除筛选：${lastZone.label}'));
+    await tester.pumpAndSettle();
+    expect(repository.calls.length, callsBefore + 4);
+    expect(repository.calls.last.order, SearchOrder.latest);
+    expect(repository.calls.last.duration, SearchDuration.any);
+    expect(repository.calls.last.videoZone, SearchVideoZone.any);
+    expect(repository.calls.last.publicationRange, applied.publicationRange);
+    expect(repository.calls.last.page, 1);
 
     await tester.tap(open);
     await tester.pumpAndSettle();
     await tester.tap(find.text('重置'));
     await tester.tap(apply);
     await tester.pumpAndSettle();
-    expect(repository.calls.length, callsBefore + 2);
+    expect(repository.calls.length, callsBefore + 5);
     expect(repository.calls.last.order, SearchOrder.relevance);
     expect(repository.calls.last.duration, SearchDuration.any);
     expect(repository.calls.last.videoZone, SearchVideoZone.any);
@@ -367,7 +405,12 @@ void main() {
     final range = repository.calls.last.publicationRange;
     expect(range?.start, DateTime(2025, 1, 10));
     expect(range?.end, DateTime(2025, 2, 15));
-    expect(find.text('筛选 (1)'), findsOneWidget);
+    expect(find.descendant(of: open, matching: find.text('1')), findsOneWidget);
+    final dateTag = find.byTooltip(RegExp('移除筛选'));
+    await tester.tap(dateTag);
+    await tester.pumpAndSettle();
+    expect(repository.calls.last.publicationRange, isNull);
+    expect(dateTag, findsNothing);
     expect(tester.takeException(), isNull);
   });
 
