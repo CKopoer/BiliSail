@@ -72,6 +72,7 @@ final class WorkspaceTabs {
   String _activeId = 'home';
   int _nextId = 1;
   final List<String> _backHistory = [];
+  final Set<String> _unopenedTabs = {};
   bool _dualMode = false;
   bool _singleMode = false;
   String _browseId = 'home';
@@ -263,6 +264,8 @@ final class WorkspaceTabs {
   String get activeId => _activeId;
   int get activeIndex => _tabs.indexWhere((tab) => tab.id == _activeId);
   WorkspaceTab get active => _tabs[activeIndex];
+
+  bool shouldMount(String id) => !_unopenedTabs.contains(id);
   bool get canGoBack {
     if (_singleMode && active.pinned) return false;
     if (_dualMode) return active.isPlayback || canGoBackBrowsing;
@@ -304,6 +307,7 @@ final class WorkspaceTabs {
   }
 
   void _activate(String id, {bool traversingPlayback = false}) {
+    _unopenedTabs.remove(id);
     if (id != _activeId) {
       if (!traversingPlayback) _playbackTraversal = null;
       _backHistory.add(_activeId);
@@ -377,6 +381,19 @@ final class WorkspaceTabs {
     _tabs.add(tab);
     _activate(tab.id);
     return tab;
+  }
+
+  /// Keep the current selection and its visit history until this link is used.
+  bool addBackgroundTab(Uri route) {
+    if (_dualMode || _singleMode || _tabs.length >= maximumTabs) return false;
+    final parameters = {...route.queryParameters}..remove('tab');
+    final location = route.replace(queryParameters: parameters);
+    final tab = WorkspaceTab(id: 'tab-$_nextId', location: location);
+    if (tab.isRoot) return false;
+    _nextId++;
+    _tabs.add(tab);
+    _unopenedTabs.add(tab.id);
+    return true;
   }
 
   /// Playback advancement changes a cached page without recording a visit or
@@ -539,6 +556,7 @@ final class WorkspaceTabs {
     if (index < 0 || _tabs[index].pinned) return false;
     final wasActive = _activeId == id;
     _tabs.removeAt(index);
+    _unopenedTabs.remove(id);
     _playbackVisits.remove(id);
     _playbackTraversal?.remove(id);
     _backHistory.removeWhere((previous) => previous == id);
@@ -549,6 +567,7 @@ final class WorkspaceTabs {
     if (id == _browseId) _browseId = 'home';
     if (wasActive) {
       _activeId = _dualMode ? _browseId : _tabs[index > 0 ? index - 1 : 0].id;
+      _unopenedTabs.remove(_activeId);
       if (active.isPlayback) _rememberPlaybackVisit();
     }
     _trimHistory();

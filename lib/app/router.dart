@@ -66,6 +66,7 @@ import '../features/live/application/live_controller.dart';
 import '../features/live/presentation/live_screen.dart';
 import '../features/live/domain/live_room.dart';
 import '../shared/ui/state_view.dart';
+import '../shared/ui/workspace_link.dart';
 import 'shell.dart';
 import 'workspace_tabs.dart';
 import 'workspace_root_page.dart';
@@ -461,7 +462,7 @@ final class _WorkspacePage extends ConsumerWidget {
       context: context,
       builder: (_) => const AccountDialog(),
     ),
-    onOpenUser: (user) => context.go('/user/${user.value}'),
+    onOpenUser: (user) => context.openWorkspaceLink('/user/${user.value}'),
     onOpenTarget: (target) {
       final location = messageWorkspaceLocation(target);
       if (location != null) {
@@ -469,7 +470,7 @@ final class _WorkspacePage extends ConsumerWidget {
         final hasPosition =
             uri.queryParameters.containsKey('comment_root_id') ||
             uri.queryParameters.containsKey('start_progress');
-        context.go(
+        context.openWorkspaceLink(
           hasPosition
               ? uri
                     .replace(
@@ -482,7 +483,7 @@ final class _WorkspacePage extends ConsumerWidget {
                     .toString()
               : location,
         );
-      } else {
+      } else if (!WorkspaceLinkScope.openingInBackground) {
         ProviderScope.containerOf(
           context,
           listen: false,
@@ -719,23 +720,24 @@ final class _WorkspacePage extends ConsumerWidget {
                   return DynamicDetailScreen(
                     id: uri.pathSegments.last,
                     byResourceId: uri.pathSegments.length == 3,
-                    onOpenUser: (user) => context.go('/user/${user.value}'),
+                    onOpenUser: (user) =>
+                        context.openWorkspaceLink('/user/${user.value}'),
                     onOpenVideo: (video) =>
-                        context.go('/video/${video.id.value}'),
+                        context.openWorkspaceLink('/video/${video.id.value}'),
                     onOpenLink: (target) async {
                       final location = messageWorkspaceLocation(target);
                       if (location != null) {
-                        context.go(location);
+                        context.openWorkspaceLink(location);
                         return;
                       }
                       final topic = dynamicTopicId(target);
                       if (topic != null) {
-                        context.go('/topic/$topic');
+                        context.openWorkspaceLink('/topic/$topic');
                         return;
                       }
                       final query = dynamicSearchQuery(target);
                       if (query != null) {
-                        context.go(
+                        context.openWorkspaceLink(
                           Uri(
                             path: '/search',
                             queryParameters: {'q': query},
@@ -743,6 +745,7 @@ final class _WorkspacePage extends ConsumerWidget {
                         );
                         return;
                       }
+                      if (WorkspaceLinkScope.openingInBackground) return;
                       var opened = false;
                       try {
                         opened = await ref.read(webLinkOpenerProvider)(target);
@@ -763,13 +766,14 @@ final class _WorkspacePage extends ConsumerWidget {
                   return DynamicTopicScreen(
                     key: PageStorageKey('topic-${tab.id}'),
                     id: uri.pathSegments.last,
-                    onOpenUser: (user) => context.go('/user/${user.value}'),
+                    onOpenUser: (user) =>
+                        context.openWorkspaceLink('/user/${user.value}'),
                     onOpenVideo: (video) =>
-                        context.go('/video/${video.id.value}'),
+                        context.openWorkspaceLink('/video/${video.id.value}'),
                     onOpenLink: (target) async {
                       final query = dynamicSearchQuery(target);
                       if (query != null) {
-                        context.go(
+                        context.openWorkspaceLink(
                           Uri(
                             path: '/search',
                             queryParameters: {'q': query},
@@ -782,21 +786,22 @@ final class _WorkspacePage extends ConsumerWidget {
                           room = dynamicLiveRoom(target);
                       final pgc = dynamicPgcRoute(target);
                       if (topic != null) {
-                        context.go('/topic/$topic');
+                        context.openWorkspaceLink('/topic/$topic');
                         return;
                       }
                       if (video != null) {
-                        context.go('/video/${video.value}');
+                        context.openWorkspaceLink('/video/${video.value}');
                         return;
                       }
                       if (room != null) {
-                        context.go('/live/${room.value}');
+                        context.openWorkspaceLink('/live/${room.value}');
                         return;
                       }
                       if (pgc != null) {
-                        context.go(pgc);
+                        context.openWorkspaceLink(pgc);
                         return;
                       }
+                      if (WorkspaceLinkScope.openingInBackground) return;
                       var opened = false;
                       try {
                         opened = await ref.read(webLinkOpenerProvider)(target);
@@ -859,8 +864,9 @@ final class _WorkspacePage extends ConsumerWidget {
                         ? null
                         : (season, selected) =>
                               onDownloadSeason?.call(context, season, selected),
-                    onOpenSeason: (season) =>
-                        context.go('/pgc/season/${season.seasonId}'),
+                    onOpenSeason: (season) => context.openWorkspaceLink(
+                      '/pgc/season/${season.seasonId}',
+                    ),
                     onEpisodeChanged: (episode) {
                       final target = uri.replace(
                         path: uri.pathSegments[1] == 'episode'
@@ -894,7 +900,8 @@ final class _WorkspacePage extends ConsumerWidget {
                           livePlayerBuilder?.call(context, room) ??
                           const StateView.empty(message: '直播播放服务未配置'),
                     ),
-                    onOpenUser: (user) => context.go('/user/${user.value}'),
+                    onOpenUser: (user) =>
+                        context.openWorkspaceLink('/user/${user.value}'),
                   );
                 }
                 if (tab.isProfile) {
@@ -914,21 +921,26 @@ final class _WorkspacePage extends ConsumerWidget {
                                   .firstOrNull ??
                               ProfileSection.videos,
                           onOpenUser: (user) =>
-                              context.go('/user/${user.value}'),
-                          onOpenVideo: (video) =>
-                              context.go('/video/${video.id.value}'),
-                          onOpenPlaylist: (video, queueId) => context.go(
-                            Uri(
-                              path: '/video/${video.id.value}',
-                              queryParameters: {'queue': queueId},
-                            ).toString(),
+                              context.openWorkspaceLink('/user/${user.value}'),
+                          onOpenVideo: (video) => context.openWorkspaceLink(
+                            '/video/${video.id.value}',
                           ),
+                          onOpenPlaylist: (video, queueId) =>
+                              context.openWorkspaceLink(
+                                Uri(
+                                  path: '/video/${video.id.value}',
+                                  queryParameters: {'queue': queueId},
+                                ).toString(),
+                              ),
                           onOpenLiveRoom: (room) =>
-                              context.go('/live/${room.value}'),
-                          onOpenSeason: (id) => context.go('/pgc/season/$id'),
-                          onOpenEpisode: (id) => context.go('/pgc/episode/$id'),
-                          onOpenTopic: (id) => context.go('/topic/$id'),
-                          onSearchQuery: (query) => context.go(
+                              context.openWorkspaceLink('/live/${room.value}'),
+                          onOpenSeason: (id) =>
+                              context.openWorkspaceLink('/pgc/season/$id'),
+                          onOpenEpisode: (id) =>
+                              context.openWorkspaceLink('/pgc/episode/$id'),
+                          onOpenTopic: (id) =>
+                              context.openWorkspaceLink('/topic/$id'),
+                          onSearchQuery: (query) => context.openWorkspaceLink(
                             Uri(
                               path: '/search',
                               queryParameters: {'q': query},
@@ -987,7 +999,7 @@ final class _WorkspacePage extends ConsumerWidget {
                             ).toString(),
                           ),
                           onOpenUser: (user) =>
-                              context.go('/user/${user.value}'),
+                              context.openWorkspaceLink('/user/${user.value}'),
                           onLogin: observeAccount
                               ? () => showAppDialog<void>(
                                   context: context,
@@ -1002,8 +1014,9 @@ final class _WorkspacePage extends ConsumerWidget {
                                   : {'cid': cid},
                             ).toString(),
                           ),
-                          onOpenVideo: (video) =>
-                              context.go('/video/${video.id.value}'),
+                          onOpenVideo: (video) => context.openWorkspaceLink(
+                            '/video/${video.id.value}',
+                          ),
                           onCloseQueue: (part) {
                             final target = uri.replace(
                               queryParameters: {

@@ -6,6 +6,7 @@ import '../../../shared/ui/card_menu.dart';
 import '../../../shared/ui/highlighted_text.dart';
 import '../../../shared/ui/live_card_cover.dart';
 import '../../../shared/ui/scroll_aware_hover_region.dart';
+import '../../../shared/ui/workspace_link.dart';
 import '../../live/domain/live_room.dart';
 import '../domain/library_repository.dart';
 
@@ -104,6 +105,10 @@ class _HistoryContentCardState extends State<HistoryContentCard> {
                 setState(() => _hovered = false);
                 widget.onOpen();
               },
+              onTertiaryTapUp: WorkspaceLinkScope.middleClick(
+                context,
+                widget.onOpen,
+              ),
               onLongPress: _showMenu,
               onFocusChange: (focused) => setState(() => _focused = focused),
               hoverColor: Colors.transparent,
@@ -190,6 +195,11 @@ class _HistoryContentCardState extends State<HistoryContentCard> {
                                     ),
                                     child: InkWell(
                                       onTap: widget.onOpenAuthor,
+                                      onTertiaryTapUp:
+                                          WorkspaceLinkScope.middleClick(
+                                            context,
+                                            widget.onOpenAuthor,
+                                          ),
                                       hoverColor: Colors.transparent,
                                       hoverDuration: Duration.zero,
                                       child: Row(

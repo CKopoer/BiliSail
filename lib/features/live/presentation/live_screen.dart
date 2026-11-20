@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/presentation/workspace_activity.dart';
 import '../../../domain/user.dart';
 import '../../../shared/ui/network_avatar.dart';
+import '../../../shared/ui/workspace_link.dart';
 import '../../../shared/ui/playback_sidebar_toggle.dart';
 import '../../../shared/ui/playback_info_tabs.dart';
 import '../../../shared/ui/responsive_layout_scope.dart';
@@ -503,6 +504,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
               InkWell(
                 key: const ValueKey('live-anchor-avatar'),
                 onTap: open,
+                onTertiaryTapUp: WorkspaceLinkScope.middleClick(context, open),
                 borderRadius: BorderRadius.circular(24),
                 child: NetworkAvatar(
                   url: room.anchorAvatarUrl,
@@ -515,6 +517,10 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
                 child: InkWell(
                   key: const ValueKey('live-anchor-name'),
                   onTap: open,
+                  onTertiaryTapUp: WorkspaceLinkScope.middleClick(
+                    context,
+                    open,
+                  ),
                   child: Text(
                     room.anchorName,
                     maxLines: 1,

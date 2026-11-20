@@ -2,6 +2,48 @@ import 'package:bilisail/app/workspace_tabs.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('background openings create independent tabs without visiting them', () {
+    final workspace = WorkspaceTabs();
+    workspace.acceptRoute(Uri.parse('/search?q=cat'));
+    final search = workspace.active;
+    final link = Uri.parse('/video/A?cid=2&queue=list&tab=${search.id}');
+
+    expect(workspace.addBackgroundTab(link), isTrue);
+    final first = workspace.tabs.last;
+    expect(workspace.addBackgroundTab(link), isTrue);
+    final second = workspace.tabs.last;
+    expect(first.id, isNot(second.id));
+    expect(first.location, Uri.parse('/video/A?cid=2&queue=list'));
+    expect(second.location, first.location);
+    expect(workspace.active, same(search));
+    expect(workspace.backDestination()?.id, 'home');
+    expect(workspace.latestPlayback, isNull);
+    expect(workspace.shouldMount(second.id), isFalse);
+
+    workspace.select(second.id);
+    expect(workspace.shouldMount(second.id), isTrue);
+    expect(workspace.latestPlayback, same(second));
+    expect(workspace.goBack(), isTrue);
+    expect(workspace.active, same(search));
+  });
+
+  test('background openings respect mode and capacity', () {
+    final workspace = WorkspaceTabs();
+    final link = Uri.parse('/user/42');
+    workspace.setDualMode(true);
+    expect(workspace.addBackgroundTab(link), isFalse);
+    workspace.setDualMode(false);
+    workspace.setSingleMode(true);
+    expect(workspace.addBackgroundTab(link), isFalse);
+    workspace.setSingleMode(false);
+    for (var i = 1; i < WorkspaceTabs.maximumTabs; i++) {
+      expect(workspace.addBackgroundTab(link), isTrue);
+    }
+    expect(workspace.addBackgroundTab(link), isFalse);
+    expect(workspace.tabs, hasLength(WorkspaceTabs.maximumTabs));
+    expect(workspace.activeId, 'home');
+  });
+
   test(
     'media history keys keep a dual slot open and discard old forward visits',
     () {

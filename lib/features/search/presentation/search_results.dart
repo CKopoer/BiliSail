@@ -1,9 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/platform/external_links.dart';
-import '../../../domain/user.dart';
 import '../../../shared/ui/app_cover_image.dart';
 import '../../../shared/ui/live_card_cover.dart';
 import '../../../shared/ui/scroll_aware_hover_region.dart';
@@ -12,6 +10,7 @@ import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/video_card.dart';
 import '../../../shared/ui/video_grid.dart';
 import '../../../shared/ui/highlighted_text.dart';
+import '../../../shared/ui/workspace_link.dart';
 import '../domain/search_result.dart';
 
 final class SearchResults extends ConsumerWidget {
@@ -101,8 +100,8 @@ final class SearchResults extends ConsumerWidget {
             items: videos.map((item) => item.video).toList(growable: false),
             showUpBadge: true,
             highlightQuery: query,
-            onOpen: (id) => context.go('/video/${id.value}'),
-            onOpenUser: (id) => context.go('/user/${id.value}'),
+            onOpen: (id) => context.openWorkspaceLink('/video/${id.value}'),
+            onOpenUser: (id) => context.openWorkspaceLink('/user/${id.value}'),
           ),
         ],
       ],
@@ -227,7 +226,7 @@ final class _UserCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    void open() => context.go('/user/${user.id.value}');
+    void open() => context.openWorkspaceLink('/user/${user.id.value}');
     return DecoratedBox(
       decoration: BoxDecoration(
         color: featured
@@ -250,6 +249,10 @@ final class _UserCard extends StatelessWidget {
               children: [
                 InkWell(
                   onTap: open,
+                  onTertiaryTapUp: WorkspaceLinkScope.middleClick(
+                    context,
+                    open,
+                  ),
                   customBorder: const CircleBorder(),
                   child: NetworkAvatar(
                     url: user.avatarUrl,
@@ -269,6 +272,10 @@ final class _UserCard extends StatelessWidget {
                         children: [
                           InkWell(
                             onTap: open,
+                            onTertiaryTapUp: WorkspaceLinkScope.middleClick(
+                              context,
+                              open,
+                            ),
                             child: HighlightedText(
                               user.name,
                               query: query,
@@ -311,8 +318,9 @@ final class _UserCard extends StatelessWidget {
                 items: user.videos,
                 showUpBadge: true,
                 highlightQuery: query,
-                onOpen: (id) => context.go('/video/${id.value}'),
-                onOpenUser: (id) => context.go('/user/${id.value}'),
+                onOpen: (id) => context.openWorkspaceLink('/video/${id.value}'),
+                onOpenUser: (id) =>
+                    context.openWorkspaceLink('/user/${id.value}'),
               ),
               const SizedBox(height: 12),
               Center(
@@ -337,7 +345,8 @@ final class _MediaCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return _TapCard(
-      onTap: () => context.go('/pgc/season/${item.id.value}'),
+      onTap: () => context.openWorkspaceLink('/pgc/season/${item.id.value}'),
+      opensWorkspaceLink: true,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -417,53 +426,67 @@ final class _LiveCardState extends State<_LiveCard> {
   bool _hovered = false;
 
   @override
-  Widget build(BuildContext context) => ScrollAwareHoverRegion(
-    onHover: (hovered) => setState(() => _hovered = hovered),
-    child: _TapCard(
-      onTap: () {
-        setState(() => _hovered = false);
-        context.go('/live/${widget.item.id.value}');
-      },
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AspectRatio(
-            aspectRatio: 16 / 9,
-            child: LiveCardCover(
-              roomId: widget.item.id,
-              hovered: _hovered,
-              previewEnabled: widget.item.isLive != false,
-              child: _Cover(
-                url: widget.item.coverUrl,
-                left: '${compactCount(widget.item.online)} 人气',
-                right: widget.item.area,
-                badge: widget.item.isLive == false
-                    ? '未开播'
-                    : widget.item.isLive == true
-                    ? '直播中'
-                    : '直播',
+  Widget build(BuildContext context) {
+    final author = widget.item.authorId;
+    void openRoom() {
+      setState(() => _hovered = false);
+      context.openWorkspaceLink('/live/${widget.item.id.value}');
+    }
+
+    final openAuthor = author == null
+        ? null
+        : () => context.openWorkspaceLink('/user/${author.value}');
+    return ScrollAwareHoverRegion(
+      onHover: (hovered) => setState(() => _hovered = hovered),
+      child: _TapCard(
+        onTap: openRoom,
+        opensWorkspaceLink: true,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AspectRatio(
+              aspectRatio: 16 / 9,
+              child: LiveCardCover(
+                roomId: widget.item.id,
+                hovered: _hovered,
+                previewEnabled: widget.item.isLive != false,
+                child: _Cover(
+                  url: widget.item.coverUrl,
+                  left: '${compactCount(widget.item.online)} 人气',
+                  right: widget.item.area,
+                  badge: widget.item.isLive == false
+                      ? '未开播'
+                      : widget.item.isLive == true
+                      ? '直播中'
+                      : '直播',
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 9),
-          HighlightedText(widget.item.title, query: widget.query, maxLines: 2),
-          const SizedBox(height: 6),
-          InkWell(
-            onTap: switch (widget.item.authorId) {
-              final UserId id => () => context.go('/user/${id.value}'),
-              _ => null,
-            },
-            child: Text(
-              widget.item.author,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall,
+            const SizedBox(height: 9),
+            HighlightedText(
+              widget.item.title,
+              query: widget.query,
+              maxLines: 2,
             ),
-          ),
-        ],
+            const SizedBox(height: 6),
+            InkWell(
+              onTap: openAuthor,
+              onTertiaryTapUp: WorkspaceLinkScope.middleClick(
+                context,
+                openAuthor,
+              ),
+              child: Text(
+                widget.item.author,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 final class _ArticleCard extends StatelessWidget {
@@ -543,7 +566,12 @@ final class _ArticleCard extends StatelessWidget {
 }
 
 final class _TapCard extends StatelessWidget {
-  const _TapCard({required this.onTap, required this.child});
+  const _TapCard({
+    required this.onTap,
+    required this.child,
+    this.opensWorkspaceLink = false,
+  });
+  final bool opensWorkspaceLink;
   final VoidCallback onTap;
   final Widget child;
   @override
@@ -551,6 +579,9 @@ final class _TapCard extends StatelessWidget {
     color: Colors.transparent,
     child: InkWell(
       onTap: onTap,
+      onTertiaryTapUp: opensWorkspaceLink
+          ? WorkspaceLinkScope.middleClick(context, onTap)
+          : null,
       borderRadius: BorderRadius.circular(6),
       child: child,
     ),
