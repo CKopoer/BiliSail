@@ -665,6 +665,14 @@ media_kit 常规 seek 保留原生播放意图和缓存；只有取消已阻塞�
 
 ## D98：Windows 恢复使用 Impeller
 
+2026-11-21 起由 [D99](#d99windows-恢复使用-skia) 取代。
+
 **决定（2026-11-19）**：按用户要求移除 Windows runner 的 Skia 覆盖，使用 Flutter 3.50.0 在 Windows 上默认启用的 Impeller（OpenGLES，经 ANGLE）。配置作用于 runner 启动的 Flutter 引擎。此前的全屏弹幕对照数据来自 Flutter 3.47.6，保留在[历史对照记录](validation/windows-skia-playback-2026-11-01.md)。[Flutter 渲染器文档](https://docs.flutter.dev/perf/impeller#windows)
 
-Windows x64 本机引擎日志确认启用 `Impeller (OpenGLESSDF)`。离线原生回归覆盖分轨播放、普通与独立播放窗口全屏、全屏切换时的弹幕状态，以及暂停和播放时调整窗口后的实际视频像素。仓库检查 `tool/check.ps1 -SkipPub` 及普通入口 Windows x64 Release 构建通过。全屏弹幕 GPU 开销尚未在 Flutter 3.50.0 上复测。
+Windows x64 本机引擎日志确认启用 `Impeller (OpenGLESSDF)`。离线原生回归覆盖分轨播放、普通与独立播放窗口全屏、全屏切换时的弹幕状态，以及暂停和播放时调整窗口后的实际视频像素。仓库检查 `tool/check.ps1 -SkipPub` 及普通入口 Windows x64 Release 构建通过。
+
+## D99：Windows 恢复使用 Skia
+
+**决定（2026-11-21）** 按用户选择，Windows runner 通过 `DartProject::set_impeller_switch` 关闭 Impeller，使用 Skia 渲染主窗口和播放窗口。
+
+Flutter 3.50.0 的 Windows x64 Profile 对照使用 RTX 4070 Ti SUPER、165 Hz 全屏和同一段本地 1080p60 视频。弹幕透明度 0.8 时，Skia 与 Impeller 的进程 GPU 3D 均值分别为 1.85% 和 6.08%，整卡功耗分别为 28.24 W 和 23.06 W。关闭弹幕时，两者的 3D 均值分别为 3.06% 和 3.34%。两个后端在关闭弹幕、透明度 1.0 和 0.8 的两轮采样中，mpv 视频输出与解码掉帧均为 0。

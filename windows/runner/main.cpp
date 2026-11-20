@@ -13,6 +13,7 @@ int RunFlutterApplication() {
   // changing the selected profile or rebuilding contexts cannot replace it.
   TextServicesScope text_services;
   flutter::DartProject project(L"data");
+  project.set_impeller_switch(flutter::ImpellerSwitch::Disabled);
 
   std::vector<std::string> command_line_arguments =
       GetCommandLineArguments();
