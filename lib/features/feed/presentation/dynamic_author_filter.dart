@@ -278,6 +278,7 @@ final class _AuthorChoice extends StatelessWidget {
         ),
         if (author?.hasUpdate == true)
           Positioned(
+            key: const ValueKey('dynamic-author-update-indicator'),
             top: 2,
             right: 2,
             child: Container(

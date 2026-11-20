@@ -14,6 +14,10 @@ final class DynamicAuthor {
   final String name;
   final Uri? avatarUrl;
   final bool hasUpdate;
+
+  DynamicAuthor withoutUpdate() => hasUpdate
+      ? DynamicAuthor(id: id, name: name, avatarUrl: avatarUrl)
+      : this;
 }
 
 final class DynamicAuthorPage {

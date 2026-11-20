@@ -58,6 +58,16 @@ void main() {
         findsNothing,
       );
       final choice = find.byKey(const ValueKey('dynamic-author-1'));
+      Finder updateIndicator(Finder choice) => find.descendant(
+        of: choice,
+        matching: find.byKey(const ValueKey('dynamic-author-update-indicator')),
+      );
+      final firstUpdate = updateIndicator(choice);
+      final otherUpdate = updateIndicator(
+        find.byKey(const ValueKey('dynamic-author-3')),
+      );
+      expect(firstUpdate, findsOneWidget);
+      expect(otherUpdate, findsOneWidget);
       final content = find.byType(HomeContent);
       expect(
         wide
@@ -66,6 +76,9 @@ void main() {
         isTrue,
       );
       await tester.tap(choice);
+      await tester.pump();
+      expect(firstUpdate, findsNothing);
+      expect(otherUpdate, findsOneWidget);
       await tester.pumpAndSettle();
       expect(repository.feedCalls.single.authorId, const UserId('1'));
       expect(find.text('筛选 1 图文 1'), findsOneWidget);

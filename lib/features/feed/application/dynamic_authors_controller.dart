@@ -36,6 +36,7 @@ final class DynamicAuthorsController extends Notifier<DynamicAuthorsState> {
   int _generation = 0;
   String? _cursor;
   final _seenCursors = <String>{};
+  final _dismissedUpdates = <UserId>{};
 
   @override
   DynamicAuthorsState build() {
@@ -48,13 +49,25 @@ final class DynamicAuthorsController extends Notifier<DynamicAuthorsState> {
   }
 
   void select(UserId? id) {
-    if (!ref.mounted || state.selected?.id == id) return;
-    final author = id == null
-        ? null
+    if (!ref.mounted) return;
+    final selected = state.selected;
+    var author = selected?.id == id
+        ? selected
         : state.items.where((item) => item.id == id).firstOrNull;
     if (id != null && author == null) return;
+    var items = state.items;
+    if (author != null && author.hasUpdate) {
+      _dismissedUpdates.add(author.id);
+      final cleared = author.withoutUpdate();
+      items = List.unmodifiable(
+        items.map((item) => item.id == cleared.id ? cleared : item),
+      );
+      author = cleared;
+    } else if (selected?.id == id) {
+      return;
+    }
     state = DynamicAuthorsState(
-      items: state.items,
+      items: items,
       selected: author,
       loading: state.loading,
       hasMore: state.hasMore,
@@ -83,6 +96,9 @@ final class DynamicAuthorsController extends Notifier<DynamicAuthorsState> {
     if (refresh) {
       _cursor = null;
       _seenCursors.clear();
+      // A new directory refresh can surface new updates. Clicks made while
+      // it is pending still win over its snapshot and subsequent pages.
+      _dismissedUpdates.clear();
     }
     state = DynamicAuthorsState(
       items: state.items,
@@ -111,7 +127,9 @@ final class DynamicAuthorsController extends Notifier<DynamicAuthorsState> {
       };
       for (final item in page.items) {
         if (unique.length >= maxAuthors && !unique.containsKey(item.id)) break;
-        unique[item.id] = item;
+        unique[item.id] = _dismissedUpdates.contains(item.id)
+            ? item.withoutUpdate()
+            : item;
       }
       if (!refresh && page.hasMore && unique.length == state.items.length) {
         throw const AppFailure(AppFailureKind.protocol, '没有新的 UP 主，可重试继续加载');
