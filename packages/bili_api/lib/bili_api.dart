@@ -23,7 +23,8 @@ export 'src/clients/ranking_client.dart';
 export 'src/models/ranking_models.dart';
 export 'src/models/popular_models.dart';
 export 'src/clients/collection_subscription_client.dart';
-export 'src/clients/favorite_folder_client.dart';
+export 'src/clients/favorite_folder_client.dart'
+    show ApiFavoriteFolderInfo, ApiFavoriteOrder, FavoriteFolderClient;
 export 'src/clients/feed_card_actions_client.dart';
 export 'src/cookies.dart';
 export 'src/models.dart';

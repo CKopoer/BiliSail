@@ -20,6 +20,8 @@ import '../../../shared/ui/image_viewer.dart';
 import '../../live/domain/live_room.dart';
 import '../../dynamic/domain/dynamic_link.dart';
 import '../../../shared/ui/paged_scroll_viewport.dart';
+import '../../../shared/ui/favorite_content_toolbar.dart';
+import '../../../domain/favorite_content_filter.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/retained_tab_view.dart';
 import '../../../shared/ui/scroll_collapsing_header.dart';
@@ -531,7 +533,9 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
     }
     final after = ref.read(provider);
     if (before.sessionGeneration != after.sessionGeneration ||
-        before.folderId != after.folderId) {
+        before.folderId != after.folderId ||
+        before.folderFilter != after.folderFilter ||
+        after.section != ProfileSection.folders) {
       return;
     }
     if (queue == null) {
@@ -624,6 +628,7 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
       keyword,
       folderId,
       folderTitle,
+      folderFilter,
       collection,
       collectionTitle,
       followingGroupId,
@@ -637,6 +642,9 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
           widget.section == ProfileSection.videos ? state.keyword : '',
           widget.section == ProfileSection.folders ? state.folderId : null,
           widget.section == ProfileSection.folders ? state.folderTitle : null,
+          widget.section == ProfileSection.folders
+              ? state.folderFilter
+              : defaultFavoriteContentFilter,
           widget.section == ProfileSection.collections
               ? state.collection
               : null,
@@ -668,7 +676,7 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
       followingQuery,
     );
     return PagedScrollViewport(
-      key: ValueKey(listKey),
+      key: ValueKey((listKey, folderFilter)),
       active: widget.active,
       canLoadMore:
           list.page > 0 &&
@@ -683,7 +691,8 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
         if (current.sessionGeneration == generation &&
             current.section == widget.section &&
             (widget.section != ProfileSection.folders ||
-                current.folderId == folderId) &&
+                (current.folderId == folderId &&
+                    current.folderFilter == folderFilter)) &&
             (widget.section != ProfileSection.collections ||
                 current.collection == collection) &&
             (widget.section != ProfileSection.following ||
@@ -803,6 +812,22 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
                         ),
                       ],
                     ),
+                  if (folderId != null && !list.isHidden)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: FavoriteContentToolbar(
+                        filter: folderFilter,
+                        onChanged: (filter) {
+                          if (filter == folderFilter) return;
+                          if (scrollController.hasClients) {
+                            scrollController.jumpTo(
+                              scrollController.position.minScrollExtent,
+                            );
+                          }
+                          controller.filterFavorites(filter);
+                        },
+                      ),
+                    ),
                   if (widget.section == ProfileSection.collections &&
                       collection != null)
                     Row(
@@ -842,6 +867,8 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
                           ? '黑名单为空'
                           : followingQuery.$1.isNotEmpty
                           ? '没有找到匹配的关注用户'
+                          : folderFilter.keyword.isNotEmpty
+                          ? '没有找到匹配的收藏视频'
                           : '${profileSectionLabel(widget.section)}暂无公开内容',
                     ),
                 ],

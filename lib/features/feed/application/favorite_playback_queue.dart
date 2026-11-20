@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_requests.dart';
 import '../../../domain/app_failure.dart';
+import '../../../domain/favorite_content_filter.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/user.dart';
 import '../../../domain/video.dart';
@@ -40,6 +41,7 @@ final class FavoritePlaybackQueueController
     String? cursor,
     VideoId? initial,
     bool reconcile = false,
+    FavoriteContentFilter filter = defaultFavoriteContentFilter,
   }) async {
     if (state.isLoading) return null;
     final query = request.query;
@@ -70,8 +72,9 @@ final class FavoritePlaybackQueueController
       var sourcePage = reconcile && initial != null ? 1 : page;
       var sourceCursor = reconcile ? null : cursor;
       Future<HomePage> loadPage() => Future.any([
-        repository.load(
+        repository.loadWithFavoriteFilter(
           query,
+          filter: filter,
           page: sourcePage,
           cursor: sourceCursor,
           cancellation: read,
@@ -124,6 +127,7 @@ final class FavoritePlaybackQueueController
               query: query,
               title: request.title,
               cursor: result.nextCursor ?? sourceCursor,
+              filter: filter,
             ),
             favoriteTitle: request.title,
             current: initial ?? items.first.video.id,

@@ -1,5 +1,6 @@
 import '../../../domain/video.dart';
 import '../../../domain/user.dart';
+import '../../../domain/favorite_content_filter.dart';
 import '../../feed/domain/home_repository.dart';
 
 final class HomeQueueSource {
@@ -7,10 +8,12 @@ final class HomeQueueSource {
     required this.query,
     required this.title,
     this.cursor,
+    this.filter = defaultFavoriteContentFilter,
   });
   final HomeQuery query;
   final String title;
   final String? cursor;
+  final FavoriteContentFilter filter;
 }
 
 /// A captured space query, paged independently of the originating browser.
@@ -19,11 +22,12 @@ final class ProfileVideoQueueSource {
     required this.userId,
     required this.name,
     required this.order,
+    this.keyword = '',
     this.folderId,
   });
 
   final UserId userId;
-  final String name, order;
+  final String name, order, keyword;
   final String? folderId;
 }
 

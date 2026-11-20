@@ -3,12 +3,16 @@ import '../../support/material_tooltip_finder.dart';
 import 'dart:async';
 
 import 'package:bilisail/core/network/api_requests.dart';
+import 'package:bilisail/domain/favorite_content_filter.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/feed/application/home_controller.dart';
 import 'package:bilisail/features/feed/domain/home_channel.dart';
 import 'package:bilisail/features/feed/domain/home_repository.dart';
 import 'package:bilisail/features/feed/presentation/home_content.dart';
 import 'package:bilisail/features/feed/presentation/home_feed_cards.dart';
+import 'package:bilisail/features/video/application/playback_queue_controller.dart';
 import 'package:bilisail/features/video/application/watch_later_queue_registry.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:material_ui/material_ui.dart';
@@ -16,22 +20,28 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
+import '../messages/message_fakes.dart';
+
 void main() {
   late _Repository repository;
   late ProviderContainer container;
   late GoRouter router;
+  late AuthFake auth;
   setUp(() {
+    auth = AuthFake();
     repository = _Repository();
     container = ProviderContainer(
       overrides: [
+        authRepositoryProvider.overrideWithValue(auth),
         homeRepositoryProvider.overrideWithValue(repository),
         sessionEpochProvider.overrideWithValue(() => 4),
       ],
     );
   });
-  tearDown(() {
+  tearDown(() async {
     router.dispose();
     container.dispose();
+    await auth.stream.close();
   });
   Future<void> mount(
     WidgetTester tester,
@@ -73,6 +83,93 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets(
+    'default folder can search all favorites and page the filtered queue',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await mount(tester, '默认收藏夹', scale: 2);
+
+      final search = find.byKey(const ValueKey('favorite-content-search'));
+      await tester.enterText(search, '  测试  ');
+      await tester.tap(find.byKey(const ValueKey('favorite-search-scope')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(CheckedPopupMenuItem<bool>, '我的全部收藏'),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('favorite-content-sort')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(CheckedPopupMenuItem<FavoriteContentOrder>, '最多播放'),
+      );
+      await tester.pumpAndSettle();
+      const filter = (
+        keyword: '测试',
+        order: FavoriteContentOrder.mostPlayed,
+        allFolders: true,
+      );
+      expect(repository.filteredCalls.last, (filter, 1));
+      expect(find.text('匹配 1'), findsOneWidget);
+      expect(find.text('视频 1'), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      final beforeCapture = repository.filteredCalls.length;
+      await tester.tap(find.byKey(const ValueKey('favorite-play-all')));
+      await tester.pumpAndSettle();
+      final queueId =
+          router.routeInformationProvider.value.uri.queryParameters['queue']!;
+      final subscription = container.listen(
+        playbackQueueProvider(queueId),
+        (_, _) {},
+      );
+      addTearDown(subscription.close);
+      await tester.pumpAndSettle();
+      final queueController = container.read(
+        playbackQueueProvider(queueId).notifier,
+      );
+      await queueController.loadMore(const VideoId('BV0000000001'));
+      expect(repository.filteredCalls.skip(beforeCapture), [
+        (filter, 1),
+        (filter, 2),
+      ]);
+    },
+  );
+
+  testWidgets(
+    'new folder searches cancel the previous page and can be cleared',
+    (tester) async {
+      await mount(tester, '我创建的收藏夹');
+      await tester.tap(find.text('测试收藏夹'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('favorite-search-scope')), findsNothing);
+      final search = find.byKey(const ValueKey('favorite-content-search'));
+      final pending = repository.pendingFilter = Completer<HomePage>();
+      await tester.enterText(search, '旧搜索');
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pump();
+      final stale = repository.lastCancellation!;
+      repository.pendingFilter = null;
+      await tester.enterText(search, '无结果');
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+      expect(stale.isCancelled, isTrue);
+      pending.complete(
+        const HomePage([
+          HomeEntry(id: '99', kind: HomeEntryKind.video, title: '旧结果'),
+        ], hasMore: false),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('旧结果'), findsNothing);
+      expect(find.text('没有找到匹配的收藏视频'), findsOneWidget);
+      await tester.tap(find.byTooltip('清除搜索'));
+      await tester.pumpAndSettle();
+      expect(find.text('视频 1'), findsOneWidget);
+    },
+  );
 
   for (final section in ['默认收藏夹', '我创建的收藏夹']) {
     testWidgets('$section remaining video opens immediately after removal', (
@@ -240,9 +337,14 @@ void main() {
         400,
         scrollable: find.descendant(
           of: find.byType(CustomScrollView),
-          matching: find.byType(Scrollable),
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is Scrollable &&
+                widget.axisDirection == AxisDirection.down,
+          ),
         ),
       );
+      await tester.pumpAndSettle();
       final before = repository.pages.length;
       await tester.tap(find.text('视频 25'));
       await tester.pumpAndSettle();
@@ -299,9 +401,14 @@ void main() {
         400,
         scrollable: find.descendant(
           of: find.byType(CustomScrollView),
-          matching: find.byType(Scrollable),
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is Scrollable &&
+                widget.axisDirection == AxisDirection.down,
+          ),
         ),
       );
+      await tester.pumpAndSettle();
       final first = container
           .read(provider)
           .items
@@ -343,7 +450,11 @@ void main() {
   });
 }
 
-final class _Repository implements HomeRepository, HomeFavoriteRepository {
+final class _Repository
+    implements
+        HomeRepository,
+        HomeFavoriteRepository,
+        HomeFavoriteContentRepository {
   @override
   String get accountScope => 'user:7';
   final pages = <int>[];
@@ -352,7 +463,38 @@ final class _Repository implements HomeRepository, HomeFavoriteRepository {
   int totalVideos = 25;
   final removed = <String>{};
   Completer<HomePage>? pending;
+  Completer<HomePage>? pendingFilter;
   RequestCancellation? lastCancellation;
+  final filteredCalls = <(FavoriteContentFilter, int)>[];
+
+  @override
+  Future<HomePage> loadFilteredFavorites(
+    HomeQuery query,
+    FavoriteContentFilter filter, {
+    required int page,
+    String? cursor,
+    required RequestCancellation cancellation,
+  }) async {
+    filteredCalls.add((filter, page));
+    lastCancellation = cancellation;
+    if (pendingFilter case final pending?) return pending.future;
+    if (filter.keyword == '无结果') return const HomePage([], hasMore: false);
+    return HomePage(
+      [
+        for (var n = (page - 1) * 24 + 1; n <= page * 24; n++)
+          HomeEntry(
+            id: '$n',
+            aid: '$n',
+            kind: HomeEntryKind.video,
+            title: '匹配 $n',
+            bvid: 'BV${n.toString().padLeft(10, '0')}',
+          ),
+      ],
+      hasMore: page == 1,
+      favoriteFolderId: '42',
+    );
+  }
+
   @override
   Future<HomePage> load(
     HomeQuery query, {

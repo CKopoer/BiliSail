@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:bilisail/core/network/api_requests.dart';
 import 'package:bilisail/domain/app_failure.dart';
+import 'package:bilisail/domain/favorite_content_filter.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/domain/video.dart';
@@ -126,6 +127,33 @@ void main() {
           expect(queue.profileSource?.folderId, '42');
           expect(queue.profileSource?.userId, _user);
           expect(repository.folderCalls, hasLength(reads + 1));
+          if (!playAll) {
+            final keyword = find.byKey(
+              const ValueKey('favorite-content-search'),
+            );
+            expect(
+              find.byKey(const ValueKey('favorite-search-scope')),
+              findsNothing,
+            );
+            await tester.enterText(keyword, '  收藏  ');
+            await tester.testTextInput.receiveAction(TextInputAction.search);
+            await tester.pumpAndSettle();
+            await tester.tap(
+              find.byKey(const ValueKey('favorite-content-sort')),
+            );
+            await tester.pumpAndSettle();
+            await tester.tap(
+              find.widgetWithText(
+                CheckedPopupMenuItem<FavoriteContentOrder>,
+                '最近投稿',
+              ),
+            );
+            await tester.pumpAndSettle();
+            final call = repository.folderCalls.last;
+            expect(call.keyword, '收藏');
+            expect(call.order, 'recentlyPublished');
+            expect(call.page, 1);
+          }
           expect(tester.takeException(), isNull);
         },
       );
@@ -230,6 +258,28 @@ void main() {
     },
   );
 
+  test(
+    'profile playback paging retains the captured favorite filter',
+    () async {
+      final origin = await openFolder();
+      origin.filterFavorites((
+        keyword: '旧收藏',
+        order: FavoriteContentOrder.mostPlayed,
+        allFolders: false,
+      ));
+      await Future<void>.delayed(Duration.zero);
+      final queue = (await origin.captureFavoriteQueue())!;
+      expect(queue.profileSource?.keyword, '旧收藏');
+      expect(queue.profileSource?.order, 'mostPlayed');
+      origin.filterFavorites(defaultFavoriteContentFilter);
+      await paging(queue).loadMore(_video(1).id);
+      final next = repository.folderCalls.last;
+      expect(next.keyword, '旧收藏');
+      expect(next.order, 'mostPlayed');
+      expect(next.page, 2);
+    },
+  );
+
   test('an oversized source page retains at most 99 videos', () async {
     repository.pages[1] = [for (var n = 1; n <= 510; n++) _entry(n)];
     repository.lastPage = 1;
@@ -306,6 +356,8 @@ typedef _Call = ({
   ProfileSection section,
   String? folderId,
   int page,
+  String keyword,
+  String order,
 });
 
 final class _Profile implements ProfileRepository {
@@ -353,6 +405,8 @@ final class _Profile implements ProfileRepository {
       section: section,
       folderId: folderId,
       page: page,
+      keyword: keyword,
+      order: order,
     ));
     read = cancellation;
     if (failure case final error?) throw error;

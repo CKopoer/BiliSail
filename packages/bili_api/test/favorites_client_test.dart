@@ -48,6 +48,84 @@ Map<String, Object?> _gallery() => {
 
 void main() {
   test(
+    'favorite search encodes the keyword once and preserves scope across pages',
+    () async {
+      const keyword = '中文 +&%';
+      final transport = _Transport((uri) {
+        if (uri.path.endsWith('/space/v2')) return _gallery();
+        expect(uri.path, '/x/v3/fav/resource/list');
+        expect(uri.queryParameters, containsPair('media_id', _defaultId));
+        expect(uri.queryParameters, containsPair('keyword', keyword));
+        expect(uri.queryParameters, containsPair('order', 'view'));
+        expect(uri.queryParameters, containsPair('type', '1'));
+        expect(uri.queryParameters, containsPair('tid', '0'));
+        final first = uri.queryParameters['pn'] == '1';
+        return {
+          'code': 0,
+          'data': {
+            'info': {'media_count': 1},
+            'medias': first ? [_video] : null,
+            'has_more': first,
+          },
+        };
+      });
+      final client = HomeClient(BiliApiClient(transport: transport));
+      Future<ApiPage<ApiHomeEntry>> load(int page, {String? cursor}) =>
+          client.load(
+            channel: 'favorites',
+            section: '默认收藏夹',
+            page: page,
+            mid: '7',
+            cursor: cursor,
+            favoriteKeyword: keyword,
+            favoriteOrder: ApiFavoriteOrder.mostPlayed,
+            searchAllFavoriteFolders: true,
+          );
+      final first = await load(1);
+      expect(first.items, hasLength(1));
+      expect(first.hasMore, isTrue);
+      final next = await load(2, cursor: first.nextCursor);
+      expect(next.items, isEmpty);
+      expect(next.hasMore, isFalse);
+      expect(transport.requests, hasLength(3));
+    },
+  );
+
+  test('profile folder search stops at the service result boundary', () async {
+    final transport = _Transport((uri) {
+      expect(uri.path, '/x/v3/fav/resource/list');
+      expect(uri.queryParameters, {
+        'media_id': '42',
+        'pn': '2',
+        'ps': '30',
+        'keyword': '收藏',
+        'order': 'pubtime',
+        'type': '0',
+        'tid': '0',
+        'platform': 'web',
+      });
+      return {
+        'code': 0,
+        'data': {
+          'info': {'media_count': 500},
+          'medias': [_video],
+          'has_more': 0,
+        },
+      };
+    });
+    final result = await ProfileClient(BiliApiClient(transport: transport))
+        .loadFolderVideos(
+          '42',
+          page: 2,
+          keyword: '收藏',
+          order: ApiFavoriteOrder.recentlyPublished,
+        );
+    expect(result.items.single.video?.bvid, _video['bvid']);
+    expect(result.hasMore, isFalse);
+    expect(result.nextCursor, isNull);
+  });
+
+  test(
     'a complete collection snapshot stops despite ignoring page size',
     () async {
       final client = HomeClient(

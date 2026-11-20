@@ -7,6 +7,7 @@ import 'package:bili_api/bili_api.dart';
 
 import '../../../core/network/api_requests.dart';
 import '../../../domain/app_failure.dart';
+import '../../../domain/favorite_content_filter.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/user.dart';
 import '../domain/dynamic_author.dart';
@@ -20,6 +21,7 @@ final class ApiHomeRepository
         HomeDynamicRepository,
         HomeSubscriptionRepository,
         HomeFavoriteRepository,
+        HomeFavoriteContentRepository,
         HomeWatchLaterRepository {
   ApiHomeRepository(
     this.client,
@@ -39,6 +41,7 @@ final class ApiHomeRepository
     String,
     ({
       HomeQuery query,
+      FavoriteContentFilter filter,
       int epoch,
       List<HomeEntry> items,
       String? favoriteFolderId,
@@ -48,10 +51,16 @@ final class ApiHomeRepository
   RequestCancellation? _snapshotLifetime;
   int _nextSnapshot = 0;
 
-  HomePage _snapshotPage(String key, HomeQuery query, int page) {
+  HomePage _snapshotPage(
+    String key,
+    HomeQuery query,
+    FavoriteContentFilter filter,
+    int page,
+  ) {
     final snapshot = _snapshots[key];
     if (snapshot == null ||
         snapshot.query != query ||
+        snapshot.filter != filter ||
         snapshot.epoch != requests.sessionEpoch) {
       throw const AppFailure(AppFailureKind.notFound, '收藏列表快照已失效，请刷新后重试');
     }
@@ -68,6 +77,7 @@ final class ApiHomeRepository
 
   HomePage _publishSnapshot(
     HomeQuery query,
+    FavoriteContentFilter filter,
     List<HomeEntry> items,
     int page,
     String? favoriteFolderId,
@@ -80,6 +90,7 @@ final class ApiHomeRepository
     final key = '$_snapshotPrefix$_snapshotNonce-${++_nextSnapshot}';
     _snapshots[key] = (
       query: query,
+      filter: filter,
       epoch: requests.sessionEpoch,
       items: List.unmodifiable(items.take(_maximumSnapshotItems)),
       favoriteFolderId: favoriteFolderId,
@@ -87,7 +98,7 @@ final class ApiHomeRepository
     while (_snapshots.length > 16) {
       _snapshots.remove(_snapshots.keys.first);
     }
-    return _snapshotPage(key, query, page);
+    return _snapshotPage(key, query, filter, page);
   }
 
   @override
@@ -301,11 +312,27 @@ final class ApiHomeRepository
     required RequestCancellation cancellation,
   }) => _load(query, page: page, cursor: cursor, cancellation: cancellation);
 
+  @override
+  Future<HomePage> loadFilteredFavorites(
+    HomeQuery query,
+    FavoriteContentFilter filter, {
+    required int page,
+    String? cursor,
+    required RequestCancellation cancellation,
+  }) => _load(
+    query,
+    filter: filter,
+    page: page,
+    cursor: cursor,
+    cancellation: cancellation,
+  );
+
   Future<HomePage> _load(
     HomeQuery query, {
     required int page,
     String? cursor,
     UserId? authorId,
+    FavoriteContentFilter filter = defaultFavoriteContentFilter,
     required RequestCancellation cancellation,
   }) => requests.run((context) async {
     if (query.scope != accountScope) {
@@ -316,7 +343,7 @@ final class ApiHomeRepository
     }
     if (page < 1) throw ArgumentError.value(page, 'page');
     if (cursor != null && cursor.startsWith(_snapshotPrefix)) {
-      return _snapshotPage(cursor, query, page);
+      return _snapshotPage(cursor, query, filter, page);
     }
     final result = await client.load(
       channel: query.channel.name,
@@ -326,6 +353,10 @@ final class ApiHomeRepository
       mid: query.scope.startsWith('user:') ? query.scope.substring(5) : null,
       folderId: query.folderId,
       authorId: authorId?.value,
+      favoriteKeyword: filter.keyword,
+      favoriteOrder: ApiFavoriteOrder.values.byName(filter.order.name),
+      searchAllFavoriteFolders:
+          query.section == '默认收藏夹' && filter.searchesAllFolders,
       context: context,
     );
     if (query.scope != accountScope) {
@@ -344,7 +375,7 @@ final class ApiHomeRepository
         (query.folderId != null || query.section == '默认收藏夹') &&
         !result.hasMore &&
         items.length > _snapshotPageSize) {
-      return _publishSnapshot(query, items, page, favoriteFolderId);
+      return _publishSnapshot(query, filter, items, page, favoriteFolderId);
     }
     return HomePage(
       items,

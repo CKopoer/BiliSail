@@ -9,6 +9,7 @@ import '../../profile/domain/profile_repository.dart';
 import '../../profile/application/profile_controller.dart';
 import '../../feed/application/home_repository_provider.dart';
 import '../../feed/application/favorite_playback_queue.dart';
+import '../../feed/domain/home_repository.dart';
 import '../domain/watch_later_queue.dart';
 import 'watch_later_queue_registry.dart';
 
@@ -269,8 +270,9 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
     if (home != null) {
       final result = await ref
           .read(homeRepositoryProvider)
-          .load(
+          .loadWithFavoriteFilter(
             home.query,
+            filter: home.filter,
             page: page,
             cursor: home.cursor,
             cancellation: cancellation,
@@ -293,6 +295,7 @@ class PlaybackQueueController extends Notifier<PlaybackQueueState> {
               : ProfileSection.folders,
           page: page,
           order: profile.order,
+          keyword: profile.keyword,
           folderId: profile.folderId,
           cancellation: cancellation,
         );

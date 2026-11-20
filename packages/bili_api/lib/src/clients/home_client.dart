@@ -3,6 +3,7 @@ import '../mappers/video_access_parser.dart';
 import '../api_client.dart';
 import '../models.dart';
 import '../models/home_models.dart';
+import 'favorite_folder_client.dart';
 
 /// Web home endpoints. Credentials/retry/deadline stay in the client.
 final class HomeClient {
@@ -113,6 +114,9 @@ final class HomeClient {
     String? mid,
     String? folderId,
     String? authorId,
+    String favoriteKeyword = '',
+    ApiFavoriteOrder favoriteOrder = ApiFavoriteOrder.recentlySaved,
+    bool searchAllFavoriteFolders = false,
     ApiRequestContext? context,
   }) async {
     if (page < 1) throw ArgumentError.value(page, 'page');
@@ -140,21 +144,42 @@ final class HomeClient {
       return ApiPage(List.unmodifiable(entries), hasMore: false);
     }
     if (channel == 'favorites') {
+      Future<ApiPage<ApiHomeEntry>> loadFolder(
+        String id, {
+        String? nextCursor,
+      }) async {
+        final result = await loadFavoriteResources(
+          api,
+          id,
+          page: page,
+          pageSize: 20,
+          endpoint: 'home_favorites',
+          order: favoriteOrder,
+          keyword: favoriteKeyword,
+          searchAllFolders: searchAllFavoriteFolders,
+          context: context,
+        );
+        return ApiPage(
+          List.unmodifiable(result.items.map(_favoriteResource)),
+          hasMore: result.hasMore,
+          totalCount: result.totalCount,
+          nextCursor: nextCursor,
+        );
+      }
+
       if (folderId != null) {
         // Keep UGC collections distinct from favorite media IDs in queries.
         final collection = folderId.startsWith('ugc:');
-        final id = collection ? folderId.substring(4) : folderId;
+        if (!collection) return loadFolder(folderId);
+        final id = folderId.substring(4);
         _validateId(id);
-        final data = await get(
-          collection ? '/x/space/fav/season/list' : '/x/v3/fav/resource/list',
-          {
-            if (collection) 'season_id': id else 'media_id': id,
-            if (collection && mid != null) 'mid': mid,
-            'pn': '$page',
-            'ps': '20',
-            'platform': 'web',
-          },
-        );
+        final data = await get('/x/space/fav/season/list', {
+          'season_id': id,
+          'mid': ?mid,
+          'pn': '$page',
+          'ps': '20',
+          'platform': 'web',
+        });
         return _favoritePage(data, page);
       }
       if (mid == null) {
@@ -184,13 +209,7 @@ final class HomeClient {
         }
         _validateId(defaultId);
         if (section == '默认收藏夹') {
-          final data = await get('/x/v3/fav/resource/list', {
-            'media_id': defaultId,
-            'pn': '$page',
-            'ps': '20',
-            'platform': 'web',
-          });
-          return _favoritePage(data, page, nextCursor: defaultId);
+          return loadFolder(defaultId, nextCursor: defaultId);
         }
       }
       final data = await get(
@@ -506,9 +525,8 @@ final class HomeClient {
 
   static ApiPage<ApiHomeEntry> _favoritePage(
     Map<String, Object?> data,
-    int page, {
-    String? nextCursor,
-  }) {
+    int page,
+  ) {
     final total = _number(_optionalMap(data['info'])?['media_count']);
     final items = _list(
       data['medias'],
@@ -523,7 +541,6 @@ final class HomeClient {
           items.isNotEmpty &&
           (total == null || items.length < total),
       totalCount: total,
-      nextCursor: nextCursor,
     );
   }
 

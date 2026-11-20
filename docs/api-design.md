@@ -176,6 +176,8 @@ ApiPage<T> { items, nextCursor, hasMore }
 
 我的收藏现有五类子标签和主页收藏视频读取，仍由现有 HomeRepository/ProfileRepository 编排。自建收藏夹元信息与编辑由 FavoriteFolderRepository 编排，Web Cookie/CSRF 单次提交，未知结果通过读取核对。默认收藏夹 ID、收藏/订阅合集类型、Web 追番/追剧、私密/创建日期及读写验证边界见 [收藏子标签与视频卡片](validation/favorites-tabs.md)。
 
+2026-11-20 收藏夹内搜索与排序复用 Web profile 的 `api.bilibili.com` HTTPS GET `/x/v3/fav/resource/list`。请求传原始 `keyword`、`order=mtime/view/pubtime`、`tid=0` 和 `platform=web`。单夹使用 `type=0`，搜索我的全部视频收藏时使用服务端识别的默认收藏夹 ID 和 `type=1`。列表及其播放队列按同一条件分页，优先依据响应的 `has_more`。Cookie、取消、会话隔离、总 deadline 与读重试沿用现有管线。交互、协议来源及验证范围见[收藏夹搜索与排序](validation/favorites-tabs.md#收藏夹搜索与排序2026-11-20)。
+
 “我的收藏与订阅”的卡片支持用户确认后取消普通收藏夹收藏或 UGC 合集订阅，分别使用 `/x/v3/fav/folder/unfav` 与 `/x/v3/fav/season/unfav` 的 Web Cookie/CSRF 单次 POST。写操作不自动重试，成功后隔离迟到列表响应并重新协调分页；协议、确认交互及未实测边界见 [收藏与订阅取消操作](validation/favorites-unsubscribe.md)。
 
 2026-11-12 自有收藏夹内视频支持确认后取消收藏，使用 `/x/v3/fav/resource/batch-deal`，仅移除当前夹；自建收藏夹支持通过 `/x/v3/fav/folder/del` 删除。两者沿用 Web Cookie/CSRF 单次写入，重新校验拥有者，结果不明需刷新核对；端点参数、PiliPlus 固定来源和验证边界见 [收藏管理](validation/favorite-management-2026-11-12.md)。

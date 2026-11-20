@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/app_failure.dart';
+import '../../../domain/favorite_content_filter.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/user.dart';
 import '../../../domain/video.dart';
@@ -50,6 +51,7 @@ final class ProfileState {
     this.keyword = '',
     this.folderId,
     this.folderTitle,
+    this.folderFilter = defaultFavoriteContentFilter,
     this.collection,
     this.collectionTitle,
     this.queueLoading = false,
@@ -79,6 +81,7 @@ final class ProfileState {
   final String? liveRoomMessage;
   final bool profileLoading;
   final String? profileMessage, folderId, folderTitle;
+  final FavoriteContentFilter folderFilter;
   final ProfileSection section;
   final Map<ProfileSection, ProfileListState> lists;
   final String order, keyword;
@@ -112,6 +115,7 @@ final class ProfileState {
     String? keyword,
     String? folderId,
     String? folderTitle,
+    FavoriteContentFilter? folderFilter,
     bool closeFolder = false,
     ProfileCollectionId? collection,
     String? collectionTitle,
@@ -153,6 +157,9 @@ final class ProfileState {
     keyword: keyword ?? this.keyword,
     folderId: closeFolder ? null : folderId ?? this.folderId,
     folderTitle: closeFolder ? null : folderTitle ?? this.folderTitle,
+    folderFilter: closeFolder
+        ? defaultFavoriteContentFilter
+        : folderFilter ?? this.folderFilter,
     collection: closeCollection ? null : collection ?? this.collection,
     collectionTitle: closeCollection
         ? null
@@ -278,7 +285,9 @@ class ProfileController extends Notifier<ProfileState> {
     final repository = ref.read(profileRepositoryProvider);
     final scope = repository.accountScope, epoch = repository.sessionEpoch;
     final generation = _generation;
-    final order = state.order;
+    final folderFilter = state.folderFilter;
+    final order = folderId == null ? state.order : folderFilter.order.name;
+    final keyword = folderId == null ? '' : folderFilter.keyword;
     final name = state.profile?.name ?? 'UP主';
     final title = folderId == null ? null : state.folderTitle ?? '收藏夹';
     _queueRead.cancel();
@@ -286,7 +295,10 @@ class ProfileController extends Notifier<ProfileState> {
     bool current() =>
         _current(generation, scope, epoch) &&
         identical(_queueRead, read) &&
-        (folderId == null || state.folderId == folderId);
+        (folderId == null ||
+            (state.section == ProfileSection.folders &&
+                state.folderId == folderId &&
+                state.folderFilter == folderFilter));
     state = state.copy(queueLoading: true, clearQueueMessage: true);
     try {
       final result = await repository
@@ -295,6 +307,7 @@ class ProfileController extends Notifier<ProfileState> {
             folderId == null ? ProfileSection.videos : ProfileSection.folders,
             page: page,
             order: order,
+            keyword: keyword,
             folderId: folderId,
             cancellation: read,
           )
@@ -339,6 +352,7 @@ class ProfileController extends Notifier<ProfileState> {
               userId: id,
               name: name,
               order: order,
+              keyword: keyword,
               folderId: folderId,
             ),
             favoriteTitle: title,
@@ -796,13 +810,34 @@ class ProfileController extends Notifier<ProfileState> {
     state = state.copy(
       folderId: entry.id,
       folderTitle: entry.title,
+      folderFilter: defaultFavoriteContentFilter,
       section: ProfileSection.folders,
     );
     load(refresh: true);
   }
 
   void closeFolder() {
-    state = state.copy(closeFolder: true);
+    _queueRead.cancel();
+    state = state.copy(
+      closeFolder: true,
+      queueLoading: false,
+      clearQueueMessage: true,
+    );
+    load(refresh: true);
+  }
+
+  void filterFavorites(FavoriteContentFilter filter) {
+    if (state.section != ProfileSection.folders ||
+        state.folderId == null ||
+        state.folderFilter == filter) {
+      return;
+    }
+    _queueRead.cancel();
+    state = state.copy(
+      folderFilter: filter,
+      queueLoading: false,
+      clearQueueMessage: true,
+    );
     load(refresh: true);
   }
 
@@ -938,6 +973,10 @@ class ProfileController extends Notifier<ProfileState> {
       ),
     );
     try {
+      final folderId = section == ProfileSection.folders
+          ? state.folderId
+          : null;
+      final folderFilter = state.folderFilter;
       final groupId = section == ProfileSection.following
           ? state.followingGroupId
           : null;
@@ -965,11 +1004,9 @@ class ProfileController extends Notifier<ProfileState> {
               section,
               page: page,
               cursor: base.cursor,
-              order: state.order,
-              keyword: state.keyword,
-              folderId: section == ProfileSection.folders
-                  ? state.folderId
-                  : null,
+              order: folderId == null ? state.order : folderFilter.order.name,
+              keyword: folderId == null ? state.keyword : folderFilter.keyword,
+              folderId: folderId,
               collection: section == ProfileSection.collections
                   ? state.collection
                   : null,

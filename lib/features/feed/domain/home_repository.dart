@@ -1,4 +1,6 @@
 import '../../../domain/dynamic_post.dart';
+import '../../../domain/app_failure.dart';
+import '../../../domain/favorite_content_filter.dart';
 import '../../../domain/video_access.dart';
 import '../../../domain/request_cancellation.dart';
 import 'home_channel.dart';
@@ -93,6 +95,46 @@ abstract interface class HomeRepository {
     String? cursor,
     required RequestCancellation cancellation,
   });
+}
+
+abstract interface class HomeFavoriteContentRepository {
+  Future<HomePage> loadFilteredFavorites(
+    HomeQuery query,
+    FavoriteContentFilter filter, {
+    required int page,
+    String? cursor,
+    required RequestCancellation cancellation,
+  });
+}
+
+extension HomeFavoriteContentReads on HomeRepository {
+  Future<HomePage> loadWithFavoriteFilter(
+    HomeQuery query, {
+    FavoriteContentFilter filter = defaultFavoriteContentFilter,
+    required int page,
+    String? cursor,
+    required RequestCancellation cancellation,
+  }) {
+    if (filter == defaultFavoriteContentFilter) {
+      return load(
+        query,
+        page: page,
+        cursor: cursor,
+        cancellation: cancellation,
+      );
+    }
+    final repository = this;
+    if (repository is! HomeFavoriteContentRepository) {
+      throw const AppFailure(AppFailureKind.protocol, '当前无法筛选收藏内容');
+    }
+    return (repository as HomeFavoriteContentRepository).loadFilteredFavorites(
+      query,
+      filter,
+      page: page,
+      cursor: cursor,
+      cancellation: cancellation,
+    );
+  }
 }
 
 /// Optional write capability of the account's collected folders/UGC collections.

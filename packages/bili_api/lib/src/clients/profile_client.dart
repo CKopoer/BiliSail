@@ -3,6 +3,7 @@ import '../mappers/video_access_parser.dart';
 import '../api_client.dart';
 import '../models.dart';
 import '../models/profile_models.dart';
+import 'favorite_folder_client.dart';
 
 /// Web space reads and explicit relationship writes. Privacy remains enforced.
 final class ProfileClient {
@@ -372,50 +373,53 @@ final class ProfileClient {
   Future<ApiPage<ApiProfileEntry>> loadFolderVideos(
     String folderId, {
     required int page,
+    String keyword = '',
+    ApiFavoriteOrder order = ApiFavoriteOrder.recentlySaved,
     ApiRequestContext? context,
   }) async {
     _id(folderId);
     _page(page);
     const e = 'profile_folder_videos';
-    final data = await _get('/x/v3/fav/resource/list', e, {
-      'media_id': folderId,
-      'pn': '$page',
-      'ps': '$_size',
-      'order': 'mtime',
-      'type': '0',
-      'platform': 'web',
-    }, context);
-    final total = _number(_map(data['info'], e)['media_count']);
-    if (total == null || total < 0) _fail(e);
-    final items = _list(data['medias'] ?? (total == 0 ? const [] : null), e)
-        .map((v) {
-          final item = _map(v, e);
-          if (item['type'] != null && item['type'] != 2 ||
-              item['title'] == '已失效视频' ||
-              (_number(item['attr']) ?? 0) & 1 != 0 ||
-              item['bvid'] is! String ||
-              (item['bvid'] as String).isEmpty) {
-            return ApiProfileEntry(
-              id: _key(item['id'], e),
-              kind: ApiProfileEntryKind.video,
-              title: _string(item['title']),
-              subtitle: '该收藏内容不可播放',
-              coverUrl: _uri(item['cover']),
-            );
-          }
-          return _video({
-            ...item,
-            'pic': item['cover'],
-            'author': _optionalMap(item['upper'])['name'],
-            'mid': _optionalMap(item['upper'])['mid'],
-            'play': _optionalMap(item['cnt_info'])['play'] ?? item['play'],
-            'danmaku':
-                _optionalMap(item['cnt_info'])['danmaku'] ?? item['danmaku'],
-            'pubdate': item['pubtime'] ?? item['pubdate'],
-          }, e);
-        })
-        .toList();
-    return _paged(items, page, total);
+    final result = await loadFavoriteResources(
+      api,
+      folderId,
+      page: page,
+      pageSize: _size,
+      endpoint: e,
+      keyword: keyword,
+      order: order,
+      context: context,
+    );
+    final items = result.items.map((item) {
+      if (item['type'] != null && item['type'] != 2 ||
+          item['title'] == '已失效视频' ||
+          (_number(item['attr']) ?? 0) & 1 != 0 ||
+          item['bvid'] is! String ||
+          (item['bvid'] as String).isEmpty) {
+        return ApiProfileEntry(
+          id: _key(item['id'], e),
+          kind: ApiProfileEntryKind.video,
+          title: _string(item['title']),
+          subtitle: '该收藏内容不可播放',
+          coverUrl: _uri(item['cover']),
+        );
+      }
+      return _video({
+        ...item,
+        'pic': item['cover'],
+        'author': _optionalMap(item['upper'])['name'],
+        'mid': _optionalMap(item['upper'])['mid'],
+        'play': _optionalMap(item['cnt_info'])['play'] ?? item['play'],
+        'danmaku': _optionalMap(item['cnt_info'])['danmaku'] ?? item['danmaku'],
+        'pubdate': item['pubtime'] ?? item['pubdate'],
+      }, e);
+    }).toList();
+    return ApiPage(
+      List.unmodifiable(items),
+      hasMore: result.hasMore,
+      totalCount: result.totalCount,
+      nextCursor: result.hasMore ? '${page + 1}' : null,
+    );
   }
 
   Future<ApiProfileRelationPrivacy> loadRelationPrivacy(
