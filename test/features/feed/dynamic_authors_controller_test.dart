@@ -89,6 +89,53 @@ void main() {
     },
   );
 
+  test(
+    'click clears an update across overlapping pages and reselection',
+    () async {
+      await first();
+      final controller = container.read(provider.notifier);
+      const id = UserId('1');
+      final page = controller.loadMore();
+      controller.select(id);
+      expect(container.read(provider).selected?.hasUpdate, isFalse);
+      repository.authorCalls.last.result.complete(
+        DynamicAuthorPage([author(1), author(5)], hasMore: false),
+      );
+      await page;
+      controller.select(null);
+      final items = container.read(provider).items;
+      expect(items.map((item) => item.id.value), ['3', '1', '5']);
+      expect(items.map((item) => item.hasUpdate), [true, false, true]);
+      controller.select(id);
+      expect(container.read(provider).selected?.hasUpdate, isFalse);
+    },
+  );
+
+  test(
+    'click wins against an in-flight refresh and can clear a new update',
+    () async {
+      await first();
+      final controller = container.read(provider.notifier);
+      const id = UserId('1');
+      for (final clickDuringRefresh in [true, false]) {
+        final refresh = controller.refresh();
+        if (clickDuringRefresh) controller.select(id);
+        repository.authorCalls.last.result.complete(
+          DynamicAuthorPage([author(1), author(3)], hasMore: false),
+        );
+        await refresh;
+        expect(
+          container.read(provider).selected?.hasUpdate,
+          !clickDuringRefresh,
+        );
+      }
+      controller.select(id);
+      expect(container.read(provider).selected?.hasUpdate, isFalse);
+      expect(container.read(provider).items.first.hasUpdate, isFalse);
+      expect(container.read(provider).items.last.hasUpdate, isTrue);
+    },
+  );
+
   for (final cursor in ['first', 'second']) {
     test('rejects stalled cursors or duplicate-only pages ($cursor)', () async {
       await first();
