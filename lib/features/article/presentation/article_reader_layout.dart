@@ -1,0 +1,262 @@
+import 'package:material_ui/material_ui.dart';
+
+import '../../../core/presentation/motion_preferences.dart';
+import '../../../core/presentation/page_back_scope.dart';
+import '../../../core/presentation/workspace_activity.dart';
+import '../../../domain/content_link.dart';
+import '../../../domain/user.dart';
+import '../../../shared/ui/comments_panel.dart';
+import '../../../shared/ui/content_link_scope.dart';
+import '../domain/article_document.dart';
+import 'article_action_bar.dart';
+import 'article_page_frame.dart';
+
+class ArticleReaderLayout extends StatefulWidget {
+  const ArticleReaderLayout({
+    super.key,
+    required this.document,
+    required this.sliver,
+    required this.actions,
+    required this.onLogin,
+    required this.onOpenUser,
+  });
+  final ArticleDocument document;
+  final Widget sliver;
+  final List<Widget> actions;
+  final VoidCallback onLogin;
+  final ValueChanged<UserId> onOpenUser;
+
+  @override
+  State<ArticleReaderLayout> createState() => _ArticleReaderLayoutState();
+}
+
+class _ArticleReaderLayoutState extends State<ArticleReaderLayout> {
+  final _reading = ScrollController();
+  final _showBar = ValueNotifier(true);
+  final _commentBack = PageBackController();
+  bool _commentsSelected = false, _mountedComments = false;
+  int _scrollCommentsToTop = 0;
+  ContentLink? _link;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final link = ContentLinkScope.of(context);
+    if (_link != link && link.comment != null) _commentsSelected = true;
+    _link = link;
+  }
+
+  @override
+  void dispose() {
+    _reading.dispose();
+    _showBar.dispose();
+    _commentBack.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, bounds) {
+      final width = bounds.maxWidth.clamp(0.0, 1440.0);
+      final wide =
+          widget.document.accessMessage == null &&
+          width >= 900 &&
+          width / MediaQuery.textScalerOf(context).scale(14) >= 50;
+      final available =
+          widget.document.commentTarget != null &&
+          !widget.document.commentForbidden &&
+          widget.document.accessMessage == null;
+      final commentsOnly =
+          !wide && widget.document.accessMessage == null && _commentsSelected;
+      final showComments = wide || commentsOnly;
+      if (showComments) _mountedComments = true;
+      final articleWidth = wide ? (width * .54).clamp(400.0, 700.0) : width;
+
+      bool back() {
+        if (showComments && _commentBack.goBack()) return true;
+        if (!commentsOnly) return false;
+        FocusManager.instance.primaryFocus?.unfocus();
+        setState(() => _commentsSelected = false);
+        return true;
+      }
+
+      void openComments() => setState(() {
+        if (wide) {
+          _scrollCommentsToTop++;
+        } else {
+          _commentsSelected = true;
+        }
+      });
+      final body = Center(
+        child: SizedBox(
+          width: width,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Visibility(
+                visible: !commentsOnly,
+                maintainState: true,
+                child: SizedBox(
+                  width: articleWidth,
+                  child: _reader(
+                    articleWidth,
+                    !wide || available ? openComments : null,
+                  ),
+                ),
+              ),
+              if (_mountedComments)
+                Visibility(
+                  visible: showComments,
+                  maintainState: true,
+                  child: SizedBox(
+                    width: wide ? width - articleWidth : width,
+                    child: WorkspaceActivity(
+                      active:
+                          showComments && WorkspaceActivity.isActive(context),
+                      previewing:
+                          showComments && WorkspaceActivity.isVisible(context),
+                      child: PageBackScope(
+                        controller: _commentBack,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            border: wide
+                                ? Border(
+                                    left: BorderSide(
+                                      color: Theme.of(context).dividerColor,
+                                    ),
+                                  )
+                                : null,
+                          ),
+                          child: _comments(),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+      return ListenableBuilder(
+        listenable: _commentBack,
+        child: body,
+        builder: (context, body) {
+          final localBack =
+              commentsOnly || (showComments && _commentBack.canGoBack);
+          return PageBackHandler(
+            enabled: localBack,
+            onBack: back,
+            child: ArticlePageFrame(
+              title: commentsOnly ? '专栏评论' : '专栏',
+              actions: commentsOnly ? const [] : widget.actions,
+              onBack: localBack ? back : null,
+              body: body!,
+            ),
+          );
+        },
+      );
+    },
+  );
+
+  Widget _comments() {
+    final target = widget.document.commentTarget;
+    if (target == null || widget.document.commentForbidden) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            widget.document.commentForbidden
+                ? '该专栏已关闭评论'
+                : '该专栏暂不支持评论，请在官方页面查看',
+          ),
+        ),
+      );
+    }
+    return CommentsPanel(
+      target: target,
+      replyCount: widget.document.commentCount,
+      onLogin: widget.onLogin,
+      onOpenUser: widget.onOpenUser,
+      scrollToTopRequest: _scrollCommentsToTop,
+    );
+  }
+
+  Widget _reader(double width, VoidCallback? onComments) => Scaffold(
+    backgroundColor: Colors.transparent,
+    extendBody: true,
+    resizeToAvoidBottomInset: false,
+    // Keep the track and the trailing space constant throughout a thumb drag.
+    // Scaffold supplies the footer's natural height through the body padding.
+    bottomNavigationBar: widget.document.accessMessage == null
+        ? ValueListenableBuilder<bool>(
+            valueListenable: _showBar,
+            child: ArticleActionBar(
+              document: widget.document,
+              onLogin: widget.onLogin,
+              onComments: onComments,
+            ),
+            builder: (context, visible, child) => IgnorePointer(
+              ignoring: !visible,
+              child: ExcludeFocus(
+                excluding: !visible,
+                child: ExcludeSemantics(
+                  excluding: !visible,
+                  child: ClipRect(
+                    child: AnimatedSlide(
+                      duration: shouldReduceMotion(context)
+                          ? Duration.zero
+                          : const Duration(milliseconds: 180),
+                      curve: Curves.easeOut,
+                      offset: visible ? Offset.zero : const Offset(0, 1),
+                      child: child,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          )
+        : null,
+    body: Builder(
+      builder: (context) {
+        final bottom = MediaQuery.paddingOf(context).bottom;
+        final side = ((width - 800) / 2).clamp(12.0, double.infinity);
+        return NotificationListener<ScrollUpdateNotification>(
+          onNotification: (notice) {
+            final delta = notice.scrollDelta;
+            if (notice.depth == 0 &&
+                notice.metrics.axis == Axis.vertical &&
+                !notice.metrics.outOfRange &&
+                delta != null &&
+                delta != 0) {
+              _showBar.value = delta < 0;
+            }
+            return false;
+          },
+          child: Scrollbar(
+            controller: _reading,
+            thumbVisibility: true,
+            interactive: true,
+            scrollbarOrientation: ScrollbarOrientation.right,
+            child: ScrollConfiguration(
+              behavior: ScrollConfiguration.of(context)
+                  .copyWith(scrollbars: false),
+              child: SelectionArea(
+                child: CustomScrollView(
+                  key: const PageStorageKey('article-reading'),
+                  controller: _reading,
+                  primary: false,
+                  slivers: [
+                    SliverPadding(
+                      padding: EdgeInsets.fromLTRB(side, 12, side, bottom + 12),
+                      sliver: widget.sliver,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    ),
+  );
+}

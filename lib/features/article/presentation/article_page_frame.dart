@@ -8,8 +8,10 @@ class ArticlePageFrame extends StatelessWidget {
     required this.title,
     required this.body,
     this.actions = const [],
+    this.onBack,
   });
   final String title;
+  final VoidCallback? onBack;
   final Widget body;
   final List<Widget> actions;
 
@@ -26,6 +28,7 @@ class ArticlePageFrame extends StatelessWidget {
                 tooltip: '返回',
                 icon: const Icon(Icons.arrow_back),
                 onPressed:
+                    onBack ??
                     PlaybackNavigation.maybeOf(context)?.onBack ??
                     () => Navigator.of(context).maybePop(),
               ),

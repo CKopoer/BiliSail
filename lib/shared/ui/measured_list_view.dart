@@ -1,3 +1,4 @@
+import 'package:flutter/rendering.dart' show SliverLayoutDimensions;
 import 'package:material_ui/material_ui.dart';
 
 import 'widget_measurement.dart';
@@ -7,8 +8,8 @@ import 'widget_measurement.dart';
 class MeasuredListView extends StatefulWidget {
   const MeasuredListView({
     super.key,
-    required this.controller,
-    required this.storageKey,
+    required ScrollController this.controller,
+    required Key this.storageKey,
     required this.padding,
     required this.identities,
     required this.itemBuilder,
@@ -16,13 +17,24 @@ class MeasuredListView extends StatefulWidget {
     required this.findChildIndexCallback,
   });
 
-  final ScrollController controller;
-  final Key storageKey;
+  /// The same measured geometry inside an existing, decorated viewport.
+  const MeasuredListView.sliver({
+    super.key,
+    required this.identities,
+    required this.itemBuilder,
+    required this.layoutBuilder,
+  }) : controller = null,
+       storageKey = null,
+       padding = EdgeInsets.zero,
+       findChildIndexCallback = null;
+
+  final ScrollController? controller;
+  final Key? storageKey;
   final EdgeInsets padding;
   // An identity must change whenever its row's natural height can change.
   final List<Object> identities;
   final IndexedWidgetBuilder itemBuilder, layoutBuilder;
-  final ChildIndexGetter findChildIndexCallback;
+  final ChildIndexGetter? findChildIndexCallback;
 
   @override
   State<MeasuredListView> createState() => _MeasuredListViewState();
@@ -77,48 +89,64 @@ class _MeasuredListViewState extends State<MeasuredListView> {
   }
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final width = constraints.maxWidth - widget.padding.horizontal;
-      if (_width != width) {
-        _width = width;
-        _heights.clear();
-        _list = null;
+  Widget build(BuildContext context) => widget.controller == null
+      ? SliverLayoutBuilder(
+          builder: (context, constraints) =>
+              _buildList(context, constraints.crossAxisExtent),
+        )
+      : LayoutBuilder(
+          builder: (context, constraints) => _buildList(
+            context,
+            constraints.maxWidth - widget.padding.horizontal,
+          ),
+        );
+
+  Widget _buildList(BuildContext context, double width) {
+    if (_width != width) {
+      _width = width;
+      _heights.clear();
+      _list = null;
+    }
+    // Composer/keyboard height changes must not replace an otherwise
+    // unchanged list or remeasure its loaded comments.
+    final cached = _list;
+    if (cached != null) return cached;
+    final identities = widget.identities.toSet();
+    _heights.removeWhere((identity, _) => !identities.contains(identity));
+    WidgetMeasurement? measurement;
+    final extents = <double>[];
+    try {
+      for (final (index, identity) in widget.identities.indexed) {
+        extents.add(
+          _heights.putIfAbsent(identity, () {
+            measurement ??= WidgetMeasurement(context, width);
+            return measurement!.height(widget.layoutBuilder(context, index));
+          }),
+        );
       }
-      // Composer/keyboard height changes must not replace an otherwise
-      // unchanged list or remeasure its loaded comments.
-      final cached = _list;
-      if (cached != null) return cached;
-      final identities = widget.identities.toSet();
-      _heights.removeWhere((identity, _) => !identities.contains(identity));
-      WidgetMeasurement? measurement;
-      final extents = <double>[];
-      try {
-        for (final (index, identity) in widget.identities.indexed) {
-          extents.add(
-            _heights.putIfAbsent(identity, () {
-              measurement ??= WidgetMeasurement(context, width);
-              return measurement!.height(widget.layoutBuilder(context, index));
-            }),
+    } finally {
+      measurement?.dispose();
+    }
+    final delegate = _MeasuredDelegate(
+      widget.itemBuilder,
+      childCount: extents.length,
+      findChildIndexCallback: widget.findChildIndexCallback,
+      extent: extents.fold(0, (sum, height) => sum + height),
+    );
+    double itemExtent(int index, SliverLayoutDimensions _) => extents[index];
+    return _list = widget.controller == null
+        ? SliverVariedExtentList(
+            delegate: delegate,
+            itemExtentBuilder: itemExtent,
+          )
+        : ListView.custom(
+            key: widget.storageKey,
+            controller: widget.controller,
+            padding: widget.padding,
+            itemExtentBuilder: itemExtent,
+            childrenDelegate: delegate,
           );
-        }
-      } finally {
-        measurement?.dispose();
-      }
-      return _list = ListView.custom(
-        key: widget.storageKey,
-        controller: widget.controller,
-        padding: widget.padding,
-        itemExtentBuilder: (index, _) => extents[index],
-        childrenDelegate: _MeasuredDelegate(
-          widget.itemBuilder,
-          childCount: extents.length,
-          findChildIndexCallback: widget.findChildIndexCallback,
-          extent: extents.fold(0, (sum, height) => sum + height),
-        ),
-      );
-    },
-  );
+  }
 
   @override
   void dispose() {
