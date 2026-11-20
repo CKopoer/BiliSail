@@ -76,23 +76,25 @@ void main() {
       expect(sizes.single.width, lessThan(sizes.single.height));
       await window.setFullScreen(
         true,
-        orientation: FullScreenOrientation.landscape,
+        orientation: FullScreenOrientation.portrait,
       );
       tester.view.physicalSize = const Size(1600, 1000);
       await tester.pumpAndSettle();
       expect(mediaSize, const Size(1600, 1000));
+      expect(tester.getSize(find.byKey(child)), mediaSize);
       expect(sizes, hasLength(1));
       await show(AppOrientationPreference.landscape);
       expect(mediaSize, const Size(1600, 1000));
       tester.view.physicalSize = const Size(700, 1000);
       await tester.pumpAndSettle();
-      expect(mediaSize.width, greaterThan(mediaSize.height));
+      expect(mediaSize, const Size(700, 1000));
       await window.setFullScreen(
         true,
-        orientation: FullScreenOrientation.portrait,
+        orientation: FullScreenOrientation.landscape,
       );
       await tester.pumpAndSettle();
       expect(mediaSize, const Size(700, 1000));
+      expect(tester.getSize(find.byKey(child)), mediaSize);
       await window.setFullScreen(false);
       await tester.pumpAndSettle();
       expect(mediaSize.width, greaterThan(mediaSize.height));

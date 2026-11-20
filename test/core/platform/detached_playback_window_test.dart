@@ -84,7 +84,7 @@ void main() {
       expect(window.windowService.keepsBrowsePortrait, isTrue);
       await window.windowService.setFullScreen(
         true,
-        orientation: FullScreenOrientation.landscape,
+        orientation: FullScreenOrientation.portrait,
       );
       window.view.physicalSize = const Size(1600, 1000);
       await tester.pumpAndSettle();
@@ -93,15 +93,18 @@ void main() {
       expect(playbackSize, const Size(1600, 1000));
       await window.windowService.setFullScreen(
         true,
-        orientation: FullScreenOrientation.portrait,
+        orientation: FullScreenOrientation.landscape,
       );
       await tester.pumpAndSettle();
-      expect(playbackSize.width, lessThan(playbackSize.height));
+      expect(playbackSize, const Size(1600, 1000));
+      await show(AppOrientationPreference.portrait);
+      expect(playbackSize, const Size(1600, 1000));
       await window.windowService.setFullScreen(false);
       await tester.pumpAndSettle();
-      expect(playbackSize, const Size(1600, 1000));
+      expect(playbackSize.width, lessThan(playbackSize.height));
       await show(AppOrientationPreference.automatic);
       expect(window.windowService.allowsAutomaticRotation, isTrue);
+      expect(playbackSize, const Size(1600, 1000));
       expect(contentKey.currentContext, same(original));
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
