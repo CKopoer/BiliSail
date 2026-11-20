@@ -46,7 +46,7 @@ Map<String, String> nativeCacheOptions({
   return {
     'cache': 'yes',
     'cache-on-disk': 'no',
-    'demuxer-max-bytes': (live ? 8 * mib : 4 * mib).toString(),
+    'demuxer-max-bytes': (8 * mib).toString(),
     'demuxer-max-back-bytes': (live ? 0 : 4 * mib).toString(),
     if (seconds != null) ...{
       'cache-secs': seconds.toStringAsFixed(3),

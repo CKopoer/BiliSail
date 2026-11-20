@@ -111,7 +111,7 @@ void main() {
           .widget<mkv.Video>(find.byType(mkv.Video))
           .controller
           .player;
-      expect(await player.getPropertyAsync('demuxer-max-bytes'), '4194304');
+      expect(await player.getPropertyAsync('demuxer-max-bytes'), '8388608');
       expect(
         await player.getPropertyAsync('demuxer-max-back-bytes'),
         '4194304',
