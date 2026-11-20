@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import '../models.dart';
 import 'video_access_parser.dart';
+import 'web_comment_target.dart';
+import 'web_count.dart';
 import '../models/dynamic_models.dart';
 
 part 'dynamic_content_parser.dart';
@@ -95,8 +97,8 @@ ApiDynamicPost parseDynamicPost(
           ownerMid: _id(author['mid']),
           ownerAvatarUrl: _uri(author['face']),
           duration: _duration(archive['duration_text']),
-          playCount: _number(stat['play']),
-          danmakuCount: _number(stat['danmaku']),
+          playCount: parseWebCount(stat['play']),
+          danmakuCount: parseWebCount(stat['danmaku']),
           publishedAt: _date(author['pub_ts']),
         )
       : null;
@@ -215,9 +217,9 @@ ApiDynamicPost parseDynamicPost(
             linkUrl: Uri.https('t.bilibili.com', '/$id'),
           )
         : parseDynamicPost(original, endpoint, depth: depth + 1),
-    repostCount: _number(_map(counts['forward'])['count']),
-    commentCount: _number(_map(counts['comment'])['count']),
-    likeCount: _number(_map(counts['like'])['count']),
+    repostCount: parseWebCount(_map(counts['forward'])['count']),
+    commentCount: parseWebCount(_map(counts['comment'])['count']),
+    likeCount: parseWebCount(_map(counts['like'])['count']),
     typeLabel: switch (type) {
       'DYNAMIC_TYPE_ARTICLE' => '专栏',
       'DYNAMIC_TYPE_PGC' || 'DYNAMIC_TYPE_PGC_UNION' => '影视',
@@ -284,26 +286,8 @@ Uri? _uri(Object? v) {
       : null;
 }
 
-int? _number(Object? v) {
-  final n = v is int
-      ? v
-      : v is String
-      ? int.tryParse(v)
-      : null;
-  if (n != null) return n >= 0 ? n : null;
-  if (v is String && v.length < 32) {
-    final m = RegExp(r'^(\d+(?:\.\d+)?)(万|亿)$').firstMatch(v);
-    if (m != null) {
-      return ((double.tryParse(m[1] ?? '') ?? 0) *
-              (m[2] == '万' ? 10000 : 100000000))
-          .round();
-    }
-  }
-  return null;
-}
-
 DateTime? _date(Object? v) {
-  final n = _number(v);
+  final n = parseWebCount(v);
   return n == null || n > 253402300799
       ? null
       : DateTime.fromMillisecondsSinceEpoch(n * 1000);
@@ -371,11 +355,8 @@ bool _hasReadableBody(Map<String, Object?> body) {
 ) {
   if (basic.containsKey('comment_id_str') ||
       basic.containsKey('comment_type')) {
-    final oid = _id(basic['comment_id_str']);
-    final value = _number(basic['comment_type']);
-    return oid != null && const {1, 11, 12, 14, 17, 33}.contains(value)
-        ? (oid, value)
-        : (null, null);
+    final target = parseWebCommentTarget(basic);
+    return (target?.oid, target?.type);
   }
   final rid = _id(basic['rid_str']);
   return switch (type) {

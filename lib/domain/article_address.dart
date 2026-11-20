@@ -1,3 +1,5 @@
+import 'content_link.dart';
+
 enum ArticleKind { column, opus }
 
 /// The legacy column ID and the newer opus ID identify different resources.
@@ -32,6 +34,20 @@ final class ArticleAddress {
     final opus = RegExp(r'^/(?:mobile/|h5/|v/)?opus/([1-9][0-9]{0,127})/?$')
         .firstMatch(uri.path)?[1];
     return opus == null ? null : ArticleAddress(ArticleKind.opus, opus);
+  }
+
+  static String? workspaceLocation(Uri uri) {
+    final article = fromWebUri(uri);
+    if (article == null) return null;
+    // Resource notifications use a business ID to look up the dynamic.
+    final path =
+        article.kind == ArticleKind.opus && uri.queryParameters['type'] == '2'
+        ? '/dynamic/resource/${article.id}'
+        : article.location;
+    final comment = CommentLocation.fromWebUri(uri);
+    return comment == null
+        ? path
+        : Uri(path: path, queryParameters: comment.queryParameters).toString();
   }
 
   @override

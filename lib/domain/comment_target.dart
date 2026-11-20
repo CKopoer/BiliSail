@@ -16,6 +16,14 @@ final class CommentTarget {
   final String oid;
   final CommentTargetType type;
 
+  static CommentTarget? fromTypeValue(String? oid, int? value) {
+    if (oid == null || value == null) return null;
+    for (final type in CommentTargetType.values) {
+      if (type.value == value) return CommentTarget(oid, type);
+    }
+    return null;
+  }
+
   @override
   bool operator ==(Object other) =>
       other is CommentTarget && oid == other.oid && type == other.type;

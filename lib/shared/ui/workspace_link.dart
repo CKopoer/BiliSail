@@ -42,9 +42,9 @@ class WorkspaceLinkScope extends InheritedWidget {
 
 extension WorkspaceLinkNavigation on BuildContext {
   bool openArticleLink(Uri target) {
-    final article = ArticleAddress.fromWebUri(target);
-    if (article == null) return false;
-    openWorkspaceLink(article.location);
+    final location = ArticleAddress.workspaceLocation(target);
+    if (location == null) return false;
+    openWorkspaceLink(location);
     return true;
   }
 

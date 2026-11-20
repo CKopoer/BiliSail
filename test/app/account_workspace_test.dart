@@ -5,12 +5,17 @@ import 'dart:async';
 import 'package:bilisail/app/router.dart';
 import 'package:bilisail/core/network/api_requests.dart';
 import 'package:bilisail/core/platform/external_links.dart';
+import 'package:bilisail/domain/article_address.dart';
 import 'package:bilisail/domain/comment_target.dart';
 import 'package:bilisail/domain/content_link.dart';
 import 'package:bilisail/domain/dynamic_post.dart';
 import 'package:bilisail/domain/page_result.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/features/article/application/article_provider.dart';
+import 'package:bilisail/features/article/domain/article_document.dart';
+import 'package:bilisail/features/article/domain/article_repository.dart';
+import 'package:bilisail/features/article/presentation/article_screen.dart';
 import 'package:bilisail/features/auth/application/account_overview_controller.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/auth/domain/auth_repository.dart';
@@ -39,6 +44,7 @@ import 'package:bilisail/features/settings/presentation/settings_screen.dart';
 import 'package:bilisail/features/settings/application/settings_controller.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/domain/settings_repository.dart';
+import 'package:bilisail/shared/ui/comments_panel.dart';
 import 'package:bilisail/shared/ui/paging_tab_strip.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
@@ -76,6 +82,8 @@ void main() {
     WorkspaceNavigationMode mode = WorkspaceNavigationMode.dualTabs,
     DynamicRepositoryFake? dynamics,
     CommentsRepository? dynamicComments,
+    ArticleRepository? articles,
+    (CommentTargetType, CommentsRepository)? articleComments,
     Future<bool> Function(Uri)? externalOpener,
   }) async {
     tester.view.devicePixelRatio = 1;
@@ -114,6 +122,10 @@ void main() {
           if (dynamicComments != null)
             commentsRepositoryProvider(_dynamicTarget.type)
                 .overrideWithValue(dynamicComments),
+          if (articles != null)
+            articleRepositoryProvider.overrideWithValue(articles),
+          if (articleComments case (final type, final repository))
+            commentsRepositoryProvider(type).overrideWithValue(repository),
           if (externalOpener != null)
             externalLinkOpenerProvider.overrideWithValue(externalOpener),
         ],
@@ -122,6 +134,101 @@ void main() {
     );
     await tester.pumpAndSettle();
     return router;
+  }
+
+  for (final (section, mode, width, address, target) in [
+    (
+      InboxSection.replies,
+      WorkspaceNavigationMode.singlePage,
+      390.0,
+      const ArticleAddress(ArticleKind.column, '100'),
+      const CommentTarget('100', CommentTargetType.article),
+    ),
+    (
+      InboxSection.mentions,
+      WorkspaceNavigationMode.multipleTabs,
+      1200.0,
+      const ArticleAddress(ArticleKind.opus, '9007199254740993'),
+      const CommentTarget('456', CommentTargetType.dynamic),
+    ),
+  ]) {
+    testWidgets(
+      '${address.kind.name} notification locates its article comment and returns to the retained inbox',
+      (tester) async {
+        messages.entries = [
+          InboxEntry(
+            id: '999',
+            title: '专栏通知',
+            text: '专栏通知正文',
+            targetUrl: address.webUri.replace(
+              queryParameters: {
+                'comment_root_id': '200',
+                'comment_secondary_id': '202',
+              },
+            ),
+          ),
+        ];
+        final articles = _NotificationArticles(target);
+        final comments = _NotificationComments(showComments: true);
+        final external = <Uri>[];
+        final router = await mount(
+          tester,
+          width: width,
+          mode: mode,
+          initialLocation: '/messages',
+          articles: articles,
+          articleComments: (target.type, comments),
+          externalOpener: (uri) async {
+            external.add(uri);
+            return true;
+          },
+        );
+        await tester.tap(
+          find.byKey(ValueKey('message-section-${section.name}')),
+        );
+        await tester.pumpAndSettle();
+        final inbox = tester.state(find.byType(MessagesScreen));
+        final reads = messages.reads;
+        await tester.tap(
+          find.text(section == InboxSection.replies ? '查看原内容' : '专栏通知正文'),
+        );
+        await tester.pumpAndSettle();
+
+        final location = router.routeInformationProvider.value.uri;
+        expect(location.path, address.location);
+        expect(location.queryParameters['comment_root_id'], '200');
+        expect(location.queryParameters['comment_secondary_id'], '202');
+        expect(articles.reads, [address]);
+        final article = find.byType(ArticleScreen);
+        final panel = find.descendant(
+          of: article,
+          matching: find.byType(CommentsPanel),
+        );
+        expect(tester.widget<CommentsPanel>(panel).target, target);
+        expect(comments.locations, [
+          (target.oid, const CommentLocation('200', replyId: '202')),
+        ]);
+        expect(find.text('根楼层的评论正文').hitTestable(), findsOneWidget);
+        expect(find.text('被定位的回复').hitTestable(), findsOneWidget);
+        expect(external, isEmpty);
+
+        await tester.tap(findMaterialTooltip('返回评论'));
+        await tester.pumpAndSettle();
+        expect(find.text('被定位的回复').hitTestable(), findsNothing);
+        expect(find.text('普通评论').hitTestable(), findsOneWidget);
+
+        await tester.tap(
+          find.descendant(of: article, matching: findMaterialTooltip('返回')),
+        );
+        await tester.pumpAndSettle();
+        expect(router.routeInformationProvider.value.uri.path, '/messages');
+        expect(tester.state(find.byType(MessagesScreen)), same(inbox));
+        expect(find.text('专栏通知正文').hitTestable(), findsOneWidget);
+        expect(messages.reads, reads);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
   }
 
   for (final (section, mode, width, targetPath) in [
@@ -753,8 +860,32 @@ final class _NotificationDynamics extends DynamicRepositoryFake {
   }
 }
 
+final class _NotificationArticles implements ArticleRepository {
+  _NotificationArticles(this.target);
+  final CommentTarget target;
+  final reads = <ArticleAddress>[];
+
+  @override
+  Future<ArticleDocument> read(
+    ArticleAddress address,
+    RequestCancellation cancellation,
+  ) async {
+    reads.add(address);
+    return ArticleDocument(
+      url: address.webUri,
+      title: '通知原专栏',
+      blocks: const [],
+      commentTarget: target,
+      commentCount: 2,
+    );
+  }
+}
+
 final class _NotificationComments extends Fake
     implements CommentsRepository, CommentLocationRepository {
+  _NotificationComments({this.showComments = false});
+
+  final bool showComments;
   final locations = <(String, CommentLocation)>[];
 
   @override
@@ -769,7 +900,12 @@ final class _NotificationComments extends Fake
     CommentSort sort,
     RequestCancellation cancellation, {
     String? cursor,
-  }) async => const CommentPage(items: [], hasMore: false);
+  }) async => CommentPage(
+    items: showComments
+        ? const [CommentEntry(id: '203', author: '读者', message: '普通评论')]
+        : const [],
+    hasMore: false,
+  );
 
   @override
   Future<LocatedCommentThread> locate(
@@ -779,7 +915,7 @@ final class _NotificationComments extends Fake
   ) async {
     locations.add((oid, location));
     return const LocatedCommentThread(
-      root: CommentEntry(id: '200', author: '评论作者', message: '原评论'),
+      root: CommentEntry(id: '200', author: '评论作者', message: '根楼层的评论正文'),
       page: CommentPage(
         items: [
           CommentEntry(

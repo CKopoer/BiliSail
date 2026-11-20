@@ -14,6 +14,7 @@ void main() {
     final transport = _Transport({
       _legacy: {
         'id': '123',
+        'dyn_id_str': _id,
         'title': '旧版标题',
         'author': {'mid': '42', 'name': '作者', 'face': '//i0.hdslb.com/f.jpg'},
         'publish_time': 1700000000,
@@ -37,6 +38,10 @@ void main() {
     expect(document.authorAvatar?.host, 'i0.hdslb.com');
     expect(document.publishedAt?.millisecondsSinceEpoch, 1700000000000);
     expect(document.url.path, '/read/cv123');
+    expect(document.commentOid, '123');
+    expect(document.commentType, 12);
+    expect(document.commentCount, isNull);
+    expect(document.commentForbidden, isFalse);
     expect(document.blocks.map((block) => block.kind), [
       ApiArticleBlockKind.heading,
       ApiArticleBlockKind.paragraph,
@@ -69,6 +74,11 @@ void main() {
         _opus: {
           'item': {
             'id_str': _id,
+            'basic': {
+              'rid_str': '123',
+              'comment_id_str': '9007199254740993123',
+              'comment_type': '17',
+            },
             'modules': [
               {
                 'module_title': {'text': '图文标题'},
@@ -82,6 +92,11 @@ void main() {
               },
               {
                 'module_content': {'paragraphs': _paragraphs},
+              },
+              {
+                'module_stat': {
+                  'comment': {'count': '1.2万', 'forbidden': false},
+                },
               },
             ],
           },
@@ -114,6 +129,12 @@ void main() {
         ApiArticleBlockKind.code,
       ]);
       expect(direct.blocks.first.text.single.text, '图文正文');
+      for (final article in [migrated, direct]) {
+        expect(article.commentOid, '9007199254740993123');
+        expect(article.commentType, 17);
+        expect(article.commentCount, 12000);
+        expect(article.commentForbidden, isFalse);
+      }
     },
   );
 
@@ -122,10 +143,10 @@ void main() {
     () async {
       final transport = _Transport({
         _opus: {
-          'fallback': {'id': '123'},
+          'fallback': {'id': '456'},
         },
         _legacy: {
-          'id': 123,
+          'id': 456,
           'opus': {
             'content': {'paragraphs': _paragraphs},
           },
@@ -140,8 +161,10 @@ void main() {
         _opus,
         _legacy,
       ]);
-      expect(doc.url.path, '/read/cv123');
+      expect(doc.url.path, '/read/cv456');
       expect(doc.blocks.first.text.single.text, '图文正文');
+      expect(doc.commentOid, '456');
+      expect(doc.commentType, 12);
     },
   );
 
@@ -179,12 +202,18 @@ void main() {
       final response = {
         'item': {
           'id_str': _id,
+          'basic': {'comment_id_str': '123', 'comment_type': 12},
           'modules': [
             {
               'module_blocked': {'title': '内容受限', 'hint_message': '请先登录'},
             },
             {
               'module_content': {'paragraphs': _paragraphs},
+            },
+            {
+              'module_stat': {
+                'comment': {'count': 7},
+              },
             },
           ],
         },
@@ -195,6 +224,9 @@ void main() {
       final blocked = await client.read(_id, opus: true);
       expect(blocked.accessMessage, '内容受限\n请先登录');
       expect(blocked.blocks, isEmpty);
+      expect(blocked.commentOid, isNull);
+      expect(blocked.commentType, isNull);
+      expect(blocked.commentCount, isNull);
       await expectLater(
         client.read('123', opus: true),
         throwsA(
@@ -205,6 +237,78 @@ void main() {
           ),
         ),
       );
+    },
+  );
+
+  test(
+    'reads a closed opus comment flag without discarding the article',
+    () async {
+      final client = ArticleClient(
+        BiliApiClient(
+          transport: _Transport({
+            _opus: {
+              'item': {
+                'id_str': _id,
+                'basic': {'comment_id_str': '123', 'comment_type': 12},
+                'modules': [
+                  {
+                    'module_content': {'paragraphs': _paragraphs},
+                  },
+                  {
+                    'module_stat': {
+                      'comment': {'count': 0, 'forbidden': true},
+                    },
+                  },
+                ],
+              },
+            },
+          }),
+        ),
+      );
+      final document = await client.read(_id, opus: true);
+      expect(document.commentForbidden, isTrue);
+      expect(document.commentOid, '123');
+      expect(document.commentType, 12);
+      expect(document.commentCount, 0);
+      expect(document.blocks, isNotEmpty);
+    },
+  );
+
+  test(
+    'opus never guesses a missing, malformed or unsupported comment target',
+    () async {
+      for (final basic in [
+        null,
+        {'rid_str': '123'},
+        {'rid_str': '123', 'comment_type': 12},
+        {'comment_id_str': '123'},
+        {'comment_id_str': '123', 'comment_type': 99},
+        {'comment_id_str': '12.3', 'comment_type': 12},
+      ]) {
+        final client = ArticleClient(
+          BiliApiClient(
+            transport: _Transport({
+              _opus: {
+                'item': {
+                  'id_str': _id,
+                  'basic': basic,
+                  'modules': [
+                    {
+                      'module_content': {'paragraphs': _paragraphs},
+                    },
+                  ],
+                },
+              },
+            }),
+          ),
+        );
+        final document = await client.read(_id, opus: true);
+        expect(document.commentOid, isNull);
+        expect(document.commentType, isNull);
+        expect(document.commentCount, isNull);
+        expect(document.commentForbidden, isFalse);
+        expect(document.blocks, isNotEmpty);
+      }
     },
   );
 

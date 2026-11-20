@@ -3,6 +3,7 @@ import 'package:bili_api/bili_api.dart';
 import '../../../core/network/api_requests.dart';
 import '../../../domain/app_failure.dart';
 import '../../../domain/article_address.dart';
+import '../../../domain/comment_target.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/user.dart';
 import '../domain/article_document.dart';
@@ -35,6 +36,12 @@ final class ApiArticleRepository implements ArticleRepository {
           authorAvatar: article.authorAvatar,
           publishedAt: article.publishedAt,
           accessMessage: article.accessMessage,
+          commentTarget: CommentTarget.fromTypeValue(
+            article.commentOid,
+            article.commentType,
+          ),
+          commentCount: article.commentCount,
+          commentForbidden: article.commentForbidden,
           blocks: List.unmodifiable(article.blocks.map(_block)),
         );
       }, cancellation: cancellation);

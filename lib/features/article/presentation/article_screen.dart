@@ -7,6 +7,9 @@ import '../../../domain/app_failure.dart';
 import '../../../domain/article_address.dart';
 import '../../../domain/user.dart';
 import '../../../shared/ui/app_network_image.dart';
+import '../../../shared/ui/comments_panel.dart';
+import '../../../shared/ui/content_link_scope.dart';
+import '../../../shared/ui/dynamic_detail_layout.dart';
 import '../../../shared/ui/image_viewer.dart';
 import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/playback_navigation.dart';
@@ -21,11 +24,13 @@ final class ArticleScreen extends ConsumerWidget {
     required this.onOpenUser,
     required this.onOpenLink,
     required this.onOpenWeb,
+    required this.onLogin,
   });
 
   final ArticleAddress address;
   final ValueChanged<UserId> onOpenUser;
   final ValueChanged<Uri> onOpenLink, onOpenWeb;
+  final VoidCallback onLogin;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -66,6 +71,7 @@ final class ArticleScreen extends ConsumerWidget {
                     document: document,
                     onOpenUser: onOpenUser,
                     onOpenLink: onOpenLink,
+                    onLogin: onLogin,
                   ),
                   loading: () => const StateView.loading(message: '正在加载专栏…'),
                   error: (error, _) => StateView.error(
@@ -87,12 +93,14 @@ final class _ArticleBody extends StatelessWidget {
     required this.document,
     required this.onOpenUser,
     required this.onOpenLink,
+    required this.onLogin,
   });
 
   final PageStorageKey<String> storageKey;
   final ArticleDocument document;
   final ValueChanged<UserId> onOpenUser;
   final ValueChanged<Uri> onOpenLink;
+  final VoidCallback onLogin;
 
   @override
   Widget build(BuildContext context) {
@@ -108,96 +116,109 @@ final class _ArticleBody extends StatelessWidget {
     }
     final date = document.publishedAt;
     final authorId = document.authorId;
-    return Align(
-      alignment: Alignment.topCenter,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 800),
-        child: SelectionArea(
-          child: CustomScrollView(
-            key: storageKey,
-            slivers: [
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
-                sliver: SliverList.builder(
-                  itemCount: blocks.length + 1,
-                  itemBuilder: (context, index) {
-                    if (index > 0) {
-                      final block = blocks[index - 1];
-                      final photo = imageIndexes[index - 1];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: photo == null
-                            ? _TextBlock(block: block, onOpenLink: onOpenLink)
-                            : _ArticleImage(
-                                block: block,
-                                images: images,
-                                index: photo,
-                              ),
-                      );
-                    }
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (document.title.isNotEmpty)
-                          Semantics(
-                            header: true,
-                            child: Text(
-                              document.title,
-                              style: theme.textTheme.headlineSmall,
-                            ),
-                          ),
-                        if (document.author.isNotEmpty || date != null)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            child: Wrap(
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              spacing: 12,
-                              runSpacing: 4,
-                              children: [
-                                if (document.author.isNotEmpty)
-                                  if (authorId != null)
-                                    TextButton.icon(
-                                      onPressed: () => onOpenUser(authorId),
-                                      icon: NetworkAvatar(
-                                        url: document.authorAvatar,
-                                        name: document.author,
-                                        radius: 14,
-                                      ),
-                                      label: Text(document.author),
-                                    )
-                                  else
-                                    Text(
-                                      document.author,
-                                      style: theme.textTheme.bodyMedium,
-                                    ),
-                                if (date != null)
-                                  Text(
-                                    MaterialLocalizations.of(context)
-                                        .formatCompactDate(date.toLocal()),
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: theme.colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        if (document.accessMessage case final message?)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 20),
-                            child: Text(
-                              message,
-                              style: theme.textTheme.bodyLarge,
-                            ),
-                          ),
-                        if (document.title.isNotEmpty)
-                          const SizedBox(height: 8),
-                      ],
-                    );
-                  },
+    final target = document.commentTarget;
+    final comments = document.accessMessage != null
+        ? null
+        : target == null || document.commentForbidden
+        ? Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                document.commentForbidden ? '该专栏已关闭评论' : '该专栏暂不支持评论，请在官方页面查看',
+              ),
+            ),
+          )
+        : CommentsPanel(
+            target: target,
+            replyCount: document.commentCount,
+            onLogin: onLogin,
+            onOpenUser: onOpenUser,
+          );
+    final body = SliverList.builder(
+      itemCount: blocks.length + 1,
+      itemBuilder: (context, index) {
+        if (index > 0) {
+          final block = blocks[index - 1];
+          final photo = imageIndexes[index - 1];
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: photo == null
+                ? _TextBlock(block: block, onOpenLink: onOpenLink)
+                : _ArticleImage(block: block, images: images, index: photo),
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (document.title.isNotEmpty)
+              Semantics(
+                header: true,
+                child: Text(
+                  document.title,
+                  style: theme.textTheme.headlineSmall,
                 ),
               ),
-            ],
-          ),
+            if (document.author.isNotEmpty || date != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 12,
+                  runSpacing: 4,
+                  children: [
+                    if (document.author.isNotEmpty)
+                      if (authorId != null)
+                        TextButton.icon(
+                          onPressed: () => onOpenUser(authorId),
+                          icon: NetworkAvatar(
+                            url: document.authorAvatar,
+                            name: document.author,
+                            radius: 14,
+                          ),
+                          label: Text(document.author),
+                        )
+                      else
+                        Text(
+                          document.author,
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                    if (date != null)
+                      Text(
+                        MaterialLocalizations.of(context)
+                            .formatCompactDate(date.toLocal()),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            if (document.accessMessage case final message?)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                child: Text(message, style: theme.textTheme.bodyLarge),
+              ),
+            if (document.title.isNotEmpty) const SizedBox(height: 8),
+          ],
+        );
+      },
+    );
+    return SelectionArea(
+      child: DynamicDetailLayout.sliver(
+        key: storageKey,
+        commentLink: ContentLinkScope.of(context),
+        comments: comments == null
+            ? null
+            : SelectionContainer.disabled(child: comments),
+        sliver: SliverLayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.crossAxisExtent;
+            final inset = 20.0 + (width > 800 ? (width - 800) / 2 : 0);
+            return SliverPadding(
+              padding: EdgeInsets.fromLTRB(inset, 24, inset, 40),
+              sliver: body,
+            );
+          },
         ),
       ),
     );
