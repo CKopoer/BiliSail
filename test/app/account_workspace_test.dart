@@ -392,6 +392,18 @@ void main() {
       await select(tester, '下载');
       expect(find.byType(DownloadsScreen), findsOneWidget);
       expect(downloads.initializations, 1);
+      final queueTab = find.widgetWithText(TextButton, '队列');
+      final completedTab = find.widgetWithText(TextButton, '已完成');
+      final refresh = find.byTooltip('刷新下载');
+      final settings = find.byTooltip('下载设置');
+      final tabCenter = tester.getCenter(queueTab).dy;
+      expect(tester.getCenter(completedTab).dy, tabCenter);
+      expect(tester.getCenter(refresh).dy, tabCenter);
+      expect(tester.getCenter(settings).dy, tabCenter);
+      expect(
+        tester.getTopLeft(refresh).dx,
+        greaterThanOrEqualTo(tester.getTopRight(completedTab).dx),
+      );
       await tester.tap(find.text('已完成'));
       await tester.pumpAndSettle();
       await tester.enterText(
