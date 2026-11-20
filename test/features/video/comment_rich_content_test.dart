@@ -352,17 +352,20 @@ void main() {
           await tester.pump();
           await tester.pump(const Duration(milliseconds: 300));
           expect(find.byType(ImageViewer), findsOneWidget);
-          expect(originals.sources, [
-            Uri.parse('$source@1280w_1280h_0e.webp').replace(scheme: 'https'),
-          ]);
+          expect(originals.sources, isEmpty);
+          expect(downloaded, hasLength(1));
+          expect(find.bySemanticsLabel('预览图 1'), findsOneWidget);
           expect(find.text('查看原图'), findsOneWidget);
           await tester.tap(find.text('查看原图'));
           await tester.pump();
-          expect(originals.sources.last, source);
+          expect(originals.sources, [source]);
           expect(downloaded, hasLength(1));
           await tester.tap(findMaterialTooltip('关闭图片'));
           await tester.pump();
           await tester.pump(const Duration(milliseconds: 300));
+          expect(cache.previewFor(source)?.bytes, bytes);
+          await cache.changeScope('other-account');
+          expect(cache.previewFor(source), isNull);
           expect(tester.takeException(), isNull);
         } finally {
           await tester.pumpWidget(const SizedBox());

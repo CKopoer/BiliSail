@@ -278,6 +278,7 @@ class _ProfileHeaderState extends State<ProfileHeader> {
                             child: switch (bannerUrl) {
                               final url? => AppCoverImage(
                                 url: url.toString(),
+                                opensViewer: onOpenBanner != null,
                                 excludeFromSemantics: true,
                                 errorBuilder: (_, _, _) =>
                                     const SizedBox.expand(),
@@ -309,6 +310,7 @@ class _ProfileHeaderState extends State<ProfileHeader> {
                                   children: [
                                     NetworkAvatar(
                                       url: profile.avatarUrl,
+                                      opensViewer: onOpenAvatar != null,
                                       pendantUrl: profile.pendantUrl,
                                       name: profile.name,
                                       radius: profile.pendantUrl == null

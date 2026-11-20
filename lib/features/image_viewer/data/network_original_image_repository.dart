@@ -11,8 +11,6 @@ final class NetworkOriginalImageRepository implements OriginalImageRepository {
   NetworkOriginalImageRepository({this.loader = loadPublicImage});
   final ImageByteLoader loader;
   static const maxBytes = 32 * 1024 * 1024;
-  static const maxPixels = 64 * 1024 * 1024;
-  static const maxDimension = 262144;
   static const timeout = Duration(seconds: 30);
 
   @override
@@ -45,9 +43,10 @@ final class NetworkOriginalImageRepository implements OriginalImageRepository {
     try {
       descriptor = await ui.ImageDescriptor.encoded(buffer);
       request.check();
-      if (descriptor.width > maxDimension ||
-          descriptor.height > maxDimension ||
-          descriptor.width * descriptor.height > maxPixels) {
+      if (!OriginalImage.acceptsDimensions(
+        descriptor.width,
+        descriptor.height,
+      )) {
         throw const OriginalImageLimit();
       }
       return OriginalImage(

@@ -647,6 +647,7 @@ Widget _image(
   BoxFit fit = BoxFit.contain,
   int decodeWidth = 256,
   bool layoutOnly = false,
+  bool opensViewer = false,
 }) {
   if (layoutOnly) return const SizedBox.expand();
   if (url == null || !['http', 'https'].contains(url.scheme)) {
@@ -654,6 +655,7 @@ Widget _image(
   }
   return AppNetworkImage(
     url: publicImageThumbnail(url, width: decodeWidth).toString(),
+    viewerOriginal: opensViewer ? url : null,
     cacheWidth: decodeWidth,
     fit: fit,
     errorBuilder: (_, _, _) =>
@@ -684,6 +686,7 @@ Widget _picture(
       fit: fit,
       decodeWidth: decodeWidth,
       layoutOnly: layoutOnly,
+      opensViewer: true,
     ),
   ),
 );

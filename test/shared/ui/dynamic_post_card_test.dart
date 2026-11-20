@@ -93,10 +93,10 @@ void main() {
       await waitForImages();
       expect(downloaded, hasLength(1));
       expect(downloaded, isNot(contains(source)));
-      expect(originals.sources, [Uri.parse('$source@1280w_1280h_0e.webp')]);
+      expect(originals.sources, isEmpty);
       await tester.tap(find.text('查看原图'));
       await tester.pumpAndSettle();
-      expect(originals.sources.last, source);
+      expect(originals.sources, [source]);
       expect(find.byType(Dialog), findsOneWidget);
       expect(find.byIcon(Icons.image_not_supported_outlined), findsNothing);
       expect(tester.takeException(), isNull);
