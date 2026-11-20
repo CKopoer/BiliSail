@@ -6088,6 +6088,128 @@ void main() {
     }
   }
 
+  for (final (viewport, dimensions) in const [
+    (Size(1280, 720), VideoDimensions(1080, 1920)),
+    (Size(1280, 720), VideoDimensions(1440, 1080)),
+    (Size(1680, 720), VideoDimensions(1920, 1080)),
+  ]) {
+    testWidgets('fullscreen danmaku paints in both side bars for '
+        '${dimensions.width}x${dimensions.height} in $viewport', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = viewport;
+      addTearDown(tester.view.reset);
+      final engine = _FakeEngine()
+        ..surfaceColor = Colors.blue
+        ..surfaceAspectRatio = dimensions.width / dimensions.height;
+      final session = _session(engine, danmakuNow: () => Duration.zero);
+      addTearDown(session.close);
+      final window = _FakeWindowService();
+      final boundary = GlobalKey();
+      await tester.pumpWidget(
+        RepaintBoundary(
+          key: boundary,
+          child: _app(session, window, const AppSettings.defaults()),
+        ),
+      );
+      await _pumpFrames(tester);
+      engine._emit(
+        engine.currentSnapshot.copyWith(videoDimensions: dimensions),
+      );
+      await session.pause();
+      await _showControls(tester);
+      final overlay = find.byType(DanmakuOverlay);
+      final videoPass = find.byWidgetPredicate(
+        (widget) =>
+            widget is ClipRect &&
+            widget.clipBehavior == Clip.antiAliasWithSaveLayer,
+      );
+      final inlineBounds = tester.getRect(overlay);
+      expect(videoPass, findsNothing);
+      await tester.tap(findMaterialTooltip('全屏（F）'));
+      await _pumpFrames(tester);
+      expect(window.fullScreen, isTrue);
+      await tester.tapAt(_surfacePoint(tester));
+      await _pumpSurfaceTap(tester);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('player-controls')), findsNothing);
+
+      final picture = tester.getRect(
+        find.byKey(const ValueKey('fake-video-picture')),
+      );
+      expect(picture.left, greaterThan(0));
+      expect(picture.right, lessThan(viewport.width));
+      expect(tester.getRect(overlay), Offset.zero & viewport);
+      expect(videoPass, findsOneWidget);
+      expect(
+        find.descendant(of: videoPass, matching: find.byType(VideoSurface)),
+        findsOneWidget,
+      );
+      expect(find.descendant(of: videoPass, matching: overlay), findsNothing);
+      final render =
+          boundary.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+
+      session.danmaku.replaceEvents([
+        DanmakuEvent(
+          id: 'top',
+          at: Duration.zero,
+          text: 'M' * 65,
+          mode: DanmakuMode.top,
+        ),
+      ]);
+      session.danmaku.seekConfirmed(Duration.zero);
+      await _pumpFrames(tester);
+
+      await tester.runAsync(() async {
+        final image = await render.toImage();
+        try {
+          final pixels = (await image.toByteData(
+            format: ImageByteFormat.rawRgba,
+          ))!;
+          bool containsText(int left, int right) {
+            for (var y = 0; y < 100; y++) {
+              for (var x = left; x < right; x++) {
+                // The frame is blue and both side bars are black.
+                if (pixels.getUint8((y * image.width + x) * 4) > 100) {
+                  return true;
+                }
+              }
+            }
+            return false;
+          }
+
+          expect(containsText(0, picture.left.floor()), isTrue);
+          expect(containsText(picture.right.ceil(), image.width), isTrue);
+        } finally {
+          image.dispose();
+        }
+      });
+
+      // React to a viewport that fits the source exactly and then widens,
+      // without detaching or reopening the video to change the paint pass.
+      tester.view.physicalSize = Size(
+        viewport.height * dimensions.width / dimensions.height,
+        viewport.height,
+      );
+      await _pumpFrames(tester);
+      expect(videoPass, findsNothing);
+      tester.view.physicalSize = viewport;
+      await _pumpFrames(tester);
+      expect(videoPass, findsOneWidget);
+      expect(engine.opens, 1);
+      expect(engine.maxSurfaces, 1);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await _pumpFrames(tester);
+      expect(window.fullScreen, isFalse);
+      expect(videoPass, findsNothing);
+      expect(tester.getRect(overlay), inlineBounds);
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+  }
+
   for (final controlsVisible in [true, false]) {
     testWidgets(
       'fullscreen round trips preserve scrolling danmaku with controls $controlsVisible',
@@ -11549,6 +11671,7 @@ final class _RecordingComposition implements VideoCompositionAdapter {
 
 final class _FakeEngine implements PlayerEngine, VideoOutputSource {
   Color surfaceColor = Colors.black;
+  double? surfaceAspectRatio;
   bool interactiveSurface = false;
   int surfaceGestures = 0;
   final _snapshots = StreamController<PlaybackSnapshot>.broadcast(sync: true);
@@ -11690,23 +11813,37 @@ final class _FakeSurfaceState extends State<_FakeSurface> {
   }
 
   @override
-  Widget build(BuildContext context) => widget.engine.interactiveSurface
-      // Match the pinned media-kit Video's low-slop scale recognizer, even
-      // though its panEnabled is false and the app uses NoVideoControls.
-      ? MediaQuery(
-          data: MediaQuery.of(context).copyWith(
-            gestureSettings: const DeviceGestureSettings(touchSlop: 4),
-          ),
-          child: InteractiveViewer(
-            panEnabled: false,
-            minScale: .75,
-            maxScale: 2,
-            boundaryMargin: const EdgeInsets.all(double.infinity),
-            onInteractionStart: (_) => widget.engine.surfaceGestures++,
-            child: const ColoredBox(color: Colors.black),
-          ),
-        )
-      : ColoredBox(color: widget.engine.surfaceColor);
+  Widget build(
+    BuildContext context,
+  ) => switch (widget.engine.surfaceAspectRatio) {
+    final ratio? => Center(
+      child: AspectRatio(
+        aspectRatio: ratio,
+        child: ColoredBox(
+          key: const ValueKey('fake-video-picture'),
+          color: widget.engine.surfaceColor,
+        ),
+      ),
+    ),
+    null =>
+      widget.engine.interactiveSurface
+          // Match the pinned media-kit Video's low-slop scale recognizer, even
+          // though its panEnabled is false and the app uses NoVideoControls.
+          ? MediaQuery(
+              data: MediaQuery.of(context).copyWith(
+                gestureSettings: const DeviceGestureSettings(touchSlop: 4),
+              ),
+              child: InteractiveViewer(
+                panEnabled: false,
+                minScale: .75,
+                maxScale: 2,
+                boundaryMargin: const EdgeInsets.all(double.infinity),
+                onInteractionStart: (_) => widget.engine.surfaceGestures++,
+                child: const ColoredBox(color: Colors.black),
+              ),
+            )
+          : ColoredBox(color: widget.engine.surfaceColor),
+  };
 }
 
 final class _FakePlaybackRepository implements PlaybackRepository {

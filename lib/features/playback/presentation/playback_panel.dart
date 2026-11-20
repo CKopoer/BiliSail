@@ -1792,6 +1792,41 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
     return overlay;
   }
 
+  Widget _buildVideoPicture(BuildContext context, AppSettings settings) {
+    final session = widget.session;
+    final picture = PlayerPicture(
+      controller: widget.picture,
+      child: VideoSurface(engine: session.engine),
+    );
+    if (!widget.fullScreen ||
+        Theme.of(context).platform != TargetPlatform.windows) {
+      return picture;
+    }
+    return PlaybackSnapshotBuilder(
+      snapshots: session.snapshots,
+      select: (snapshot) => snapshot.videoDimensions,
+      builder: (context, snapshot) => LayoutBuilder(
+        builder: (context, constraints) {
+          final dimensions = snapshot.videoDimensions;
+          final hasSideBars =
+              dimensions != null &&
+              dimensions.width > 0 &&
+              dimensions.height > 0 &&
+              constraints.maxWidth * dimensions.height >
+                  constraints.maxHeight * dimensions.width;
+          // Isolate the native texture pass when its fitted picture leaves
+          // side bars. The danmaku is then painted in the viewport's pass.
+          return ClipRect(
+            clipBehavior: settings.danmakuEnabled && hasSideBars
+                ? Clip.antiAliasWithSaveLayer
+                : Clip.none,
+            child: picture,
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildPlayer(BuildContext context) {
     final session = widget.session;
     return InputProtection(
@@ -1900,10 +1935,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                           context,
                           layers: [
                             if (widget.active)
-                              PlayerPicture(
-                                controller: widget.picture,
-                                child: VideoSurface(engine: session.engine),
-                              ),
+                              _buildVideoPicture(context, settings),
                             if (widget.active &&
                                 settings.danmakuEnabled &&
                                 !session.isResolving &&
