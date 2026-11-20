@@ -23,7 +23,7 @@ final imageViewerControllerProvider = NotifierProvider.autoDispose
 
 final class ImageViewerRequest {
   ImageViewerRequest(List<Uri> images, int index)
-    : images = List.unmodifiable(images.take(9)),
+    : images = List.unmodifiable(images),
       initialIndex = index {
     if (this.images.isEmpty) throw ArgumentError.value(images, 'images');
   }
