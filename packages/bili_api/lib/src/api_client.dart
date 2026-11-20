@@ -547,6 +547,7 @@ final class BiliApiClient {
   /// Large bodies move UTF-8, JSON and all DTO parsing together off the caller.
   Future<ApiPgcSeason> requestPgcSeason(
     Uri uri, {
+    bool requireEpisodes = false,
     ApiRequestContext? context,
   }) async {
     const endpoint = 'pgc_season';
@@ -557,39 +558,54 @@ final class BiliApiClient {
         uri.path != '/pgc/view/web/season') {
       throw ArgumentError('Unsupported PGC destination');
     }
+    final active = boundedReadContext(context);
     final epoch = _sessionProvider?.sessionEpoch;
-    final deadline = context?.deadline ?? _clock().add(timeout);
-    final activeContext = ApiRequestContext(
-      cancellation: context?.cancellation,
-      deadline: deadline,
-      sessionEpoch: context?.sessionEpoch,
-    );
+    final deadline = active.deadline!;
+    final attempts = _ReadAttemptBudget();
     void check() =>
-        _checkDecodeContext(activeContext, epoch, deadline, endpoint: endpoint);
-    check();
-    final response = await _request(uri, endpoint, activeContext);
-    check();
+        _checkDecodeContext(active, epoch, deadline, endpoint: endpoint);
+    while (true) {
+      check();
+      final response = await _request(
+        uri,
+        endpoint,
+        active,
+        attemptBudget: attempts,
+      );
+      check();
+      final season = await _decodePgcSeason(response, active, endpoint, check);
+      check();
+      if (!requireEpisodes || season.episodes.isNotEmpty) return season;
+      if (attempts.isExhausted) {
+        throw const ApiFailure(ApiFailureCategory.unavailable, endpoint);
+      }
+      await _retryDelay(attempts.used - 1, deadline, active.cancellation);
+    }
+  }
+
+  Future<ApiPgcSeason> _decodePgcSeason(
+    ApiHttpResponse response,
+    ApiRequestContext context,
+    String endpoint,
+    void Function() check,
+  ) async {
     // Also enforce the transport's 4 MiB limit for injected transports and
     // before copying bytes into the worker message.
     if (response.body.length > 4 * 1024 * 1024) {
-      throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
+      throw ApiFailure(ApiFailureCategory.protocol, endpoint);
     }
     if (response.body.length < 512 * 1024) {
-      final season = decodePgcSeasonBytes(response.body);
-      check();
-      return season;
+      return decodePgcSeasonBytes(response.body);
     }
     await _decodeGate.enter(
-      activeContext.cancellation,
-      deadline,
+      context.cancellation,
+      context.deadline!,
       _clock,
       endpoint: endpoint,
     );
     try {
       check();
-      final season = await _pgcSeasonDecoder(response.body);
-      check();
-      return season;
+      return await _pgcSeasonDecoder(response.body);
     } finally {
       // Cancellation discards output; the running worker retains its slot
       // until it really finishes, so cancelled work cannot exceed the budget.

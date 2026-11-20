@@ -7,15 +7,24 @@ import 'package:bili_api/src/decoding/pgc_season_decoder.dart';
 import 'package:test/test.dart';
 
 final class _Transport implements ApiTransport {
-  _Transport(this.body);
+  _Transport(this.body, {this.responses = const [], this.onRead});
   final Uint8List body;
+  final List<ApiHttpResponse> responses;
+  final void Function()? onRead;
+  int reads = 0;
   @override
   Future<ApiHttpResponse> get(
     Uri uri, {
     required Map<String, String> headers,
     required Duration timeout,
     ApiCancellation? cancellation,
-  }) async => ApiHttpResponse(200, body, const {});
+  }) async {
+    final index = reads++;
+    onRead?.call();
+    return index < responses.length
+        ? responses[index]
+        : ApiHttpResponse(200, body, const {});
+  }
 }
 
 final class _Session implements ApiSessionProvider {
@@ -61,6 +70,101 @@ Matcher _failure(ApiFailureCategory category) => isA<ApiFailure>()
 Future<void> _turn() => Future<void>.delayed(Duration.zero);
 
 void main() {
+  test('empty episode detail and HTTP failures share three attempts', () async {
+    final transport = _Transport(
+      _body(count: 0),
+      responses: [
+        ApiHttpResponse(200, _body(count: 0), const {}),
+        ApiHttpResponse(503, Uint8List(0), const {}),
+        ApiHttpResponse(200, _body(count: 0), const {}),
+      ],
+    );
+    final client = PgcClient(BiliApiClient(transport: transport));
+    await expectLater(
+      client.getSeason(episodeId: '2', requireEpisodes: true),
+      throwsA(_failure(ApiFailureCategory.unavailable)),
+    );
+    expect(transport.reads, 3);
+  });
+
+  test('empty worker response shares the detail recovery policy', () async {
+    final transport = _Transport(
+      _body(),
+      responses: [
+        ApiHttpResponse(200, _body(count: 0, padding: 512 * 1024), const {}),
+      ],
+    );
+    final client = PgcClient(BiliApiClient(transport: transport));
+    final season = await client.getSeason(
+      episodeId: '2',
+      requireEpisodes: true,
+    );
+    expect(season.episodes.map((episode) => episode.episodeId), contains('2'));
+    expect(transport.reads, 2);
+  });
+
+  test('explicit permission errors do not retry episode detail', () async {
+    final transport = _Transport(_body(code: -403));
+    final client = PgcClient(BiliApiClient(transport: transport));
+    await expectLater(
+      client.getSeason(episodeId: '2', requireEpisodes: true),
+      throwsA(_failure(ApiFailureCategory.permission)),
+    );
+    expect(transport.reads, 1);
+  });
+
+  for (final invalidation in ['cancel', 'epoch', 'deadline']) {
+    test('empty episode detail does not retry after $invalidation', () async {
+      final session = _Session();
+      final cancellation = ApiCancellation();
+      var now = DateTime.utc(2026);
+      final deadline = now.add(const Duration(seconds: 5));
+      final transport = _Transport(
+        _body(count: 0),
+        onRead: () {
+          // The response is decoded before this event interrupts the backoff.
+          Timer.run(() {
+            switch (invalidation) {
+              case 'cancel':
+                cancellation.cancel();
+              case 'epoch':
+                session.sessionEpoch++;
+              case 'deadline':
+                now = deadline;
+            }
+          });
+        },
+      );
+      final client = PgcClient(
+        BiliApiClient(
+          transport: transport,
+          sessionProvider: session,
+          clock: () => now,
+        ),
+      );
+      await expectLater(
+        client.getSeason(
+          episodeId: '2',
+          requireEpisodes: true,
+          context: ApiRequestContext(
+            cancellation: cancellation,
+            deadline: deadline,
+          ),
+        ),
+        throwsA(
+          isA<ApiFailure>().having(
+            (error) => error.category,
+            'category',
+            invalidation == 'deadline'
+                ? ApiFailureCategory.timeout
+                : ApiFailureCategory.cancelled,
+          ),
+        ),
+      );
+      expect(transport.reads, 1);
+    });
+  }
+
   for (final padding in [0, 512 * 1024]) {
     test(
       'season preserves account episode and seconds progress ($padding)',

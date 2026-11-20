@@ -40,9 +40,12 @@ final class PgcClient {
     );
   }
 
+  // Require episodes for a detail page opened with a specific episode. Other
+  // callers can use the season metadata even when it has no episode list.
   Future<ApiPgcSeason> getSeason({
     String? seasonId,
     String? episodeId,
+    bool requireEpisodes = false,
     ApiRequestContext? context,
   }) async {
     if (seasonId == null && episodeId == null) {
@@ -55,6 +58,7 @@ final class PgcClient {
         'season_id': ?seasonId,
         'ep_id': ?episodeId,
       }),
+      requireEpisodes: requireEpisodes,
       context: context,
     );
   }
