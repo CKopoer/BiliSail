@@ -86,7 +86,6 @@ final class _ArticleBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final blocks = document.blocks;
     final images = <Uri>[];
     final imageIndexes = <int, int>{};
@@ -156,7 +155,7 @@ final class _ArticleBody extends StatelessWidget {
                 header: true,
                 child: Text(
                   document.title,
-                  style: theme.textTheme.headlineSmall,
+                  style: PostCardSurface.titleStyleOf(context, inDetail: true),
                 ),
               ),
             ],
@@ -313,7 +312,7 @@ final class _TextBlockState extends State<_TextBlock> {
         ],
       ),
       style: block.kind == ArticleBlockKind.heading
-          ? theme.textTheme.titleLarge
+          ? style?.copyWith(fontWeight: FontWeight.w600)
           : style,
     );
     return switch (block.kind) {
