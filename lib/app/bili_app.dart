@@ -357,12 +357,6 @@ class _BiliAppState extends ConsumerState<BiliApp> {
     );
     _router.routeInformationProvider.addListener(_routeChanged);
     _lifecycle = AppLifecycleListener(
-      onStateChange: (state) {
-        if (state == AppLifecycleState.paused &&
-            widget.dependencies.files.pauseDownloadsInBackground) {
-          unawaited(widget.dependencies.downloads.pauseAll());
-        }
-      },
       onExitRequested: () async {
         await widget.dependencies.close();
         return AppExitResponse.exit;

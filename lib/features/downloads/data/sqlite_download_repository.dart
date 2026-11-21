@@ -27,6 +27,7 @@ final class SqliteDownloadRepository implements DownloadRepository {
     this.sources, {
     required Future<String> Function() defaultDirectory,
     HttpDownloadTransfer? transfer,
+    this.setBackgroundActive,
     DownloadFileStore? files,
     DownloadMuxer? muxer,
     PublicDownloadStorage? publicStorage,
@@ -43,6 +44,8 @@ final class SqliteDownloadRepository implements DownloadRepository {
   final DownloadSourceRepository sources;
   final Future<String> Function() _defaultDirectory;
   final HttpDownloadTransfer _transfer;
+  final Future<void> Function(bool)? setBackgroundActive;
+  Future<void>? _backgroundStart;
   final DownloadFileStore _files;
   final DownloadMuxer _muxer;
   final DateTime Function() _clock;
@@ -368,9 +371,18 @@ final class SqliteDownloadRepository implements DownloadRepository {
           .catchError(
             (Object _, StackTrace _) => _backgroundFailure(queued.id, run),
           )
-          .whenComplete(() {
+          .whenComplete(() async {
             if (identical(_runs[queued.id], run)) _runs.remove(queued.id);
             _pump();
+            if (_runs.isEmpty && _backgroundStart != null) {
+              _backgroundStart = null;
+              try {
+                await setBackgroundActive!(false);
+              } on AppFailure catch (error) {
+                _failure = error;
+                _emit();
+              }
+            }
           });
     }
   }
@@ -386,6 +398,12 @@ final class SqliteDownloadRepository implements DownloadRepository {
 
   Future<void> _runTask(String id, _Run run) async {
     try {
+      if (setBackgroundActive case final start?) {
+        await (_backgroundStart ??= start(true));
+        if (!_valid(id, run)) {
+          throw const AppFailure(AppFailureKind.cancelled, '下载已取消');
+        }
+      }
       var task = _tasks[id]!;
       if (task.publicFiles.isNotEmpty) {
         final restored = await _reconcile(task);

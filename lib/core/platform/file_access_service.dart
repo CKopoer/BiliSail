@@ -10,12 +10,11 @@ final class FileAccessService {
   const FileAccessService();
   bool get canOpenDirectory => Platform.isWindows || Platform.isMacOS;
   bool get canChooseDownloadDirectory => canOpenDirectory;
-  bool get pauseDownloadsInBackground => Platform.isAndroid || Platform.isIOS;
 
-  /// Only Android's platform-owned anchor may have system ancestors that the
-  /// app cannot inspect. Download children must still be checked without links.
+  /// Mobile document containers can have system aliases above the app's root.
+  /// Download children must still be checked without links.
   Future<String?> trustedDownloadDocumentsDirectory() async =>
-      Platform.isAndroid
+      Platform.isAndroid || Platform.isIOS
       ? (await getApplicationDocumentsDirectory()).path
       : null;
 

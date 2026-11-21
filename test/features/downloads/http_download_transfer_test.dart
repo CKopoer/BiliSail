@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
 
@@ -13,8 +14,10 @@ void main() {
   final body = List<int>.generate(128, (index) => index);
   final ranges = <String?>[];
   var mode = 'range';
+  late Completer<void> finishForeground;
 
   setUp(() async {
+    finishForeground = Completer<void>();
     ranges.clear();
     mode = 'range';
     directory = await Directory.systemTemp.createTemp('bilisail_transfer');
@@ -22,7 +25,19 @@ void main() {
     server.listen((request) async {
       final range = request.headers.value(HttpHeaders.rangeHeader);
       ranges.add(range);
-      if (mode == 'bad206' && range != null) {
+      if (mode == 'handoff') {
+        final socket = await request.response.detachSocket(writeHeaders: false);
+        socket.add(
+          ascii.encode(
+            'HTTP/1.1 200 OK\r\nContent-Length: 128\r\nETag: "v1"\r\n\r\n',
+          ),
+        );
+        socket.add(body.take(40).toList());
+        await socket.flush();
+        await finishForeground.future;
+        socket.destroy();
+        return;
+      } else if (mode == 'bad206' && range != null) {
         request.response.statusCode = 206;
         request.response.headers.set(
           HttpHeaders.contentRangeHeader,
@@ -127,6 +142,117 @@ void main() {
         totalBytes: bytes == 0 ? null : body.length,
         etag: bytes == 0 ? null : '"v1"',
       );
+
+  test(
+    'moving a live transfer to the background resumes at validated disk bytes',
+    () async {
+      mode = 'handoff';
+      final system = _BackgroundTransfer((headers) async {
+        expect(headers[HttpHeaders.rangeHeader], 'bytes=40-');
+        expect(headers[HttpHeaders.ifRangeHeader], '"v1"');
+        expect(headers.containsKey('Cookie'), isFalse);
+        return TrackHttpResponse(
+          status: 206,
+          length: 88,
+          range: 'bytes 40-127/128',
+          etag: '"v1"',
+          body: Stream.value(body.skip(40).toList()),
+        );
+      });
+      final part = File('${directory.path}/video.m4s.part');
+      try {
+        final transfer = await HttpDownloadTransfer(background: system)
+            .transfer(
+              source: source('one'),
+              previous: previous('one', 0),
+              partFile: part,
+              headers: const {'Cookie': 'discard'},
+              cancellation: RequestCancellation(),
+              onProgress: (track) {
+                if (track.bytes == 40) system.hide();
+              },
+            );
+        expect(transfer.bytes, body.length);
+        expect(await part.readAsBytes(), body);
+        expect(system.listener, isNull);
+        expect(system.requests, 1);
+        expect(ranges, [null]);
+      } finally {
+        finishForeground.complete();
+      }
+    },
+  );
+
+  test(
+    'background response is validated before replacing the part file',
+    () async {
+      final staged = File('${directory.path}/system-response');
+      final part = File('${directory.path}/video.m4s.part');
+      final system = _BackgroundTransfer((_) async {
+        await staged.writeAsBytes(body);
+        return TrackHttpResponse(
+          status: 200,
+          length: body.length,
+          range: null,
+          etag: '"v1"',
+          body: staged.openRead(),
+          stagedFile: staged,
+        );
+      })..hide();
+      final result = await HttpDownloadTransfer(background: system).transfer(
+        source: source('one'),
+        previous: previous('one', 0),
+        partFile: part,
+        headers: {},
+        cancellation: RequestCancellation(),
+        onProgress: (_) {},
+      );
+      expect(result.bytes, body.length);
+      expect(await part.readAsBytes(), body);
+      expect(await staged.exists(), isFalse);
+      expect(ranges, isEmpty);
+    },
+  );
+
+  test(
+    'invalid system response is discarded without touching the saved prefix',
+    () async {
+      final part = File('${directory.path}/video.m4s.part');
+      final prefix = body.take(40).toList();
+      await part.writeAsBytes(prefix);
+      final staged = File('${directory.path}/system-response');
+      final system = _BackgroundTransfer((_) async {
+        await staged.writeAsBytes(body);
+        return TrackHttpResponse(
+          status: 206,
+          length: body.length,
+          range: 'bytes 0-127/128',
+          etag: '"v1"',
+          body: staged.openRead(),
+          stagedFile: staged,
+        );
+      })..hide();
+      await expectLater(
+        HttpDownloadTransfer(background: system).transfer(
+          source: source('one'),
+          previous: previous('one', 40),
+          partFile: part,
+          headers: {},
+          cancellation: RequestCancellation(),
+          onProgress: (_) {},
+        ),
+        throwsA(
+          isA<AppFailure>().having(
+            (e) => e.kind,
+            'kind',
+            AppFailureKind.protocol,
+          ),
+        ),
+      );
+      expect(await part.readAsBytes(), prefix);
+      expect(await staged.exists(), isFalse);
+    },
+  );
 
   test('resumes with validated Range and preserves bytes', () async {
     final part = File('${directory.path}/video.m4s.part');
@@ -346,4 +472,37 @@ void main() {
     expect(result.etag, '"v2"');
     expect(await part.readAsBytes(), body);
   });
+}
+
+final class _BackgroundTransfer implements BackgroundTrackTransfer {
+  _BackgroundTransfer(this.response);
+  final Future<TrackHttpResponse> Function(Map<String, String>) response;
+  int requests = 0;
+  void Function()? listener;
+  @override
+  bool inBackground = false;
+
+  void hide() {
+    inBackground = true;
+    listener?.call();
+  }
+
+  @override
+  void Function() onHide(void Function() callback) {
+    listener = callback;
+    return () {
+      listener = null;
+    };
+  }
+
+  @override
+  Future<TrackHttpResponse> fetch(
+    Uri url,
+    Map<String, String> headers,
+    RequestCancellation cancellation,
+    DateTime? deadline,
+  ) {
+    requests++;
+    return response(headers);
+  }
 }

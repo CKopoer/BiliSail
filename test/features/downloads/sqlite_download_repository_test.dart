@@ -31,6 +31,7 @@ void main() {
   final media = List<int>.generate(2048, (index) => index % 256);
 
   Future<void> openRepository({
+    Future<void> Function(bool)? setBackgroundActive,
     DateTime Function()? clock,
     DownloadFileStore? files,
     String? directory,
@@ -41,6 +42,7 @@ void main() {
       sources,
       defaultDirectory: () async => directory ?? root.path,
       files: files,
+      setBackgroundActive: setBackgroundActive,
       muxer: muxer,
       publicStorage: publicStorage,
       clock: clock,
@@ -106,6 +108,73 @@ void main() {
     await server.close(force: true);
     await root.delete(recursive: true);
   });
+
+  test(
+    'background execution spans concurrent and queued jobs until idle',
+    () async {
+      await repository.close();
+      await db.close();
+      final started = Completer<void>();
+      final idle = Completer<void>();
+      final active = <bool>[];
+      await openRepository(
+        setBackgroundActive: (value) async {
+          active.add(value);
+          if (value) {
+            await started.future;
+          } else {
+            idle.complete();
+          }
+        },
+      );
+      final batch = [
+        for (var index = 1; index <= 3; index++)
+          DownloadItem(
+            video: item.video,
+            part: VideoPart(
+              cid: '$index',
+              page: index,
+              title: 'P$index',
+              duration: const Duration(seconds: 3),
+            ),
+          ),
+      ];
+      await repository.enqueue(batch, const DownloadSelection());
+      expect(active, [true]);
+      expect(sources.resolveCalls, 0);
+      started.complete();
+      await idle.future.timeout(const Duration(seconds: 5));
+      expect(active, [true, false]);
+      expect(
+        repository.current.tasks.map((t) => t.status),
+        everyElement(DownloadStatus.completed),
+      );
+    },
+  );
+
+  test(
+    'manual pause while the system service starts keeps the task paused',
+    () async {
+      await repository.close();
+      await db.close();
+      final started = Completer<void>();
+      final active = <bool>[];
+      await openRepository(
+        setBackgroundActive: (value) async {
+          active.add(value);
+          if (value) await started.future;
+        },
+      );
+      await repository.enqueue([item], const DownloadSelection());
+      final paused = repository.pause(repository.current.tasks.single.id);
+      await Future<void>.delayed(Duration.zero);
+      started.complete();
+      await paused;
+      expect(repository.current.tasks.single.status, DownloadStatus.paused);
+      expect(sources.resolveCalls, 0);
+      expect(active, [true, false]);
+    },
+  );
 
   test(
     'public output survives restart without hidden media or source reads',

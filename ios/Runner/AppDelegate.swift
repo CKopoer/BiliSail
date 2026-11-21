@@ -3,6 +3,7 @@ import UIKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
+  private lazy var downloads = BackgroundDownloads()
   private var deviceOrientation: DeviceOrientationHandler?
   private var appIconChannel: FlutterMethodChannel?
   override func application(
@@ -12,7 +13,17 @@ import UIKit
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
+  override func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String,
+                            completionHandler: @escaping () -> Void) {
+    if identifier == BackgroundDownloads.identifier {
+      downloads.handleEvents(completion: completionHandler)
+    } else {
+      super.application(application, handleEventsForBackgroundURLSession: identifier, completionHandler: completionHandler)
+    }
+  }
+
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
+    downloads.attach(to: engineBridge.applicationRegistrar.messenger())
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     let channel = FlutterMethodChannel(name: "bilisail/app_icon", binaryMessenger: engineBridge.applicationRegistrar.messenger())
     channel.setMethodCallHandler { call, result in
