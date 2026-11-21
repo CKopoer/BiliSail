@@ -18,7 +18,7 @@ class ContentSectionTabs<T extends Object> extends StatefulWidget {
 
   final List<(T, String)> entries;
   final T? value;
-  final ValueChanged<T> onSelected;
+  final ValueChanged<T>? onSelected;
   final Key Function(T)? itemKey;
   final Key? scrollKey;
   final bool wrap;
@@ -124,7 +124,9 @@ class _ContentSectionTabsState<T extends Object>
                           : Colors.transparent,
                     ),
                   ),
-              onPressed: () => widget.onSelected(id),
+              onPressed: widget.onSelected == null
+                  ? null
+                  : () => widget.onSelected?.call(id),
               child: Text(label, maxLines: 1),
             ),
           ),

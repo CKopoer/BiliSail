@@ -3,6 +3,16 @@ import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
 import '../../../domain/user.dart';
 
+enum HistoryCategory {
+  all('全部'),
+  video('视频'),
+  live('直播'),
+  article('专栏');
+
+  const HistoryCategory(this.label);
+  final String label;
+}
+
 enum HistoryContentType {
   video('视频'),
   pgc('影视'),
@@ -121,6 +131,7 @@ final class HistoryWriteUncertain implements Exception {
 abstract interface class LibraryRepository {
   String get accountScope;
   Future<WatchHistoryPage> loadHistory({
+    HistoryCategory category = HistoryCategory.all,
     String keyword = '',
     String? cursor,
     required RequestCancellation cancellation,

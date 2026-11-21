@@ -79,3 +79,11 @@ Windows Debug 假仓储预览构建、启动和热重载成功，未检出运行
 窄屏入口调整复验（同日）：历史页面 24 项测试通过，覆盖初始折叠、点击展开和聚焦、收起保留草稿、搜索后保持展开、宽窄布局切换、写入中禁用及既有菜单/导航。重新渲染并检查 320/360/402/800/1280px 的初始、展开与搜索结果，含浅深主题和两倍字体，假仓储预览位于 `build/validation/history-search-toggle/`。`tool/check.ps1 -SkipPub` 全量通过，根应用及四包为 3828/525/105/145/5，共 4608 项；仍按环境跳过 13 项符号链接和 10 项 mux 原生测试，日志为 `build/history-search-toggle-check.log`。
 
 本次 Windows Debug 假仓储预览构建、启动和热重载通过，未发现运行时错误；结束预览后已重新构建普通 `lib/main.dart` 入口，日志为 `build/validation/history-search-toggle/windows-debug-build.log`。未执行真实账号操作或移动设备验收。
+
+## 历史分类（2026-11-21）
+
+独立历史页和“我的”内嵌历史页都在工具栏左侧显示“全部、视频、直播、专栏”，默认选择“全部”。子标签复用热门页的 `ContentSectionTabs`，空间不足时可横向滚动。切换分类保留已提交的关键词，从第一页加载并取消上一分类的请求。清除关键词返回当前分类的浏览列表。“清空历史”仍需确认，范围为当前账号的全部云端观看历史。
+
+普通列表向 `/x/web-interface/history/cursor` 传入 `type=all/archive/live/article`。翻页时继续传相同的 `type`，并原样带回服务端游标的 `max/view_at/business`。关键词搜索向 `/x/web-interface/history/search` 传入当前分类的 `business`，使用独立页码 `pn`。分类参考 PiliPlus 提交 `217fb54f51f6764176319bbdedab2a7522d75401` 的历史列表请求，搜索参数对照 B 站网页端；仅参考协议字段，界面及控制器使用本项目实现。[PiliPlus 历史接口](https://github.com/bggRGjQaUbCoE/PiliPlus/blob/217fb54f51f6764176319bbdedab2a7522d75401/lib/http/user.dart) · [B 站历史页脚本](https://s1.hdslb.com/bfs/static/shanks/history-record/assets/index-d270e984.js)
+
+离线测试覆盖四类请求参数、切换时丢弃旧分页、搜索和刷新保留分类、删除与清空期间的切换保护，以及宽窄布局下的点击和内容切换。应用侧 231 项定向测试、API 包 60 项定向测试及根检查脚本的 Lint 阶段通过。构建、真实账号响应和实机界面待用户验证。
