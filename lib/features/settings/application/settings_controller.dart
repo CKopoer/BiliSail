@@ -4,6 +4,7 @@ import '../../../domain/recommendation_settings.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../domain/responsive_layout_settings.dart';
 import '../domain/app_settings.dart';
 import '../domain/shortcut_settings.dart';
 import '../domain/settings_repository.dart';
@@ -126,6 +127,13 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
     (current) => current.copyWith(
       responsiveLayout: current.responsiveLayout.copyWith(
         playbackSideBySideWidth: value,
+      ),
+    ),
+  );
+  Future<void> setPlaybackSplitStyle(PlaybackSplitStyle value) => update(
+    (current) => current.copyWith(
+      responsiveLayout: current.responsiveLayout.copyWith(
+        playbackSplitStyle: value,
       ),
     ),
   );

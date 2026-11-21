@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/presentation/workspace_activity.dart';
 import 'playback_sidebar_toggle.dart';
+import 'playback_split_layout.dart';
 import 'scroll_collapsing_header.dart';
 
 /// Keeps the player mounted while the information lists collapse its extra
@@ -23,6 +24,8 @@ class PlaybackPageLayout extends StatefulWidget {
     required this.toggleInfo,
     required this.toggleTooltip,
     this.minimumInfoHeight = 0,
+    this.summaryBuilder,
+    this.summaryIdentity,
   });
 
   final bool wide;
@@ -36,6 +39,9 @@ class PlaybackPageLayout extends StatefulWidget {
   final VoidCallback toggleInfo;
   final String toggleTooltip;
   final double minimumInfoHeight;
+  final Widget Function(BuildContext context, {required bool measuring})?
+  summaryBuilder;
+  final Object? summaryIdentity;
 
   @override
   State<PlaybackPageLayout> createState() => _PlaybackPageLayoutState();
@@ -93,7 +99,9 @@ class _PlaybackPageLayoutState extends State<PlaybackPageLayout> {
           ),
         );
       }
-      final infoWidth = widget.wide ? 380.0 : bounds.maxWidth;
+      final infoWidth = widget.wide
+          ? PlaybackSplitLayout.sidebarWidth
+          : bounds.maxWidth;
       final playerWidth = widget.wide && widget.showInfo
           ? math.max(0.0, bounds.maxWidth - infoWidth)
           : bounds.maxWidth;
@@ -102,91 +110,99 @@ class _PlaybackPageLayoutState extends State<PlaybackPageLayout> {
           widget.wide || !widget.showInfo || scrollRange > 0 || editingInfo
           ? bounds.maxHeight
           : math.max(bounds.maxHeight, collapsed + widget.minimumInfoHeight);
-      return AnimatedBuilder(
-        animation: _scroll,
-        builder: (context, _) {
-          final offset = _scroll.hasClients ? _scroll.offset : 0.0;
-          final playerHeight = widget.wide || !widget.showInfo
-              ? bounds.maxHeight
-              : expanded - offset.clamp(0.0, scrollRange);
-          return SingleChildScrollView(
-            padding: EdgeInsets.zero,
-            child: SizedBox(
-              width: bounds.maxWidth,
-              height: pageHeight,
-              child: Stack(
-                children: [
-                  Positioned(
-                    right: 0,
-                    top: widget.wide ? 0 : collapsed,
-                    width: infoWidth,
-                    height: math.max(
-                      1.0,
-                      pageHeight - (widget.wide ? 0 : collapsed),
-                    ),
-                    child: ExcludeFocus(
-                      excluding: !widget.showInfo,
-                      child: Offstage(
-                        offstage: !widget.showInfo,
-                        // Offstage retains layout and State, but does not
-                        // stop tickers or visibility-driven image/preview work.
-                        child: WorkspaceActivity(
-                          active:
-                              widget.showInfo &&
-                              WorkspaceActivity.isActive(context),
-                          previewing:
-                              widget.showInfo &&
-                              WorkspaceActivity.isVisible(context) &&
-                              !WorkspaceActivity.isActive(context),
-                          child: TickerMode(
-                            enabled:
+      return PlaybackSplitLayout(
+        enabled: widget.wide && !widget.listening,
+        showInfo: widget.showInfo,
+        dimensions: dimensions,
+        contentKey: widget.contentKey,
+        summaryIdentity: widget.summaryIdentity ?? widget.contentKey,
+        summaryBuilder: widget.summaryBuilder,
+        builder: (context, bottomHeight) => AnimatedBuilder(
+          animation: _scroll,
+          builder: (context, _) {
+            final offset = _scroll.hasClients ? _scroll.offset : 0.0;
+            final playerHeight = widget.wide || !widget.showInfo
+                ? bounds.maxHeight - bottomHeight
+                : expanded - offset.clamp(0.0, scrollRange);
+            return SingleChildScrollView(
+              padding: EdgeInsets.zero,
+              child: SizedBox(
+                width: bounds.maxWidth,
+                height: pageHeight,
+                child: Stack(
+                  children: [
+                    Positioned(
+                      right: 0,
+                      top: widget.wide ? 0 : collapsed,
+                      width: infoWidth,
+                      height: math.max(
+                        1.0,
+                        pageHeight - (widget.wide ? 0 : collapsed),
+                      ),
+                      child: ExcludeFocus(
+                        excluding: !widget.showInfo,
+                        child: Offstage(
+                          offstage: !widget.showInfo,
+                          // Offstage retains layout and State, but does not
+                          // stop tickers or visibility-driven image/preview work.
+                          child: WorkspaceActivity(
+                            active:
                                 widget.showInfo &&
-                                WorkspaceActivity.isVisible(context),
-                            child: NestedScrollView(
-                              controller: _scroll,
-                              physics: const ClampingScrollPhysics(),
-                              headerSliverBuilder: (context, _) => [
-                                SliverToBoxAdapter(
-                                  child: SizedBox(
-                                    height: widget.wide ? 0 : scrollRange,
+                                WorkspaceActivity.isActive(context),
+                            previewing:
+                                widget.showInfo &&
+                                WorkspaceActivity.isVisible(context) &&
+                                !WorkspaceActivity.isActive(context),
+                            child: TickerMode(
+                              enabled:
+                                  widget.showInfo &&
+                                  WorkspaceActivity.isVisible(context),
+                              child: NestedScrollView(
+                                controller: _scroll,
+                                physics: const ClampingScrollPhysics(),
+                                headerSliverBuilder: (context, _) => [
+                                  SliverToBoxAdapter(
+                                    child: SizedBox(
+                                      height: widget.wide ? 0 : scrollRange,
+                                    ),
                                   ),
-                                ),
-                              ],
-                              body: HeaderScrollBody(child: widget.info),
+                                ],
+                                body: HeaderScrollBody(child: widget.info),
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                  Positioned(
-                    left: 0,
-                    top: 0,
-                    width: playerWidth,
-                    height: playerHeight,
-                    child: widget.player,
-                  ),
-                  if (widget.wide)
                     Positioned(
-                      right: widget.showInfo ? infoWidth : 0,
-                      top: math.max(
-                        0,
-                        playerHeight / 2 -
-                            PlaybackSidebarToggle.size.height / 2,
-                      ),
-                      child: PlaybackSidebarToggle(
-                        tooltip: widget.toggleTooltip,
-                        onPressed: widget.toggleInfo,
-                        icon: widget.showInfo
-                            ? Icons.chevron_right
-                            : Icons.chevron_left,
-                      ),
+                      left: 0,
+                      top: 0,
+                      width: playerWidth,
+                      height: playerHeight,
+                      child: widget.player,
                     ),
-                ],
+                    if (widget.wide)
+                      Positioned(
+                        right: widget.showInfo ? infoWidth : 0,
+                        top: math.max(
+                          0,
+                          playerHeight / 2 -
+                              PlaybackSidebarToggle.size.height / 2,
+                        ),
+                        child: PlaybackSidebarToggle(
+                          tooltip: widget.toggleTooltip,
+                          onPressed: widget.toggleInfo,
+                          icon: widget.showInfo
+                              ? Icons.chevron_right
+                              : Icons.chevron_left,
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       );
     },
   );

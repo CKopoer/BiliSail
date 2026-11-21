@@ -318,7 +318,7 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 53,
+        'schemaVersion': 54,
         'appIcon': value.appIcon.name,
         'recommendations': value.recommendations.toJson(),
         'navigationBarMode': value.navigationBarMode.name,
@@ -329,6 +329,7 @@ class SqliteSettingsRepository implements SettingsRepository {
           'navigationBarBreakpoint':
               value.responsiveLayout.navigationBarBreakpoint,
           'sidebarExpandedWidth': value.responsiveLayout.sidebarExpandedWidth,
+          'playbackSplitStyle': value.responsiveLayout.playbackSplitStyle.name,
           'playbackSideBySideWidth':
               value.responsiveLayout.playbackSideBySideWidth,
         },
@@ -435,6 +436,9 @@ class SqliteSettingsRepository implements SettingsRepository {
       sidebarExpandedWidth: value['sidebarExpandedWidth'] is int
           ? value['sidebarExpandedWidth'] as int
           : 1600,
+      playbackSplitStyle:
+          PlaybackSplitStyle.values.asNameMap()[value['playbackSplitStyle']] ??
+          PlaybackSplitStyle.automatic,
       playbackSideBySideWidth: value['playbackSideBySideWidth'] is int
           ? value['playbackSideBySideWidth'] as int
           : 1000,

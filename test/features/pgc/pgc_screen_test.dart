@@ -113,6 +113,27 @@ void main() {
     await tester.pumpAndSettle();
     expect(findMaterialTooltip('收起影视信息'), findsOneWidget);
     expect(tester.getSize(find.byType(_TrackedPlayer)).width, 520);
+    final episodes = tester.state(find.byType(PgcEpisodePanel));
+    layout.value = layout.value.copyWith(
+      playbackSplitStyle: PlaybackSplitStyle.below,
+    );
+    await tester.pumpAndSettle();
+    final player = find.byType(_TrackedPlayer);
+    expect(tester.getSize(player), const Size(520, 292.5));
+    expect(
+      tester.getTopLeft(find.text('测试番剧').first).dy,
+      greaterThanOrEqualTo(292.5),
+    );
+    expect(tester.getTopLeft(find.text('选集')).dx, greaterThanOrEqualTo(520));
+    expect(tester.state(find.byType(PgcEpisodePanel)), same(episodes));
+    await tester.tap(find.text('展开').first);
+    await tester.pumpAndSettle();
+    await tester.tap(findMaterialTooltip('收起影视信息'));
+    await tester.pumpAndSettle();
+    expect(tester.getSize(player), const Size(900, 800));
+    await tester.tap(findMaterialTooltip('展开影视信息'));
+    await tester.pumpAndSettle();
+    expect(find.text('收起'), findsOneWidget);
     tester.view.physicalSize = const Size(899, 800);
     await tester.pumpAndSettle();
     expect(findMaterialTooltip('收起影视信息'), findsNothing);

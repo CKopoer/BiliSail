@@ -19,6 +19,10 @@ void main() {
         expect(settings.responsiveLayout.navigationBarBreakpoint, 600);
         expect(settings.responsiveLayout.sidebarExpandedWidth, 1600);
         expect(settings.responsiveLayout.playbackSideBySideWidth, 1000);
+        expect(
+          settings.responsiveLayout.playbackSplitStyle,
+          PlaybackSplitStyle.automatic,
+        );
       }
       final source = [...ResponsiveLayoutSettings.defaultVideoGridMinWidths];
       final custom = ResponsiveLayoutSettings(videoGridMinWidths: source);
@@ -83,6 +87,10 @@ void main() {
       expect(loaded.responsiveLayout.videoGridMinWidths, widths);
       expect(loaded.responsiveLayout.playbackSideBySideWidth, 900);
       expect(loaded.theme, AppThemePreference.dark);
+      expect(
+        loaded.responsiveLayout.playbackSplitStyle,
+        PlaybackSplitStyle.automatic,
+      );
       await repository.save(loaded);
       final Object? raw = jsonDecode(
         (await database.readSetting('preferences.v1')) ?? '{}',
@@ -112,6 +120,7 @@ void main() {
             'videoGridMinWidths': [300, 300],
             'navigationBarBreakpoint': 319,
             'playbackSideBySideWidth': '900',
+            'playbackSplitStyle': 'bogus',
           },
           {
             'videoGridMinWidths': [
@@ -121,6 +130,7 @@ void main() {
             ],
             'navigationBarBreakpoint': 7000,
             'playbackSideBySideWidth': -1,
+            'playbackSplitStyle': 2,
           },
         ]) {
           await database.writeSetting(
@@ -136,6 +146,10 @@ void main() {
           expect(loaded.responsiveLayout.videoGridMinWidths, isNull);
           expect(loaded.responsiveLayout.navigationBarBreakpoint, 600);
           expect(loaded.responsiveLayout.playbackSideBySideWidth, 1000);
+          expect(
+            loaded.responsiveLayout.playbackSplitStyle,
+            PlaybackSplitStyle.automatic,
+          );
         }
         await database.writeSetting(
           'preferences.v1',
@@ -147,6 +161,25 @@ void main() {
         expect(partial.navigationBarBreakpoint, 1280);
         expect(partial.playbackSideBySideWidth, 1000);
         expect(partial.videoGridMinWidths, isNull);
+      },
+    );
+
+    test(
+      'all split styles round trip independently of the split width',
+      () async {
+        for (final style in PlaybackSplitStyle.values) {
+          await repository.save(
+            AppSettings(
+              responsiveLayout: ResponsiveLayoutSettings(
+                playbackSplitStyle: style,
+                playbackSideBySideWidth: 820,
+              ),
+            ),
+          );
+          final saved = (await repository.load()).responsiveLayout;
+          expect(saved.playbackSplitStyle, style);
+          expect(saved.playbackSideBySideWidth, 820);
+        }
       },
     );
 
@@ -178,7 +211,7 @@ void main() {
           isA<Map<String, Object?>>().having(
             (map) => map['schemaVersion'],
             'schema version',
-            53,
+            54,
           ),
         );
         expect(database.schemaVersion, 3);
@@ -204,6 +237,7 @@ void main() {
       await Future.wait([
         controller.setNavigationBreakpoints(800, 1280),
         controller.setPlaybackSideBySideWidth(900),
+        controller.setPlaybackSplitStyle(PlaybackSplitStyle.below),
         controller.setVideoGridMinWidths(
           [...ResponsiveLayoutSettings.defaultVideoGridMinWidths]..[2] = 1000,
         ),
@@ -237,7 +271,15 @@ void main() {
       await controller.setVideoGridMinWidths(null);
       expect(repository.value.responsiveLayout.videoGridMinWidths, isNull);
       expect(repository.value.responsiveLayout.playbackSideBySideWidth, 900);
+      expect(
+        repository.value.responsiveLayout.playbackSplitStyle,
+        PlaybackSplitStyle.below,
+      );
       await controller.resetToDefaults();
+      expect(
+        repository.value.responsiveLayout.playbackSplitStyle,
+        PlaybackSplitStyle.automatic,
+      );
       expect(repository.value.responsiveLayout.navigationBarBreakpoint, 600);
       expect(repository.value.responsiveLayout.sidebarExpandedWidth, 1600);
       expect(repository.value.responsiveLayout.playbackSideBySideWidth, 1000);

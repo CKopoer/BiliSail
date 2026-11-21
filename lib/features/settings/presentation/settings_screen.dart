@@ -18,6 +18,7 @@ import '../../../shared/ui/playback_rate_options_setting.dart';
 import '../application/settings_controller.dart';
 import '../application/app_update_controller.dart';
 import '../domain/app_update.dart';
+import '../../../domain/responsive_layout_settings.dart';
 import '../domain/app_settings.dart';
 import '../domain/settings_category.dart';
 import 'shortcut_settings_section.dart';
@@ -437,6 +438,20 @@ final class _SettingsCategoryPageState
                                 controller.setNavigationBreakpoints,
                             onPlaybackChanged:
                                 controller.setPlaybackSideBySideWidth,
+                          ),
+                          _choices(
+                            '左右布局样式',
+                            s.responsiveLayout.playbackSplitStyle,
+                            const {
+                              PlaybackSplitStyle.automatic: '自动',
+                              PlaybackSplitStyle.right: '信息在右侧',
+                              PlaybackSplitStyle.below: '信息在下方',
+                            },
+                            controller.setPlaybackSplitStyle,
+                          ),
+                          const Text(
+                            '自动模式会在画面上下留白足够时，将视频、影视或直播信息放到画面下方。',
+                            style: TextStyle(fontSize: 12),
                           ),
                           _choices('动态页默认标签', s.defaultDynamicTab, const {
                             DynamicPageTab.dynamic: '动态',

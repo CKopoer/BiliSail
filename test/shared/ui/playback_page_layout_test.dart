@@ -1,3 +1,5 @@
+import 'package:bilisail/domain/responsive_layout_settings.dart';
+import 'package:bilisail/shared/ui/responsive_layout_scope.dart';
 import 'package:bilisail/shared/ui/playback_page_layout.dart';
 import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/shared/ui/scroll_collapsing_header.dart';
@@ -83,6 +85,106 @@ void main() {
       expect(ticks, inactiveTicks);
       await tester.pumpWidget(const SizedBox());
       expect(disposals, 1);
+    },
+  );
+
+  testWidgets(
+    'split measures compact information at the candidate width and uses separate entry and exit heights',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      late StateSetter update;
+      VideoDimensions? dimensions;
+      var style = PlaybackSplitStyle.automatic;
+      var expanded = false, showInfo = true, listening = false;
+      var scale = 1.0;
+      const player = ValueKey('split-player');
+      const summary = ValueKey('split-summary');
+      Future<void> resize(double height) async {
+        tester.view.physicalSize = Size(1020, height);
+        await tester.pumpAndSettle();
+      }
+
+      double playerHeight() => tester.getSize(find.byKey(player)).height;
+      await resize(544);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StatefulBuilder(
+            builder: (context, setState) {
+              update = setState;
+              return MediaQuery(
+                data: MediaQuery.of(context)
+                    .copyWith(textScaler: TextScaler.linear(scale)),
+                child: ResponsiveLayoutScope(
+                  settings: ResponsiveLayoutSettings(playbackSplitStyle: style),
+                  child: PlaybackPageLayout(
+                    wide: true,
+                    showInfo: showInfo,
+                    listening: listening,
+                    dimensions: dimensions,
+                    collapsedHeight: 360,
+                    contentKey: 1,
+                    player: const SizedBox(key: player),
+                    info: const SizedBox(),
+                    summaryBuilder: (context, {required measuring}) => SizedBox(
+                      key: measuring ? null : summary,
+                      height: !measuring && expanded
+                          ? 600
+                          : MediaQuery.textScalerOf(context).scale(160),
+                    ),
+                    toggleInfo: () {},
+                    toggleTooltip: '信息',
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(summary), findsNothing);
+      await resize(543);
+      update(() => dimensions = const VideoDimensions(1920, 1080));
+      await tester.pumpAndSettle();
+      expect(playerHeight(), 543);
+      await resize(544);
+      expect(tester.getSize(find.byKey(player)), const Size(640, 360));
+      expect(tester.getTopLeft(find.byKey(summary)).dy, 360);
+      update(() => expanded = true);
+      await tester.pumpAndSettle();
+      await resize(520);
+      expect(playerHeight(), 360);
+      update(() => showInfo = false);
+      await tester.pumpAndSettle();
+      expect(playerHeight(), 520);
+      update(() => showInfo = true);
+      await tester.pumpAndSettle();
+      expect(playerHeight(), 360);
+      await resize(519);
+      expect(find.byKey(summary), findsNothing);
+      await resize(544);
+      update(() => scale = 2);
+      await tester.pumpAndSettle();
+      expect(find.byKey(summary), findsNothing);
+      await resize(720);
+      expect(playerHeight(), 360);
+      update(() => dimensions = const VideoDimensions(9, 16));
+      await tester.pumpAndSettle();
+      expect(find.byKey(summary), findsNothing);
+      update(() => style = PlaybackSplitStyle.below);
+      await tester.pumpAndSettle();
+      expect(playerHeight(), 432); // forced: at most 40% for information.
+      update(() => showInfo = false);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byKey(player)), const Size(1020, 720));
+      update(() {
+        showInfo = true;
+        listening = true;
+      });
+      await tester.pumpAndSettle();
+      expect(find.byKey(summary), findsNothing);
+      expect(tester.takeException(), isNull);
     },
   );
 

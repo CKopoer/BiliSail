@@ -16,6 +16,7 @@ import '../../../core/network/api_requests.dart';
 
 import '../../../shared/ui/playback_page_commands.dart';
 import '../../../shared/ui/playback_layout_builder.dart';
+import '../../../shared/ui/playback_split_layout.dart';
 import '../../../shared/ui/responsive_layout_scope.dart';
 import '../../../shared/ui/width_layout_builder.dart';
 import '../../../domain/video.dart';
@@ -382,182 +383,61 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                 child: Builder(
                   builder: (context) {
                     final playerContent = _player(video, activePart);
-                    final content = Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 16, 12, 0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          VideoAuthorHeader(
-                            video: video,
-                            onLogin: widget.onLogin,
-                            onOpenUser: widget.onOpenUser,
-                          ),
-                          const SizedBox(height: 18),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: SelectionArea(
-                                  child: Text(
-                                    video.summary.title,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(height: 22 / 16),
-                                  ),
-                                ),
-                              ),
-                              TextButton(
-                                style: TextButton.styleFrom(
-                                  foregroundColor: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                  ),
-                                  minimumSize: const Size(0, 30),
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                ),
-                                onPressed: () => setState(() {
-                                  _setDescriptionExpanded(
-                                    !_descriptionExpanded,
-                                  );
-                                }),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(_descriptionExpanded ? '收起' : '展开'),
-                                    AnimatedRotation(
-                                      turns: _descriptionExpanded ? .5 : 0,
-                                      duration: shouldReduceMotion(context)
-                                          ? Duration.zero
-                                          : _descriptionTransitionDuration,
-                                      curve: Curves.easeInOutCubic,
-                                      child: const Icon(
-                                        Icons.expand_more,
-                                        size: 16,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 10,
-                            runSpacing: 6,
-                            children: [
-                              if (video.isInteractive)
-                                _Meta(
-                                  icon: Icons.alt_route_rounded,
-                                  label: '互动视频',
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
-                                ),
-                              _Meta(
-                                icon: BiliIcons.playCount,
-                                label: compactCount(video.summary.playCount),
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
-                              ),
-                              _Meta(
-                                icon: BiliIcons.comment,
-                                label: compactCount(video.summary.danmakuCount),
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
-                              ),
-                              if (video.summary.publishedAt
-                                  case final DateTime date)
-                                _Meta(
-                                  icon: Icons.schedule_outlined,
-                                  label: _publicationTime(date),
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          if (video.summary.access.kind !=
-                              VideoAccessKind.normal) ...[
-                            VideoAccessNotice(video: video.summary),
-                            const SizedBox(height: 4),
-                          ],
-                          if (widget.actionsBuilder != null)
-                            widget.actionsBuilder!(context, video, selected),
-                          _VideoDescriptionTransition(
-                            key: ValueKey(('description', widget.id)),
-                            expanded: _descriptionExpanded,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                const SizedBox(height: 4),
-                                SelectionArea(
-                                  child: Text(
-                                    video.description.isEmpty
-                                        ? 'UP 主还没有填写简介'
-                                        : video.description,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(height: 1.6),
-                                  ),
-                                ),
-                                VideoTagsPanel(
-                                  id: widget.id,
-                                  onSearch: widget.onSearchTag,
-                                ),
-                              ],
-                            ),
-                          ),
-                          _separator('intro', height: 16),
-                          if (video.parts.length > 1 ||
-                              video.collection != null) ...[
-                            VideoCollectionPanel(
-                              key: ValueKey(video.summary.id),
-                              video: video,
-                              selected: selected,
-                              playbackReversed: _collectionReversed(video),
-                              displayReversed:
-                                  _reversedDisplayCollectionId != null &&
-                                  _reversedDisplayCollectionId ==
-                                      video.collection?.id,
-                              onToggleDisplayOrder: () => setState(() {
-                                _reversedDisplayCollectionId =
-                                    _reversedDisplayCollectionId ==
-                                        video.collection?.id
-                                    ? null
-                                    : video.collection?.id;
-                                if (_canReverseCollection(video)) {
-                                  _reversedCollectionId =
-                                      _reversedDisplayCollectionId;
-                                }
-                              }),
-                              onTogglePlaybackOrder:
-                                  _canReverseCollection(video)
-                                  ? () => setState(() {
-                                      _reversedCollectionId =
-                                          _collectionReversed(video)
-                                          ? null
-                                          : video.collection?.id;
-                                    })
-                                  : null,
-                              onLogin: widget.onLogin,
-                              onSelectPart: (part) {
-                                _selectPart(part);
-                              },
-                              onOpenVideoPart: widget.onOpenVideoPart,
-                            ),
-                            _separator('collection'),
-                          ],
-                        ],
-                      ),
+                    final actions = widget.actionsBuilder?.call(
+                      context,
+                      video,
+                      selected,
                     );
+                    final classicSummary = _summary(
+                      context,
+                      video,
+                      actions,
+                      below: false,
+                    );
+                    final hasCollection =
+                        video.parts.length > 1 || video.collection != null;
+                    final collection = hasCollection
+                        ? Column(
+                            children: [
+                              VideoCollectionPanel(
+                                key: ValueKey(video.summary.id),
+                                video: video,
+                                selected: selected,
+                                playbackReversed: _collectionReversed(video),
+                                displayReversed:
+                                    _reversedDisplayCollectionId != null &&
+                                    _reversedDisplayCollectionId ==
+                                        video.collection?.id,
+                                onToggleDisplayOrder: () => setState(() {
+                                  _reversedDisplayCollectionId =
+                                      _reversedDisplayCollectionId ==
+                                          video.collection?.id
+                                      ? null
+                                      : video.collection?.id;
+                                  if (_canReverseCollection(video)) {
+                                    _reversedCollectionId =
+                                        _reversedDisplayCollectionId;
+                                  }
+                                }),
+                                onTogglePlaybackOrder:
+                                    _canReverseCollection(video)
+                                    ? () => setState(() {
+                                        _reversedCollectionId =
+                                            _collectionReversed(video)
+                                            ? null
+                                            : video.collection?.id;
+                                      })
+                                    : null,
+                                onLogin: widget.onLogin,
+                                onSelectPart: (part) {
+                                  _selectPart(part);
+                                },
+                                onOpenVideoPart: widget.onOpenVideoPart,
+                              ),
+                              _separator('collection'),
+                            ],
+                          )
+                        : null;
                     final detailsVisible = queue == null || !_queueExpanded;
                     final tabs = CommentDetailBuilder(
                       target: switch (video.aid) {
@@ -575,7 +455,11 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                         onChanged: (tab) => setState(() => _tab = tab),
                         viewKey: const ValueKey('video-info-swipe'),
                         labels: [
-                          const Text('简介'),
+                          Text(
+                            PlaybackSplitLayout.infoBelowOf(context)
+                                ? (hasCollection ? '选集与推荐' : '相关推荐')
+                                : '简介',
+                          ),
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -610,7 +494,35 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                                     key: const ValueKey('video-intro-scroll'),
                                     controller: _introScroll,
                                     slivers: [
-                                      SliverToBoxAdapter(child: content),
+                                      if (!PlaybackSplitLayout.infoBelowOf(
+                                        context,
+                                      ))
+                                        SliverToBoxAdapter(
+                                          child: Column(
+                                            children: [
+                                              classicSummary,
+                                              Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                    ),
+                                                child: _separator(
+                                                  'intro',
+                                                  height: 16,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      if (collection != null)
+                                        SliverPadding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                          ),
+                                          sliver: SliverToBoxAdapter(
+                                            child: collection,
+                                          ),
+                                        ),
                                       SliverPadding(
                                         padding: const EdgeInsets.fromLTRB(
                                           12,
@@ -704,6 +616,20 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                                     final visible = override ?? defaultShowInfo;
                                     return PlaybackPageLayout(
                                       minimumInfoHeight: 480,
+                                      summaryIdentity: (
+                                        video,
+                                        selected,
+                                        widget.actionsBuilder != null,
+                                      ),
+                                      summaryBuilder:
+                                          (context, {required measuring}) =>
+                                              _summary(
+                                                context,
+                                                video,
+                                                actions,
+                                                below: true,
+                                                measuring: measuring,
+                                              ),
                                       wide: wide,
                                       showInfo: visible,
                                       listening: listening,
@@ -756,7 +682,148 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
         : page;
   }
 
+  Widget _summary(
+    BuildContext context,
+    VideoDetail video,
+    Widget? actions, {
+    required bool below,
+    bool measuring = false,
+  }) {
+    final expanded = !measuring && _descriptionExpanded;
+    final author = VideoAuthorHeader(
+      video: video,
+      onLogin: widget.onLogin,
+      onOpenUser: widget.onOpenUser,
+    );
+    return Padding(
+      padding: below
+          ? const EdgeInsets.fromLTRB(20, 16, 20, 16)
+          : const EdgeInsets.fromLTRB(12, 16, 12, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (!below) ...[author, const SizedBox(height: 18)],
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: SelectionArea(
+                  child: Text(
+                    video.summary.title,
+                    maxLines: below && !expanded ? 2 : null,
+                    overflow: below && !expanded ? TextOverflow.ellipsis : null,
+                    style: Theme.of(context).textTheme.titleMedium
+                        ?.copyWith(height: 22 / 16),
+                  ),
+                ),
+              ),
+              TextButton(
+                style: TextButton.styleFrom(
+                  foregroundColor: Theme.of(context)
+                      .colorScheme
+                      .onSurfaceVariant,
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  minimumSize: const Size(0, 30),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                onPressed: () => setState(() {
+                  _setDescriptionExpanded(!_descriptionExpanded);
+                }),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(expanded ? '收起' : '展开'),
+                    AnimatedRotation(
+                      turns: expanded ? .5 : 0,
+                      duration: shouldReduceMotion(context)
+                          ? Duration.zero
+                          : _descriptionTransitionDuration,
+                      curve: Curves.easeInOutCubic,
+                      child: const Icon(Icons.expand_more, size: 16),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 10,
+            runSpacing: 6,
+            children: [
+              if (video.isInteractive)
+                _Meta(
+                  icon: Icons.alt_route_rounded,
+                  label: '互动视频',
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              _Meta(
+                icon: BiliIcons.playCount,
+                label: compactCount(video.summary.playCount),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+              _Meta(
+                icon: BiliIcons.comment,
+                label: compactCount(video.summary.danmakuCount),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+              if (video.summary.publishedAt case final DateTime date)
+                _Meta(
+                  icon: Icons.schedule_outlined,
+                  label: _publicationTime(date),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          if (below) ...[
+            const SizedBox(height: 8),
+            author,
+            const SizedBox(height: 8),
+          ],
+          if (video.summary.access.kind != VideoAccessKind.normal) ...[
+            VideoAccessNotice(video: video.summary),
+            const SizedBox(height: 4),
+          ],
+          if (actions != null) ...[
+            if (below) const Divider(height: 12),
+            measuring
+                ? const SizedBox(height: VideoActionsBar.height)
+                : actions,
+          ],
+          if (!measuring)
+            _VideoDescriptionTransition(
+              key: ValueKey(('description', widget.id)),
+              expanded: expanded,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 4),
+                  SelectionArea(
+                    child: Text(
+                      video.description.isEmpty
+                          ? 'UP 主还没有填写简介'
+                          : video.description,
+                      style: Theme.of(context).textTheme.bodyMedium
+                          ?.copyWith(height: 1.6),
+                    ),
+                  ),
+                  VideoTagsPanel(id: widget.id, onSearch: widget.onSearchTag),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   void _toggleVideoDetails(int tab, bool showInfo) {
+    if (tab == 0 &&
+        showInfo &&
+        PlaybackSplitLayout.readInfoBelow(_infoKey.currentContext)) {
+      setState(() => _setDescriptionExpanded(!_descriptionExpanded));
+      return;
+    }
     final alreadyVisible =
         showInfo && (widget.queue == null || !_queueExpanded);
     final currentTab = _tab ?? 0;
@@ -1462,9 +1529,11 @@ final class _Meta extends StatelessWidget {
         color: Theme.of(context).colorScheme.onSurfaceVariant,
       ),
       const SizedBox(width: 5),
-      Text(
-        label,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: color),
+      Flexible(
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: color),
+        ),
       ),
     ],
   );

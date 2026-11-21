@@ -1,3 +1,8 @@
+import '../../support/playback_layout_session_fake.dart';
+
+import 'package:bilisail/features/playback/application/playback_session.dart';
+import 'package:bili_player/bili_player.dart' show VideoDimensions;
+
 import '../../support/material_tooltip_finder.dart';
 
 import 'dart:async';
@@ -54,14 +59,17 @@ void main() {
   late _Repository repository;
   late _RealtimeRepository realtime;
   late ProviderContainer container;
+  late PlaybackLayoutSessionFake layoutSession;
   late ValueNotifier<ResponsiveLayoutSettings> layout;
 
   setUp(() {
     repository = _Repository();
     realtime = _RealtimeRepository();
     layout = ValueNotifier(const ResponsiveLayoutSettings.defaults());
+    layoutSession = PlaybackLayoutSessionFake();
     container = ProviderContainer(
       overrides: [
+        playbackSessionProvider.overrideWithValue(layoutSession),
         liveRepositoryProvider.overrideWithValue(repository),
         liveChatRepositoryProvider.overrideWithValue(realtime),
         authRepositoryProvider.overrideWithValue(_AuthRepository()),
@@ -72,6 +80,7 @@ void main() {
   tearDown(() async {
     layout.dispose();
     container.dispose();
+    layoutSession.dispose();
     await realtime.events.close();
   });
 
@@ -176,6 +185,49 @@ void main() {
     expect(tester.state(find.byType(_PlayerProbe)), same(player));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'decoded live picture places room details below while preserving chat, SC and composer',
+    (tester) async {
+      container.read(playbackSessionProvider);
+      await showPage(
+        tester,
+        width: 1020,
+        height: 674,
+        composerBuilder: (_, _, {required compact}) => const TextField(),
+      );
+      await tester.pumpAndSettle();
+      final player = find.byType(_PlayerProbe);
+      final initialPlayer = tester.state(player);
+      final position = chatPosition(tester);
+      await tester.enterText(find.byType(TextField), '保留草稿');
+      layoutSession.snapshots.value = layoutSession.snapshots.value.copyWith(
+        videoDimensions: const VideoDimensions(1920, 1080),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.getSize(player), const Size(640, 360));
+      expect(
+        tester.getTopLeft(find.text('直播间标题')).dy,
+        greaterThanOrEqualTo(360),
+      );
+      expect(tester.getTopLeft(find.text('聊天')).dx, greaterThanOrEqualTo(640));
+      expect(chatPosition(tester), same(position));
+      await tester.tap(find.byKey(const ValueKey('live-tab-1')));
+      await tester.pumpAndSettle();
+      layout.value = layout.value.copyWith(
+        playbackSplitStyle: PlaybackSplitStyle.right,
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester.getTopLeft(find.text('直播间标题')).dx,
+        greaterThanOrEqualTo(640),
+      );
+      expect(find.textContaining('共 2 条 SC'), findsOneWidget);
+      expect(find.text('保留草稿'), findsOneWidget);
+      expect(tester.state(player), same(initialPlayer));
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('custom playback threshold updates the open live room', (
     tester,

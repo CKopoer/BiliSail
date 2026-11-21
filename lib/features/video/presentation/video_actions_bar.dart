@@ -1,3 +1,4 @@
+import '../../../shared/ui/playback_split_layout.dart';
 import '../../../shared/ui/bili_icons.dart';
 import '../../../shared/ui/bili_coin_icon.dart';
 
@@ -320,6 +321,7 @@ class VideoActionsBar extends StatelessWidget {
     this.onReload,
     this.onDownload,
   });
+  static const height = 36.0;
   final bool menuOnly;
   final VoidCallback? onReload;
   final VoidCallback? onDownload;
@@ -358,23 +360,44 @@ class VideoActionsBar extends StatelessWidget {
         ],
       );
     }
+    final below = PlaybackSplitLayout.infoBelowOf(context);
     Widget action(
       Widget icon,
       String label,
       VoidCallback? onTap, {
       bool selected = false,
-    }) => IconButton(
-      tooltip: label,
-      onPressed: onTap,
-      color: selected
+      String? caption,
+    }) {
+      final color = selected
           ? Theme.of(context).colorScheme.primary
-          : Theme.of(context).colorScheme.onSurfaceVariant,
-      iconSize: 22,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      icon: icon,
-    );
+          : Theme.of(context).colorScheme.onSurfaceVariant;
+      if (below) {
+        return Tooltip(
+          message: label,
+          child: TextButton.icon(
+            onPressed: onTap,
+            icon: icon,
+            label: Text(caption ?? label),
+            style: TextButton.styleFrom(
+              foregroundColor: color,
+              iconSize: 18,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+            ),
+          ),
+        );
+      }
+      return IconButton(
+        tooltip: label,
+        onPressed: onTap,
+        color: color,
+        iconSize: 22,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        icon: icon,
+      );
+    }
+
     return SizedBox(
-      height: 36,
+      height: height,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
@@ -391,6 +414,7 @@ class VideoActionsBar extends StatelessWidget {
               enabled('like', needsState: true)
                   ? () => owner._invoke(ShortcutAction.likeVideo)
                   : null,
+              caption: '点赞',
               selected: state.interaction.liked,
             ),
             action(
@@ -401,6 +425,7 @@ class VideoActionsBar extends StatelessWidget {
               enabled('coin', needsState: true)
                   ? () => owner._invoke(ShortcutAction.coinVideo)
                   : null,
+              caption: '投币',
               selected: state.interaction.coins > 0,
             ),
             action(
@@ -415,6 +440,7 @@ class VideoActionsBar extends StatelessWidget {
               enabled('favorite')
                   ? () => owner._invoke(ShortcutAction.favoriteVideo)
                   : null,
+              caption: '收藏',
               selected: state.interaction.favorited,
             ),
             action(

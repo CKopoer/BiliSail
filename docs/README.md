@@ -41,7 +41,7 @@
 | [直播卡悬停预览](validation/live-card-hover-preview-2026-11-14.md) | 官网首页预览接口、视频／直播共享预览生命周期、静音与首帧淡入、自动回归及未构建／实机边界 |
 | [历史续播与默认 CDN](validation/resume-startup-cdn-2026-11-14.md) | Windows 历史续播等待、PiliPlus 默认选线对照、自动模式常规 CDN 优先及验证 |
 | [点播预读断流恢复](validation/prefetch-network-recovery-2026-11-14.md) | 缓存仍可播放时的网络恢复探测、提前重开、PiliPlus 对比与受控断流回归 |
-| [响应式布局阈值设置](validation/responsive-layout-settings-2026-11-14.md) | 卡片多滑块阈值、导航栏自动切换和视频／影视／直播分栏宽度，默认兼容、持久化与布局状态验证 |
+| [响应式布局阈值与播放页样式](validation/responsive-layout-settings-2026-11-14.md) | 卡片与导航阈值、视频／影视／直播分栏宽度、画面下方信息及自动样式切换 |
 | [视频侧栏重建与生命周期](validation/video-sidebar-lifecycle-2026-11-14.md) | 开关局部更新、播放器内容复用、隐藏态 Ticker／可见性边界及回归证据 |
 | [评论区滚动条拖动跳变](validation/comments-scrollbar-drag-2026-11-15.md) | 变高评论总长估算、逐行高度测量、鼠标滑块拖动及懒加载边界 |
 | [评论区滚动生命周期复查](validation/comments-scroll-lifecycle-2026-11-14.md) | 行内表情可见性与请求取消、分页无效调度、手势资源及 500 条列表释放回归 |

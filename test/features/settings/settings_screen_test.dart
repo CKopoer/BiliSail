@@ -1,6 +1,7 @@
 import '../../support/material_tooltip_finder.dart';
 
 import 'package:bilisail/app/theme.dart';
+import 'package:bilisail/domain/responsive_layout_settings.dart';
 import 'package:bilisail/features/playback/presentation/player_settings_dialog.dart';
 import 'package:bilisail/features/settings/application/settings_controller.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
@@ -1455,6 +1456,40 @@ void main() {
     }
     expect(tester.takeException(), isNull);
   });
+  testWidgets('appearance starts on automatic and saves each split style', (
+    tester,
+  ) async {
+    final repository = _SettingsRepository();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [settingsRepositoryProvider.overrideWithValue(repository)],
+        child: const MaterialApp(home: Scaffold(body: SettingsScreen())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final group = find
+        .ancestor(of: find.text('左右布局样式'), matching: find.byType(Column))
+        .first;
+    Finder choice(String title) => find.descendant(
+      of: group,
+      matching: find.widgetWithText(ChoiceChip, title),
+    );
+    expect(tester.widget<ChoiceChip>(choice('自动')).selected, isTrue);
+    for (final (label, style) in [
+      ('信息在右侧', PlaybackSplitStyle.right),
+      ('信息在下方', PlaybackSplitStyle.below),
+      ('自动', PlaybackSplitStyle.automatic),
+    ]) {
+      final chip = choice(label);
+      await tester.ensureVisible(chip);
+      await tester.pumpAndSettle();
+      await tester.tap(chip);
+      await tester.pumpAndSettle();
+      expect(repository.settings.responsiveLayout.playbackSplitStyle, style);
+      expect(tester.widget<ChoiceChip>(chip).selected, isTrue);
+    }
+  });
+
   testWidgets('appearance saves each navigation mode', (tester) async {
     final repository = _SettingsRepository();
     await tester.pumpWidget(

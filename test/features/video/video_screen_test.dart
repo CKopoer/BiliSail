@@ -167,10 +167,13 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       final layout = ValueNotifier(const ResponsiveLayoutSettings.defaults());
       addTearDown(layout.dispose);
+      final session = PlaybackLayoutSessionFake();
+      addTearDown(session.dispose);
       var created = 0, disposed = 0;
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            playbackSessionProvider.overrideWithValue(session),
             authControllerProvider.overrideWith(_GuestAuthController.new),
             videoRepositoryProvider.overrideWithValue(_VideoRepository()),
             videoExtrasRepositoryProvider.overrideWithValue(
@@ -185,10 +188,14 @@ void main() {
               child: Scaffold(
                 body: VideoScreen(
                   id: const VideoId('BV1abc123456'),
-                  playerBuilder: (_, _, _) => _TrackedPlayer(
-                    onCreate: () => created++,
-                    onDispose: () => disposed++,
-                  ),
+                  playerBuilder: (context, _, _) {
+                    ProviderScope.containerOf(context)
+                        .read(playbackSessionProvider);
+                    return _TrackedPlayer(
+                      onCreate: () => created++,
+                      onDispose: () => disposed++,
+                    );
+                  },
                 ),
               ),
             ),
@@ -207,6 +214,34 @@ void main() {
       tester.view.physicalSize = const Size(900, 800);
       await tester.pumpAndSettle();
       expect(tester.getSize(find.byType(_TrackedPlayer)).width, 520);
+      // A real decoded aspect ratio enables auto in the already open split.
+      session.snapshots.value = session.snapshots.value.copyWith(
+        videoDimensions: const VideoDimensions(16, 9),
+      );
+      await tester.pumpAndSettle();
+      final player = find.byType(_TrackedPlayer);
+      expect(tester.getSize(player), const Size(520, 292.5));
+      expect(
+        tester.getTopLeft(find.text('测试视频')).dy,
+        greaterThanOrEqualTo(292.5),
+      );
+      expect(
+        tester.getTopLeft(find.text('选集与推荐')).dx,
+        greaterThanOrEqualTo(520),
+      );
+      await tester.tap(find.text('展开'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('评论'));
+      await tester.pumpAndSettle();
+      expect(find.text('测试简介').hitTestable(), findsOneWidget);
+      layout.value = ResponsiveLayoutSettings(
+        playbackSideBySideWidth: 900,
+        playbackSplitStyle: PlaybackSplitStyle.right,
+      );
+      await tester.pumpAndSettle();
+      expect(tester.getSize(player).height, 800);
+      expect(find.text('简介'), findsOneWidget);
+      expect(find.text('测试简介').hitTestable(), findsNothing);
       layout.value = const ResponsiveLayoutSettings.defaults();
       await tester.pumpAndSettle();
       expect(tester.getSize(find.byType(_TrackedPlayer)).width, 900);

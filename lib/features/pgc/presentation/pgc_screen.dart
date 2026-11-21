@@ -17,6 +17,7 @@ import '../../../core/presentation/input_scope.dart';
 import '../../playback/application/playback_session.dart';
 import '../../../shared/ui/playback_page_commands.dart';
 import '../../../shared/ui/playback_layout_builder.dart';
+import '../../../shared/ui/playback_split_layout.dart';
 import '../../../shared/ui/width_layout_builder.dart';
 import '../../../shared/ui/responsive_layout_scope.dart';
 import '../../../core/presentation/workspace_activity.dart';
@@ -83,6 +84,7 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
   int? _tab;
   bool? _infoVisibilityOverride;
   bool _wide = false;
+  PgcSeasonId? _expandedDescription;
   ContentLink? _contentLink;
 
   bool get _infoVisible =>
@@ -101,6 +103,7 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
     }
   }
 
+  final _sidebarKey = GlobalKey();
   final _introScroll = HeaderScrollController();
   PgcSeason? _playerSeason;
   PgcEpisode? _playerEpisode;
@@ -243,6 +246,13 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
           _stepEpisode(season, selected, 1, completed: true, loop: true),
       toggleInfo: _toggleInfo,
       toggleDescription: () => setState(() {
+        if (_infoVisible &&
+            PlaybackSplitLayout.readInfoBelow(_sidebarKey.currentContext)) {
+          _expandedDescription = _expandedDescription == season.id
+              ? null
+              : season.id;
+          return;
+        }
         _infoVisibilityOverride = !_infoVisible || tab != 0;
         _tab = 0;
       }),
@@ -258,6 +268,7 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
           _wide = wide;
           final showInfo = _infoVisible;
           final info = Material(
+            key: _sidebarKey,
             color: Theme.of(context).colorScheme.surface,
             child: Column(
               children: [
@@ -302,7 +313,11 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
                         onChanged: (tab) => setState(() => _tab = tab),
                         viewKey: const ValueKey('pgc-info-swipe'),
                         labels: [
-                          const Text('简介'),
+                          Text(
+                            PlaybackSplitLayout.infoBelowOf(context)
+                                ? '选集'
+                                : '简介',
+                          ),
                           if (widget.commentsBuilder != null &&
                               selected != null)
                             const Text('评论'),
@@ -344,10 +359,25 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
                                       0,
                                     ),
                                     sliver: SliverToBoxAdapter(
-                                      child: _details(
-                                        context,
-                                        season,
-                                        selected,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          if (!PlaybackSplitLayout.infoBelowOf(
+                                            context,
+                                          )) ...[
+                                            _summary(
+                                              context,
+                                              season,
+                                              selected,
+                                              below: false,
+                                            ),
+                                            const SizedBox(height: 12),
+                                            const Divider(height: 1),
+                                            const SizedBox(height: 18),
+                                          ],
+                                          _episodePanel(season, selected),
+                                        ],
                                       ),
                                     ),
                                   ),
@@ -389,6 +419,20 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
                                 : constraints.maxWidth * 9 / 16,
                           ),
                     contentKey: season.id,
+                    summaryIdentity: (season, selected),
+                    summaryBuilder: (context, {required measuring}) => Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 16,
+                      ),
+                      child: _summary(
+                        context,
+                        season,
+                        selected,
+                        below: true,
+                        measuring: measuring,
+                      ),
+                    ),
                     player: player,
                     info: info,
                     toggleInfo: _toggleInfo,
@@ -530,11 +574,13 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
     ]);
   }
 
-  Widget _details(
+  Widget _summary(
     BuildContext context,
     PgcSeason season,
-    PgcEpisode? selected,
-  ) {
+    PgcEpisode? selected, {
+    required bool below,
+    bool measuring = false,
+  }) {
     final text = Theme.of(context).textTheme;
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
     return Column(
@@ -567,6 +613,10 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
             ],
           ),
         ),
+        if (below && selected != null) ...[
+          const SizedBox(height: 4),
+          Text(selected.displayTitle, style: text.bodyMedium),
+        ],
         if (season.publishText?.isNotEmpty == true) ...[
           const SizedBox(height: 5),
           Text(
@@ -604,7 +654,15 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
               ),
           ],
         ),
-        _PgcDescription(key: ValueKey(season.id), text: season.description),
+        _PgcDescription(
+          text: season.description,
+          expanded: !measuring && _expandedDescription == season.id,
+          onToggle: () => setState(() {
+            _expandedDescription = _expandedDescription == season.id
+                ? null
+                : season.id;
+          }),
+        ),
         if (selected != null && !selected.playable) ...[
           const SizedBox(height: 4),
           Text(
@@ -612,23 +670,22 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
             style: text.bodySmall?.copyWith(color: muted),
           ),
         ],
-        const SizedBox(height: 12),
-        const Divider(height: 1),
-        const SizedBox(height: 18),
-        PgcEpisodePanel(
-          key: ValueKey('pgc-season-episodes-${season.seasonId}'),
-          season: season,
-          selected: selected,
-          onSelect: (episode) {
-            final changed = ref
-                .read(pgcControllerProvider(_locator).notifier)
-                .selectEpisode(episode.id);
-            if (changed) widget.onEpisodeChanged?.call(episode);
-          },
-        ),
       ],
     );
   }
+
+  Widget _episodePanel(PgcSeason season, PgcEpisode? selected) =>
+      PgcEpisodePanel(
+        key: ValueKey('pgc-season-episodes-${season.seasonId}'),
+        season: season,
+        selected: selected,
+        onSelect: (episode) {
+          final changed = ref
+              .read(pgcControllerProvider(_locator).notifier)
+              .selectEpisode(episode.id);
+          if (changed) widget.onEpisodeChanged?.call(episode);
+        },
+      );
 
   Widget _stat(BuildContext context, IconData icon, String label) => Row(
     mainAxisSize: MainAxisSize.min,
@@ -639,25 +696,26 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
         color: Theme.of(context).colorScheme.onSurfaceVariant,
       ),
       const SizedBox(width: 3),
-      Text(label, style: Theme.of(context).textTheme.bodySmall),
+      Flexible(
+        child: Text(label, style: Theme.of(context).textTheme.bodySmall),
+      ),
     ],
   );
 }
 
-final class _PgcDescription extends StatefulWidget {
-  const _PgcDescription({super.key, required this.text});
+final class _PgcDescription extends StatelessWidget {
+  const _PgcDescription({
+    required this.text,
+    required this.expanded,
+    required this.onToggle,
+  });
   final String text;
-
-  @override
-  State<_PgcDescription> createState() => _PgcDescriptionState();
-}
-
-final class _PgcDescriptionState extends State<_PgcDescription> {
-  bool _expanded = false;
+  final bool expanded;
+  final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
-    if (widget.text.isEmpty) {
+    if (text.isEmpty) {
       return const Padding(
         padding: EdgeInsets.only(top: 8),
         child: Text('暂无简介'),
@@ -669,9 +727,9 @@ final class _PgcDescriptionState extends State<_PgcDescription> {
         const SizedBox(height: 8),
         SelectionArea(
           child: Text(
-            widget.text,
-            maxLines: _expanded ? null : 2,
-            overflow: _expanded ? null : TextOverflow.ellipsis,
+            text,
+            maxLines: expanded ? null : 2,
+            overflow: expanded ? null : TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               height: 1.4,
               color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -681,12 +739,12 @@ final class _PgcDescriptionState extends State<_PgcDescription> {
         Align(
           alignment: Alignment.centerRight,
           child: TextButton.icon(
-            onPressed: () => setState(() => _expanded = !_expanded),
+            onPressed: onToggle,
             icon: Icon(
-              _expanded ? Icons.expand_less : Icons.expand_more,
+              expanded ? Icons.expand_less : Icons.expand_more,
               size: 16,
             ),
-            label: Text(_expanded ? '收起' : '展开'),
+            label: Text(expanded ? '收起' : '展开'),
           ),
         ),
       ],

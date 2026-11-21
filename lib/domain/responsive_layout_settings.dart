@@ -1,3 +1,5 @@
+enum PlaybackSplitStyle { automatic, right, below }
+
 /// Width breakpoints in Flutter logical pixels, independent of the platform.
 final class ResponsiveLayoutSettings {
   ResponsiveLayoutSettings({
@@ -5,6 +7,7 @@ final class ResponsiveLayoutSettings {
     int navigationBarBreakpoint = 600,
     int sidebarExpandedWidth = 1600,
     int playbackSideBySideWidth = 1000,
+    this.playbackSplitStyle = PlaybackSplitStyle.automatic,
   }) : videoGridMinWidths =
            videoGridMinWidths != null &&
                validVideoGridWidths(videoGridMinWidths)
@@ -27,7 +30,8 @@ final class ResponsiveLayoutSettings {
     : videoGridMinWidths = null,
       navigationBarBreakpoint = 600,
       sidebarExpandedWidth = 1600,
-      playbackSideBySideWidth = 1000;
+      playbackSideBySideWidth = 1000,
+      playbackSplitStyle = PlaybackSplitStyle.automatic;
 
   static const defaultVideoGridMinWidths = [
     300,
@@ -49,6 +53,7 @@ final class ResponsiveLayoutSettings {
   final int navigationBarBreakpoint;
   final int sidebarExpandedWidth;
   final int playbackSideBySideWidth;
+  final PlaybackSplitStyle playbackSplitStyle;
 
   static bool validVideoGridWidths(List<int>? values) {
     if (values == null || values.length != 11) return false;
@@ -66,6 +71,7 @@ final class ResponsiveLayoutSettings {
     int? navigationBarBreakpoint,
     int? sidebarExpandedWidth,
     int? playbackSideBySideWidth,
+    PlaybackSplitStyle? playbackSplitStyle,
   }) => ResponsiveLayoutSettings(
     videoGridMinWidths: resetVideoGrid
         ? null
@@ -73,6 +79,7 @@ final class ResponsiveLayoutSettings {
     navigationBarBreakpoint:
         navigationBarBreakpoint ?? this.navigationBarBreakpoint,
     sidebarExpandedWidth: sidebarExpandedWidth ?? this.sidebarExpandedWidth,
+    playbackSplitStyle: playbackSplitStyle ?? this.playbackSplitStyle,
     playbackSideBySideWidth:
         playbackSideBySideWidth ?? this.playbackSideBySideWidth,
   );

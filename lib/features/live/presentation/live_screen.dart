@@ -10,6 +10,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/presentation/workspace_activity.dart';
 import '../../../domain/user.dart';
 import '../../../shared/ui/playback_sidebar_toggle.dart';
+import '../../../shared/ui/playback_split_layout.dart';
+import '../../../shared/ui/playback_layout_builder.dart';
 import '../../../shared/ui/playback_info_tabs.dart';
 import '../../../shared/ui/responsive_layout_scope.dart';
 import '../../../shared/ui/smooth_scroll_behavior.dart';
@@ -295,65 +297,100 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
       _playerWidget = _player(context, room);
     }
     final player = _playerWidget ??= _player(context, room);
-    return LayoutBuilder(
-      builder: (context, constraints) {
+    return PlaybackLayoutBuilder(
+      builder: (context, constraints, listening) {
         final wide =
             constraints.maxWidth >=
             ResponsiveLayoutScope.of(context).playbackSideBySideWidth;
         _wide = wide;
-        final playerWidth = _infoVisible && wide
-            ? math.max(0.0, constraints.maxWidth - 380)
-            : constraints.maxWidth;
-        final playerHeight = _infoVisible && !wide
-            ? math.min(
+        return PlaybackVideoDimensions(
+          builder: (context, dimensions) => PlaybackSplitLayout(
+            enabled: wide && !listening,
+            showInfo: _infoVisible,
+            dimensions: room.isLive ? dimensions : null,
+            contentKey: id,
+            summaryIdentity: room,
+            summaryBuilder: (context, {required measuring}) => LiveRoomHeader(
+              room: room,
+              requestedId: id,
+              compact: false,
+              belowPlayer: true,
+              onOpenUser: widget.onOpenUser,
+            ),
+            builder: (context, bottomHeight) {
+              final playerWidth = _infoVisible && wide
+                  ? math.max(
+                      0.0,
+                      constraints.maxWidth - PlaybackSplitLayout.sidebarWidth,
+                    )
+                  : constraints.maxWidth;
+              final playerHeight = _infoVisible && !wide
+                  ? math.min(
+                      constraints.maxWidth * 9 / 16,
+                      constraints.maxHeight * 0.55,
+                    )
+                  : constraints.maxHeight - bottomHeight;
+              final compactPlayerHeight = math.min(
                 constraints.maxWidth * 9 / 16,
                 constraints.maxHeight * 0.55,
-              )
-            : constraints.maxHeight;
-        final compactPlayerHeight = math.min(
-          constraints.maxWidth * 9 / 16,
-          constraints.maxHeight * 0.55,
-        );
-        final infoHeight = wide
-            ? constraints.maxHeight
-            : math.max(0.0, constraints.maxHeight - compactPlayerHeight);
-        return Stack(
-          children: [
-            Positioned(
-              left: 0,
-              top: 0,
-              width: playerWidth,
-              height: playerHeight,
-              child: player,
-            ),
-            Positioned(
-              left: wide ? constraints.maxWidth - 380 : 0,
-              top: wide ? 0 : compactPlayerHeight,
-              width: wide ? 380 : constraints.maxWidth,
-              height: infoHeight,
-              child: ExcludeFocus(
-                excluding: !_infoVisible,
-                child: Offstage(
-                  offstage: !_infoVisible,
-                  child: _sidebar(context, room, controller),
-                ),
-              ),
-            ),
-            if (wide)
-              Positioned(
-                right: _infoVisible ? 380 : 0,
-                top: math.max(
-                  0.0,
-                  playerHeight / 2 - PlaybackSidebarToggle.size.height / 2,
-                ),
-                child: PlaybackSidebarToggle(
-                  tooltip: _infoVisible ? '收起直播信息' : '展开直播信息',
-                  icon: _infoVisible ? Icons.chevron_right : Icons.chevron_left,
-                  onPressed: () =>
-                      setState(() => _infoVisibilityOverride = !_infoVisible),
-                ),
-              ),
-          ],
+              );
+              final infoHeight = wide
+                  ? constraints.maxHeight
+                  : math.max(0.0, constraints.maxHeight - compactPlayerHeight);
+              return Stack(
+                children: [
+                  Positioned(
+                    left: 0,
+                    top: 0,
+                    width: playerWidth,
+                    height: playerHeight,
+                    child: player,
+                  ),
+                  Positioned(
+                    left: wide
+                        ? constraints.maxWidth -
+                              PlaybackSplitLayout.sidebarWidth
+                        : 0,
+                    top: wide ? 0 : compactPlayerHeight,
+                    width: wide
+                        ? PlaybackSplitLayout.sidebarWidth
+                        : constraints.maxWidth,
+                    height: infoHeight,
+                    child: ExcludeFocus(
+                      excluding: !_infoVisible,
+                      child: Offstage(
+                        offstage: !_infoVisible,
+                        child: Builder(
+                          builder: (context) =>
+                              _sidebar(context, room, controller),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (wide)
+                    Positioned(
+                      right: _infoVisible
+                          ? PlaybackSplitLayout.sidebarWidth
+                          : 0,
+                      top: math.max(
+                        0.0,
+                        playerHeight / 2 -
+                            PlaybackSidebarToggle.size.height / 2,
+                      ),
+                      child: PlaybackSidebarToggle(
+                        tooltip: _infoVisible ? '收起直播信息' : '展开直播信息',
+                        icon: _infoVisible
+                            ? Icons.chevron_right
+                            : Icons.chevron_left,
+                        onPressed: () => setState(
+                          () => _infoVisibilityOverride = !_infoVisible,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
         );
       },
     );
@@ -388,6 +425,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
     final roomId = RoomId(widget.roomId);
     final provider = liveControllerProvider(roomId);
     final compact = !_wide;
+    final below = PlaybackSplitLayout.infoBelowOf(context);
     final refresh = Consumer(
       builder: (context, ref, _) {
         final (phase, chatLoading, scLoading) = ref.watch(
@@ -500,13 +538,15 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
               builder: (context, constraints) => Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxHeight: constraints.maxHeight * .4,
+                  if (!below) ...[
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: constraints.maxHeight * .4,
+                      ),
+                      child: header,
                     ),
-                    child: header,
-                  ),
-                  const Divider(height: 1),
+                    const Divider(height: 1),
+                  ],
                   content,
                 ],
               ),
