@@ -42,6 +42,8 @@ class NativeTextureHandoffTest(unittest.TestCase):
             (output / "linux_texture_gl_body.inc").write_text(gl, encoding="utf-8")
             (output / "linux_video_copy_body.inc").write_text(function_body(
                 source / "video_output.cc", "gboolean video_output_copy_pixel_buffer("), encoding="utf-8")
+            (output / "linux_texture_detach_body.inc").write_text(function_body(
+                source / "texture_sw.cc", "void texture_sw_detach("), encoding="utf-8")
             (output / "linux_texture_sw_body.inc").write_text(function_body(
                 source / "texture_sw.cc", "gboolean texture_sw_copy_pixels("), encoding="utf-8")
             executable = output / "linux_texture_handoff.exe"
