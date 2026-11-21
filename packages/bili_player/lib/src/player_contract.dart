@@ -252,6 +252,7 @@ enum PlayerFailureKind {
   nativePlayback,
   networkOpen,
   networkRead,
+  liveReadTerminated,
   videoInterrupted,
   disposed,
 }

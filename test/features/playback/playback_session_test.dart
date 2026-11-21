@@ -1499,6 +1499,127 @@ void main() {
     expect(session.error, isNull);
   });
 
+  testWidgets(
+    'terminal live reads retry the selected line with a bound and respect pause',
+    (tester) async {
+      final engine = _FakeEngine();
+      final content = _FakeContentRepository()..liveLineCount = 2;
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(),
+        contentRepository: content,
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+      );
+      addTearDown(session.close);
+      await session.open(null, null, target: const LivePlaybackTarget('42'));
+      await session.changeLiveLine(1);
+      final resolutions = content.targets.length;
+      final initialOpens = engine.sources.length;
+      final selected = engine.openedUris.last;
+      void terminateRead() {
+        engine.emit(
+          engine.currentSnapshot.copyWith(
+            phase: PlaybackPhase.failed,
+            desiredPlaying: false,
+          ),
+        );
+        engine._failures.add(
+          PlayerFailure(
+            PlayerFailureKind.liveReadTerminated,
+            '直播读取中断',
+            engine.currentSnapshot.generation,
+          ),
+        );
+      }
+
+      for (var i = 0; i < 3; i++) {
+        terminateRead();
+        expect(session.isRecovering, isTrue);
+        await tester.pump(const Duration(seconds: 2));
+        expect(engine.sources.length, initialOpens + i);
+        await tester.pump(const Duration(seconds: 1));
+        expect(engine.openedUris.last, selected);
+        expect(engine.sources.length, initialOpens + i + 1);
+        expect(engine.openOptions.last.startPosition, Duration.zero);
+        expect(engine.currentSnapshot.desiredPlaying, isTrue);
+      }
+      terminateRead();
+      expect(session.isRecovering, isFalse);
+      expect(session.error, isNotNull);
+      expect(content.targets.length, resolutions);
+      await session.retry();
+      terminateRead();
+      expect(session.isRecovering, isTrue);
+      await session.pause();
+      final opensBeforePause = engine.sources.length;
+      await tester.pump(const Duration(seconds: 4));
+      expect(engine.sources.length, opensBeforePause);
+      expect(session.isRecovering, isFalse);
+    },
+  );
+
+  for (final outcome in ['on air', 'offline', 'pause', 'unavailable']) {
+    testWidgets('live HLS EOF checks room status once: $outcome', (
+      tester,
+    ) async {
+      final engine = _FakeEngine();
+      final response = Completer<bool>();
+      final requests = <RequestCancellation>[];
+      final roomIds = <String>[];
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(),
+        contentRepository: _FakeContentRepository(),
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+        isRoomLive: (room, token) {
+          roomIds.add(room.roomId);
+          requests.add(token);
+          return response.future;
+        },
+      );
+      addTearDown(session.close);
+      await session.open(null, null, target: const LivePlaybackTarget('42'));
+      final opens = engine.sources.length;
+      expect(
+        engine.currentSnapshot.phase,
+        PlaybackPhase.playing,
+        reason: session.error,
+      );
+      engine.emit(
+        engine.currentSnapshot.copyWith(
+          phase: PlaybackPhase.ended,
+          desiredPlaying: false,
+        ),
+      );
+      expect(
+        session.isRecovering,
+        isTrue,
+        reason:
+            'kind=${session.media?.kind} phase=${session.snapshots.value.phase}',
+      );
+      await tester.pump(const Duration(seconds: 3));
+      expect(roomIds, [
+        '42',
+      ], reason: 'recovering=${session.isRecovering} error=${session.error}');
+      expect(requests, hasLength(1));
+      if (outcome == 'pause') {
+        await session.pause();
+        expect(requests.single.isCancelled, isTrue);
+      }
+      if (outcome == 'unavailable') {
+        response.completeError(TimeoutException('room status'));
+      } else {
+        response.complete(outcome != 'offline');
+      }
+      await tester.pump();
+      expect(engine.sources.length, opens + (outcome == 'on air' ? 1 : 0));
+      expect(session.isRecovering, isFalse);
+      expect(session.error != null, outcome == 'unavailable');
+    });
+  }
+
   for (final kind in [PlaybackMediaKind.liveHls, PlaybackMediaKind.liveFlv]) {
     test('live buffering identity reaches the backend: $kind', () async {
       final engine = _FakeEngine();

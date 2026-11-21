@@ -245,7 +245,7 @@ void main() {
         NativeErrorDetail.prematureRead,
       ),
       ('Failed to open segment 3 of playlist 0', NativeErrorDetail.segmentRead),
-      ('Failed to reload playlist 0', NativeErrorDetail.segmentRead),
+      ('Failed to reload playlist 0', NativeErrorDetail.playlistReload),
     ]) {
       for (final prefix in ['ffmpeg/demuxer', 'ffmpeg', 'other']) {
         final summary = NativeErrorSummary.classify(message, prefix: prefix);
@@ -265,6 +265,18 @@ void main() {
         expect(json, isNot(contains('private.test')));
       }
     }
+  });
+
+  test('identifies the fatal lavf read notification only from its demuxer', () {
+    const message = '...treating it as fatal error.';
+    expect(
+      NativeErrorSummary.classify(message, prefix: 'lavf').detail,
+      NativeErrorDetail.fatalPacketRead,
+    );
+    expect(
+      NativeErrorSummary.classify(message, prefix: 'vd').detail,
+      NativeErrorDetail.unknown,
+    );
   });
 
   test('decoder components retain their dedicated failure routes', () {

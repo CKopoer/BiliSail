@@ -175,11 +175,138 @@ void main() {
       await server.close(force: true);
     }
   });
+
+  testWidgets('a failed live playlist reload reopens the same stream once', (
+    tester,
+  ) async {
+    initializePlayerBackend();
+    final directory = Platform.environment['BILI_CONTENT_MEDIA_DIR']!;
+    final playlist = await File('$directory/fragmented.m3u8').readAsString();
+    final segments = RegExp(r'#EXTINF:[^\r\n]+\r?\nfrag-\d+\.m4s')
+        .allMatches(playlist)
+        .map((match) => match[0]!)
+        .toList();
+    final header = playlist.split('#EXTINF:').first;
+    final broadcast = Stopwatch()..start();
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final engine = MediaKitEngine();
+    int? brokenGeneration;
+    var rejectedReloads = 0, recoveredRequests = 0;
+    var roomChecks = 0;
+    final mediaHeaders = <(String?, String?)>{};
+    server.listen((request) async {
+      final name = request.uri.pathSegments.last;
+      mediaHeaders.add((
+        request.headers.value(HttpHeaders.userAgentHeader),
+        request.headers.value(HttpHeaders.refererHeader),
+      ));
+      request.response.persistentConnection = false;
+      List<int> body = const [];
+      if (name == 'live.m3u8') {
+        request.response.headers.contentType = ContentType(
+          'application',
+          'vnd.apple.mpegurl',
+        );
+        if (engine.currentSnapshot.generation == brokenGeneration) {
+          rejectedReloads++;
+          request.response.statusCode = HttpStatus.serviceUnavailable;
+          body = utf8.encode('Service unavailable');
+        } else {
+          if (rejectedReloads > 0) recoveredRequests++;
+          final sequence = (broadcast.elapsed.inSeconds ~/ 2).clamp(
+            0,
+            segments.length - 5,
+          );
+          final window = segments.skip(sequence).take(5).join('\n');
+          body = utf8.encode(
+            '${header.replaceFirst('#EXT-X-MEDIA-SEQUENCE:0', '#EXT-X-MEDIA-SEQUENCE:$sequence')}$window\n',
+          );
+        }
+      } else if (name == 'init.mp4' ||
+          RegExp(r'^frag-\d+\.m4s$').hasMatch(name)) {
+        request.response.headers.contentType = ContentType('video', 'mp4');
+        body = await File('$directory/$name').readAsBytes();
+      } else {
+        request.response.statusCode = HttpStatus.notFound;
+      }
+      request.response.contentLength = body.length;
+      request.response.add(body);
+      await request.response.close();
+    });
+    final repository = _LiveRepository(server.port, hls: true);
+    final session = PlaybackSession(
+      engine: engine,
+      repository: _UnusedRepository(),
+      contentRepository: repository,
+      isRoomLive: (target, cancellation) async {
+        roomChecks++;
+        return target.roomId == '1';
+      },
+      progress: _UnusedProgress(),
+      accountScope: () => 'guest',
+    );
+    final failures = <PlayerFailure>[];
+    final subscription = engine.failures.listen(failures.add);
+    try {
+      await tester.pumpWidget(MaterialApp(home: VideoSurface(engine: engine)));
+      await _withFrames(
+        tester,
+        session.open(
+          null,
+          null,
+          target: const LivePlaybackTarget('1'),
+          volume: 0,
+        ),
+      );
+      final generation = engine.currentSnapshot.generation;
+      expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+      // Fail playlist refreshes on the original reader, including any native
+      // retries. The same URL serves healthy media when the session reopens it.
+      await tester.pump(const Duration(seconds: 3));
+      brokenGeneration = generation;
+      final watch = Stopwatch()..start();
+      while (watch.elapsed < const Duration(seconds: 30) &&
+          !(engine.currentSnapshot.generation > generation &&
+              engine.currentSnapshot.phase == PlaybackPhase.playing &&
+              engine.currentSnapshot.position > const Duration(seconds: 1))) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(rejectedReloads, greaterThan(0));
+      expect(
+        failures.every((f) => f.kind == PlayerFailureKind.liveReadTerminated),
+        isTrue,
+      );
+      expect(failures.length + roomChecks, 1);
+      expect(mediaHeaders, {
+        ('BiliSail-Live-Test', 'https://www.bilibili.com'),
+      });
+      expect(recoveredRequests, greaterThan(0));
+      expect(repository.resolutions, 1);
+      expect(engine.currentSnapshot.generation, greaterThan(generation));
+      expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+      expect(
+        engine.currentSnapshot.position,
+        greaterThan(const Duration(seconds: 1)),
+      );
+      expect(session.error, isNull);
+      debugPrint(
+        'LIVE_HLS_RECOVERY playlist503=$rejectedReloads '
+        'roomChecks=$roomChecks reopened=${engine.currentSnapshot.generation > generation} '
+        'positionMs=${engine.currentSnapshot.position.inMilliseconds}',
+      );
+    } finally {
+      await subscription.cancel();
+      await _withFrames(tester, session.close());
+      await tester.pumpWidget(const SizedBox.shrink());
+      await server.close(force: true);
+    }
+  });
 }
 
 final class _LiveRepository implements ContentPlaybackRepository {
-  _LiveRepository(this.port);
+  _LiveRepository(this.port, {this.hls = false});
   final int port;
+  final bool hls;
   int resolutions = 0;
   @override
   Future<PlaybackMedia> resolve(
@@ -188,11 +315,16 @@ final class _LiveRepository implements ContentPlaybackRepository {
     VideoCodecPreference preferredCodec = VideoCodecPreference.h264,
     required RequestCancellation cancellation,
   }) async {
-    final path = ++resolutions == 1 ? 'bad' : 'good';
+    resolutions++;
+    final path = hls
+        ? 'live.m3u8'
+        : resolutions == 1
+        ? 'bad.flv'
+        : 'good.flv';
     return PlaybackMedia(
       video: PlaybackTrack(
         urls: [
-          Uri.parse('http://127.0.0.1:$port/$path.flv?token=synthetic-secret'),
+          Uri.parse('http://127.0.0.1:$port/$path?token=synthetic-secret'),
         ],
         codec: 'avc1',
         bandwidth: 0,
@@ -201,8 +333,13 @@ final class _LiveRepository implements ContentPlaybackRepository {
       quality: 80,
       qualities: const [80],
       duration: Duration.zero,
-      headers: const {},
-      kind: PlaybackMediaKind.liveFlv,
+      headers: hls
+          ? const {
+              'User-Agent': 'BiliSail-Live-Test',
+              'Referer': 'https://www.bilibili.com',
+            }
+          : const {},
+      kind: hls ? PlaybackMediaKind.liveHls : PlaybackMediaKind.liveFlv,
     );
   }
 }

@@ -24,6 +24,14 @@ final class ApiContentPlaybackRepository
   final Future<MediaCdnPreference> Function()? cdnPreference;
   final Future<AudioQualityPreference> Function()? audioQualityPreference;
 
+  Future<bool> isRoomLive(
+    LivePlaybackTarget target,
+    RequestCancellation cancellation,
+  ) => requests.run((context) async {
+    final info = await live.getPlayInfo(target.roomId, qn: 0, context: context);
+    return info.liveStatus == 1;
+  }, cancellation: cancellation);
+
   static const _headers = {
     'Referer': 'https://www.bilibili.com/',
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/132.0.0.0 Safari/537.36',
@@ -115,7 +123,12 @@ final class ApiContentPlaybackRepository
       qualities: stream.qualities,
       qualityLabels: info.qualityLabels,
       duration: Duration.zero,
-      headers: {..._headers, 'Referer': 'https://live.bilibili.com/'},
+      headers: const {
+        'Referer': 'https://www.bilibili.com',
+        'User-Agent':
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
+            'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.2 Safari/605.1.15',
+      },
       kind: stream.preference.format == 'flv'
           ? PlaybackMediaKind.liveFlv
           : PlaybackMediaKind.liveHls,

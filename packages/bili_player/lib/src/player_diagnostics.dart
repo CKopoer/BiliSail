@@ -100,6 +100,8 @@ enum NativeErrorDetail {
   corruptPacket,
   prematureRead,
   segmentRead,
+  playlistReload,
+  fatalPacketRead,
   avDesync,
   hardwareAdvice,
   decoderFailure,
@@ -154,6 +156,8 @@ final class NativeErrorSummary {
     ).firstMatch(value);
     final status = match == null ? null : int.tryParse(match.group(1) ?? '');
     final detail = switch (value) {
+      '...treating it as fatal error.' when component == 'lavf' =>
+        NativeErrorDetail.fatalPacketRead,
       _ when value.contains('consider trying') && value.contains('hwdec') =>
         NativeErrorDetail.hardwareAdvice,
       _ when value.contains('audio/video desynchronisation') =>
@@ -178,9 +182,9 @@ final class NativeErrorSummary {
           when value.contains('stream ends prematurely') ||
               value.contains('partial file') =>
         NativeErrorDetail.prematureRead,
-      _
-          when value.contains('failed to open segment') ||
-              value.contains('failed to reload playlist') =>
+      _ when value.contains('failed to reload playlist') =>
+        NativeErrorDetail.playlistReload,
+      _ when value.contains('failed to open segment') =>
         NativeErrorDetail.segmentRead,
       _
           when value.contains('timestamp') ||
@@ -236,6 +240,7 @@ final class NativeErrorSummary {
       _
           when detail == NativeErrorDetail.prematureRead ||
               detail == NativeErrorDetail.segmentRead ||
+              detail == NativeErrorDetail.playlistReload ||
               value.contains('input/output') ||
               value.contains('i/o error') ||
               value.contains('error in the pull function') =>

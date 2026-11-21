@@ -74,6 +74,7 @@ final class MediaKitBackend
   NativeReadinessStage? _readinessStage;
   Timer? _colorDeadline;
   bool _networkOpenError = false;
+  bool _fatalLiveHlsRead = false;
   NativeBufferingDiagnostics? _bufferDiagnostics;
   DiagnosticSourceKind? diagnosticSourceKind;
   NativeReadinessStage? get readinessStage => _readinessStage;
@@ -461,6 +462,7 @@ final class MediaKitBackend
     }
     final player = _player!;
     _networkOpenError = false;
+    _fatalLiveHlsRead = false;
     if (_nativeLoad == null) {
       final attaching = _attachingLoad =
           NativeLoadObserver.attach(
@@ -472,7 +474,7 @@ final class MediaKitBackend
               );
               if (_snapshot.phase != PlaybackPhase.opening &&
                   !_snapshot.isSeeking) {
-                _emit(const BackendEvent(BackendEventKind.failure));
+                _emit(_nativeFailureEvent());
               }
             },
           ).then((observer) {
@@ -529,8 +531,13 @@ final class MediaKitBackend
     }
     if (generation != _generation || _disposed) throw const SourceSuperseded();
     final mediaUri = nativeMediaUri(mediaTrack.uri, audioTrack?.uri);
+    final liveHeaders = plan.live
+        ? nativeMediaHeaders(mediaTrack.requestPolicy.headers)
+        : null;
     final fileOptions = {
       'force-media-title': 'BiliSail',
+      'user-agent': ?liveHeaders?.userAgent,
+      'referrer': ?liveHeaders?.referer,
       if (video.uri.scheme == 'file' || video.uri.scheme == 'content')
         'cache': 'no'
       else
@@ -554,7 +561,8 @@ final class MediaKitBackend
         .open(
           mk.Media(
             mediaUri,
-            httpHeaders: mediaTrack.requestPolicy.headers,
+            httpHeaders:
+                liveHeaders?.fields ?? mediaTrack.requestPolicy.headers,
             nativeOptions: fileOptions,
             // Resume as part of loading, before decoding the first frame.
             // Opening at zero and seeking afterward buffers twice when
@@ -851,6 +859,13 @@ final class MediaKitBackend
     // keeps mpv's source, demuxer cache and selected external audio intact.
   }
 
+  BackendEvent _nativeFailureEvent() => BackendEvent(
+    BackendEventKind.failure,
+    failureKind: _fatalLiveHlsRead
+        ? PlayerFailureKind.liveReadTerminated
+        : PlayerFailureKind.nativePlayback,
+  );
+
   void _subscribe(
     mk.Player player,
     int generation, {
@@ -920,6 +935,12 @@ final class MediaKitBackend
                 _seek != null) {
               return;
             }
+            // Let buffered packets play out. A fatal HLS reader can report
+            // ordinary playback EOF once they are consumed.
+            if (_fatalLiveHlsRead && _snapshot.desiredPlaying) {
+              event(_nativeFailureEvent());
+              return;
+            }
             event(
               BackendEvent(
                 BackendEventKind.ended,
@@ -944,6 +965,12 @@ final class MediaKitBackend
             log.text,
             prefix: log.prefix,
           );
+          if (networkSource &&
+              diagnosticSourceKind == DiagnosticSourceKind.liveManifest &&
+              severity != NativeLogSeverity.warning &&
+              summary.detail == NativeErrorDetail.fatalPacketRead) {
+            _fatalLiveHlsRead = true;
+          }
           _diagnose(
             PlayerDiagnosticKind.nativeLog,
             severity: severity,

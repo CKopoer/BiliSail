@@ -44,6 +44,7 @@ class PlaybackSession extends ChangeNotifier {
     this.cardPreviews,
     this.sponsorRepository,
     this.contentRepository,
+    this.isRoomLive,
     this.metadataRepository,
     this.historyRepository,
     int Function()? sessionEpoch,
@@ -103,7 +104,7 @@ class PlaybackSession extends ChangeNotifier {
             _closing) {
           return;
         }
-        if (_scheduleNetworkRetry(failure, media)) {
+        if (_scheduleNetworkRetry(failure.kind, failure.generation, media)) {
           return;
         }
         error = contentTarget is OfflinePlaybackTarget
@@ -137,10 +138,14 @@ class PlaybackSession extends ChangeNotifier {
   final PlayerEngine engine;
   final CardPreviewPlayback? cardPreviews;
   Timer? _recoveryTimer;
+  RequestCancellation? _roomStatusRequest;
+  final _liveReadRetries = <Duration>[];
   bool _reopening = false;
   final PlaybackRepository repository;
   final PlaybackMetadataRepository? metadataRepository;
   final ContentPlaybackRepository? contentRepository;
+  final Future<bool> Function(LivePlaybackTarget, RequestCancellation)?
+  isRoomLive;
   final PlaybackProgressStore progress;
   final PlaybackStartupDiagnostics startupDiagnostics;
   final PlaybackHistoryRepository? historyRepository;
@@ -154,10 +159,18 @@ class PlaybackSession extends ChangeNotifier {
   final Duration Function()? startupNow;
   AudioQualityPreference? _audioQuality;
 
-  bool _scheduleNetworkRetry(PlayerFailure failure, PlaybackMedia? source) {
+  bool _scheduleNetworkRetry(
+    PlayerFailureKind kind,
+    int engineGeneration,
+    PlaybackMedia? source, {
+    LivePlaybackTarget? verifyRoom,
+  }) {
+    final terminalLiveRead =
+        isLive && kind == PlayerFailureKind.liveReadTerminated;
     if (source == null ||
-        (failure.kind != PlayerFailureKind.networkRead &&
-            failure.kind != PlayerFailureKind.networkOpen) ||
+        (!terminalLiveRead &&
+            kind != PlayerFailureKind.networkRead &&
+            kind != PlayerFailureKind.networkOpen) ||
         _reopening ||
         _disposed ||
         _closing ||
@@ -167,27 +180,61 @@ class PlaybackSession extends ChangeNotifier {
         !sourceMatchesAccount) {
       return false;
     }
-    if (_recoveryTimer != null) return true;
+    if (_recoveryTimer != null || _roomStatusRequest != null) return true;
+    if (terminalLiveRead) {
+      final now = _clock.elapsed;
+      _liveReadRetries.removeWhere(
+        (attempt) => now - attempt >= const Duration(seconds: 30),
+      );
+      if (_liveReadRetries.length >= 3) return false;
+      _liveReadRetries.add(now);
+    }
     final generation = _generation;
     error = null;
     // Running read errors have already passed the SDK buffer check after 3s.
-    // A terminal network open error has no active reader left to check.
+    // A terminal network error has no active reader left to check.
     _recoveryTimer = Timer(
-      failure.kind == PlayerFailureKind.networkOpen
-          ? const Duration(seconds: 3)
-          : Duration.zero,
-      () {
+      kind == PlayerFailureKind.networkRead
+          ? Duration.zero
+          : const Duration(seconds: 3),
+      () async {
         _recoveryTimer = null;
-        if (_disposed ||
-            _closing ||
-            generation != _generation ||
-            failure.generation != engine.currentSnapshot.generation ||
-            !_desiredPlaying ||
-            !_playbackAllowed ||
-            !sourceMatchesAccount) {
-          return;
+        bool current() =>
+            !_disposed &&
+            !_closing &&
+            generation == _generation &&
+            engineGeneration == engine.currentSnapshot.generation &&
+            _desiredPlaying &&
+            _playbackAllowed &&
+            sourceMatchesAccount;
+        if (!current()) return;
+        if ((verifyRoom, isRoomLive) case (final room?, final readStatus?)) {
+          final token = _roomStatusRequest = RequestCancellation();
+          try {
+            final onAir = await readStatus(
+              room,
+              token,
+            ).timeout(const Duration(seconds: 8));
+            if (token.isCancelled || !current()) return;
+            if (!onAir) {
+              _desiredPlaying = false;
+              return;
+            }
+          } on Exception {
+            if (!token.isCancelled && current()) {
+              _desiredPlaying = false;
+              error = '无法确认直播状态，请重新加载。';
+            }
+            return;
+          } finally {
+            token.cancel();
+            if (identical(_roomStatusRequest, token)) {
+              _roomStatusRequest = null;
+              _notify();
+            }
+          }
         }
-        unawaited(_retry(source));
+        if (current()) await _retry(source);
       },
     );
     _notify();
@@ -195,6 +242,8 @@ class PlaybackSession extends ChangeNotifier {
   }
 
   void _cancelRecovery() {
+    _roomStatusRequest?.cancel();
+    _roomStatusRequest = null;
     if (_recoveryTimer != null) {
       error = '音视频加载中断，请重新加载或切换线路。';
       _recoveryTimer!.cancel();
@@ -502,7 +551,8 @@ class PlaybackSession extends ChangeNotifier {
   bool commentsEnabled = true;
   double commentFontScale = 1;
   bool get isResolving => _resolving;
-  bool get isRecovering => _recoveryTimer != null || _reopening;
+  bool get isRecovering =>
+      _recoveryTimer != null || _roomStatusRequest != null || _reopening;
   int get sourceGeneration => _generation;
   String get sourceAccountScope => _scope;
   bool get sourceMatchesAccount =>
@@ -899,6 +949,7 @@ class PlaybackSession extends ChangeNotifier {
     final generation = ++_generation;
     _cancelRecovery();
     _reopening = retryMedia != null;
+    if (retryMedia == null) _liveReadRetries.clear();
     final openBudget = startupBudget ?? const Duration(seconds: 35);
     _allowColorFallback = allowColorFallback;
     final requestedAudioOnly =
@@ -1368,7 +1419,11 @@ class PlaybackSession extends ChangeNotifier {
             : failure.message;
         _resolving = false;
         if (retryMedia == null) {
-          _scheduleNetworkRetry(failure, compatibilityMedia);
+          _scheduleNetworkRetry(
+            failure.kind,
+            failure.generation,
+            compatibilityMedia,
+          );
         }
         _notify();
       }
@@ -1404,7 +1459,20 @@ class PlaybackSession extends ChangeNotifier {
       unawaited(ensureHighEnergy());
     }
     if (enteredEnded && !_resolving) {
-      _desiredPlaying = false;
+      // A libmpv instance may receive only EOF if FFmpeg is logging through
+      // another player in the process. Check the room once before reopening.
+      final target = contentTarget;
+      final recovering =
+          target is LivePlaybackTarget &&
+          media?.kind == PlaybackMediaKind.liveHls &&
+          isRoomLive != null &&
+          _scheduleNetworkRetry(
+            PlayerFailureKind.liveReadTerminated,
+            value.generation,
+            media,
+            verifyRoom: target,
+          );
+      if (!recovering) _desiredPlaying = false;
     }
     if (_ownerVisible &&
         commentsEnabled &&
