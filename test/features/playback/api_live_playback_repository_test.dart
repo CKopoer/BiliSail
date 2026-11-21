@@ -43,7 +43,7 @@ void main() {
         );
         expect(media.liveStream, preference);
         expect(media.video.codec, codec);
-        expect(media.liveStreams.length, 4);
+        expect(media.liveStreams.length, 5);
         expect(
           media.kind,
           format == 'flv'
@@ -56,20 +56,20 @@ void main() {
           preference: const LiveStreamPreference(
             protocol: 'http_stream',
             format: 'flv',
-            codec: 'hevc',
+            codec: 'av1',
           ),
           cancellation: RequestCancellation(),
         );
-        expect(fallback.liveStream?.format, 'fmp4');
-        expect(fallback.liveStream?.codec, 'avc');
+        expect(fallback.liveStream?.format, 'flv');
+        expect(fallback.liveStream?.codec, 'hevc');
       },
     );
   }
-  for (final quality in [0, 400, 10000]) {
+  for (final (quality, hlsFirst) in [(0, false), (400, true), (10000, false)]) {
     test(
-      'live resolution keeps stream-specific qualities and server line order: qn=$quality',
+      'automatic live playback follows server stream and line order: qn=$quality hlsFirst=$hlsFirst',
       () async {
-        final transport = _Transport();
+        final transport = _Transport(hlsFirst: hlsFirst);
         final requests = ApiRequests();
         final api = BiliApiClient(
           transport: transport,
@@ -88,11 +88,15 @@ void main() {
           cancellation: RequestCancellation(),
         );
         expect(transport.request?.queryParameters['qn'], '$quality');
-        expect(media.kind, PlaybackMediaKind.liveHls);
-        expect(media.video.codec, 'avc');
+        expect(media.liveStreams.first.preference, media.liveStream);
+        expect(media.liveStream?.format, hlsFirst ? 'ts' : 'flv');
+        expect(
+          media.kind,
+          hlsFirst ? PlaybackMediaKind.liveHls : PlaybackMediaKind.liveFlv,
+        );
+        expect(media.video.codec, hlsFirst ? 'av1' : 'hevc');
         expect(media.quality, quality == 0 ? 250 : quality);
-        // HEVC/FLV-only qualities must not appear in the selected AVC HLS menu.
-        expect(media.qualities, [10000, 400, 250]);
+        expect(media.qualities, [if (!hlsFirst) 20000, 10000, 400, 250]);
         expect(media.qualityLabels[400], '1080P 蓝光');
         expect(media.video.urls.map((uri) => uri.host), [
           'primary.example',
@@ -108,6 +112,9 @@ void main() {
 }
 
 final class _Transport implements ApiTransport {
+  _Transport({this.hlsFirst = false});
+
+  final bool hlsFirst;
   Uri? request;
   @override
   Future<ApiHttpResponse> get(
@@ -147,6 +154,19 @@ final class _Transport implements ApiTransport {
         {'host': 'https://backup.example', 'extra': 'sign=backup'},
       ],
     };
+    final flv = {
+      'protocol_name': 'http_stream',
+      'format': [
+        {
+          'format_name': 'flv',
+          'codec': [
+            codec('unknown', [400]),
+            codec('hevc', [20000, 10000, 400, 250]),
+            codec('avc', [10000, 400, 250]),
+          ],
+        },
+      ],
+    };
     final data = {
       'room_id': 8,
       'live_status': 1,
@@ -165,17 +185,7 @@ final class _Transport implements ApiTransport {
             {'qn': 20000, 'desc': '4K'},
           ],
           'stream': [
-            {
-              'protocol_name': 'http_stream',
-              'format': [
-                {
-                  'format_name': 'flv',
-                  'codec': [
-                    codec('avc', [20000, 10000, 400, 250]),
-                  ],
-                },
-              ],
-            },
+            if (!hlsFirst) flv,
             {
               'protocol_name': 'http_hls',
               'format': [
@@ -194,6 +204,7 @@ final class _Transport implements ApiTransport {
                 },
               ],
             },
+            if (hlsFirst) flv,
           ],
         },
       },

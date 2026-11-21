@@ -11,7 +11,7 @@ final class LiveStreamPreference {
   bool get isAutomatic => protocol.isEmpty && format.isEmpty && codec.isEmpty;
   String get key => '$protocol/$format/$codec';
   String get label {
-    if (isAutomatic) return '自动兼容';
+    if (isAutomatic) return '自动（按接口顺序）';
     final protocolLabel = switch (protocol) {
       'http_hls' => 'HLS',
       'http_stream' => 'HTTP-FLV',

@@ -126,6 +126,17 @@ final class LivePlaybackStream {
   final List<Uri> urls;
   final int quality;
   final List<int> qualities;
+
+  static LivePlaybackStream? select(
+    List<LivePlaybackStream> streams,
+    LiveStreamPreference preference,
+  ) {
+    if (preference.isAutomatic) return streams.firstOrNull;
+    return streams
+            .where((stream) => stream.preference == preference)
+            .firstOrNull ??
+        streams.firstOrNull;
+  }
 }
 
 final class PlaybackVoice {
