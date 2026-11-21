@@ -33,9 +33,6 @@ final class ImageViewerRequest {
   final int initialIndex;
   final ImageViewerPreview? Function(Uri)? findPreview;
 
-  ImageViewerPreview? cachedPreview(int index) =>
-      findPreview?.call(images[index]);
-
   Uri previewSource(int index) =>
       publicImageThumbnail(images[index], width: 1280, resizeAnimated: true);
 }
@@ -76,6 +73,11 @@ final class ImageViewerState {
 class ImageViewerController extends Notifier<ImageViewerState> {
   ImageViewerController(this.request);
   final ImageViewerRequest request;
+  // Retain encoded originals for this viewer; decoded frames can be released
+  // as soon as their page leaves the viewport.
+  static const _originalByteBudget = 128 * 1024 * 1024;
+  final _originals = <Uri, OriginalImage>{};
+  int _originalBytes = 0;
   RequestCancellation? _read;
   int _generation = 0;
   bool _exporting = false;
@@ -88,6 +90,7 @@ class ImageViewerController extends Notifier<ImageViewerState> {
       ++_generation;
       _read?.cancel();
       _read = null;
+      _clearOriginals();
       state = ImageViewerState(
         index: state.index,
         loading: false,
@@ -99,10 +102,40 @@ class ImageViewerController extends Notifier<ImageViewerState> {
       _disposed = true;
       ++_generation;
       _read?.cancel();
+      _clearOriginals();
     });
     return ImageViewerState(
       index: request.initialIndex.clamp(0, request.images.length - 1),
     );
+  }
+
+  ImageViewerPreview? cachedPreview(int index) {
+    final source = request.images[index];
+    final original = _originals.remove(source);
+    if (original != null) {
+      _originals[source] = original;
+      return (image: original, isOriginal: true);
+    }
+    final preview = request.findPreview?.call(source);
+    if (preview != null && preview.isOriginal) {
+      _rememberOriginal(source, preview.image);
+    }
+    return preview;
+  }
+
+  void _rememberOriginal(Uri source, OriginalImage image) {
+    _originalBytes -= _originals.remove(source)?.bytes.lengthInBytes ?? 0;
+    _originals[source] = image;
+    _originalBytes += image.bytes.lengthInBytes;
+    while (_originalBytes > _originalByteBudget) {
+      final oldest = _originals.remove(_originals.keys.first)!;
+      _originalBytes -= oldest.bytes.lengthInBytes;
+    }
+  }
+
+  void _clearOriginals() {
+    _originals.clear();
+    _originalBytes = 0;
   }
 
   Future<void> load([int? index]) => _load(index ?? state.index);
@@ -125,7 +158,7 @@ class ImageViewerController extends Notifier<ImageViewerState> {
         (!original || state.originalRequested)) {
       return;
     }
-    final cached = original ? null : request.cachedPreview(next);
+    final cached = original ? null : cachedPreview(next);
     final repository = ref.read(originalImageRepositoryProvider);
     final automatic =
         !original &&
@@ -169,6 +202,7 @@ class ImageViewerController extends Notifier<ImageViewerState> {
           if (retained == null && !canPreview) rethrow;
         }
         if (generation != _generation || cancellation.isCancelled) return;
+        if (upgraded != null) _rememberOriginal(source, upgraded);
         if (upgraded != null || retained != null || !canPreview) {
           state = ImageViewerState(
             index: next,
@@ -190,6 +224,7 @@ class ImageViewerController extends Notifier<ImageViewerState> {
         cancellation,
       );
       if (generation != _generation || cancellation.isCancelled) return;
+      if (originalRequested) _rememberOriginal(source, image);
       state = ImageViewerState(
         index: next,
         loading: false,

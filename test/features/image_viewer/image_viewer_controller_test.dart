@@ -90,6 +90,49 @@ void main() {
     );
   });
 
+  test('returning to a manual original cancels the pending page and restores its bytes', () async {
+    await load();
+    final upgrade = controller.loadOriginal();
+    final original = OriginalImage(
+      bytes: Uint8List.fromList([4, 5, 6]),
+      width: 48,
+      height: 32,
+    );
+    repository.pending.last.complete(original);
+    await upgrade;
+
+    final next = controller.load(1);
+    final pending = repository.pending.last;
+    final cancellation = repository.reads.last;
+    final back = controller.load(0);
+    var state = container.read(imageViewerControllerProvider(request));
+    expect(cancellation.isCancelled, isTrue);
+    expect(state.loading, isFalse);
+    expect(state.isOriginal, isTrue);
+    expect(state.image, same(original));
+    pending.complete(image);
+    await Future.wait([next, back]);
+    expect(
+      container.read(imageViewerControllerProvider(request)).image,
+      same(original),
+    );
+    expect(repository.sources, [
+      request.previewSource(0),
+      sources[0],
+      request.previewSource(1),
+    ]);
+
+    container.read(sessionProvider.notifier).change();
+    container.read(imageViewerSessionProvider);
+    final reload = controller.load();
+    expect(repository.sources.last, request.previewSource(0));
+    repository.pending.last.complete(image);
+    await reload;
+    state = container.read(imageViewerControllerProvider(request));
+    expect(state.isOriginal, isFalse);
+    expect(state.image, same(image));
+  });
+
   test(
     'failed original keeps preview and retry targets the original',
     () async {
@@ -158,6 +201,45 @@ void main() {
       await directController.loadOriginal();
       expect(repository.sources, hasLength(1));
       subscription.close();
+    },
+  );
+
+  test(
+    'large albums evict the least recently viewed original by byte size',
+    () async {
+      final pages = ImageViewerRequest(
+        List.generate(5, (i) => Uri.https('message.biliimg.com', '/$i.jpg')),
+        0,
+      );
+      final provider = imageViewerControllerProvider(pages);
+      final subscription = container.listen(provider, (_, _) {});
+      final viewer = container.read(provider.notifier);
+      final bytes = Uint8List(32 * 1024 * 1024);
+      Future<void> download(int index) async {
+        final pending = viewer.load(index);
+        expect(repository.sources.last, pages.images[index]);
+        repository.pending.last.complete(
+          OriginalImage(bytes: bytes, width: 24, height: 16),
+        );
+        await pending;
+      }
+
+      for (var i = 0; i < 4; i++) {
+        await download(i);
+      }
+      await viewer.load(0);
+      await download(4);
+      await viewer.load(0);
+      await download(1);
+      expect(repository.sources, [...pages.images, pages.images[1]]);
+
+      subscription.close();
+      await container.pump();
+      container.listen(provider, (_, _) {});
+      final reopened = container.read(provider.notifier).load();
+      expect(repository.sources.last, pages.images.first);
+      repository.pending.last.complete(image);
+      await reopened;
     },
   );
 
