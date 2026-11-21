@@ -192,6 +192,36 @@ MediaTrack track(String name) => MediaTrack(
 void main() {
   final pair = DashPairSource(video: track('v'), audio: track('a'));
   TestWidgetsFlutterBinding.ensureInitialized();
+  for (final pendingReadError in [false, true]) {
+    test(
+      'live playback EOF with pending network error: $pendingReadError',
+      () async {
+        final backend = _Backend();
+        final engine = SharedPlayerEngine(createBackend: () => backend);
+        addTearDown(engine.dispose);
+        final failures = <PlayerFailure>[];
+        engine.failures.listen(failures.add);
+        await engine.open(
+          ManifestSource(track('live'), isLive: true),
+          const OpenOptions(play: true),
+        );
+        if (pendingReadError) {
+          backend.signals.add(
+            const BackendEvent(BackendEventKind.networkError),
+          );
+        }
+        backend.signals.add(const BackendEvent(BackendEventKind.ended));
+        await tick();
+        if (pendingReadError) {
+          expect(failures.single.kind, PlayerFailureKind.liveReadTerminated);
+          expect(engine.currentSnapshot.phase, PlaybackPhase.failed);
+        } else {
+          expect(failures, isEmpty);
+          expect(engine.currentSnapshot.phase, PlaybackPhase.ended);
+        }
+      },
+    );
+  }
   for (final live in [false, true]) {
     test(
       'network retry checks the current source after 3s (live=$live)',

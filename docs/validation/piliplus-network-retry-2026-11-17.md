@@ -1,5 +1,27 @@
 # 点播与直播的原生缓存和网络重试
 
+## 2026-11-21 Windows 直播播放列表读取中断
+
+Windows x64 Release 在房间 23167433 播放 HLS。23:24 的两次缓存暂停分别持续 1.135 秒和 1.697 秒，同一播放器自行恢复。23:25:05，播放器 71 在两次 HTTP 503 后记录了 11 条 lavf 告警和一条错误，原生输入到达 EOF 时还剩 4.074 秒缓存。23:25:18，播放器 72 再次出现相同的 lavf 日志序列，读取已停止，剩余缓存 2.838 秒，播放意图仍为开启。第二次的脱敏日志没有 HTTP 状态码。原有 `segmentRead` 分类同时包含播放列表刷新和分片读取失败。
+
+用该房间同一个游客 HLS/fMP4 地址同时测试两个 Windows 原生库。BiliSail 在约 72 秒时播放列表刷新遇到 HTTP 5xx，lavf 终止读取，随后 `eof-reached=yes`、`pause=yes`。本机 PiliPlus 2.1.6 的原生库有一次分片打开失败，观察到 80 秒仍在播放。两边均使用软件解码、空输出和相同请求头。进一步用相同的滚动播放列表，分别向两个原生库注入一次 HTTP 503：
+
+| 返回 503 的请求 | BiliSail 原生库 | PiliPlus 原生库 |
+| --- | --- | --- |
+| 无故障 | 持续播放 | 持续播放 |
+| 单个媒体分片 | 继续请求后续分片 | 继续请求后续分片 |
+| 刷新播放列表 | 消耗剩余缓存后结束 | 消耗剩余缓存后结束 |
+
+FFmpeg 的分片重试选项仅在分片打开失败时生效，播放列表刷新失败可以直接返回给上层。mpv 的 lavf 解复用器连续 11 次读包失败后终止读取。这 11 条告警并不代表 11 次 HTTP 请求。[FFmpeg HLS](https://github.com/FFmpeg/FFmpeg/blob/615b071/libavformat/hls.c#L1588-L1595)、[BiliSail 所用 mpv 基线](https://github.com/mpv-player/mpv/blob/afd6da884/demux/demux_lavf.c#L1567-L1585)、[PiliPlus 原生库对应基线](https://github.com/mpv-player/mpv/blob/43b14a4c9/demux/demux_lavf.c#L1464-L1480)。
+
+核对 PiliPlus 2.2.1 源码，其直播播放器使用桌面 Safari UA 和 B 站主站 Referer，分别设置 mpv 的 `user-agent` 和 `referrer`。其应用收到指定 TCP／HTTPS 错误后，延迟三秒用当前地址从直播边缘重开。普通 completed 通知自身只更新完成状态。[播放器配置](https://github.com/bggRGjQaUbCoE/PiliPlus/blob/217fb54f51f6764176319bbdedab2a7522d75401/lib/plugin/pl_player/controller.dart#L883)、[错误订阅](https://github.com/bggRGjQaUbCoE/PiliPlus/blob/217fb54f51f6764176319bbdedab2a7522d75401/lib/plugin/pl_player/controller.dart#L1120-L1133)。
+
+本次对齐直播间媒体请求头，并将当前解复用器报告的 HLS 终止读错接入同地址恢复。引擎等待缓冲播放完毕并确认本源 EOF，或收到原生终止错误后再上报。已经报告网络读错的直播若先收到 EOF，也进入终止恢复。会话三秒后重新检查账号、源代次、播放许可和用户意图。滚动 30 秒内最多安排三次终止恢复。单个分片告警和普通缓冲沿用原生处理。请求头对齐对线上 503 发生率的影响尚未测量。
+
+mpv 将 FFmpeg 的日志回调注册到单个实例，多播放器共存时，当前直播可能只收到 EOF。应用在用户仍想播放的 HLS 直播出现这种情况时，向既有播放信息接口查询一次房间状态。仍在开播才重开同一流，下播保持结束，查询失败则提示手动重载。手动暂停、切页暂停、换源和关闭会取消待执行的恢复或状态查询。[mpv 的 FFmpeg 日志路由](https://github.com/mpv-player/mpv/blob/afd6da884/common/av_log.c#L140-L168)
+
+Windows 原生回归使用循环更新的 fMP4 播放列表。旧连接收到四次 HTTP 503，房间状态桩返回仍在开播后，新连接使用相同的地址和媒体请求头恢复，播放位置推进到 4.163 秒。真实房间 23167433 的游客播放另观察两轮，每轮 80 秒。两轮结束时均在播放，期间的普通缓冲自行恢复，未遇到同类终止错误。
+
 ## 行为对照
 
 | 场景 | BiliSail 原行为 | 本次采用的 PiliPlus 行为 |

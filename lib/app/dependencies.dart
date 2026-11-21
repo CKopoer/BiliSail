@@ -370,17 +370,18 @@ class AppDependencies {
     final playback = PlaybackManager(
       systemMediaControls: systemMedia,
       createSession: (sleepTimer) {
+        final networkContent = ApiContentPlaybackRepository(
+          PgcClient(api),
+          LiveClient(api),
+          requests,
+          cdnPreference: cdnPreference,
+          audioQualityPreference: audioQualityPreference,
+        );
         final repository = OfflinePlaybackRepository(
           downloads: downloads,
           network: playbackRepository,
           networkMetadata: playbackRepository,
-          networkContent: ApiContentPlaybackRepository(
-            PgcClient(api),
-            LiveClient(api),
-            requests,
-            cdnPreference: cdnPreference,
-            audioQualityPreference: audioQualityPreference,
-          ),
+          networkContent: networkContent,
         );
         return PlaybackSession(
           cardPreviews: Platform.isWindows ? cardPreviews : null,
@@ -401,6 +402,7 @@ class AppDependencies {
           sessionEpoch: () => requests.sessionEpoch,
           metadataRepository: repository,
           contentRepository: repository.content,
+          isRoomLive: networkContent.isRoomLive,
           accountScope: () => session.accountScope,
           progress: LocalProgressStore(
             readProgress: library.resumePosition,
