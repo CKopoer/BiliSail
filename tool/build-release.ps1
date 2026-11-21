@@ -155,7 +155,7 @@ if ($isWindowsTarget -and @(($Version -split '[.+]') | Where-Object { [long]$_ -
 }
 if ($isWindowsTarget) { $msiVersion = Get-WindowsMsiVersion $Version }
 if ($isWindowsTarget -and (!$IsWindows -or [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant() -ne $windowsArch)) {
-  throw "$Target requires a matching Windows $windowsArch host (Flutter 3.50.0 selects the target from the host)."
+  throw "$Target requires a matching Windows $windowsArch host (Flutter selects the target from the host)."
 }
 if ($Target -eq 'macos-arm64' -and (!$IsMacOS -or [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -ne 'Arm64')) {
   throw 'macos-arm64 requires an Apple Silicon macOS host.'
@@ -196,7 +196,8 @@ try {
   $sdkJson = & flutter --version --machine
   if ($LASTEXITCODE -ne 0) { throw 'Could not read Flutter SDK version.' }
   $sdk = $sdkJson | ConvertFrom-Json
-  if ($sdk.frameworkVersion -ne '3.50.0') { throw 'This checkout is verified with Flutter 3.50.0.' }
+  $flutterVersion = (Get-Content -LiteralPath (Join-Path $repoRoot '.flutter-version') -Raw).Trim()
+  if ($sdk.frameworkVersion -ne $flutterVersion) { throw "This checkout is verified with Flutter $flutterVersion." }
   if ($isWindowsTarget) {
     $flutterRoot = Split-Path (Split-Path (Get-Command flutter).Source -Parent) -Parent
     $dartBinary = Join-Path $flutterRoot 'bin/cache/dart-sdk/bin/dart.exe'
@@ -233,7 +234,7 @@ try {
   }
   Invoke-BuildStage 'Mux component preparation' { & (Join-Path $PSScriptRoot 'build-download-mux.ps1') -Target $Target }
   # Release builds must regenerate native registrants without dev-only plugins.
-  # In Flutter 3.50.0 --no-pub skips that regeneration (not just dependency fetching).
+  # Flutter's --no-pub also skips that regeneration.
   $versionArgs = @('--release', '--build-name', $buildName, '--build-number', $buildNumber, "--dart-define=BILISAIL_RELEASE_VERSION=$Version")
   New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
 
@@ -366,7 +367,7 @@ try {
     { $_ -in @('macos-arm64', 'macos-x64') } {
       $arm64Only = if ($Target -eq 'macos-arm64') { '--enable-macos-arm64-only' } else { '--no-enable-macos-arm64-only' }
       Invoke-BuildCommand flutter @('config', '--enable-macos-desktop', $arm64Only)
-      # Flutter 3.50.0 forwards FLUTTER_XCODE_* settings to xcodebuild.
+      # Flutter forwards FLUTTER_XCODE_* settings to xcodebuild.
       # Select one architecture so the mux framework and Flutter app match.
       $env:FLUTTER_XCODE_ARCHS = $macosArch
       $env:FLUTTER_XCODE_CODE_SIGN_IDENTITY = '-'

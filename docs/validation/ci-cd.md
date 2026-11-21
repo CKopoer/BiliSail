@@ -25,7 +25,7 @@
 
 PowerShell 7 是跨平台 shell；Ubuntu 上复用 `.ps1` 不要求 Windows。Windows 原生构建需要对应架构的 Windows 主机与 Visual Studio 工具链，macOS 构建需要 macOS/Xcode 主机。`enable_macos` 同时控制 arm64 和 x64；两项现在均使用 Apple Silicon runner 及 ARM64 Flutter SDK，产物和 mux 按目标架构隔离，SDK／Pub 按宿主 ABI 共享。arm64 启用 `--enable-macos-arm64-only`，x64 显式关闭；两者通过固定 SDK 的 `FLUTTER_XCODE_ARCHS` 指定 `arm64`／`x86_64`，mux 同步交叉编译对应切片。Intel Mac 上的本地 x64 打包入口仍保留。参见 [Flutter Windows 构建](https://docs.flutter.dev/platform-integration/windows/building)、[GitHub runner 范围](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)。
 
-Flutter 固定 **3.47.6 stable / Dart 3.13.5**；升级需同时调整工作流、检查/构建脚本、[Windows SDK 归档固定值](../../tool/flutter-windows-sdk.json)并重新验证。根及各包保留各自 `pubspec.lock`，pub 缓存键包含锁文件哈希。Actions 使用已查询的提交 SHA，并以注释标明主版本。Android SDK/NDK 由该 SDK 的 Flutter Gradle 配置选择，AGP/Gradle 版本沿用工程；Apple 构建在 Flutter 和 mux 编译前通过 `DEVELOPER_DIR` 显式选择 runner 中的 Xcode 26.2，并打印 Xcode、Swift 和 SDK 版本，缺少该版本立即失败。系统映像仍由对应 runner 提供，不能据此宣称完全可重现的原生工具链。
+Flutter 固定 **3.50.1 stable / Dart 3.14.0**；升级需同时调整工作流、检查/构建脚本、[Windows SDK 归档固定值](../../tool/flutter-windows-sdk.json)并重新验证。根及各包保留各自 `pubspec.lock`，pub 缓存键包含锁文件哈希。Actions 使用已查询的提交 SHA，并以注释标明主版本。Android SDK/NDK 由该 SDK 的 Flutter Gradle 配置选择，AGP/Gradle 版本沿用工程；Apple 构建在 Flutter 和 mux 编译前通过 `DEVELOPER_DIR` 显式选择 runner 中的 Xcode 26.2，并打印 Xcode、Swift 和 SDK 版本，缺少该版本立即失败。系统映像仍由对应 runner 提供，不能据此宣称完全可重现的原生工具链。
 
 2026-11-08 起，[依赖恢复组合 Action](../../.github/actions/restore-flutter/action.yml) 关闭 `flutter-action` 的自动 SDK／Pub 写入，使用独立的 restore／save。SDK 仅保留 Linux x64 与 macOS ARM64，沿用系统、架构、版本及 revision 隔离的原键；Windows 两种架构每次安装固定 SDK，避免大型快照互相挤占。Intel macOS 目标改用 ARM64 宿主后也读取现有 ARM64 SDK。Pub 使用 `bilisail-pub-v2` 前缀、系统、实际 runner ABI、Flutter 版本和五份锁文件哈希，精确命中优先，未命中时回退同系统／ABI／SDK 的快照，仍执行 `pub get --enforce-lockfile`。Windows ARM64 的 Pub 键使用 ARM64，不与其初始 x64 Flutter 分发包的 ABI 混淆。
 
@@ -52,6 +52,22 @@ macOS 原生插件按根 `pubspec.yaml` 的项目级开关统一使用 CocoaPods
 本地临时使用镜像运行 `pub get` 可能改写锁文件中的 hosted URL；不要将这类改动混入提交。恢复官方源后重新验证五份锁文件，并确认依赖版本、约束、内容哈希没有意外变化。`FLUTTER_STORAGE_BASE_URL` 控制 Flutter SDK 下载，与 Pub 包源是不同设置。
 
 Dart 3.13.5 内置的 [Pub 源码](https://github.com/dart-lang/pub/blob/ec276d10a7fa0f6c6ec005340fb9ad29f3b012d0/lib/src/source/hosted.dart#L40) 会将官方旧域名 `https://pub.dartlang.org` 规范化为 `https://pub.dev`，再用于 hosted 来源身份比较；两者的文本差异不等于来源冲突。`pub.flutter-io.cn` 是另一来源，不能依赖这种官方别名规范化消除镜像冲突。验证以固定 Flutter 3.47.6 的实际解析、内容哈希与 `--enforce-lockfile` 为准。
+
+## Flutter 3.50.1 验证（2026-11-21）
+
+### SDK 升级验证（原锁文件）
+
+- 检查与打包脚本从仓库根的 `.flutter-version` 读取预期版本。CI 安装配置与 Windows x64 SDK 归档的提交、路径及 SHA-256 已同步到 3.50.1。Dart 仍为 3.14.0，五份锁文件通过严格与普通 Pub 解析，文件内容一致。[Flutter 官方归档清单](https://storage.googleapis.com/flutter_infra_release/releases/releases_windows.json)
+- Windows x64 的 `tool/check.ps1 -EnforceLockfile` 通过格式、静态分析、打包边界和 7,380 项 Dart／Flutter 测试，其中包含 10 项 mux 原生测试。根应用 14 项、播放器 10 项按环境条件跳过。普通 Release 构建通过。离线独立播放窗口 Debug／Release 烟测均覆盖启动、缩放、最大化、全屏、IME 关联及关闭，Debug 热重载通过。Release 烟测出现一次引擎窗口尺寸告警，测试断言通过。
+- Linux 在 WSL Ubuntu 24.04／Xvfb 使用本次 Flutter 引擎与固定 media_kit 原生库，默认合成和模拟无 framebuffer blit 的着色器回退各通过 11 项软件视频及周边布局像素断言。覆盖本地合成样本，保留物理 GPU 和真实播放验收。
+- [CI 44915825904](https://github.com/CKopoer/BiliSail/actions/runs/44915825904) 对 `d4ca5926` 的质量检查与七个目标全部通过。Android arm64 APK 清单核实 `versionName=1.3.0`、`versionCode=13005`，签名检查通过。平台构建的覆盖范围见上表。
+
+
+### SDK 升级与依赖更新
+
+根应用锁文件更新 22 个传递依赖，包括 `sqlite3 3.9.1`、`jni 1.2.1`、`jni_flutter 1.1.0` 和 `sqflite` 平台插件。其余四份锁文件沿用各包的独立依赖解析。SQLite 七个构建目标的上游原生资产 SHA-256 与锁定版本的资产清单逐项核对一致。[SQLite 3.9.1 发布记录](https://github.com/simolus3/sqlite3.dart/releases/tag/sqlite3-3.9.1)
+
+合入检查使用升级后的根锁文件。构建记录见[依赖更新验证分支的 CI](https://github.com/CKopoer/BiliSail/actions/workflows/ci.yml?query=branch%3Acodex%2Fflutter-3.50.1-dependencies)。
 
 ## 2026-11-18：macOS arm64 标题栏绑定崩溃
 
