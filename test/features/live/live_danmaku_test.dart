@@ -264,24 +264,36 @@ void main() {
               body: LiveScreen(
                 roomId: '12',
                 playerBuilder: (_, _) => const SizedBox(),
-                composerBuilder: (_, roomId) =>
-                    LiveDanmakuComposer(roomId: roomId, onLogin: () {}),
+                composerBuilder: (_, roomId, {required compact}) =>
+                    LiveDanmakuComposer(
+                      roomId: roomId,
+                      onLogin: () {},
+                      compact: compact,
+                    ),
               ),
             ),
           ),
         ),
       );
       await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('live-sidebar-danmaku-input')),
-        findsOneWidget,
-      );
+      final input = find.byKey(const ValueKey('live-sidebar-danmaku-input'));
+      final editor = tester.widget<TextField>(input).controller;
+      await tester.enterText(input, '未发送的草稿');
+      for (final action in ['展开房间详情', '收起房间详情']) {
+        await tester.tap(findMaterialTooltip(action));
+        await tester.pumpAndSettle();
+        expect(tester.widget<TextField>(input).controller, same(editor));
+        expect(editor?.text, '未发送的草稿');
+      }
       await tester.tap(find.byKey(const ValueKey('live-tab-1')));
       await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('live-sidebar-danmaku-input')),
-        findsOneWidget,
-      );
+      expect(tester.widget<TextField>(input).controller, same(editor));
+      expect(editor?.text, '未发送的草稿');
+      await tester.tap(find.byKey(const ValueKey('live-tab-0')));
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(input).controller, same(editor));
+      expect(editor?.text, '未发送的草稿');
+      expect(h.repository.posts, 0);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
     },
