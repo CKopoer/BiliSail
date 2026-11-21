@@ -2732,7 +2732,7 @@ void main() {
         initialLocation: '/user/42',
         playerBuilder: (_, _, _) => const SizedBox(),
         livePlayerBuilder: (_, room) => Text('直播播放器 ${room.id.value}'),
-        liveComposerBuilder: (_, _) => const SizedBox(),
+        liveComposerBuilder: (_, _, {required compact}) => const SizedBox(),
       );
       addTearDown(router.dispose);
       await tester.pumpWidget(

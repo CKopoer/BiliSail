@@ -81,6 +81,7 @@ void main() {
     double height = 800,
     double textScale = 1,
     LivePlayerBuilder? playerBuilder,
+    LiveComposerBuilder? composerBuilder,
     ValueChanged<UserId>? onOpenUser,
     bool disableAnimations = false,
     String roomId = '12',
@@ -90,6 +91,7 @@ void main() {
     final page = LiveScreen(
       roomId: roomId,
       onOpenUser: onOpenUser,
+      composerBuilder: composerBuilder,
       playerBuilder: playerBuilder ?? (_, _) => const _PlayerProbe(),
     );
     await tester.pumpWidget(
@@ -162,6 +164,10 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(999, 800));
     await tester.pumpAndSettle();
     expect(findMaterialTooltip('展开直播信息'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('live-chat-list')).hitTestable(),
+      findsOneWidget,
+    );
     await tester.binding.setSurfaceSize(const Size(1000, 800));
     await tester.pumpAndSettle();
     await tester.tap(findMaterialTooltip('展开直播信息'));
@@ -201,6 +207,115 @@ void main() {
     expect(chatPosition(tester), same(chatScrollPosition));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'narrow room details only rebuild the header and retain reading intent',
+    (tester) async {
+      repository.scMessages = [];
+      repository.chatMessages = List.generate(
+        80,
+        (index) => LiveChatMessage(userName: '观众', text: '历史消息 $index'),
+      );
+      var playerBuilds = 0;
+      var composerBuilds = 0;
+      await showPage(
+        tester,
+        width: 371,
+        height: 648,
+        playerBuilder: (_, _) {
+          playerBuilds++;
+          return const _PlayerProbe();
+        },
+        composerBuilder: (_, _, {required compact}) {
+          composerBuilds++;
+          return const TextField();
+        },
+      );
+      await tester.pumpAndSettle();
+      final chat = find.byKey(const ValueKey('live-chat-list'));
+      final pager = find.byKey(const ValueKey('live-info-swipe'));
+      final player = tester.state(find.byType(_PlayerProbe));
+      final position = chatPosition(tester);
+      await tester.tap(findMaterialTooltip('展开房间详情'));
+      receiveMessages(0, 2);
+      await tester.pumpAndSettle();
+      expect(position.extentAfter, lessThanOrEqualTo(1));
+      await tester.tap(findMaterialTooltip('收起房间详情'));
+      await tester.pumpAndSettle();
+      expect(position.extentAfter, lessThanOrEqualTo(1));
+      await tester.drag(chat, const Offset(0, 280));
+      await tester.pumpAndSettle();
+      final offset = position.pixels;
+      expect(position.extentAfter, greaterThan(0));
+      final list = tester.widget(chat);
+      final pages = tester.widget(pager);
+      final height = tester.getSize(chat).height;
+      expect(
+        tester.getTopLeft(pager).dy -
+            tester.getBottomLeft(find.byType(_PlayerProbe)).dy,
+        45,
+      );
+      playerBuilds = 0;
+      composerBuilds = 0;
+      for (var i = 0; i < 3; i++) {
+        expect(find.text(room.title, skipOffstage: false), findsNothing);
+        await tester.tap(findMaterialTooltip('展开房间详情'));
+        await tester.pump();
+        expect(find.text(room.title), findsOneWidget);
+        expect(find.text('刷新消息'), findsOneWidget);
+        expect(tester.getSize(chat).height, lessThan(height));
+        await tester.tap(findMaterialTooltip('收起房间详情'));
+        await tester.pumpAndSettle();
+        expect(tester.getSize(chat).height, height);
+        expect(tester.widget(chat), same(list));
+        expect(tester.widget(pager), same(pages));
+        expect(chatPosition(tester), same(position));
+        expect(position.pixels, offset);
+      }
+      receiveMessages(0, 4);
+      await tester.pumpAndSettle();
+      expect(position.pixels, offset);
+      expect(playerBuilds, 0);
+      expect(composerBuilds, 0);
+      expect(tester.state(find.byType(_PlayerProbe)), same(player));
+      expect(realtime.opens, 1);
+      expect(realtime.reads.single.isCancelled, isFalse);
+      await tester.tap(find.byKey(const ValueKey('live-tab-1')));
+      await tester.pumpAndSettle();
+      await tester.tap(findMaterialTooltip('展开房间详情'));
+      await tester.pumpAndSettle();
+      expect(find.text('刷新 SC'), findsOneWidget);
+      await showPage(tester, width: 371, roomId: '13');
+      await tester.pumpAndSettle();
+      expect(find.text(room.title, skipOffstage: false), findsNothing);
+      expect(find.text('SC 0'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'expanded room keeps chat and SC usable with a short keyboard viewport',
+    (tester) async {
+      await showPage(
+        tester,
+        width: 371,
+        height: 648,
+        composerBuilder: (_, _, {required compact}) =>
+            const SizedBox(height: 38),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(findMaterialTooltip('展开房间详情'));
+      await tester.pumpAndSettle();
+      await tester.binding.setSurfaceSize(const Size(371, 300));
+      await tester.pumpAndSettle();
+      final chat = find.byKey(const ValueKey('live-chat-list'));
+      expect(tester.getSize(chat).height, greaterThan(0));
+      await tester.tap(find.byKey(const ValueKey('live-tab-1')));
+      await tester.pumpAndSettle();
+      expect(find.text('共 2 条 SC').hitTestable(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('chat and audience updates retain player and unrelated views', (
     tester,
@@ -451,11 +566,17 @@ void main() {
       await drag.moveBy(Offset(-pageWidth * .3, 0));
       await tester.pump();
       await tester.pump();
-      final strip = tester.widget<PagingTabStrip<int>>(
-        find.byType(PagingTabStrip<int>),
-      );
-      expect(strip.value, 0);
-      expect(strip.progress?.value, inExclusiveRange(0, 1));
+      final strip = find.byType(PagingTabStrip<int>);
+      if (width == 390) {
+        expect(strip, findsNothing);
+        expect(find.text('SC 20'), findsOneWidget);
+      } else {
+        expect(tester.widget<PagingTabStrip<int>>(strip).value, 0);
+        expect(
+          tester.widget<PagingTabStrip<int>>(strip).progress?.value,
+          inExclusiveRange(0, 1),
+        );
+      }
       expect(find.text('共 20 条 SC'), findsOneWidget);
       expect(tester.getRect(find.byType(_PlayerProbe)), playerRect);
       await drag.moveBy(Offset(-pageWidth * .35, 0));
@@ -1368,10 +1489,15 @@ void main() {
       LiveWatchedCountChanged('123.4万'),
     ]);
     await tester.pump();
-    expect(find.text('当前2.3万人在看'), findsOneWidget);
+    expect(find.text('2.3万 人在看'), findsOneWidget);
+    expect(find.text('123.4万人看过'), findsNothing);
+    await tester.tap(findMaterialTooltip('展开房间详情'));
+    await tester.pump();
     expect(find.text('123.4万人看过'), findsOneWidget);
+    await tester.tap(findMaterialTooltip('收起房间详情'));
+    await tester.pump();
     expect(tester.takeException(), isNull);
-    expect(find.byKey(const ValueKey('live-tab-0')), findsOneWidget);
+    expect(find.byType(PagingTabStrip<int>), findsNothing);
     await tester.tap(find.byKey(const ValueKey('live-sc-chip-sc-1')));
     await tester.pump();
     expect(find.text('第一条完整的 SC 内容'), findsOneWidget);

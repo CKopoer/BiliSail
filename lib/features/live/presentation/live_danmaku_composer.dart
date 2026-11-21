@@ -19,12 +19,14 @@ final class LiveDanmakuComposer extends ConsumerStatefulWidget {
     required this.roomId,
     required this.onLogin,
     this.playerStyle = false,
+    this.compact = false,
   });
 
   /// Requested ID retains the same scoped controller for short/canonical IDs.
   final RoomId roomId;
   final VoidCallback onLogin;
   final bool playerStyle;
+  final bool compact;
 
   @override
   ConsumerState<LiveDanmakuComposer> createState() =>
@@ -94,6 +96,12 @@ final class _LiveDanmakuComposerState
     final muted = player
         ? Colors.white60
         : Theme.of(context).colorScheme.onSurfaceVariant;
+    final colors = Theme.of(context).colorScheme;
+    final compact = widget.compact && !player;
+    final compactTarget = compact ? MaterialTapTargetSize.shrinkWrap : null;
+    final background = player
+        ? Colors.white.withValues(alpha: .16)
+        : colors.surfaceContainerHigh;
     final row = Container(
       constraints: BoxConstraints(
         minHeight: (MediaQuery.textScalerOf(context).scale(12) + 20).clamp(
@@ -102,56 +110,84 @@ final class _LiveDanmakuComposerState
         ),
       ),
       decoration: BoxDecoration(
-        color: player
-            ? Colors.white.withValues(alpha: .16)
-            : Theme.of(context).colorScheme.surfaceContainerHigh,
+        color: compact ? null : background,
         borderRadius: BorderRadius.circular(4),
       ),
       child: Row(
         children: [
-          IconButton(
-            tooltip: '直播表情包',
-            onPressed: state.busy ? null : _emoticons,
-            icon: Icon(Icons.emoji_emotions_outlined, size: 18, color: muted),
-            constraints: const BoxConstraints.tightFor(width: 32, height: 36),
-            padding: EdgeInsets.zero,
-          ),
-          if (state.selected?.imageUrl case final url?)
-            AppNetworkImage(
-              url: url.toString(),
-              width: 24,
-              height: 24,
-              fit: BoxFit.contain,
-              errorBuilder: (_, _, _) => const SizedBox.shrink(),
-            ),
           Expanded(
-            child: TextField(
-              autofocus: DanmakuComposerDraft.autofocusOf(context),
-              key: ValueKey(
-                player
-                    ? 'live-player-danmaku-input'
-                    : 'live-sidebar-danmaku-input',
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: compact ? colors.surfaceContainerLow : null,
+                borderRadius: BorderRadius.circular(10),
+                border: compact
+                    ? Border.all(color: colors.outlineVariant)
+                    : null,
               ),
-              controller: _text,
-              maxLength: 100,
-              enabled: !state.busy && (state.canSend || !state.signedIn),
-              style: TextStyle(
-                fontSize: 12,
-                color: player ? Colors.white : null,
-              ),
-              onChanged: controller.setDraft,
-              onSubmitted: (_) => _send(),
-              decoration: InputDecoration(
-                hintText: !state.signedIn
-                    ? '登录后发送弹幕'
-                    : !state.canSend
-                    ? '主播尚未开播'
-                    : '发个友善的弹幕',
-                hintStyle: TextStyle(fontSize: 12, color: muted),
-                counterText: '',
-                isDense: true,
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+              child: Row(
+                children: [
+                  IconButton(
+                    tooltip: '直播表情包',
+                    style: IconButton.styleFrom(tapTargetSize: compactTarget),
+                    onPressed: state.busy ? null : _emoticons,
+                    icon: Icon(
+                      Icons.emoji_emotions_outlined,
+                      size: 18,
+                      color: muted,
+                    ),
+                    constraints: const BoxConstraints.tightFor(
+                      width: 32,
+                      height: 36,
+                    ),
+                    padding: EdgeInsets.zero,
+                  ),
+                  if (state.selected?.imageUrl case final url?)
+                    AppNetworkImage(
+                      url: url.toString(),
+                      width: 24,
+                      height: 24,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                    ),
+                  Expanded(
+                    child: TextField(
+                      autofocus: DanmakuComposerDraft.autofocusOf(context),
+                      key: ValueKey(
+                        player
+                            ? 'live-player-danmaku-input'
+                            : 'live-sidebar-danmaku-input',
+                      ),
+                      controller: _text,
+                      maxLength: 100,
+                      enabled:
+                          !state.busy && (state.canSend || !state.signedIn),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: player ? Colors.white : null,
+                      ),
+                      onChanged: controller.setDraft,
+                      onSubmitted: (_) => _send(),
+                      decoration: InputDecoration(
+                        hintText: !state.signedIn
+                            ? '登录后发送弹幕'
+                            : !state.canSend
+                            ? '主播尚未开播'
+                            : '发个友善的弹幕',
+                        hintStyle: TextStyle(fontSize: 12, color: muted),
+                        counterText: '',
+                        isDense: true,
+                        border: InputBorder.none,
+                        filled: compact ? false : null,
+                        enabledBorder: compact ? InputBorder.none : null,
+                        focusedBorder: compact ? InputBorder.none : null,
+                        disabledBorder: compact ? InputBorder.none : null,
+                        contentPadding: EdgeInsets.symmetric(
+                          vertical: compact ? 7 : 10,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -164,7 +200,8 @@ final class _LiveDanmakuComposerState
                 ? null
                 : _send,
             style: TextButton.styleFrom(
-              minimumSize: const Size(48, 36),
+              minimumSize: Size(compact ? 36 : 48, 36),
+              tapTargetSize: compactTarget,
               padding: const EdgeInsets.symmetric(horizontal: 8),
             ),
             child: Text(
@@ -172,7 +209,7 @@ final class _LiveDanmakuComposerState
               style: const TextStyle(fontSize: 12),
             ),
           ),
-          if (state.uncertain)
+          if (state.uncertain && !compact)
             TextButton(
               onPressed: controller.acknowledgeUncertain,
               child: const Text('已核对', style: TextStyle(fontSize: 12)),
@@ -186,6 +223,14 @@ final class _LiveDanmakuComposerState
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         row,
+        if (compact && state.uncertain)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: controller.acknowledgeUncertain,
+              child: const Text('已核对'),
+            ),
+          ),
         if (state.message case final message?)
           Padding(
             padding: const EdgeInsets.only(top: 4),
