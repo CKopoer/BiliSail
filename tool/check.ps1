@@ -11,6 +11,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$flutterVersion = (Get-Content -LiteralPath (Join-Path $repoRoot '.flutter-version') -Raw).Trim()
 if ($ShardIndex -ge $TotalShards) { throw 'ShardIndex must be less than TotalShards.' }
 if (($TotalShards -ne 1 -or $ShardIndex -ne 0) -and $Stage -ne 'RootTests') {
   throw 'Test shards are only supported by the RootTests stage.'
@@ -42,7 +43,7 @@ function Invoke-PubCheck([string]$Executable, [string[]]$Parameters) {
     # Strict resolution alone accepts noncanonical YAML without rewriting it.
     Invoke-Check $Executable @('pub', 'get')
     if ((Get-FileHash -LiteralPath 'pubspec.lock' -Algorithm SHA256).Hash -ne $lockHash) {
-      throw 'pub get changed pubspec.lock. Regenerate it with Flutter 3.50.0 / Dart 3.14.0 and commit the generated lockfile.'
+      throw "pub get changed pubspec.lock. Regenerate it with Flutter $flutterVersion and commit the generated lockfile."
     }
   }
 }
@@ -74,7 +75,7 @@ try {
   # A cold Windows SDK can emit pub bootstrap output before the machine JSON.
   Invoke-Check flutter @('--version')
   $sdk = (& flutter --version --machine | ConvertFrom-Json)
-  if ($sdk.frameworkVersion -ne '3.50.0') { throw 'This checkout is verified with Flutter 3.50.0.' }
+  if ($sdk.frameworkVersion -ne $flutterVersion) { throw "This checkout is verified with Flutter $flutterVersion." }
   if ($runLint) {
     & (Join-Path $PSScriptRoot 'test-android-toolchain.ps1') -FlutterSdkPath $sdk.flutterRoot
   }

@@ -13,7 +13,7 @@
   <a href="https://github.com/CKopoer/BiliSail/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/CKopoer/BiliSail/ci.yml?label=CI" alt="CI 状态"></a>
   <a href="pubspec.yaml"><img src="https://img.shields.io/badge/dynamic/yaml?url=https%3A%2F%2Fraw.githubusercontent.com%2FCKopoer%2FBiliSail%2Fmaster%2Fpubspec.yaml&amp;query=%24.version&amp;label=version&amp;color=fb7299" alt="源码版本（pubspec.yaml）"></a>
   <a href="https://github.com/CKopoer/BiliSail/releases"><img src="https://img.shields.io/github/v/release/CKopoer/BiliSail?include_prereleases&amp;sort=date&amp;label=release&amp;color=fb7299" alt="最新公开发布版本（含预发布）"></a>
-  <a href="docs/validation/ci-cd.md"><img src="https://img.shields.io/badge/Flutter-3.50.0-02569B?logo=flutter&amp;logoColor=white" alt="Flutter 3.50.0"></a>
+  <a href="docs/validation/ci-cd.md"><img src="https://img.shields.io/badge/Flutter-3.50.1-02569B?logo=flutter&amp;logoColor=white" alt="Flutter 3.50.1"></a>
   <a href="https://github.com/CKopoer/BiliSail/stargazers"><img src="https://img.shields.io/github/stars/CKopoer/BiliSail?style=flat" alt="GitHub Stars"></a>
   <a href="https://github.com/CKopoer/BiliSail/forks"><img src="https://img.shields.io/github/forks/CKopoer/BiliSail?style=flat" alt="GitHub Forks"></a>
 </p>
@@ -112,7 +112,7 @@ CI 和 Release 构建的 Windows 产物同时包含 `.msix`、`.msi` 和 `.exe` 
 
 ### 环境要求
 
-项目固定使用 **Flutter 3.50.0 stable / Dart 3.14.0**。直接依赖采用精确版本，根应用和各包均保留锁文件。
+项目固定使用 **Flutter 3.50.1 stable / Dart 3.14.0**。直接依赖采用精确版本，根应用和各包均保留锁文件。
 
 Windows 开发还需安装 **Visual Studio 2022** 的“使用 C++ 的桌面开发”工作负载及 Windows SDK，并将 NuGet CLI 加入 `PATH`（内嵌网页插件构建使用）。Windows 人机验证及官网登录需要 WebView2 Runtime；密码／短信流程与验证边界见[App 登录记录](docs/validation/password-sms-app-login-2026-11-15.md)。Android 和 macOS 的构建需各自的工具链，macOS 构建需在 macOS 主机上执行。Linux 构建需 WebKitGTK 4.1 开发包；网页登录与安装包运行依赖见[WebView 平台记录](docs/validation/webview-all-linux-2026-11-14.md)。
 

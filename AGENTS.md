@@ -101,7 +101,7 @@
 - SQLite migration 必须增版本并有迁移验证；禁止靠清空用户数据完成升级。数据库 schema 与 `preferences.v1` 等 JSON 快照版本分别管理；当前定义以 `AppDatabase` 和对应仓储为准，增加设置字段不必然改表。
 - 下载队列由进程级仓储持有，页面关闭不停止任务；账号变化暂停旧任务，重启等待用户显式继续。校验 206/Content-Range、文件完整性及 URL 刷新后的资源身份，不将带签名 URL 或凭据落盘。
 - 下载文件、manifest 与 SQLite 按可恢复的提交顺序处理；分轨/MP4/MKV 均需兼容已有任务及离线打开。封装在 worker isolate 执行，取消、临时文件清理、校验和原子发布由下载仓储负责，离线媒体不受普通缓存清理影响。
-- 工程固定 Flutter **3.50.0 stable / Dart 3.14.0**，以 `.flutter-version`、检查脚本和 CI 配置共同约束；升级须同步这些入口及验证记录。直接依赖使用精确版本，提交根应用和四个包的五份 `pubspec.lock`。
+- 工程固定 Flutter **3.50.1 stable / Dart 3.14.0**，以 `.flutter-version`、检查脚本和 CI 配置共同约束；升级须同步这些入口及验证记录。直接依赖使用精确版本，提交根应用和四个包的五份 `pubspec.lock`。
 - media-kit fork 的 Git ref 必须固定完整提交；更新时同步根应用与 `bili_player` 的核心／视频／库插件及 overrides，以及两处锁文件。全部媒体包固定到同一 `CKopoer/media-kit` 提交，沿用官方事件路由，不再依赖旧 native_event_loop 包。保留根应用的 overrides，Pub 不会采纳传递依赖包的 overrides；弹幕依赖更新同步根应用与 `bili_danmaku` 锁文件。
 - 原生 libmpv、库插件与视频实现统一由个人 media-kit/mpv fork 维护。Windows 保留 ANGLE 和标准 OpenGL render API，库插件统一下载并逐项校验 SDK／ANGLE，不混用 DXGI 扩展或旧 DLL；应用不再执行历史视频源码变换或替换 SDK。Android 保留按源 Surface 生命周期和公开首帧回调；Apple 使用匹配的 CocoaPods／SPM 固定资产；Linux 从个人固定 mpv 源码构建并保留发行版子依赖 notices。来源与验证见 [个人媒体 fork](docs/validation/media-kit-personal-fork-2026-11-07.md)。历史 `windows/native/mpv.cmake` 与 Predidit Native Assets 入口不启用。依赖升级须审查原生契约、生命周期、许可及完整摘要。
 - `bili_mux` 原生资产按其 README 从固定源码构建，不能借用系统 FFmpeg 或播放器私有库；预构建资产不提交 Git，分发保留许可、来源和可重建材料。
@@ -114,7 +114,7 @@
 - 开发测试包可与正式包 `dev.bilisail.bilisail` 共存，私有账号、数据库和缓存按 Android 包隔离。除用户明确要求正式包安装/升级验收外，不将本地测试构建安装到正式包名，也不复制正式包凭据。
 - 构建入口为 `tool/build-android-development.ps1`，默认 **Release**，默认构建 Android arm64 mux；例如 `./tool/build-android-development.ps1 -Mode Release -Install -DeviceId <adb-device-id>`。Debug/Profile 仅在对应调试/采样需要时显式选择；普通入口固定 `lib/main.dart`。
 - 底层构建参数固定 `--android-project-arg=bilisailDevelopmentBuild=true`，统一添加 `.test` 和测试版名称。参数默认关闭；CI/正式打包不传该参数，仍沿用现有正式包名、名称和签名边界。开发 Release 是实际 Release/AOT 构建，使用本机开发签名，仅供本地测试，不作为正式发布包上传。
-- 此构建入口不能加 `--no-pub`：Flutter 3.50.0 会同时跳过原生插件注册文件重生成，Profile/Debug 与 Release 切换时可能留下 integration_test 等 dev-only 注册，导致 Release 编译失败。使用 Flutter 自身生成流程，不手改 GeneratedPluginRegistrant。
+- 此构建入口不能加 `--no-pub`：Flutter 会同时跳过原生插件注册文件重生成，Profile/Debug 与 Release 切换时可能留下 integration_test 等 dev-only 注册，导致 Release 编译失败。使用 Flutter 自身生成流程，不手改 GeneratedPluginRegistrant。
 - 三种模式沿用同一本机 Android debug keystore；本机默认位于 `%USERPROFILE%/.android/debug.keystore`。不得删除、重新生成或随意更换已有开发签名，否则无法保持覆盖升级和数据。脚本记录证书指纹；跨机器签名不同须先厘清已有签名，不能通过卸载绕过。
 - 安装前校验 APK 的实际包名、名称、版本和签名，Release 还须确认不可调试；覆盖安装使用 `adb install -r`。安装失败时保留原应用，不自动卸载、不执行 `pm clear`、不强制降级，不让 Flutter 的自动重装流程清除测试数据。
 - 集成测试也统一使用此别名，`flutter drive` 必须带 `--keep-app-running`，避免默认结束流程卸载应用。使用 fixture 入口前构建并保留当前普通入口的开发 Release APK；测试后在 `finally` 中覆盖恢复普通入口，保留已有数据。底栏基准使用 `tool/test-android-primary-switch.ps1`，不能把 fixture 包留作用户日常测试入口。
