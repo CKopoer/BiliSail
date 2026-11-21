@@ -6,7 +6,6 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$flutterVersion = (Get-Content -LiteralPath (Join-Path $repoRoot '.flutter-version') -Raw).Trim()
 . (Join-Path $PSScriptRoot 'android-signing.ps1')
 . (Join-Path $PSScriptRoot 'android-version.ps1')
 . (Join-Path $PSScriptRoot 'android-media-notification.ps1')
@@ -197,6 +196,7 @@ try {
   $sdkJson = & flutter --version --machine
   if ($LASTEXITCODE -ne 0) { throw 'Could not read Flutter SDK version.' }
   $sdk = $sdkJson | ConvertFrom-Json
+  $flutterVersion = (Get-Content -LiteralPath (Join-Path $repoRoot '.flutter-version') -Raw).Trim()
   if ($sdk.frameworkVersion -ne $flutterVersion) { throw "This checkout is verified with Flutter $flutterVersion." }
   if ($isWindowsTarget) {
     $flutterRoot = Split-Path (Split-Path (Get-Command flutter).Source -Parent) -Parent
