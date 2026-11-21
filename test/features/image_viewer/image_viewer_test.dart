@@ -629,10 +629,39 @@ void main() {
     repository.autoReads.first.result.complete(first);
     await tester.pump();
     expect(find.bySemanticsLabel('预览图 2'), findsOneWidget);
-    repository.autoReads.last.result.complete(second);
+    final original = (await _swipeRepository(tester)).image;
+    repository.autoReads.last.result.complete(original);
     await tester.pumpAndSettle();
     expect(find.bySemanticsLabel('原图 2'), findsOneWidget);
     expect(find.text('查看原图'), findsNothing);
+
+    await tester.drag(viewport, const Offset(120, 0));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump();
+    expect(find.bySemanticsLabel('预览图 1'), findsOneWidget);
+    expect(repository.autoReads.map((read) => read.source), [
+      sources.first,
+      sources.last,
+      sources.first,
+    ]);
+    repository.autoReads.last.result.complete(first);
+    await tester.pumpAndSettle();
+
+    final revisit = await tester.startGesture(tester.getCenter(viewport));
+    await revisit.moveBy(const Offset(-120, 0));
+    await tester.pump();
+    final cachedOriginal = find.byWidgetPredicate(
+      (widget) => widget is Image && widget.semanticLabel == '原图 2',
+    );
+    expect(cachedOriginal, findsOneWidget);
+    expect(tester.widget<Image>(cachedOriginal).width, original.width);
+    await revisit.up();
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('原图 2'), findsOneWidget);
+    expect(find.text('正在加载原图…'), findsNothing);
+    expect(repository.autoReads, hasLength(3));
+    expect(repository.sources, isEmpty);
   });
 
   testWidgets(

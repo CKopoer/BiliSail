@@ -1,5 +1,11 @@
 # 首页刷新、自动分页与图片缓存
 
+## 2026-11-21 查看器内复用已加载的原图
+
+同一次打开查看器期间，自动加载、手动查看和直接打开的原图都按来源地址复用。滑回已看过的图片时，拖动中的相邻页和松手后的当前页都使用缓存原图，跳过大小探测与下载。首次查看仍可用列表缩略图垫底。关闭查看器或切换账号会话时释放缓存。[查看器控制器](../../lib/features/image_viewer/application/image_viewer_controller.dart) · [查看器组件](../../lib/shared/ui/image_viewer.dart)
+
+每个查看器最多保留 128 MiB 编码图片字节，超出时淘汰最久未使用的原图，再次查看被淘汰的图片会重新加载。已解码的显示纹理仍随页面切换释放。控制器和滑动组件回归覆盖原图复用、取消后的迟到响应、容量淘汰和会话清理。[控制器测试](../../test/features/image_viewer/image_viewer_controller_test.dart) · [组件测试](../../test/features/image_viewer/image_viewer_test.dart)
+
 ## 2026-11-20：自动加载有界原图
 
 进入查看器或切到下一张时，先显示可复用的缓存缩略图，再检查当前原图的编码文件大小。参考 PiliPlus 的缩略图垫底交互，BiliSail 在发送原图 GET 前用同一无凭据公开传输检查 HEAD。HEAD 在 3 秒内给出大于零且不超过 8 MiB 的 Content-Length 时才自动下载，GET 的响应头和累计流量仍受 8 MiB 上限约束，成功时可复用同一来源的连接。尺寸由图片编码头校验，沿用既有 64 Mi 像素上限。[图片仓储](../../lib/features/image_viewer/data/network_original_image_repository.dart) · [公开图片传输](../../lib/core/storage/image_byte_cache.dart)

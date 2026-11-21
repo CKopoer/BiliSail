@@ -190,8 +190,11 @@ class _ImageViewerState extends ConsumerState<ImageViewer>
     }
     if (_neighbor?.index != next) {
       _evict(_neighbor?.preview?.image);
+      final controller = ref.read(
+        imageViewerControllerProvider(widget.request).notifier,
+      );
       setState(() {
-        _neighbor = (index: next, preview: widget.request.cachedPreview(next));
+        _neighbor = (index: next, preview: controller.cachedPreview(next));
       });
     }
     _slideOffset.value = delta.dx.clamp(-_viewport.width, _viewport.width);
