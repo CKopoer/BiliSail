@@ -7969,6 +7969,14 @@ void main() {
         });
       }
       final hevc = find.widgetWithText(ChoiceChip, 'HLS · fMP4 · HEVC');
+      expect(find.text('av1-0.example'), findsOneWidget);
+      await tester.ensureVisible(hevc);
+      await tester.tap(hevc);
+      await tester.pumpAndSettle();
+      expect(find.text('hevc-0.example'), findsOneWidget);
+      await tester.tap(find.text('恢复自动'));
+      await tester.pumpAndSettle();
+      expect(find.text('av1-0.example'), findsOneWidget);
       await tester.ensureVisible(hevc);
       await tester.tap(hevc);
       expect(engine.opens, 1);
@@ -11956,6 +11964,11 @@ final class _FakeContentPlaybackRepository
 final class _LiveMenuRepository
     implements ContentPlaybackRepository, LiveStreamPlaybackRepository {
   LiveStreamPreference preference = LiveStreamPreference.automatic;
+  static const av1 = LiveStreamPreference(
+    protocol: 'http_hls',
+    format: 'ts',
+    codec: 'av1',
+  );
   static const avc = LiveStreamPreference(
     protocol: 'http_hls',
     format: 'fmp4',
@@ -11965,6 +11978,10 @@ final class _LiveMenuRepository
     protocol: 'http_hls',
     format: 'fmp4',
     codec: 'hevc',
+  );
+  static List<Uri> _lines(LiveStreamPreference stream) => List.generate(
+    3,
+    (line) => Uri.https('${stream.codec}-$line.example', '/live.m3u8'),
   );
   @override
   Future<PlaybackMedia> resolveLive(
@@ -11984,25 +12001,19 @@ final class _LiveMenuRepository
     VideoCodecPreference preferredCodec = VideoCodecPreference.h264,
     required RequestCancellation cancellation,
   }) async => PlaybackMedia(
-    liveStream: preference.isAutomatic ? avc : preference,
+    liveStream: preference.isAutomatic ? av1 : preference,
     liveStreams: [
-      for (final key in [avc, hevc])
+      for (final key in [av1, avc, hevc])
         LivePlaybackStream(
           preference: key,
-          urls: List.generate(
-            3,
-            (line) => Uri.https('live.example', '/$line.m3u8'),
-          ),
+          urls: _lines(key),
           quality: quality == 0 ? 400 : quality,
           qualities: const [10000, 400, 250],
         ),
     ],
     video: PlaybackTrack(
-      urls: List.generate(
-        3,
-        (line) => Uri.https('live.example', '/$line.m3u8'),
-      ),
-      codec: preference.isAutomatic ? 'avc' : preference.codec,
+      urls: _lines(preference.isAutomatic ? av1 : preference),
+      codec: preference.isAutomatic ? av1.codec : preference.codec,
       bandwidth: 0,
     ),
     audio: null,

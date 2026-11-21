@@ -57,21 +57,16 @@ class _LiveStreamPickerState extends ConsumerState<LiveStreamPicker> {
   }
 
   LivePlaybackStream? get _selected =>
-      (_preference.isAutomatic
-          ? widget.media.liveStreams
-                .where(
-                  (stream) =>
-                      VideoCodecPreference.fromCodec(stream.preference.codec) ==
-                      VideoCodecPreference.h264,
-                )
-                .firstOrNull
-          : null) ??
-      widget.media.liveStreams
-          .where((stream) => stream.preference == _preference)
-          .firstOrNull ??
-      widget.media.liveStreams
-          .where((stream) => stream.preference == widget.media.liveStream)
-          .firstOrNull;
+      LivePlaybackStream.select(widget.media.liveStreams, _preference);
+
+  void _selectPreference(LiveStreamPreference preference) {
+    setState(() {
+      _preference = preference;
+      _line = 0;
+      final available = _selected?.qualities ?? widget.media.qualities;
+      if (!available.contains(_quality)) _quality = 0;
+    });
+  }
 
   Future<void> _apply() async {
     if (_generation != widget.session.sourceGeneration) {
@@ -222,16 +217,7 @@ class _LiveStreamPickerState extends ConsumerState<LiveStreamPicker> {
                             selected: _preference == preference,
                             onSelected: _saving
                                 ? null
-                                : (_) => setState(() {
-                                    _preference = preference;
-                                    _line = 0;
-                                    final available =
-                                        _selected?.qualities ?? media.qualities;
-                                    if (_quality != 0 &&
-                                        !available.contains(_quality)) {
-                                      _quality = 0;
-                                    }
-                                  }),
+                                : (_) => _selectPreference(preference),
                           ),
                       ],
                     ),
@@ -289,10 +275,8 @@ class _LiveStreamPickerState extends ConsumerState<LiveStreamPicker> {
                   TextButton(
                     onPressed: _saving
                         ? null
-                        : () => setState(() {
-                            _preference = LiveStreamPreference.automatic;
-                            _line = 0;
-                          }),
+                        : () =>
+                              _selectPreference(LiveStreamPreference.automatic),
                     child: const Text('恢复自动'),
                   ),
                   const Spacer(),
