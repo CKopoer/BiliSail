@@ -383,6 +383,7 @@ class AppDependencies {
           ),
         );
         return PlaybackSession(
+          cardPreviews: Platform.isWindows ? cardPreviews : null,
           sleepTimer: sleepTimer,
           rateMemory: playbackRateMemory,
           volumeMemory: playbackVolumeMemory,

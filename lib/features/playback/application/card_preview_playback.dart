@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:bili_player/bili_player.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../domain/app_failure.dart';
 import '../../../domain/request_cancellation.dart';
 import '../domain/playback_repository.dart';
 
@@ -31,6 +32,7 @@ final class CardPreviewPlayback {
   Future<void> _released = Future.value();
   bool _closed = false;
   bool _releaseFailed = false;
+  int _foregroundOpens = 0;
   int _generation = 0;
 
   Future<CardPreviewSession?> start(
@@ -61,6 +63,7 @@ final class CardPreviewPlayback {
     List<ResolvedMediaSource> sources,
     RequestCancellation cancellation,
   ) async {
+    if (_foregroundOpens > 0) return null;
     final generation = ++_generation;
     await _stopCurrent();
     if (_closed ||
@@ -156,6 +159,28 @@ final class CardPreviewPlayback {
   Future<void> stop() {
     ++_generation;
     return _stopCurrent();
+  }
+
+  /// Wait for native texture unregistration. Foreground sessions may open
+  /// concurrently, so exclude new previews until the last open has finished.
+  Future<void> openForeground(
+    Future<void> Function() open, {
+    required Duration releaseTimeout,
+  }) async {
+    _foregroundOpens++;
+    try {
+      await stop().timeout(
+        releaseTimeout,
+        onTimeout: () =>
+            throw const AppFailure(AppFailureKind.playback, '视频预览仍在关闭，请稍后重试'),
+      );
+      if (_releaseFailed) {
+        throw const AppFailure(AppFailureKind.playback, '视频预览未能释放，请重启应用后重试');
+      }
+      await open();
+    } finally {
+      _foregroundOpens--;
+    }
   }
 
   Future<void> _stopCurrent() {

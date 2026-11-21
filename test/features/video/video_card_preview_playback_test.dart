@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bili_player/bili_player.dart';
+import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/features/video/application/video_card_preview_playback.dart';
@@ -22,6 +23,73 @@ void main() {
     );
   });
   tearDown(() => previews.close());
+
+  test(
+    'concurrent foreground opens exclude previews until both finish',
+    () async {
+      final token = RequestCancellation();
+      await previews.start(cardPreviewMedia(), token);
+      final first = Completer<void>();
+      final second = Completer<void>();
+      var started = 0;
+      Future<void> foreground(Completer<void> gate) =>
+          previews.openForeground(() {
+            started++;
+            return gate.future;
+          }, releaseTimeout: const Duration(seconds: 1));
+      final one = foreground(first);
+      final two = foreground(second);
+      try {
+        await Future<void>.delayed(Duration.zero);
+        expect(token.isCancelled, isTrue);
+        expect(engines.single.disposals, 1);
+        expect(started, 2);
+        first.complete();
+        await one;
+        expect(
+          await previews.start(cardPreviewMedia(), RequestCancellation()),
+          isNull,
+        );
+        expect(engines, hasLength(1));
+      } finally {
+        if (!first.isCompleted) first.complete();
+        second.complete();
+        await Future.wait([one, two]);
+      }
+      expect(
+        await previews.start(cardPreviewMedia(), RequestCancellation()),
+        isNotNull,
+      );
+    },
+  );
+
+  test(
+    'a timed out release never starts the waiting foreground source',
+    () async {
+      await previews.start(cardPreviewMedia(), RequestCancellation());
+      final release = engines.single.disposing = Completer<void>();
+      var opens = 0;
+      Future<void> open() async {
+        opens++;
+      }
+
+      try {
+        await expectLater(
+          previews.openForeground(open, releaseTimeout: Duration.zero),
+          throwsA(isA<AppFailure>()),
+        );
+      } finally {
+        release.complete();
+        await previews.stop();
+      }
+      expect(opens, 0);
+      await previews.openForeground(
+        open,
+        releaseTimeout: const Duration(seconds: 1),
+      );
+      expect(opens, 1);
+    },
+  );
 
   test(
     'preview forwards HDR metadata before creating its muted source',
@@ -318,6 +386,14 @@ void main() {
       1,
     );
     await previews.stop();
+    var foregroundOpened = false;
+    await expectLater(
+      previews.openForeground(() async {
+        foregroundOpened = true;
+      }, releaseTimeout: const Duration(seconds: 1)),
+      throwsA(isA<AppFailure>()),
+    );
+    expect(foregroundOpened, isFalse);
     expect(
       await previews.start(cardPreviewMedia(), RequestCancellation()),
       isNull,
