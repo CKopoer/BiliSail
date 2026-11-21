@@ -2,6 +2,16 @@
 
 日期：2026-10-11。
 
+## 移动端后台接续（2026-11-21）
+
+Flutter 在 Android／iOS 进入 `hidden` 或 `paused` 后暂停正常帧。播放器仍能收到完播事件，但下一项先更新分 P、剧集或工作区路由，再由页面重建后打开媒体。跨视频接续还要等详情结果触发重建。即使新源已交给播放器，固定版本的 media_kit 也从帧末回调初始化新视频控制器。这些等待会让下一项直到回前台才起播。
+
+移动端在后台完成接续命令、收到下一视频详情结果或绑定新视频控制器时，按需请求 Flutter warm-up frame，继续处理页面和控制器的待办工作。正常帧调度仍遵循应用生命周期。关闭“后台播放”时，后台完播事件不触发接续；原有队列边界、账号和源代次检查继续生效。
+
+[连播测试](../../test/features/playback/continuous_playback_test.dart)和[工作区测试](../../test/app/continuous_fullscreen_test.dart)覆盖正常帧停发后的分 P、合集、收藏队列、相关视频、影视下一集、异步详情、重复完播、零点起播、返回前台不重复打开和关闭后台播放。[播放器测试](../../packages/bili_player/test/media_kit_video_output_test.dart)验证新控制器在系统后台进入初始化。按用户要求未构建应用或执行实机测试。
+
+`tool/check.ps1 -SkipPub` 通过，格式、静态分析和打包边界检查通过，根应用和四个包共 7,364 项测试通过，34 项按既有条件跳过，其中 10 项 mux 原生测试需要 `BILI_MUX_LIBRARY`。
+
 ## Android 连播保留全屏（2026-11-16）
 
 Android 工作区为返回预览按 URL 路径保留页面；原地接续合集、相关视频、播放队列或 `/pgc/episode/:id` 下一集时，路径改变会替换缓存视图，销毁旧 `PlaybackPanel`，进而移除全屏路由并调用平台退出全屏。分 P 与 `/pgc/season/:id?ep=…` 的路径不变，因此不触发这条问题路径。Windows、macOS、Linux、iOS 使用稳定的工作区槽位，源码及离线组件回归未发现同类重建。

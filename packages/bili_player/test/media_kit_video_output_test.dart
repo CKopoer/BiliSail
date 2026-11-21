@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:bili_player/bili_player.dart' show VideoDecodingMode;
 import 'package:bili_player/src/media_kit_video_output.dart';
 import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
@@ -33,6 +34,17 @@ final class _Player extends mk.PlatformPlayer {
     state = state.copyWith(width: width, height: height);
     widthController.add(width);
     heightController.add(height);
+  }
+}
+
+final class _UnopenedPlayer extends _Player {
+  final requestedHandle = Completer<void>();
+  final openFailure = StateError('Test stops before accessing libmpv');
+
+  @override
+  Future<int> get handle async {
+    requestedHandle.complete();
+    throw openFailure;
   }
 }
 
@@ -94,6 +106,43 @@ final class _Harness {
 }
 
 void main() {
+  testWidgets(
+    'new video controller starts initialization while mobile vsync is paused',
+    (tester) async {
+      final player = _UnopenedPlayer();
+      final output = MediaKitVideoOutput();
+      final binding = tester.binding;
+      addTearDown(() async {
+        binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+        binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+        binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+        await tester.pump();
+        output.dispose();
+        await player.dispose();
+      });
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      expect(binding.framesEnabled, isFalse);
+      expect(binding.hasScheduledFrame, isFalse);
+
+      final failedOpen = expectLater(
+        output.bindPlayer(
+          mk.Player(platformPlayer: player),
+          generation: 1,
+          decoding: VideoDecodingMode.automatic,
+        ),
+        throwsA(same(player.openFailure)),
+      );
+      await tester.idle();
+      expect(player.requestedHandle.isCompleted, isTrue);
+      await failedOpen;
+      expect(binding.hasScheduledFrame, isFalse);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
   testWidgets(
     'a reused texture stays masked until the new source confirms its frame',
     (tester) async {

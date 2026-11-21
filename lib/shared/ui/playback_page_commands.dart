@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 
 import '../../core/input/input_stroke.dart';
@@ -25,9 +27,9 @@ class PlaybackPageCommands extends StatelessWidget {
   final VoidCallback? toggleDescription, toggleComments;
   final Widget child;
   final bool hasNext;
-  final VoidCallback? onCompleted;
-  final VoidCallback? onRelatedCompleted;
-  final VoidCallback? onLoopCompleted;
+  final FutureOr<void> Function()? onCompleted,
+      onRelatedCompleted,
+      onLoopCompleted;
   final Widget? completedOverlay;
   static PlaybackPageCommands? maybeOf(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<_PageCommands>()?.commands;

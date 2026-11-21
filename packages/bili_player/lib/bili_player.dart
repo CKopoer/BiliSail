@@ -8,3 +8,4 @@ export 'src/configurable_player_engine.dart';
 export 'src/video_surface.dart';
 export 'src/video_output.dart';
 export 'src/video_composition.dart';
+export 'src/background_playback_frame.dart';

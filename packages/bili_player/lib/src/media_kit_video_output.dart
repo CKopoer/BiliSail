@@ -11,6 +11,7 @@ import 'package:media_kit_video/media_kit_video.dart' as mkv;
 
 import 'player_contract.dart';
 import 'android_video_viewport.dart';
+import 'background_playback_frame.dart';
 import 'native_video_surface.dart';
 import 'native_player_properties.dart';
 import 'video_composition.dart';
@@ -306,8 +307,9 @@ final class MediaKitVideoOutput
                 _sizeAndroidSurface(player, size, revision, viewport: true),
           )
         : null;
+    final existing = _controller.value;
     final controller =
-        _controller.value ??
+        existing ??
         mkv.VideoController(
           player,
           configuration: videoDecoderConfiguration(
@@ -318,6 +320,10 @@ final class MediaKitVideoOutput
           ),
         );
     WidgetsBinding.instance.ensureVisualUpdate();
+    if (existing == null) {
+      // media_kit creates its platform controller from a post-frame callback.
+      requestBackgroundPlaybackFrame();
+    }
     await controller.platform.future;
     if (_disposed ||
         revision != _bindingRevision ||

@@ -259,6 +259,13 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
         pending?.id == widget.id &&
         pending?.scope == session?.accountScope() &&
         pending?.epoch == session?.sessionEpoch();
+    if (transitioning) {
+      // The route can reach this page before the next video's details arrive.
+      // Let their result reach the retained player even while vsync is paused.
+      ref.listen(videoDetailProvider(widget.id), (_, next) {
+        if (!next.isLoading) requestBackgroundPlaybackFrame();
+      });
+    }
     final video = loaded ?? (transitioning ? _lastVideo : null);
     if (video == null) {
       return detail.when(

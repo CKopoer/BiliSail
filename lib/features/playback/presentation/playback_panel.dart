@@ -265,15 +265,16 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
 
   void _configure() => _session.configureSettings(widget.settings);
 
+  bool _mustPauseInBackground(AppLifecycleState? state) =>
+      (!widget.settings.backgroundPlayback ||
+          !widget.window.supportsBackgroundAudio) &&
+      !widget.window.hasDesktopWindow &&
+      (state == AppLifecycleState.paused || state == AppLifecycleState.hidden);
+
   void _pauseInBackground(AppLifecycleState? state) {
     // Hidden workspace pages can still own playback and must observe the same
     // system background policy as the visible player.
-    if ((!widget.settings.backgroundPlayback ||
-            !widget.window.supportsBackgroundAudio) &&
-        _session.ownsPlayback(this) &&
-        !widget.window.hasDesktopWindow &&
-        (state == AppLifecycleState.paused ||
-            state == AppLifecycleState.hidden)) {
+    if (_mustPauseInBackground(state) && _session.ownsPlayback(this)) {
       unawaited(_session.pause());
     }
   }
@@ -292,9 +293,10 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
       return;
     }
     _handledCompletionGeneration = generation;
-    scheduleMicrotask(() {
+    scheduleMicrotask(() async {
       final commands = _pageCommands.value;
       if (!mounted ||
+          _mustPauseInBackground(WidgetsBinding.instance.lifecycleState) ||
           !_session.canAutoAdvance ||
           !_session.ownsPlayback(this) ||
           _session.isLive ||
@@ -305,25 +307,25 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
           _session.contentTarget != widget.target) {
         return;
       }
-      switch (widget.settings.playbackMode) {
-        case PlaybackMode.pause:
-          break;
-        case PlaybackMode.continuous:
-          if (commands?.hasNext == true) {
-            if (widget.settings.continuousPlayback) {
-              commands?.onCompleted?.call();
-            }
-          } else if (widget.settings.continuousRelatedPlayback) {
-            commands?.onRelatedCompleted?.call();
-          }
-        case PlaybackMode.listLoop:
-          if (commands?.onLoopCompleted case final loop?) {
-            loop();
-          } else {
-            unawaited(_session.repeatCompleted(generation));
-          }
-        case PlaybackMode.singleLoop:
-          unawaited(_session.repeatCompleted(generation));
+      final action = switch (widget.settings.playbackMode) {
+        PlaybackMode.pause => null,
+        PlaybackMode.continuous when commands?.hasNext == true =>
+          widget.settings.continuousPlayback ? commands?.onCompleted : null,
+        PlaybackMode.continuous =>
+          widget.settings.continuousRelatedPlayback
+              ? commands?.onRelatedCompleted
+              : null,
+        PlaybackMode.listLoop => commands?.onLoopCompleted,
+        PlaybackMode.singleLoop => null,
+      };
+      if (action != null) {
+        await action();
+        if (mounted && _session.ownsPlayback(this)) {
+          requestBackgroundPlaybackFrame();
+        }
+      } else if (widget.settings.playbackMode == PlaybackMode.listLoop ||
+          widget.settings.playbackMode == PlaybackMode.singleLoop) {
+        unawaited(_session.repeatCompleted(generation));
       }
     });
   }

@@ -1,5 +1,3 @@
-import '../../support/material_tooltip_finder.dart';
-
 import 'dart:async';
 
 import 'package:bili_player/bili_player.dart';
@@ -35,9 +33,12 @@ import 'package:bilisail/features/video/presentation/watch_later_queue_panel.dar
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:bilisail/shared/ui/playback_page_commands.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../support/app_lifecycle.dart';
+import '../../support/material_tooltip_finder.dart';
 import '../../support/video_card_fake_engine.dart';
 
 const _a = VideoId('BV1234567890'), _b = VideoId('BV1234567891');
@@ -1226,7 +1227,13 @@ void main() {
     }
   }
 
-  for (final mode in ['video', 'manual', 'disabled']) {
+  for (final mode in [
+    'video',
+    'manual',
+    'disabled',
+    'background',
+    'background-disabled',
+  ]) {
     testWidgets('parts, collection and related playback preserve $mode mode', (
       tester,
     ) async {
@@ -1252,14 +1259,23 @@ void main() {
       var id = _a;
       String? cid;
       var advances = 0;
+      final background = mode.startsWith('background');
+      final backgroundPlayback = mode != 'background-disabled';
+      final nextDetail = Completer<VideoDetail>();
+      final window = _Window();
+      Future<void> settlePlayback() =>
+          background ? tester.idle() : _frames(tester);
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
             playbackSessionProvider.overrideWithValue(session),
             authControllerProvider.overrideWith(_Auth.new),
             for (final video in videos.values) ...[
-              videoDetailProvider(video.summary.id)
-                  .overrideWith((_) async => video),
+              videoDetailProvider(video.summary.id).overrideWith(
+                (_) async => background && video.summary.id == _b
+                    ? nextDetail.future
+                    : video,
+              ),
               relatedVideosProvider(video.summary.id)
                   .overrideWith((_) => const []),
               filteredRelatedVideosProvider(video.summary.id).overrideWith(
@@ -1289,9 +1305,10 @@ void main() {
                     settings: AppSettings(
                       continuousPlayback: true,
                       continuousRelatedPlayback: mode != 'disabled',
+                      backgroundPlayback: backgroundPlayback,
                       danmakuEnabled: false,
                     ),
-                    window: _Window(),
+                    window: window,
                     onToggleComments: () {},
                   ),
                 ),
@@ -1301,13 +1318,36 @@ void main() {
         ),
       );
       await _frames(tester);
+      if (background) await _pauseFrames(tester);
+      if (!backgroundPlayback) {
+        expect(session.snapshots.value.phase, PlaybackPhase.paused);
+        engine.end();
+        await tester.idle();
+        expect(session.part?.cid, '101');
+        expect(engine.opens, 1);
+        await sendAppLifecycleState(tester, AppLifecycleState.resumed);
+        await _frames(tester);
+        expect(engine.opens, 1);
+        await tester.pumpWidget(const SizedBox.shrink());
+        return;
+      }
       if (mode == 'manual') await session.setAudioOnly(true);
       final listening = mode == 'manual';
       for (final expected in ['102', '103']) {
+        final opens = engine.opens;
         engine.end();
         engine.end();
-        await _frames(tester);
+        if (background && expected == '103') {
+          await tester.idle();
+          expect(advances, 1);
+          expect(engine.opens, opens);
+          nextDetail.complete(videos[_b]);
+        }
+        await settlePlayback();
         expect(session.part?.cid, expected);
+        expect(engine.opens, opens + 1);
+        expect(session.snapshots.value.phase, PlaybackPhase.playing);
+        expect(engine.options?.startPosition, Duration.zero);
         expect(session.audioOnly, listening);
         expect(
           engine.source,
@@ -1317,7 +1357,7 @@ void main() {
       expect(session.detail?.summary.id, _b);
       engine.end();
       engine.end();
-      await _frames(tester);
+      await settlePlayback();
       expect(session.detail?.summary.id, mode == 'disabled' ? _b : c);
       expect(advances, mode == 'disabled' ? 1 : 2);
       expect(session.audioOnly, listening);
@@ -1328,8 +1368,15 @@ void main() {
           listening ? isA<ProgressiveSource>() : isA<DashPairSource>(),
         );
         engine.end();
-        await _frames(tester);
+        await settlePlayback();
         expect(advances, 2);
+      }
+      if (background) {
+        expect(tester.binding.lifecycleState, AppLifecycleState.paused);
+        final opens = engine.opens;
+        await sendAppLifecycleState(tester, AppLifecycleState.resumed);
+        await _frames(tester);
+        expect(engine.opens, opens);
       }
       await tester.pumpWidget(const SizedBox.shrink());
       await _frames(tester);
@@ -1426,6 +1473,8 @@ void main() {
     ) async {
       final engine = _Engine();
       final session = _session(engine);
+      Future<void> settlePlayback() =>
+          background ? tester.idle() : _frames(tester);
       addTearDown(session.close);
       await tester.pumpWidget(
         ProviderScope(
@@ -1465,36 +1514,26 @@ void main() {
       );
       await _frames(tester);
       if (background) {
-        tester.binding.handleAppLifecycleStateChanged(
-          AppLifecycleState.inactive,
-        );
-        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
-        addTearDown(
-          () => tester.binding.handleAppLifecycleStateChanged(
-            AppLifecycleState.resumed,
-          ),
-        );
+        await _pauseFrames(tester, platform: TargetPlatform.iOS);
       } else {
         await session.setAudioOnly(true);
       }
       engine.end();
       engine.end();
-      await _frames(tester);
+      await settlePlayback();
       expect(session.contentTarget, const PgcPlaybackTarget('2', cid: '102'));
       expect(session.audioOnly, !background);
+      expect(session.snapshots.value.phase, PlaybackPhase.playing);
       expect(
         engine.source,
         background ? isA<DashPairSource>() : isA<ProgressiveSource>(),
       );
       expect(engine.options?.startPosition, Duration.zero);
       engine.end();
-      await _frames(tester);
+      await settlePlayback();
       expect(session.contentTarget, const PgcPlaybackTarget('2', cid: '102'));
       if (background) {
-        tester.binding.handleAppLifecycleStateChanged(
-          AppLifecycleState.resumed,
-        );
+        await sendAppLifecycleState(tester, AppLifecycleState.resumed);
       }
       expect(session.audioOnly, !background);
       await tester.pumpWidget(const SizedBox.shrink());
@@ -1879,6 +1918,21 @@ Future<void> _frames(WidgetTester tester) async {
   for (var i = 0; i < 12; i++) {
     await tester.pump(const Duration(milliseconds: 16));
   }
+}
+
+Future<void> _pauseFrames(
+  WidgetTester tester, {
+  TargetPlatform platform = TargetPlatform.android,
+}) async {
+  debugDefaultTargetPlatformOverride = platform;
+  addTearDown(() => debugDefaultTargetPlatformOverride = null);
+  final binding = tester.binding;
+  addTearDown(() => sendAppLifecycleState(tester, AppLifecycleState.resumed));
+  await sendAppLifecycleState(tester, AppLifecycleState.paused);
+  // Drain the last request made while resumed before injecting a media event.
+  await tester.pump();
+  expect(binding.framesEnabled, isFalse);
+  expect(binding.hasScheduledFrame, isFalse);
 }
 
 PlaybackSession _session(
