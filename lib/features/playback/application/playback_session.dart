@@ -20,6 +20,7 @@ import '../domain/content_playback.dart';
 import '../domain/comment_window.dart';
 import '../domain/sponsor_repository.dart';
 import '../domain/playback_history_repository.dart';
+import 'card_preview_playback.dart';
 import 'playback_history_reporter.dart';
 import 'playback_rate_memory.dart';
 import 'playback_volume_memory.dart';
@@ -40,6 +41,7 @@ class PlaybackSession extends ChangeNotifier {
     required this.repository,
     required this.progress,
     required this.accountScope,
+    this.cardPreviews,
     this.sponsorRepository,
     this.contentRepository,
     this.metadataRepository,
@@ -133,6 +135,7 @@ class PlaybackSession extends ChangeNotifier {
       )
       .firstOrNull;
   final PlayerEngine engine;
+  final CardPreviewPlayback? cardPreviews;
   Timer? _recoveryTimer;
   bool _reopening = false;
   final PlaybackRepository repository;
@@ -847,6 +850,21 @@ class PlaybackSession extends ChangeNotifier {
     recommendation: recommendation,
   );
 
+  Future<void> _openAfterPreview(
+    ResolvedMediaSource source,
+    OpenOptions options,
+    bool Function() isCurrent,
+  ) {
+    final previews = cardPreviews;
+    if (previews == null ||
+        (source is ProgressiveSource && source.isAudioOnly)) {
+      return engine.open(source, options);
+    }
+    return previews.openForeground(() async {
+      if (isCurrent()) await engine.open(source, options);
+    }, releaseTimeout: options.openTimeout);
+  }
+
   Future<void> _open(
     VideoDetail? video,
     VideoPart? selected, {
@@ -1165,7 +1183,7 @@ class PlaybackSession extends ChangeNotifier {
       await startupDiagnostics.measure(
         generation,
         PlaybackStartupStage.nativeOpen,
-        () => engine.open(
+        () => _openAfterPreview(
           requestedAudioOnly && audio != null && audioUri != null
               ? ProgressiveSource(
                   MediaTrack(
@@ -1230,6 +1248,7 @@ class PlaybackSession extends ChangeNotifier {
             openTimeout: openBudget,
             retainPresentation: retryMedia != null,
           ),
+          isCurrent,
         ),
       );
       if (!isCurrent()) return;

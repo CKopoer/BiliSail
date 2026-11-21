@@ -14,6 +14,8 @@ import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
+import 'package:bilisail/features/playback/application/card_preview_playback.dart';
+import 'package:bilisail/features/playback/application/playback_listening_mode.dart';
 import 'package:bilisail/features/playback/application/playback_startup_diagnostics.dart';
 import 'package:bilisail/features/playback/application/playback_manager.dart';
 import 'package:bilisail/features/playback/application/playback_rate_memory.dart';
@@ -34,8 +36,75 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:bili_player/bili_player.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../support/video_card_fake_engine.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'foreground open waits for an already cancelled preview to dispose',
+    () async {
+      final releasing = Completer<void>();
+      final disposing = Completer<void>();
+      final previewEngine = CardFakeEngine()
+        ..releasing = releasing
+        ..disposing = disposing;
+      final previews = CardPreviewPlayback(createEngine: () => previewEngine);
+      final token = RequestCancellation();
+      await previews.start(cardPreviewMedia(), token);
+      token.cancel();
+      final engine = _FakeEngine();
+      final session = PlaybackSession(
+        engine: engine,
+        cardPreviews: previews,
+        repository: _FakeRepository(autoResolve: true),
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+      );
+      try {
+        final opening = session.open(_detail('one'), _part('one'));
+        await _flush();
+        expect(previewEngine.stops, 1);
+        expect(previewEngine.disposals, 0);
+        expect(engine.openOptions, isEmpty);
+        releasing.complete();
+        await _flush();
+        expect(previewEngine.disposals, 1);
+        expect(engine.openOptions, isEmpty);
+        // The user can select another video while Windows unregisters the texture.
+        final newest = session.open(_detail('two'), _part('two'));
+        await _flush();
+        disposing.complete();
+        await Future.wait([opening, newest]);
+        expect(engine.openedUris.single.path, contains('two-video'));
+      } finally {
+        if (!releasing.isCompleted) releasing.complete();
+        if (!disposing.isCompleted) disposing.complete();
+        await session.close();
+        await previews.close();
+      }
+    },
+  );
+  test('audio-only open leaves the preview video output alone', () async {
+    final previews = CardPreviewPlayback(createEngine: CardFakeEngine.new);
+    addTearDown(previews.close);
+    final token = RequestCancellation();
+    await previews.start(cardPreviewMedia(), token);
+    final mode = PlaybackListeningMode();
+    await mode.select(true);
+    final engine = _FakeEngine();
+    final session = PlaybackSession(
+      engine: engine,
+      cardPreviews: previews,
+      listeningMode: mode,
+      repository: _FakeRepository(autoResolve: true),
+      progress: _FakeProgress(),
+      accountScope: () => 'guest',
+    );
+    addTearDown(session.close);
+    await session.open(_detail('one'), _part('one'));
+    expect((engine.sources.single as ProgressiveSource).isAudioOnly, isTrue);
+    expect(token.isCancelled, isFalse);
+  });
   test('recommendation attribution survives quality changes and clears for another video or account', () async {
     var epoch = 0;
     final engine = _FakeEngine();

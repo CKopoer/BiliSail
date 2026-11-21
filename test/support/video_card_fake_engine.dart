@@ -39,7 +39,7 @@ class CardFakeEngine extends Fake implements PlayerEngine, VideoOutputSource {
   );
   ResolvedMediaSource? source;
   OpenOptions? options;
-  Completer<void>? opening, releasing;
+  Completer<void>? opening, releasing, disposing;
   PlayerFailure? stopFailure, disposeFailure;
   int opens = 0, stops = 0, disposals = 0, seeks = 0;
   @override
@@ -96,6 +96,7 @@ class CardFakeEngine extends Fake implements PlayerEngine, VideoOutputSource {
   Future<void> dispose() async {
     disposals++;
     publish(snapshot.copyWith(phase: PlaybackPhase.disposed));
+    if (disposing case final pending?) await pending.future;
     await events.close();
     await errors.close();
     if (disposeFailure case final failure?) throw failure;
