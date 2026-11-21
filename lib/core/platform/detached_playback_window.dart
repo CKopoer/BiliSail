@@ -1,4 +1,4 @@
-// The application pins Flutter 3.50.0. Keep its experimental windowing API
+// The application pins the Flutter SDK. Keep its experimental windowing API
 // behind this adapter so an SDK update has one explicit compatibility boundary.
 // ignore_for_file: implementation_imports, invalid_use_of_internal_member
 
