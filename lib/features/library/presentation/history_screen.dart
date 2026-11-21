@@ -7,6 +7,7 @@ import '../../../core/network/api_requests.dart';
 import '../../../core/presentation/workspace_activity.dart';
 import '../../../shared/ui/app_dialog.dart';
 import '../../../shared/ui/app_notice.dart';
+import '../../../shared/ui/content_section_tabs.dart';
 import '../../../shared/ui/paged_scroll_viewport.dart';
 import '../../../shared/ui/responsive_card_grid.dart';
 import '../../../shared/ui/state_view.dart';
@@ -152,7 +153,7 @@ final class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     final history = ref.watch(historyProvider);
     final controller = ref.read(historyProvider.notifier);
     return PagedScrollViewport(
-      key: ValueKey(history.keyword),
+      key: ValueKey((history.category, history.keyword)),
       keepScrollOffset: false,
       active: true,
       canLoadMore:
@@ -194,7 +195,7 @@ final class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                           );
                           final showClearLabel =
                               constraints.maxWidth >=
-                              280 *
+                              420 *
                                   MediaQuery.textScalerOf(context).scale(14) /
                                   14;
                           final repository = ref.watch(
@@ -234,15 +235,20 @@ final class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                                       ),
                                       const SizedBox(height: 7),
                                     ],
-                                    Text(
-                                      constraints.maxWidth < 600
-                                          ? '云端观看记录'
-                                          : '当前账号的云端观看记录',
-                                      style: TextStyle(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurfaceVariant,
-                                      ),
+                                    ContentSectionTabs<HistoryCategory>(
+                                      entries: [
+                                        for (final category
+                                            in HistoryCategory.values)
+                                          (category, category.label),
+                                      ],
+                                      value: history.category,
+                                      onSelected:
+                                          history.writeBusy ||
+                                              !WorkspaceActivity.isActive(
+                                                context,
+                                              )
+                                          ? null
+                                          : controller.selectCategory,
                                     ),
                                     if (history.writeUncertain)
                                       const Text('操作结果待确认，请刷新核对'),
@@ -454,6 +460,9 @@ final class _HistoryEntriesSliver extends ConsumerWidget {
     final searching = ref.watch(
       historyProvider.select((state) => state.keyword.isNotEmpty),
     );
+    final category = ref.watch(
+      historyProvider.select((state) => state.category),
+    );
     final controller = ref.read(historyProvider.notifier);
     final writeBlocked = ref.watch(
       historyProvider.select(
@@ -478,7 +487,11 @@ final class _HistoryEntriesSliver extends ConsumerWidget {
               child: SizedBox(
                 height: 280,
                 child: StateView.empty(
-                  message: searching ? '未找到相关观看记录，试试其他关键词' : '还没有云端观看记录',
+                  message: searching
+                      ? '未找到相关观看记录，试试其他关键词'
+                      : category == HistoryCategory.all
+                      ? '还没有云端观看记录'
+                      : '还没有${category.label}观看记录',
                 ),
               ),
             )

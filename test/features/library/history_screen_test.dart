@@ -13,6 +13,7 @@ import 'package:bilisail/features/library/domain/library_repository.dart';
 import 'package:bilisail/features/library/presentation/history_screen.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
+import 'package:bilisail/shared/ui/content_section_tabs.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -90,6 +91,32 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byType(VideoCard), findsNothing);
         expect(find.text('直播中'), findsOneWidget);
+        final tabs = find.byType(ContentSectionTabs<HistoryCategory>);
+        Future<void> select(HistoryCategory category) async {
+          final button = find.descendant(
+            of: tabs,
+            matching: find.text(category.label),
+          );
+          await tester.ensureVisible(button);
+          await tester.tap(button);
+          await tester.pumpAndSettle();
+          expect(
+            tester.widget<ContentSectionTabs<HistoryCategory>>(tabs).value,
+            category,
+          );
+          expect(button.hitTestable(), findsOneWidget);
+        }
+
+        await select(HistoryCategory.video);
+        expect(find.text('还没有视频观看记录'), findsOneWidget);
+        await select(HistoryCategory.live);
+        expect(find.text('直播历史'), findsOneWidget);
+        expect(find.text('专栏历史'), findsNothing);
+        await select(HistoryCategory.article);
+        expect(find.text('直播历史'), findsNothing);
+        expect(find.text('专栏历史'), findsOneWidget);
+        await select(HistoryCategory.all);
+        expect(find.text('直播历史'), findsOneWidget);
         await tester.ensureVisible(find.text('专栏历史'));
         await tester.tap(find.text('专栏历史'));
         await tester.pumpAndSettle();
@@ -264,7 +291,7 @@ void main() {
         );
         final clear = find.byKey(const ValueKey('history-clear'));
         final inset = config.width < 600 ? 4 : 20;
-        final showClearLabel = config.width - 2 * inset >= 280 * config.scale;
+        final showClearLabel = config.width - 2 * inset >= 420 * config.scale;
         expect(
           tester.widget(clear),
           showClearLabel ? isA<TextButton>() : isA<IconButton>(),
@@ -334,15 +361,13 @@ void main() {
           scale: config.scale,
           showHeading: false,
         );
-        final caption = find.text(
-          config.width - (config.width < 600 ? 8 : 40) < 600
-              ? '云端观看记录'
-              : '当前账号的云端观看记录',
-        );
+        final tabs = find.byType(ContentSectionTabs<HistoryCategory>);
+        expect(find.text('云端观看记录'), findsNothing);
+        expect(find.text('当前账号的云端观看记录'), findsNothing);
         final clear = find.byKey(const ValueKey('history-clear'));
         final field = find.byKey(const ValueKey('history-search'));
         expect(
-          (tester.getCenter(caption).dy - tester.getCenter(clear).dy).abs(),
+          (tester.getCenter(tabs).dy - tester.getCenter(clear).dy).abs(),
           lessThan(1),
         );
         expect(
@@ -350,7 +375,16 @@ void main() {
               tester.getRect(field.evaluate().isEmpty ? clear : field).bottom,
           closeTo(8, 1),
         );
-        if (config.scale == 1) expect(find.text('清空历史'), findsOneWidget);
+        if (config.width >= 390 && config.scale == 1) {
+          for (final category in HistoryCategory.values) {
+            expect(
+              find
+                  .descendant(of: tabs, matching: find.text(category.label))
+                  .hitTestable(),
+              findsOneWidget,
+            );
+          }
+        }
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox());
       },
@@ -514,7 +548,7 @@ void main() {
       final cards = find.byType(VideoCard);
       expect(tester.widget<VideoCard>(cards.at(0)).progress, 0.2);
       expect(tester.widget<VideoCard>(cards.at(1)).progress, 0.4);
-      expect(find.text('当前账号的云端观看记录'), findsOneWidget);
+      expect(find.text('全部'), findsOneWidget);
       expect(
         tester.widget<VideoCard>(cards.at(0)).publishTooltip,
         '观看于 2026-10-05 00:00',
@@ -616,16 +650,27 @@ final class _HistoryRepository
 
   @override
   Future<WatchHistoryPage> loadHistory({
+    HistoryCategory category = HistoryCategory.all,
     String keyword = '',
     String? cursor,
     required RequestCancellation cancellation,
   }) async {
     keywords.add(keyword);
+    final matching = entries.where(
+      (entry) => switch (category) {
+        HistoryCategory.all => true,
+        HistoryCategory.video => entry.video != null,
+        HistoryCategory.live => entry.type == HistoryContentType.live,
+        HistoryCategory.article =>
+          entry.type == HistoryContentType.article ||
+              entry.type == HistoryContentType.articleList,
+      },
+    );
     return WatchHistoryPage(
       keyword.isEmpty
-          ? entries
+          ? matching.toList()
           : keyword == 'Flutter'
-          ? entries.take(1).toList()
+          ? matching.take(1).toList()
           : const [],
       hasMore: false,
     );

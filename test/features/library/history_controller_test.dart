@@ -39,6 +39,7 @@ final class _Repository implements LibraryRepository, WatchHistoryMutations {
   String accountScope = 'user:1';
   final List<
     ({
+      HistoryCategory category,
       String keyword,
       String? cursor,
       RequestCancellation cancellation,
@@ -64,12 +65,14 @@ final class _Repository implements LibraryRepository, WatchHistoryMutations {
 
   @override
   Future<WatchHistoryPage> loadHistory({
+    HistoryCategory category = HistoryCategory.all,
     String keyword = '',
     String? cursor,
     required RequestCancellation cancellation,
   }) {
     final result = Completer<WatchHistoryPage>();
     calls.add((
+      category: category,
       keyword: keyword,
       cursor: cursor,
       cancellation: cancellation,
@@ -219,6 +222,72 @@ void main() {
     },
   );
 
+  test('switching category resets paging, keeps the query and ignores the old page', () async {
+    await loaded();
+    final controller = container.read(historyProvider.notifier);
+    final query = controller.search('记录');
+    repository.calls.last.result.complete(
+      WatchHistoryPage([entry('1')], hasMore: true, nextCursor: '2'),
+    );
+    await query;
+    final oldPage = controller.loadMore();
+    final oldCall = repository.calls.last;
+
+    final change = controller.selectCategory(HistoryCategory.live);
+    expect(oldCall.cancellation.isCancelled, isTrue);
+    final current = repository.calls.last;
+    expect(
+      (current.category, current.keyword, current.cursor),
+      (HistoryCategory.live, '记录', null),
+    );
+    current.result.complete(
+      WatchHistoryPage([entry('2')], hasMore: true, nextCursor: '2'),
+    );
+    await change;
+    oldCall.result.complete(WatchHistoryPage([entry('old')], hasMore: false));
+    await oldPage;
+    expect(
+      container.read(historyProvider).items.requireValue.single.part!.cid,
+      '2',
+    );
+
+    await controller.selectCategory(HistoryCategory.live);
+    expect(repository.calls.last.cancellation, same(current.cancellation));
+    final more = controller.loadMore();
+    expect(
+      (repository.calls.last.category, repository.calls.last.cursor),
+      (HistoryCategory.live, '2'),
+    );
+    repository.calls.last.result.complete(
+      const WatchHistoryPage([], hasMore: false),
+    );
+    await more;
+
+    final reset = controller.search('');
+    expect(
+      (
+        repository.calls.last.category,
+        repository.calls.last.keyword,
+        repository.calls.last.cursor,
+      ),
+      (HistoryCategory.live, '', null),
+    );
+    repository.calls.last.result.completeError(
+      const AppFailure(AppFailureKind.network, '网络错误'),
+    );
+    await reset;
+    expect(container.read(historyProvider).category, HistoryCategory.live);
+    final retry = controller.refresh();
+    expect(
+      (repository.calls.last.category, repository.calls.last.cursor),
+      (HistoryCategory.live, null),
+    );
+    repository.calls.last.result.complete(
+      const WatchHistoryPage([], hasMore: false),
+    );
+    await retry;
+  });
+
   test('failed search and paging retry keep the submitted keyword', () async {
     await loaded();
     final controller = container.read(historyProvider.notifier);
@@ -255,6 +324,11 @@ void main() {
       () async {
         await loaded();
         final controller = container.read(historyProvider.notifier);
+        final select = controller.selectCategory(HistoryCategory.video);
+        repository.calls.last.result.complete(
+          WatchHistoryPage([entry('1')], hasMore: false),
+        );
+        await select;
         final search = controller.search('Flutter');
         repository.calls.last.result.complete(
           WatchHistoryPage([entry('1')], hasMore: false),
@@ -266,10 +340,12 @@ void main() {
                 container.read(historyProvider).items.requireValue.single,
               );
         await controller.search('ignored');
-        expect(repository.calls, hasLength(2));
+        await controller.selectCategory(HistoryCategory.live);
+        expect(repository.calls, hasLength(3));
         repository.writes.single.result.complete();
         await pending;
         expect(container.read(historyProvider).keyword, 'Flutter');
+        expect(container.read(historyProvider).category, HistoryCategory.video);
         expect(container.read(historyProvider).items.requireValue, isEmpty);
       },
     );

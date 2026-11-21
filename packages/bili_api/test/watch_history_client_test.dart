@@ -52,6 +52,7 @@ void main() {
       ).load();
       expect(transport.requests.single.path, '/x/web-interface/history/cursor');
       expect(transport.requests.single.queryParameters, {
+        'type': 'all',
         'ps': '20',
         'max': '0',
         'view_at': '0',
@@ -80,10 +81,13 @@ void main() {
         'data': {'list': []},
       },
     );
-    final page = await WatchHistoryClient(
-      BiliApiClient(transport: transport),
-    ).load(cursor: '9007199254740997:1791324000:pgc');
+    final page = await WatchHistoryClient(BiliApiClient(transport: transport))
+        .load(
+          type: ApiHistoryType.archive,
+          cursor: '9007199254740997:1791324000:pgc',
+        );
     expect(transport.requests.single.queryParameters, {
+      'type': 'archive',
       'ps': '20',
       'max': '9007199254740997',
       'view_at': '1791324000',

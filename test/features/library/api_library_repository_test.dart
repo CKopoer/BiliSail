@@ -89,6 +89,56 @@ final class _Transport implements ApiTransport, ApiFormTransport {
 }
 
 void main() {
+  for (final (category, type) in [
+    (HistoryCategory.all, 'all'),
+    (HistoryCategory.video, 'archive'),
+    (HistoryCategory.live, 'live'),
+    (HistoryCategory.article, 'article'),
+  ]) {
+    test(
+      '$category selects the server category for browsing and search',
+      () async {
+        final transport = _Transport(
+          (_) => {'code': 0, 'data': historyData([])},
+        );
+        final requests = ApiRequests();
+        final api = BiliApiClient(
+          transport: transport,
+          sessionProvider: requests,
+        );
+        addTearDown(api.close);
+        final repository = ApiLibraryRepository(
+          WatchHistoryClient(api),
+          requests,
+          accountScope: () => 'user:1',
+        );
+        await repository.loadHistory(
+          category: category,
+          cancellation: RequestCancellation(),
+        );
+        expect(transport.requests.single.queryParameters, {
+          'type': type,
+          'ps': '20',
+          'max': '0',
+          'view_at': '0',
+          'business': '',
+        });
+        await repository.loadHistory(
+          category: category,
+          keyword: '记录',
+          cursor: '2',
+          cancellation: RequestCancellation(),
+        );
+        expect(transport.requests.last.path, '/x/web-interface/history/search');
+        expect(transport.requests.last.queryParameters, {
+          'keyword': '记录',
+          'pn': '2',
+          'business': type,
+        });
+      },
+    );
+  }
+
   test('mixed history maps destinations without fetching video details for other types', () async {
     final transport = _Transport(
       (_) => {

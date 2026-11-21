@@ -36,19 +36,22 @@ final class ApiWatchHistoryEntry {
   final DateTime watchedAt;
 }
 
+enum ApiHistoryType { all, archive, live, article }
+
 final class WatchHistoryClient {
   const WatchHistoryClient(this.api);
   final BiliApiClient api;
   static const _endpoint = 'watch_history';
 
   Future<ApiPage<ApiWatchHistoryEntry>> load({
+    ApiHistoryType type = ApiHistoryType.all,
     String keyword = '',
     String? cursor,
     ApiRequestContext? context,
   }) async {
     final query = keyword.trim();
     if (query.isNotEmpty) {
-      return _search(query, cursor: cursor, context: context);
+      return _search(query, type: type, cursor: cursor, context: context);
     }
     final parts = cursor?.split(':');
     if (parts != null &&
@@ -60,6 +63,7 @@ final class WatchHistoryClient {
     }
     final data = await api.requestJson(
       Uri.https('api.bilibili.com', '/x/web-interface/history/cursor', {
+        'type': type.name,
         'ps': '20',
         'max': parts?[0] ?? '0',
         'view_at': parts?[1] ?? '0',
@@ -94,6 +98,7 @@ final class WatchHistoryClient {
 
   Future<ApiPage<ApiWatchHistoryEntry>> _search(
     String keyword, {
+    required ApiHistoryType type,
     String? cursor,
     ApiRequestContext? context,
   }) async {
@@ -105,7 +110,7 @@ final class WatchHistoryClient {
       Uri.https('api.bilibili.com', '/x/web-interface/history/search', {
         'keyword': keyword,
         'pn': '$page',
-        'business': 'all',
+        'business': type.name,
       }),
       'watch_history_search',
       context: context,
