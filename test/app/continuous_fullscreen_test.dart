@@ -33,6 +33,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
+import '../support/app_lifecycle.dart';
 import '../support/input_test_app.dart';
 import '../support/video_card_fake_engine.dart';
 
@@ -128,8 +129,13 @@ void main() {
         'pgcEpisode',
         'pgcSeason',
       ]) {
+        final background =
+            mode == WorkspaceNavigationMode.singlePage &&
+            ((platform == TargetPlatform.android && sequence == 'queue') ||
+                (platform == TargetPlatform.iOS && sequence == 'pgcEpisode'));
         testWidgets(
-          'continuous fullscreen retains owner $platform $mode $sequence',
+          'continuous fullscreen retains owner $platform $mode $sequence '
+          'background=$background',
           (tester) async {
             final mobile =
                 platform == TargetPlatform.android ||
@@ -259,6 +265,15 @@ void main() {
             final route = ModalRoute.of(
               tester.element(find.byKey(const ValueKey('player-next-episode'))),
             );
+            final binding = tester.binding;
+            if (background) {
+              addTearDown(
+                () => sendAppLifecycleState(tester, AppLifecycleState.resumed),
+              );
+              await sendAppLifecycleState(tester, AppLifecycleState.paused);
+              await tester.pump();
+              expect(binding.framesEnabled, isFalse);
+            }
 
             // Parts and season-based episode routes keep the same path. The
             // following cross-video/episode advance also changes the path.
@@ -266,7 +281,13 @@ void main() {
             for (var advance = 0; advance < advances; advance++) {
               engine.end();
               engine.end();
-              await _frames(tester);
+              if (background) {
+                expect(binding.hasScheduledFrame, isFalse);
+                await tester.pump(const Duration(milliseconds: 100));
+                expect(binding.hasScheduledFrame, isFalse);
+              } else {
+                await _frames(tester);
+              }
               expect(tester.state(find.byType(PlaybackPanel)), same(owner));
               expect(window.commands, [true]);
               expect(window.fullscreen, isTrue);
@@ -307,6 +328,11 @@ void main() {
             expect(engine.options?.startPosition, Duration.zero);
             expect(session.snapshots.value.desiredPlaying, isTrue);
 
+            if (background) {
+              await sendAppLifecycleState(tester, AppLifecycleState.resumed);
+              await _frames(tester);
+              expect(engine.opens, pgc ? 2 : 3);
+            }
             await tester.sendKeyEvent(LogicalKeyboardKey.escape);
             await _frames(tester);
             expect(window.commands, [true, false]);
