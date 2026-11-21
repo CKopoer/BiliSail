@@ -27,7 +27,11 @@ using EGLImageKHR = uintptr_t;
 using EGLClientBuffer = void*;
 using EGLint = int;
 using GMutex = std::mutex;
-struct GError {};
+struct GError { int code; };
+constexpr int G_IO_ERROR = 1, G_IO_ERROR_WOULD_BLOCK = 2;
+void g_set_error_literal(GError** error, int, int code, const char*) {
+  if (error) *error = new GError{code};
+}
 constexpr bool TRUE = true, FALSE = false;
 constexpr int G_MAXINT32 = std::numeric_limits<int32_t>::max();
 constexpr int GL_TEXTURE_2D = 1, GL_FRAMEBUFFER = 2, GL_LINEAR = 3;
@@ -61,6 +65,7 @@ struct TextureGL {
 using FlTextureGL = TextureGL;
 #define TEXTURE_GL(value) (value)
 struct TextureSW {
+  GMutex output_mutex;
   guint32 current_width = 1, current_height = 1;
   VideoOutput* video_output;
   guint8* snapshot = nullptr;
@@ -135,6 +140,7 @@ void g_free(void* value) { std::free(value); }
 
 #include "linux_texture_gl_body.inc"
 #include "linux_video_copy_body.inc"
+#include "linux_texture_detach_body.inc"
 #include "linux_texture_sw_body.inc"
 
 void CrossContextReadsAndWritesAreOrdered() {
@@ -164,8 +170,11 @@ void SoftwarePixelsRemainStableAfterProducerUnlock() {
   texture.video_output = &output;
   const guint8* pixels = nullptr;
   guint32 width = 0, height = 0;
-  Require(!texture_sw_copy_pixels(&texture, &pixels, &width, &height, nullptr),
-          "Unrendered software pixels were published");
+  GError* error = nullptr;
+  Require(!texture_sw_copy_pixels(&texture, &pixels, &width, &height, &error) &&
+              error && error->code == G_IO_ERROR_WOULD_BLOCK,
+          "Missing frame must provide the embedder with an error");
+  delete error;
   std::vector<guint8> producer(64 * 32 * 4, 17);
   output.pixel_buffer = producer.data();
   output.sw_frame_width = 64;
@@ -187,7 +196,8 @@ void SoftwarePixelsRemainStableAfterProducerUnlock() {
   Require(texture_sw_copy_pixels(&texture, &pixels, &width, &height, nullptr) && pixels[0] == 99,
           "Completed resized software frame was not published");
   Require(width == 32 && height == 16, "Software resize metadata is stale");
-  output.destroyed = true;
+  texture_sw_detach(&texture);
+  Require(texture.video_output == nullptr, "Raster consumer retained the closing output");
   Require(texture_sw_copy_pixels(&texture, &pixels, &width, &height, nullptr) && pixels[0] == 99,
           "Closing output discarded the acquired complete frame");
   g_free(texture.snapshot);
