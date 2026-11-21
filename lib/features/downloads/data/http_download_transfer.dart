@@ -5,9 +5,11 @@ import '../../../domain/app_failure.dart';
 import '../../../domain/request_cancellation.dart';
 import '../domain/download_models.dart';
 
-/// Transfers one DASH track. URLs and request headers exist only in memory.
+/// Transfers one DASH track without adding request URLs or headers to its checkpoint.
 final class HttpDownloadTransfer {
-  const HttpDownloadTransfer();
+  const HttpDownloadTransfer({this.background});
+
+  final BackgroundTrackTransfer? background;
 
   Future<DownloadTrackProgress> transfer({
     required DownloadTrackSource source,
@@ -31,6 +33,8 @@ final class HttpDownloadTransfer {
       onProgress(progress);
     }
     Object? lastError;
+    final system = background;
+    var handOff = system?.inBackground ?? false;
     for (var attempt = 0; attempt < 6; attempt++) {
       if (cancellation.isCancelled) throw _cancelled();
       if (deadline != null && DateTime.now().isAfter(deadline)) {
@@ -41,50 +45,59 @@ final class HttpDownloadTransfer {
         progress = _fresh(source, previous.fileName);
         onProgress(progress);
       }
-      final client = HttpClient()
-        ..connectionTimeout = const Duration(seconds: 12)
-        ..idleTimeout = const Duration(seconds: 12)
-        ..maxConnectionsPerHost = 2;
-      client.autoUncompress = false;
-      cancellation.onCancel(() => client.close(force: true));
+      final url = source.urls[attempt % source.urls.length];
+      final requestHeaders = {
+        for (final entry in headers.entries)
+          if (const {'referer', 'user-agent'}.contains(entry.key.toLowerCase()))
+            entry.key: entry.value,
+        HttpHeaders.acceptEncodingHeader: 'identity',
+        if (progress.bytes > 0) ...{
+          HttpHeaders.rangeHeader: 'bytes=${progress.bytes}-',
+          HttpHeaders.ifRangeHeader: ?progress.etag,
+        },
+      };
+      HttpClient? client;
+      void Function()? stopListening;
       RandomAccessFile? handle;
+      File? staged;
+      var interruptedForHandoff = false;
       try {
-        final url = source.urls[attempt % source.urls.length];
-        final request = await client
-            .getUrl(url)
-            .timeout(const Duration(seconds: 15));
-        request.followRedirects = true;
-        request.maxRedirects = 3;
-        for (final entry in headers.entries) {
-          final name = entry.key.toLowerCase();
-          if (name == 'referer' || name == 'user-agent') {
-            request.headers.set(entry.key, entry.value);
-          }
-        }
-        request.headers.set(HttpHeaders.acceptEncodingHeader, 'identity');
-        if (progress.bytes > 0) {
-          request.headers.set(
-            HttpHeaders.rangeHeader,
-            'bytes=${progress.bytes}-',
+        final TrackHttpResponse response;
+        if (system != null && (handOff || system.inBackground)) {
+          response = await system.fetch(
+            url,
+            requestHeaders,
+            cancellation,
+            deadline,
           );
-          if (progress.etag case final etag?) {
-            request.headers.set(HttpHeaders.ifRangeHeader, etag);
-          }
+          staged = response.stagedFile;
+        } else {
+          final http = HttpClient()
+            ..connectionTimeout = const Duration(seconds: 12)
+            ..idleTimeout = const Duration(seconds: 12)
+            ..maxConnectionsPerHost = 2
+            ..autoUncompress = false;
+          client = http;
+          cancellation.onCancel(() => http.close(force: true));
+          stopListening = system?.onHide(() {
+            interruptedForHandoff = true;
+            handOff = true;
+            http.close(force: true);
+          });
+          response = await _get(http, url, requestHeaders);
         }
-        final response = await request.close().timeout(
-          const Duration(seconds: 15),
-        );
         if (cancellation.isCancelled) throw _cancelled();
-        final status = response.statusCode;
+        if (deadline != null && DateTime.now().isAfter(deadline)) {
+          throw const AppFailure(AppFailureKind.timeout, '下载超过时间限制');
+        }
+        final status = response.status;
         if (status == HttpStatus.forbidden || status == HttpStatus.gone) {
           throw AppFailure(AppFailureKind.permission, '媒体地址已失效（HTTP $status）');
         }
         if (status == HttpStatus.requestedRangeNotSatisfiable) {
-          final total = _unsatisfiedTotal(
-            response.headers.value(HttpHeaders.contentRangeHeader),
-          );
+          final total = _unsatisfiedTotal(response.range);
           if (_strongEtag(progress.etag) &&
-              response.headers.value(HttpHeaders.etagHeader) == progress.etag &&
+              response.etag == progress.etag &&
               total != null &&
               total == progress.bytes &&
               total == progress.totalBytes) {
@@ -98,15 +111,13 @@ final class HttpDownloadTransfer {
         if (status != HttpStatus.ok && status != HttpStatus.partialContent) {
           throw AppFailure(AppFailureKind.network, '媒体下载失败（HTTP $status）');
         }
-        final responseEtag = response.headers.value(HttpHeaders.etagHeader);
+        final responseEtag = response.etag;
         final etag = _strongEtag(responseEtag) ? responseEtag : null;
         int total;
         int expectedEnd;
         if (status == HttpStatus.partialContent) {
-          final range = _parseRange(
-            response.headers.value(HttpHeaders.contentRangeHeader),
-          );
-          final contentLength = response.contentLength;
+          final range = _parseRange(response.range);
+          final contentLength = response.length;
           if (range == null ||
               range.start != progress.bytes ||
               (contentLength >= 0 &&
@@ -123,10 +134,10 @@ final class HttpDownloadTransfer {
             continue;
           }
         } else {
-          if (response.contentLength <= 0) {
+          if (response.length <= 0) {
             throw const AppFailure(AppFailureKind.protocol, '媒体响应缺少有效长度');
           }
-          total = response.contentLength;
+          total = response.length;
           expectedEnd = total - 1;
           if (progress.bytes > 0) {
             await _discard(partFile);
@@ -134,11 +145,32 @@ final class HttpDownloadTransfer {
             onProgress(progress);
           }
         }
+        DownloadTrackProgress received(int bytes) => DownloadTrackProgress(
+          kind: source.kind,
+          identity: source.identity,
+          fileName: previous.fileName,
+          codec: source.codec,
+          bandwidth: source.bandwidth,
+          bytes: bytes,
+          totalBytes: total,
+          etag: etag,
+        );
+        if (staged != null && progress.bytes == 0 && expectedEnd + 1 == total) {
+          if (await staged.length() != total) {
+            throw const AppFailure(AppFailureKind.network, '媒体响应长度不符');
+          }
+          if (cancellation.isCancelled) throw _cancelled();
+          await staged.rename(partFile.path);
+          staged = null;
+          progress = received(total);
+          onProgress(progress);
+          return progress;
+        }
         handle = await partFile.open(
           mode: progress.bytes > 0 ? FileMode.append : FileMode.write,
         );
         var bytes = progress.bytes;
-        await for (final chunk in response.timeout(
+        await for (final chunk in response.body.timeout(
           const Duration(seconds: 20),
         )) {
           if (cancellation.isCancelled) throw _cancelled();
@@ -150,16 +182,7 @@ final class HttpDownloadTransfer {
             throw const AppFailure(AppFailureKind.protocol, '媒体响应超过声明长度');
           }
           await handle.writeFrom(chunk);
-          progress = DownloadTrackProgress(
-            kind: previous.kind,
-            identity: source.identity,
-            fileName: previous.fileName,
-            codec: source.codec,
-            bandwidth: source.bandwidth,
-            bytes: bytes,
-            totalBytes: total,
-            etag: etag,
-          );
+          progress = received(bytes);
           onProgress(progress);
         }
         await handle.flush();
@@ -175,6 +198,7 @@ final class HttpDownloadTransfer {
         continue;
       } on AppFailure catch (error) {
         if (error.kind == AppFailureKind.cancelled ||
+            error.kind == AppFailureKind.storage ||
             error.kind == AppFailureKind.permission ||
             error.kind == AppFailureKind.protocol ||
             error.kind == AppFailureKind.timeout &&
@@ -197,9 +221,14 @@ final class HttpDownloadTransfer {
             await handle?.close();
           }
         } finally {
-          client.close(force: true);
+          stopListening?.call();
+          client?.close(force: true);
+          if (staged != null) await staged.delete();
         }
       }
+      if (cancellation.isCancelled) throw _cancelled();
+      // Moving a live socket to URLSession is independent of network retries.
+      if (interruptedForHandoff) attempt--;
       // A short response or interrupted connection can resume from actual disk bytes.
       if (await partFile.exists()) {
         final length = await partFile.length();
@@ -217,6 +246,25 @@ final class HttpDownloadTransfer {
       }
     }
     throw lastError ?? const AppFailure(AppFailureKind.network, '媒体下载失败');
+  }
+
+  static Future<TrackHttpResponse> _get(
+    HttpClient client,
+    Uri url,
+    Map<String, String> headers,
+  ) async {
+    const timeout = Duration(seconds: 15);
+    final request = await client.getUrl(url).timeout(timeout);
+    request.maxRedirects = 3;
+    headers.forEach(request.headers.set);
+    final response = await request.close().timeout(timeout);
+    return TrackHttpResponse(
+      status: response.statusCode,
+      length: response.contentLength,
+      range: response.headers.value(HttpHeaders.contentRangeHeader),
+      etag: response.headers.value(HttpHeaders.etagHeader),
+      body: response,
+    );
   }
 
   static DownloadTrackProgress _fresh(
@@ -280,4 +328,33 @@ final class HttpDownloadTransfer {
 final class _ByteRange {
   const _ByteRange(this.start, this.end, this.total);
   final int start, end, total;
+}
+
+/// The iOS system session can finish a request while Dart is suspended.
+abstract interface class BackgroundTrackTransfer {
+  bool get inBackground;
+  void Function() onHide(void Function() callback);
+  Future<TrackHttpResponse> fetch(
+    Uri url,
+    Map<String, String> headers,
+    RequestCancellation cancellation,
+    DateTime? deadline,
+  );
+}
+
+final class TrackHttpResponse {
+  const TrackHttpResponse({
+    required this.status,
+    required this.length,
+    required this.range,
+    required this.etag,
+    required this.body,
+    this.stagedFile,
+  });
+  final int status;
+  final int length;
+  final String? range;
+  final String? etag;
+  final Stream<List<int>> body;
+  final File? stagedFile;
 }

@@ -10,8 +10,8 @@ import '../domain/download_models.dart';
 final class DownloadFileStore {
   const DownloadFileStore({this.trustedDocumentsDirectory});
 
-  /// Android supplies its app-private documents directory, never a DB path.
-  /// Other platforms retain the strict filesystem-root boundary.
+  /// A mobile app's platform-provided documents directory, never a DB path.
+  /// Desktop downloads retain the strict filesystem-root boundary.
   final Future<String?> Function()? trustedDocumentsDirectory;
 
   Future<String> createTaskDirectory(

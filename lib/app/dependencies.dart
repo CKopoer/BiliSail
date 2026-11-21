@@ -37,6 +37,8 @@ import '../features/downloads/data/api_download_source_repository.dart';
 import '../features/downloads/data/sqlite_download_repository.dart';
 import '../features/downloads/data/download_file_store.dart';
 import '../features/downloads/data/native_download_muxer.dart';
+import '../features/downloads/data/http_download_transfer.dart';
+import '../features/downloads/data/mobile_download_execution.dart';
 import '../features/playback/data/offline_playback_repository.dart';
 import '../core/platform/external_links.dart';
 import '../core/platform/system_font_catalog.dart';
@@ -310,10 +312,18 @@ class AppDependencies {
       accountScope: () => session.accountScope,
       cdnPreference: cdnPreference,
     );
-    final downloads = SqliteDownloadRepository(
+    late final SqliteDownloadRepository downloads;
+    downloads = SqliteDownloadRepository(
       database,
       downloadSources,
       muxer: NativeDownloadMuxer(),
+      setBackgroundActive: Platform.isAndroid || Platform.isIOS
+          ? (active) =>
+                MobileDownloadExecution.setActive(active, downloads.pauseAll)
+          : null,
+      transfer: Platform.isIOS
+          ? const HttpDownloadTransfer(background: IosBackgroundTransfer())
+          : null,
       publicStorage: Platform.isAndroid
           ? const AndroidPublicDownloadStorage()
           : null,

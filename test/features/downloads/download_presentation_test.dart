@@ -184,6 +184,36 @@ void main() {
     await repository.close();
   });
 
+  testWidgets('download confirmation stays visible for 1.5 seconds', (
+    tester,
+  ) async {
+    final repository = _DownloadRepository();
+    addTearDown(repository.close);
+    await _pump(
+      tester,
+      Builder(
+        builder: (context) => TextButton(
+          onPressed: () => showDownloadDialog(context, items: [_item(1)]),
+          child: const Text('下载'),
+        ),
+      ),
+      repository,
+      _SourceRepository(),
+    );
+    await tester.tap(find.text('下载'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('开始下载'));
+    await tester.pumpAndSettle();
+    final notice = find.widgetWithText(SnackBar, '已添加 1 项下载任务');
+    expect(
+      tester.widget<SnackBar>(notice).duration,
+      const Duration(milliseconds: 1500),
+    );
+    await tester.pump(const Duration(milliseconds: 1500));
+    await tester.pumpAndSettle();
+    expect(notice, findsNothing);
+  });
+
   testWidgets('unavailable quality prevents enqueue', (tester) async {
     final repository = _DownloadRepository();
     final source = _SourceRepository()
