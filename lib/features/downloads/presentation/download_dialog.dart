@@ -55,8 +55,9 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
       widget.initialSelection?.codec ?? VideoCodecPreference.h264;
   late bool _danmaku = widget.initialSelection?.includeDanmaku ?? true;
   late bool _subtitles = widget.initialSelection?.includeSubtitles ?? true;
-  late DownloadOutput _output =
-      widget.initialSelection?.output ?? DownloadOutput.separate;
+  late DownloadOutput _output = ref.read(downloadControllerProvider).canMerge
+      ? (widget.initialSelection?.output ?? DownloadOutput.mp4)
+      : DownloadOutput.separate;
   List<int> _qualities = const [];
   bool _loading = false;
   bool _submitting = false;

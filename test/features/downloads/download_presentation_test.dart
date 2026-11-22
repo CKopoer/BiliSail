@@ -166,7 +166,7 @@ void main() {
   testWidgets('selection remains explicit and includes chosen episodes only', (
     tester,
   ) async {
-    final repository = _DownloadRepository();
+    final repository = _DownloadRepository(canMerge: true);
     final source = _SourceRepository();
     await _pump(
       tester,
@@ -184,6 +184,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(repository.enqueued.single.map((item) => item.part.cid), ['1', '2']);
     expect(repository.selection?.quality, 80);
+    expect(repository.selection?.output, DownloadOutput.mp4);
     await repository.close();
   });
 
@@ -241,7 +242,7 @@ void main() {
     await repository.close();
   });
 
-  for (final output in [DownloadOutput.mp4, DownloadOutput.mkv]) {
+  for (final output in [DownloadOutput.separate, DownloadOutput.mkv]) {
     testWidgets('${output.name} format is explicit and passed to the queue', (
       tester,
     ) async {
@@ -253,8 +254,8 @@ void main() {
         _SourceRepository(),
       );
       expect(repository.enqueued, isEmpty);
-      await tester.ensureVisible(find.text('音视频分轨').last);
-      await tester.tap(find.text('音视频分轨').last);
+      await tester.ensureVisible(find.text('合并 MP4').last);
+      await tester.tap(find.text('合并 MP4').last);
       await tester.pumpAndSettle();
       await tester.tap(find.text(output.label).last);
       await tester.pumpAndSettle();
@@ -271,7 +272,10 @@ void main() {
     final repository = _DownloadRepository();
     await _pump(
       tester,
-      DownloadDialog(items: [_item(1)]),
+      DownloadDialog(
+        items: [_item(1)],
+        initialSelection: const DownloadSelection(output: DownloadOutput.mp4),
+      ),
       repository,
       _SourceRepository(),
     );

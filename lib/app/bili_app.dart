@@ -184,6 +184,7 @@ class _BiliAppState extends ConsumerState<BiliApp> {
             initialSelection: DownloadSelection(
               quality: settings.preferredQuality,
               codec: settings.preferredVideoCodec,
+              output: DownloadOutput.mp4,
             ),
           ),
         );
@@ -385,6 +386,7 @@ class _BiliAppState extends ConsumerState<BiliApp> {
         initialSelection: DownloadSelection(
           quality: settings.preferredQuality,
           codec: settings.preferredVideoCodec,
+          output: DownloadOutput.mp4,
         ),
       ),
     );
