@@ -121,14 +121,14 @@ class _PlaybackPageLayoutState extends State<PlaybackPageLayout> {
         contentKey: widget.contentKey,
         summaryIdentity: widget.summaryIdentity ?? widget.contentKey,
         summaryBuilder: widget.summaryBuilder,
-        builder: (context, bottomHeight) => AnimatedBuilder(
+        builder: (context, bottomHeight, bottomSummary) => AnimatedBuilder(
           animation: _scroll,
           builder: (context, _) {
             final offset = _scroll.hasClients ? _scroll.offset : 0.0;
             final playerHeight = widget.wide || !widget.showInfo
                 ? bounds.maxHeight - bottomHeight
                 : expanded - offset.clamp(0.0, scrollRange);
-            return SingleChildScrollView(
+            final content = SingleChildScrollView(
               padding: EdgeInsets.zero,
               child: SizedBox(
                 width: bounds.maxWidth,
@@ -204,6 +204,20 @@ class _PlaybackPageLayoutState extends State<PlaybackPageLayout> {
                   ],
                 ),
               ),
+            );
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                content,
+                if (bottomSummary != null)
+                  Positioned(
+                    left: 0,
+                    bottom: 0,
+                    width: playerWidth,
+                    height: bottomHeight,
+                    child: bottomSummary,
+                  ),
+              ],
             );
           },
         ),

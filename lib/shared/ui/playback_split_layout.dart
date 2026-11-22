@@ -31,7 +31,14 @@ class PlaybackSplitLayout extends StatefulWidget {
   final Object summaryIdentity;
   final Widget Function(BuildContext context, {required bool measuring})?
   summaryBuilder;
-  final Widget Function(BuildContext context, double bottomHeight) builder;
+
+  /// The page places the scrollable summary within the available height.
+  final Widget Function(
+    BuildContext context,
+    double maxSummaryHeight,
+    Widget? bottomSummary,
+  )
+  builder;
 
   static bool infoBelowOf(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<_SplitPosition>()?.below ??
@@ -125,37 +132,30 @@ class _PlaybackSplitLayoutState extends State<PlaybackSplitLayout> {
       final below =
           canSplit && (style == PlaybackSplitStyle.below || _autoBelow);
       final showBelow = below && widget.showInfo;
-      final bottomHeight = !showBelow
+      final maxSummaryHeight = !showBelow
           ? 0.0
           : style == PlaybackSplitStyle.below && free < _compactHeight
           ? math.min(_compactHeight, bounds.maxHeight * .4)
           : free;
+      final bottomSummary = showBelow
+          ? Material(
+              color: Theme.of(context).colorScheme.surface,
+              child: SingleChildScrollView(
+                key: PageStorageKey(('playback-summary', widget.contentKey)),
+                primary: false,
+                child: widget.summaryBuilder!(context, measuring: false),
+              ),
+            )
+          : null;
       return _SplitPosition(
         below: below,
         child: Stack(
           fit: StackFit.expand,
           children: [
             Builder(
-              builder: (context) => widget.builder(context, bottomHeight),
+              builder: (context) =>
+                  widget.builder(context, maxSummaryHeight, bottomSummary),
             ),
-            if (showBelow)
-              Positioned(
-                left: 0,
-                bottom: 0,
-                width: width,
-                height: bottomHeight,
-                child: Material(
-                  color: Theme.of(context).colorScheme.surface,
-                  child: SingleChildScrollView(
-                    key: PageStorageKey((
-                      'playback-summary',
-                      widget.contentKey,
-                    )),
-                    primary: false,
-                    child: widget.summaryBuilder!(context, measuring: false),
-                  ),
-                ),
-              ),
             if (needsMeasure)
               Positioned(
                 left: 0,

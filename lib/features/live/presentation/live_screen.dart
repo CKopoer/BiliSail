@@ -319,19 +319,13 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
               belowPlayer: true,
               onOpenUser: widget.onOpenUser,
             ),
-            builder: (context, bottomHeight) {
+            builder: (context, maxSummaryHeight, bottomSummary) {
               final playerWidth = _infoVisible && wide
                   ? math.max(
                       0.0,
                       constraints.maxWidth - PlaybackSplitLayout.sidebarWidth,
                     )
                   : constraints.maxWidth;
-              final playerHeight = _infoVisible && !wide
-                  ? math.min(
-                      constraints.maxWidth * 9 / 16,
-                      constraints.maxHeight * 0.55,
-                    )
-                  : constraints.maxHeight - bottomHeight;
               final compactPlayerHeight = math.min(
                 constraints.maxWidth * 9 / 16,
                 constraints.maxHeight * 0.55,
@@ -339,14 +333,45 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
               final infoHeight = wide
                   ? constraints.maxHeight
                   : math.max(0.0, constraints.maxHeight - compactPlayerHeight);
+              final playerArea = Stack(
+                fit: StackFit.expand,
+                children: [
+                  player,
+                  if (wide)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: PlaybackSidebarToggle(
+                        tooltip: _infoVisible ? '收起直播信息' : '展开直播信息',
+                        icon: _infoVisible
+                            ? Icons.chevron_right
+                            : Icons.chevron_left,
+                        onPressed: () => setState(
+                          () => _infoVisibilityOverride = !_infoVisible,
+                        ),
+                      ),
+                    ),
+                ],
+              );
               return Stack(
                 children: [
                   Positioned(
                     left: 0,
                     top: 0,
                     width: playerWidth,
-                    height: playerHeight,
-                    child: player,
+                    height: wide ? constraints.maxHeight : compactPlayerHeight,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(child: playerArea),
+                        if (bottomSummary != null)
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxHeight: maxSummaryHeight,
+                            ),
+                            child: bottomSummary,
+                          ),
+                      ],
+                    ),
                   ),
                   Positioned(
                     left: wide
@@ -369,26 +394,6 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
                       ),
                     ),
                   ),
-                  if (wide)
-                    Positioned(
-                      right: _infoVisible
-                          ? PlaybackSplitLayout.sidebarWidth
-                          : 0,
-                      top: math.max(
-                        0.0,
-                        playerHeight / 2 -
-                            PlaybackSidebarToggle.size.height / 2,
-                      ),
-                      child: PlaybackSidebarToggle(
-                        tooltip: _infoVisible ? '收起直播信息' : '展开直播信息',
-                        icon: _infoVisible
-                            ? Icons.chevron_right
-                            : Icons.chevron_left,
-                        onPressed: () => setState(
-                          () => _infoVisibilityOverride = !_infoVisible,
-                        ),
-                      ),
-                    ),
                 ],
               );
             },

@@ -20,6 +20,7 @@ import 'package:bilisail/features/live/domain/live_room.dart';
 import 'package:bilisail/features/live/presentation/live_screen.dart';
 import 'package:bilisail/features/live/presentation/live_chat_bubble.dart';
 import 'package:bilisail/features/live/presentation/live_player_danmaku.dart';
+import 'package:bilisail/features/live/presentation/live_room_header.dart';
 import 'package:bilisail/features/live/presentation/live_super_chat_card.dart';
 import 'package:bilisail/shared/ui/responsive_layout_scope.dart';
 import 'package:bilisail/shared/ui/smooth_scroll_behavior.dart';
@@ -210,11 +211,10 @@ void main() {
         videoDimensions: const VideoDimensions(1920, 1080),
       );
       await tester.pumpAndSettle();
-      expect(tester.getSize(player), const Size(640, 360));
-      expect(
-        tester.getTopLeft(find.text('直播间标题')).dy,
-        greaterThanOrEqualTo(360),
-      );
+      final header = tester.getRect(find.byType(LiveRoomHeader));
+      expect(header.bottom, 674);
+      expect(header.top, greaterThan(360));
+      expect(tester.getRect(player), Rect.fromLTWH(0, 0, 640, header.top));
       expect(tester.getTopLeft(find.text('聊天')).dx, greaterThanOrEqualTo(640));
       expect(chatPosition(tester), same(position));
       await tester.tap(find.byKey(const ValueKey('live-tab-1')));
@@ -233,6 +233,42 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('fixed bottom live details give extra height to the player', (
+    tester,
+  ) async {
+    layout.value = layout.value.copyWith(
+      playbackSplitStyles: {PlaybackSplitPage.live: PlaybackSplitStyle.below},
+    );
+    await showPage(tester, width: 1020, height: 700, textScale: 1.5);
+    await tester.pumpAndSettle();
+    final player = find.byType(_PlayerProbe);
+    final header = find.byType(LiveRoomHeader);
+    final initialPlayer = tester.getRect(player);
+    final initialHeader = tester.getRect(header);
+    expect(initialHeader.top, initialPlayer.bottom);
+    expect(initialHeader.bottom, 700);
+
+    await tester.binding.setSurfaceSize(const Size(1020, 900));
+    await tester.pumpAndSettle();
+    expect(tester.getRect(header), initialHeader.shift(const Offset(0, 200)));
+    expect(tester.getSize(player).height, initialPlayer.height + 200);
+
+    await tester.binding.setSurfaceSize(const Size(1020, 240));
+    await tester.pumpAndSettle();
+    final scrollable = find.ancestor(
+      of: header,
+      matching: find.byType(Scrollable),
+    );
+    expect(tester.getRect(scrollable).bottom, 240);
+    expect(tester.getSize(scrollable).height, 240 * .4);
+    expect(tester.getRect(scrollable).top, tester.getRect(player).bottom);
+    expect(
+      tester.state<ScrollableState>(scrollable).position.maxScrollExtent,
+      greaterThan(0),
+    );
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('custom playback threshold updates the open live room', (
     tester,
