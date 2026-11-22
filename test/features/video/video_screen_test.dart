@@ -205,7 +205,10 @@ void main() {
       await tester.pumpAndSettle();
       final state = tester.state(find.byType(_TrackedPlayer));
       expect(tester.getSize(find.byType(_TrackedPlayer)).width, 900);
-      layout.value = ResponsiveLayoutSettings(playbackSideBySideWidth: 900);
+      layout.value = ResponsiveLayoutSettings(
+        playbackSideBySideWidth: 900,
+        playbackSplitStyle: PlaybackSplitStyle.automatic,
+      );
       await tester.pumpAndSettle();
       expect(tester.getSize(find.byType(_TrackedPlayer)).width, 520);
       tester.view.physicalSize = const Size(899, 800);

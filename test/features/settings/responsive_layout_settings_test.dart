@@ -22,13 +22,14 @@ void main() {
         expect(settings.responsiveLayout.articleWidthFraction, isNull);
         expect(
           settings.responsiveLayout.playbackSplitStyle,
-          PlaybackSplitStyle.automatic,
+          PlaybackSplitStyle.right,
         );
       }
       final source = [...ResponsiveLayoutSettings.defaultVideoGridMinWidths];
       final custom = ResponsiveLayoutSettings(videoGridMinWidths: source);
       source[0] = 9999;
       expect(custom.videoGridMinWidths?.first, 300);
+      expect(custom.playbackSplitStyle, PlaybackSplitStyle.right);
       expect(
         () => custom.videoGridMinWidths?.add(4000),
         throwsUnsupportedError,
@@ -91,7 +92,7 @@ void main() {
       expect(loaded.theme, AppThemePreference.dark);
       expect(
         loaded.responsiveLayout.playbackSplitStyle,
-        PlaybackSplitStyle.automatic,
+        PlaybackSplitStyle.right,
       );
       await repository.save(loaded);
       final Object? raw = jsonDecode(
@@ -150,7 +151,7 @@ void main() {
           expect(loaded.responsiveLayout.playbackSideBySideWidth, 1000);
           expect(
             loaded.responsiveLayout.playbackSplitStyle,
-            PlaybackSplitStyle.automatic,
+            PlaybackSplitStyle.right,
           );
         }
         await database.writeSetting(
@@ -313,7 +314,7 @@ void main() {
       await controller.resetToDefaults();
       expect(
         repository.value.responsiveLayout.playbackSplitStyle,
-        PlaybackSplitStyle.automatic,
+        PlaybackSplitStyle.right,
       );
       expect(repository.value.responsiveLayout.navigationBarBreakpoint, 600);
       expect(repository.value.responsiveLayout.sidebarExpandedWidth, 1600);

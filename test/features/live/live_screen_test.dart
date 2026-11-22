@@ -189,6 +189,9 @@ void main() {
   testWidgets(
     'decoded live picture places room details below while preserving chat, SC and composer',
     (tester) async {
+      layout.value = layout.value.copyWith(
+        playbackSplitStyle: PlaybackSplitStyle.automatic,
+      );
       container.read(playbackSessionProvider);
       await showPage(
         tester,

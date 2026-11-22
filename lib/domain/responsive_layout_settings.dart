@@ -7,7 +7,7 @@ final class ResponsiveLayoutSettings {
     int navigationBarBreakpoint = 600,
     int sidebarExpandedWidth = 1600,
     int playbackSideBySideWidth = 1000,
-    this.playbackSplitStyle = PlaybackSplitStyle.automatic,
+    this.playbackSplitStyle = defaultPlaybackSplitStyle,
     double? articleWidthFraction,
   }) : videoGridMinWidths =
            videoGridMinWidths != null &&
@@ -38,9 +38,10 @@ final class ResponsiveLayoutSettings {
       navigationBarBreakpoint = 600,
       sidebarExpandedWidth = 1600,
       playbackSideBySideWidth = 1000,
-      playbackSplitStyle = PlaybackSplitStyle.automatic,
+      playbackSplitStyle = defaultPlaybackSplitStyle,
       articleWidthFraction = null;
 
+  static const defaultPlaybackSplitStyle = PlaybackSplitStyle.right;
   static const minArticleWidthFraction = .3;
   static const maxArticleWidthFraction = .7;
 

@@ -1456,7 +1456,7 @@ void main() {
     }
     expect(tester.takeException(), isNull);
   });
-  testWidgets('appearance starts on automatic and saves each split style', (
+  testWidgets('appearance starts with information on the right', (
     tester,
   ) async {
     final repository = _SettingsRepository();
@@ -1474,11 +1474,11 @@ void main() {
       of: group,
       matching: find.widgetWithText(ChoiceChip, title),
     );
-    expect(tester.widget<ChoiceChip>(choice('自动')).selected, isTrue);
+    expect(tester.widget<ChoiceChip>(choice('信息在右侧')).selected, isTrue);
     for (final (label, style) in [
-      ('信息在右侧', PlaybackSplitStyle.right),
       ('信息在下方', PlaybackSplitStyle.below),
       ('自动', PlaybackSplitStyle.automatic),
+      ('信息在右侧', PlaybackSplitStyle.right),
     ]) {
       final chip = choice(label);
       await tester.ensureVisible(chip);

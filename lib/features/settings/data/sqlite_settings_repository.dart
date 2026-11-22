@@ -439,7 +439,7 @@ class SqliteSettingsRepository implements SettingsRepository {
           : 1600,
       playbackSplitStyle:
           PlaybackSplitStyle.values.asNameMap()[value['playbackSplitStyle']] ??
-          PlaybackSplitStyle.automatic,
+          ResponsiveLayoutSettings.defaultPlaybackSplitStyle,
       playbackSideBySideWidth: value['playbackSideBySideWidth'] is int
           ? value['playbackSideBySideWidth'] as int
           : 1000,
