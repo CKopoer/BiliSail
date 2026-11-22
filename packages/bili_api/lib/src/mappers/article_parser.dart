@@ -228,27 +228,6 @@ final class ArticleParser {
       final paragraph = articleMap(row);
       final kind = int.tryParse('${paragraph['para_type']}');
       switch (kind) {
-        case 1 || 4 || 8:
-          final text = _nodes(
-            articleMap(paragraph[kind == 8 ? 'heading' : 'text'])['nodes'],
-          );
-          if (text.isNotEmpty) {
-            yield _block(
-              kind == 4 || quoted
-                  ? ApiArticleBlockKind.quote
-                  : kind == 8
-                  ? ApiArticleBlockKind.heading
-                  : ApiArticleBlockKind.paragraph,
-              text,
-            );
-          }
-          if (kind == 4) {
-            yield* _paragraphs(
-              articleMap(paragraph['blockquote'])['children'],
-              depth: depth + 1,
-              quoted: true,
-            );
-          }
         case 2:
           for (final row in _list(articleMap(paragraph['pic'])['pics'])) {
             final photo = articleMap(row);
@@ -312,6 +291,28 @@ final class ArticleParser {
           final value = _text(articleMap(paragraph['code'])['content']);
           if (value.isNotEmpty) {
             yield _block(ApiArticleBlockKind.code, [ApiArticleText(value)]);
+          }
+        default:
+          // New paragraph types may still carry readable text.nodes.
+          final text = _nodes(
+            articleMap(paragraph[kind == 8 ? 'heading' : 'text'])['nodes'],
+          );
+          if (text.isNotEmpty) {
+            yield _block(
+              kind == 4 || quoted
+                  ? ApiArticleBlockKind.quote
+                  : kind == 8
+                  ? ApiArticleBlockKind.heading
+                  : ApiArticleBlockKind.paragraph,
+              text,
+            );
+          }
+          if (kind == 4) {
+            yield* _paragraphs(
+              articleMap(paragraph['blockquote'])['children'],
+              depth: depth + 1,
+              quoted: true,
+            );
           }
       }
     }

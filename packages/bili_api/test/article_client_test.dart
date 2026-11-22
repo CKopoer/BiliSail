@@ -120,6 +120,47 @@ void main() {
     },
   );
 
+  test('reads text nodes in an unrecognized opus paragraph', () async {
+    final client = ArticleClient(
+      BiliApiClient(
+        transport: _Transport({
+          _opus: {
+            'item': {
+              'id_str': _id,
+              'modules': [
+                {
+                  'module_content': {
+                    'paragraphs': [
+                      {'para_type': 99},
+                      {
+                        'para_type': 99,
+                        'text': {
+                          'nodes': [
+                            {
+                              'word': {
+                                'words': '可读正文',
+                                'style': {'bold': true},
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        }),
+      ),
+    );
+    final article = await client.read(_id, opus: true);
+    final block = article.blocks.single;
+    expect(block.kind, ApiArticleBlockKind.paragraph);
+    expect(block.text.single.text, '可读正文');
+    expect(block.text.single.bold, isTrue);
+  });
+
   test(
     'upgrades unsigned public article image URLs and keeps source order',
     () async {

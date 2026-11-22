@@ -201,6 +201,71 @@ void main() {
   );
 
   testWidgets(
+    'consecutive identical article paragraphs keep their individual heights',
+    (tester) async {
+      const multiline = '第一行\n第二行\n第三行\n第四行';
+      final blocks = [
+        for (final words in ['\n', '\n', '重复正文', '重复正文', multiline, '文末'])
+          ArticleBlock(
+            ArticleBlockKind.paragraph,
+            text: [
+              (
+                text: words,
+                link: null,
+                bold: false,
+                italic: false,
+                strike: false,
+              ),
+            ],
+          ),
+      ];
+      await _mountReader(
+        tester,
+        comments: DynamicCommentsFake(),
+        document: ArticleDocument(
+          url: _opus.webUri,
+          title: '图文',
+          blocks: blocks,
+        ),
+        address: _opus,
+      );
+
+      final blanks = find.text('\n');
+      final repeated = find.text('重复正文');
+      expect(blanks, findsNWidgets(2));
+      expect(repeated, findsNWidgets(2));
+      expect(tester.getSize(blanks.first).height, greaterThan(0));
+      expect(
+        tester.getSize(blanks.last).height,
+        tester.getSize(blanks.first).height,
+      );
+      expect(
+        tester.getSize(repeated.last).height,
+        tester.getSize(repeated.first).height,
+      );
+      expect(
+        tester.getSize(find.text(multiline)).height,
+        greaterThan(tester.getSize(repeated.first).height),
+      );
+      final paragraphs = [
+        blanks.first,
+        blanks.last,
+        repeated.first,
+        repeated.last,
+        find.text(multiline),
+        find.text('文末'),
+      ];
+      for (var i = 1; i < paragraphs.length; i++) {
+        expect(
+          tester.getTopLeft(paragraphs[i]).dy,
+          greaterThanOrEqualTo(tester.getBottomLeft(paragraphs[i - 1]).dy),
+        );
+      }
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'mouse thumb keeps a stable mapping across short and long article blocks',
     (tester) async {
       final blocks = List.generate(

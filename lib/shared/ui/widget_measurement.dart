@@ -25,15 +25,16 @@ class WidgetMeasurement {
   final _owner = BuildOwner(focusManager: FocusManager());
   final _pipeline = PipelineOwner();
   late final RenderView _view;
-  double? _height;
-  final _root = RenderPositionedBox(
+  // Give the row the available width and let it take its natural height.
+  final _root = RenderConstrainedOverflowBox(
     alignment: Alignment.topLeft,
-    heightFactor: 1,
+    minWidth: 0,
+    minHeight: 0,
+    maxHeight: double.infinity,
   );
   RenderObjectToWidgetElement<RenderBox>? _element;
 
   double height(Widget widget) {
-    _height = null;
     final child = InheritedTheme.captureAll(
       context,
       MediaQuery(
@@ -46,16 +47,7 @@ class WidgetMeasurement {
               style: DefaultTextStyle.of(context).style,
               child: TooltipVisibility(
                 visible: false,
-                child: TickerMode(
-                  enabled: false,
-                  child: UnconstrainedBox(
-                    constrainedAxis: Axis.horizontal,
-                    child: _MeasureHeight(
-                      onHeight: (height) => _height = height,
-                      child: widget,
-                    ),
-                  ),
-                ),
+                child: TickerMode(enabled: false, child: widget),
               ),
             ),
           ),
@@ -69,7 +61,10 @@ class WidgetMeasurement {
     _owner.buildScope(_element!);
     _pipeline.flushLayout();
     _owner.finalizeTree();
-    return _height ?? (throw StateError('Widget did not lay out'));
+    // A reused row may already have a valid layout after the tree update.
+    final row = _root.child;
+    if (row == null || !row.hasSize) throw StateError('Widget did not lay out');
+    return row.size.height;
   }
 
   void dispose() {
@@ -86,35 +81,5 @@ class WidgetMeasurement {
     _view.dispose();
     _pipeline.dispose();
     _owner.focusManager.dispose();
-  }
-}
-
-class _MeasureHeight extends SingleChildRenderObjectWidget {
-  const _MeasureHeight({required this.onHeight, required super.child});
-
-  final ValueChanged<double> onHeight;
-
-  @override
-  RenderObject createRenderObject(BuildContext context) =>
-      _RenderMeasureHeight(onHeight);
-
-  @override
-  void updateRenderObject(
-    BuildContext context,
-    _RenderMeasureHeight renderObject,
-  ) {
-    renderObject.onHeight = onHeight;
-  }
-}
-
-class _RenderMeasureHeight extends RenderProxyBox {
-  _RenderMeasureHeight(this.onHeight);
-
-  ValueChanged<double> onHeight;
-
-  @override
-  void performLayout() {
-    super.performLayout();
-    onHeight(size.height);
   }
 }
