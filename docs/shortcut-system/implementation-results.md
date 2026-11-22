@@ -270,3 +270,12 @@ smoke 时，记录 keyWindow/view、active、responder 类型／所属关系、�
 - 78 项定向回归通过，覆盖平台默认、旧设置兼容、录制／恢复默认、三种导航模式、Windows／macOS／iOS／Android 平台模拟、按键重复、页面保留、重绑／禁用、输入／弹窗／隐藏页／底栏隔离、持久化成功与失败回退。日志为 `build/sidebar-shortcut-targeted-final.log`。
 - 基于包含同期改动的共同工作区运行 `tool/check.ps1 -SkipPub`，格式与打包边界通过，全仓静态分析被同期另一后端源码与测试的两处 `unnecessary_import` 提示（对应实现已随后端清理移除）阻塞；未修改这些其他任务文件。本次 11 个源码／测试文件定向分析与 Linux 适配器静态分析通过，见 `build/sidebar-shortcut-analyze.log`。继续按 `RootTests`／`PackageTests` 阶段执行，根应用 4,635 项、四包 1,120 项全部通过，见 `build/sidebar-shortcut-root-tests.log`、`build/sidebar-shortcut-package-tests.log`；根应用另有 13 项因 Windows 符号链接权限跳过，10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过，不计为原生通过。完整入口不能记为全通过。
 - 按用户要求未构建或操作设备，物理键盘和实机验收由用户后续完成。未发现运行中的 Flutter／DTD 实例，热重载因无连接未执行成功。
+
+## 桌面老板键（2026-11-22）
+
+- 老板键默认关闭。Windows／Linux 默认 `Ctrl+Shift+Q`，macOS 默认 `Command+Shift+Q`。在“设置 → 快捷键 → 标签页与页面”可开启、改绑或解除绑定。快捷键总开关同时生效，已有自定义键位优先。
+- `Command+Shift+Q` 也是 macOS 的注销快捷键。系统占用此组合键时，可以在应用中改绑。[Apple 快捷键说明](https://support.apple.com/en-us/102650)
+- 由当前活动的 BiliSail 窗口触发，主窗口、独立播放窗、全屏和迷你小窗共用一个操作。带 Ctrl／Alt／Command 的组合键和已绑定侧键可在 Flutter 弹窗、编辑焦点下触发，快捷键录制仍优先接收输入。
+- 触发后暂停已打开的播放会话。Windows 最小化主窗口和独立播放窗，Linux 最小化主窗口，macOS 通过 AppKit 隐藏应用。通过任务栏或 Dock 恢复窗口，标签、播放源和进度保留，播放由用户继续。
+- 对照了 PiliPlus 2.2.1（`217fb54f51f6764176319bbdedab2a7522d75401`）、[上游老板键需求](https://github.com/bggRGjQaUbCoE/PiliPlus/issues/2719)和[参考分支的托盘显隐](https://github.com/bggRGjQaUbCoE/PiliPlus/blob/e03a02072aae781afcf35980d3973cead9324831/lib/pages/main/view.dart#L148-L189)。发布版未提供对应老板键，本项目借鉴窗口可恢复的交互，并沿用自己的快捷键和窗口服务独立实现。
+- 定向测试通过 503 项，涵盖默认关闭、开启后保存、恢复默认、旧键位、录制优先级、双窗口的最小化调用、准备中的窗口、暂停保留进度和迟到的播放源。按要求未构建，三个桌面平台的实际窗口行为待实机验收。

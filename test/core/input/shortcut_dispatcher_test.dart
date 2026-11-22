@@ -23,6 +23,72 @@ InputStroke stroke(
 );
 
 void main() {
+  test('boss key runs once from an active desktop window or dialog', () {
+    var hides = 0;
+    final input = ShortcutCoordinator(
+      onBossKey: () async {
+        hides++;
+        return CommandOutcome.completed;
+      },
+    );
+    addTearDown(input.dispose);
+    const defaults = ShortcutSettings.defaults(desktopShortcuts: true);
+    final desktop = defaults.withActionEnabled(ShortcutAction.bossKey, true);
+    const key = 'Ctrl+Shift+Q';
+    const dialog = ShortcutContext(modal: true, editing: true);
+    input.configure(desktop);
+    for (final context in [const ShortcutContext(), dialog]) {
+      expect(
+        input.dispatch(stroke(key, InputPhase.down), context).claimed,
+        isTrue,
+      );
+      input.dispatch(stroke(key, InputPhase.repeat), context);
+      input.dispatch(stroke(key, InputPhase.up), context);
+    }
+    expect(hides, 2);
+
+    for (final settings in [
+      const ShortcutSettings.defaults(),
+      defaults,
+      desktop.withEnabled(false),
+      desktop.withActionEnabled(ShortcutAction.bossKey, false),
+      desktop.withKeys(ShortcutAction.bossKey, []),
+    ]) {
+      input.configure(settings);
+      expect(
+        input.dispatch(stroke(key, InputPhase.down), dialog).claimed,
+        isFalse,
+      );
+    }
+    input.configure(desktop);
+    expect(
+      input
+          .dispatch(
+            stroke(key, InputPhase.down),
+            const ShortcutContext(activeWindow: false),
+          )
+          .claimed,
+      isFalse,
+    );
+    input.recording = (_) => CommandOutcome.completed;
+    input.dispatch(stroke(key, InputPhase.down), dialog);
+    input.dispatch(stroke(key, InputPhase.up), dialog);
+    expect(hides, 2);
+    input.recording = null;
+    input.configure(desktop.withKeys(ShortcutAction.bossKey, ['K']));
+    expect(
+      input.dispatch(stroke('K', InputPhase.down), dialog).claimed,
+      isFalse,
+    );
+    expect(
+      input
+          .dispatch(stroke('K', InputPhase.down), const ShortcutContext())
+          .claimed,
+      isTrue,
+    );
+    expect(hides, 3);
+  });
+
   test('platform defaults reconfigure even with identical stored JSON', () {
     final input = ShortcutCoordinator();
     addTearDown(input.dispose);

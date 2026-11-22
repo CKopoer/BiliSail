@@ -35,6 +35,12 @@ enum ShortcutAction {
   toggleMaximized('最大化 / 还原窗口', [], addedKeys: ['G']),
   toggleMiniPlayer('进入 / 退出迷你小窗', [], addedKeys: ['S']),
   toggleSidebar('收起 / 展开侧边栏', ['Ctrl+B'], appleKeys: ['Meta+B']),
+  bossKey(
+    '老板键',
+    ['Ctrl+Shift+Q'],
+    appleKeys: ['Shift+Meta+Q'],
+    desktopOnly: true,
+  ),
   newTab('新建浏览标签', ['Ctrl+T'], appleKeys: ['Meta+T']),
   closeTab(
     '关闭当前标签页',
@@ -54,11 +60,13 @@ enum ShortcutAction {
     this.defaultKeys, {
     this.appleKeys,
     this.addedKeys = const [],
+    this.desktopOnly = false,
   });
   final String label;
   final List<String> defaultKeys;
   final List<String>? appleKeys;
   final List<String> addedKeys;
+  final bool desktopOnly;
 
   List<String> defaultsFor({required bool useAppleDefaults}) {
     final keys = useAppleDefaults ? appleKeys ?? defaultKeys : defaultKeys;

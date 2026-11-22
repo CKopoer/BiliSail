@@ -1,9 +1,62 @@
 import 'dart:convert';
 
+import 'package:bilisail/app/platform_defaults.dart';
 import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('boss key defaults respect platform and occupied user bindings', () {
+    for (final platform in TargetPlatform.values) {
+      final settings = shortcutSettingsForPlatform(platform);
+      final key = switch (platform) {
+        TargetPlatform.windows || TargetPlatform.linux => 'Ctrl+Shift+Q',
+        TargetPlatform.macOS => 'Shift+Meta+Q',
+        _ => null,
+      };
+      expect(settings.keysFor(ShortcutAction.bossKey), [?key]);
+      expect(settings.isEnabled(ShortcutAction.bossKey), isFalse);
+      if (key == null) continue;
+      final defaults = ShortcutSettings.fromJson(
+        {},
+        useAppleDefaults: settings.useAppleDefaults,
+        desktopShortcuts: true,
+      );
+      expect(defaults.keysFor(ShortcutAction.bossKey), [key]);
+      expect(defaults.isEnabled(ShortcutAction.bossKey), isFalse);
+      expect(defaults.actionFor(key), isNull);
+      final legacy = ShortcutSettings.fromJson(
+        {
+          'bindings': {
+            'refresh': [key],
+          },
+        },
+        desktopShortcuts: true,
+        useAppleDefaults: settings.useAppleDefaults,
+      );
+      expect(legacy.actionFor(key), ShortcutAction.refresh);
+      expect(legacy.keysFor(ShortcutAction.bossKey), isEmpty);
+      expect(legacy.issues, isEmpty);
+    }
+    final desktop = const ShortcutSettings.defaults(desktopShortcuts: true)
+        .withKeys(ShortcutAction.bossKey, ['Alt+V'])
+        .withActionEnabled(ShortcutAction.bossKey, true);
+    final saved = desktop.toJson();
+    final mobile = ShortcutSettings.fromJson(saved);
+    expect(mobile.keysFor(ShortcutAction.bossKey), isEmpty);
+    final restored = ShortcutSettings.fromJson(
+      mobile.toJson(),
+      desktopShortcuts: true,
+    );
+    expect(restored.actionFor('Alt+V'), ShortcutAction.bossKey);
+    final disabled = ShortcutSettings.fromJson(
+      restored.withActionEnabled(ShortcutAction.bossKey, false).toJson(),
+      desktopShortcuts: true,
+    );
+    expect(disabled.isEnabled(ShortcutAction.bossKey), isFalse);
+    expect(disabled.keysFor(ShortcutAction.bossKey), ['Alt+V']);
+  });
+
   test(
     'official additions leave occupied defaults and saved bindings intact',
     () {

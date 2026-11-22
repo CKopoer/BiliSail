@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:bilisail/app/workspace_playback_window.dart';
+import 'package:bilisail/core/input/shortcut_dispatcher.dart';
 import 'package:bilisail/core/platform/window_service.dart';
 import 'package:bilisail/domain/responsive_layout_settings.dart';
 import 'package:bilisail/shared/ui/responsive_layout_scope.dart';
@@ -16,6 +17,36 @@ import '../support/native_window_events.dart';
 import '../support/window_service_fake.dart';
 
 void main() {
+  testWidgets('detached macOS playback dispatches the shared boss key', (
+    tester,
+  ) async {
+    var hides = 0;
+    await tester.pumpWidget(
+      WorkspacePlaybackWindow(
+        theme: ThemeData(),
+        shortcuts: const ShortcutSettings.defaults(
+          useAppleDefaults: true,
+          desktopShortcuts: true,
+        ).withActionEnabled(ShortcutAction.bossKey, true),
+        onBack: () {},
+        onClose: () {},
+        onActivateBrowser: () {},
+        onBossKey: () async {
+          hides++;
+          return CommandOutcome.completed;
+        },
+        child: const SizedBox.expand(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyQ);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    expect(hides, 1);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
   testWidgets('detached playback navigator receives updated layout settings', (
     tester,
   ) async {

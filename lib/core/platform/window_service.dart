@@ -216,6 +216,24 @@ class WindowService {
 
   Future<void> minimizePlaybackWindow() => _playbackCaptionCall('minimize');
 
+  Future<void> hideForBossKey() async {
+    if (!hasDesktopWindow || _closing || _isViewAvailable?.call() == false) {
+      return;
+    }
+    if (Platform.isMacOS || Platform.isWindows) {
+      // AppKit hides all windows together. On Windows, target the actual view
+      // and keep fullscreen state, which window_manager refuses to minimize.
+      await _desktopChannel
+          .invokeMethod<void>(
+            Platform.isMacOS ? 'hideApplication' : 'minimize',
+            {'viewId': viewId ?? 0},
+          )
+          .timeout(_geometryTimeout);
+    } else {
+      await windowManager.minimize().timeout(_geometryTimeout);
+    }
+  }
+
   Future<void> _playbackCaptionCall(
     String method, [
     Map<String, Object> arguments = const {},

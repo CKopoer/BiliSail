@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as path;
 
+import '../core/input/shortcut_dispatcher.dart';
 import '../shared/ui/app_dialog.dart';
 import '../shared/ui/responsive_layout_scope.dart';
 import '../core/platform/desktop_window_chrome.dart';
@@ -89,8 +90,25 @@ VideoDetail _episodeDetail(PgcSeason season, PgcEpisode episode) => VideoDetail(
 
 class _BiliAppState extends ConsumerState<BiliApp> {
   late final GoRouter _router;
-  final _input = ShortcutCoordinator();
+  late final _input = ShortcutCoordinator(onBossKey: _hideForBossKey);
   late final AppLifecycleListener _lifecycle;
+  bool _hidingForBossKey = false;
+
+  Future<CommandOutcome> _hideForBossKey() async {
+    final dependencies = widget.dependencies;
+    if (!dependencies.window.hasDesktopWindow) return CommandOutcome.noOp;
+    if (_hidingForBossKey) return CommandOutcome.busy;
+    _hidingForBossKey = true;
+    try {
+      await Future.wait([
+        dependencies.playback.pauseAll(),
+        dependencies.playbackWindow.hideForBossKey(dependencies.window),
+      ]);
+      return CommandOutcome.completed;
+    } finally {
+      _hidingForBossKey = false;
+    }
+  }
 
   @override
   void initState() {
@@ -151,6 +169,7 @@ class _BiliAppState extends ConsumerState<BiliApp> {
                                   ))
                               .shortcuts,
                       onClose: onClose,
+                      onBossKey: _hideForBossKey,
                       onBack: onBack,
                       onHome: onHome,
                       onActivateBrowser: () =>

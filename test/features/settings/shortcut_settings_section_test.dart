@@ -8,6 +8,32 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('boss key is opt-in and appears only on desktop', (tester) async {
+    for (final desktop in [false, true]) {
+      var saved = ShortcutSettings.defaults(desktopShortcuts: desktop);
+      await tester.pumpWidget(
+        InputTestApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: ShortcutSettingsSection(
+                settings: saved,
+                save: (value) async => saved = value,
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(find.text('老板键'), desktop ? findsOneWidget : findsNothing);
+      if (!desktop) continue;
+      final row = find.widgetWithText(ListTile, '老板键');
+      final toggle = find.descendant(of: row, matching: find.byType(Switch));
+      expect(tester.widget<Switch>(toggle).value, isFalse);
+      await tester.ensureVisible(toggle);
+      await tester.tap(toggle);
+      expect(saved.actionFor('Ctrl+Shift+Q'), ShortcutAction.bossKey);
+    }
+  });
+
   for (final action in [
     ShortcutAction.nextTab,
     ShortcutAction.previousTab,
@@ -64,10 +90,15 @@ void main() {
     );
   }
   testWidgets('shortcut-only reset preserves Apple defaults', (tester) async {
-    var saved = const ShortcutSettings.defaults(useAppleDefaults: true)
-        .withKeys(ShortcutAction.closeTab, ['Ctrl+Q'])
-        .withKeys(ShortcutAction.toggleSidebar, [])
-        .withKeys(ShortcutAction.nextTab, []);
+    var saved =
+        const ShortcutSettings.defaults(
+              useAppleDefaults: true,
+              desktopShortcuts: true,
+            )
+            .withActionEnabled(ShortcutAction.bossKey, true)
+            .withKeys(ShortcutAction.closeTab, ['Ctrl+Q'])
+            .withKeys(ShortcutAction.toggleSidebar, [])
+            .withKeys(ShortcutAction.nextTab, []);
     await tester.pumpWidget(
       InputTestApp(
         home: Scaffold(
@@ -80,6 +111,7 @@ void main() {
         ),
       ),
     );
+    expect(find.textContaining('与 macOS 注销快捷键相同'), findsOneWidget);
     await tester.ensureVisible(find.text('恢复默认快捷键'));
     await tester.tap(find.text('恢复默认快捷键'));
     await tester.pumpAndSettle();
@@ -87,6 +119,8 @@ void main() {
     expect(saved.actionFor('Meta+B'), ShortcutAction.toggleSidebar);
     expect(saved.actionFor('Shift+Meta+BracketRight'), ShortcutAction.nextTab);
     expect(saved.actionFor('Ctrl+Q'), isNull);
+    expect(saved.isEnabled(ShortcutAction.bossKey), isFalse);
+    expect(saved.keysFor(ShortcutAction.bossKey), ['Shift+Meta+Q']);
   });
   for (final key in [
     LogicalKeyboardKey.escape,

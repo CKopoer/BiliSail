@@ -116,6 +116,12 @@ final class PlaybackManager extends ChangeNotifier {
     await Future.wait(_releases.toList());
   }
 
+  Future<void> pauseAll() async {
+    await Future.wait([
+      for (final session in _sessions.values.toList()) session.pause(),
+    ]);
+  }
+
   Future<void> stop() async {
     ++_revision;
     sleepTimer.cancel();

@@ -27,6 +27,7 @@ class WorkspacePlaybackWindow extends StatefulWidget {
     required this.onBack,
     required this.onClose,
     required this.onActivateBrowser,
+    this.onBossKey,
     this.onHome,
     required this.theme,
     this.responsiveLayout = const ResponsiveLayoutSettings.defaults(),
@@ -42,6 +43,7 @@ class WorkspacePlaybackWindow extends StatefulWidget {
   final VoidCallback onBack;
   final VoidCallback onClose;
   final VoidCallback onActivateBrowser;
+  final Future<CommandOutcome> Function()? onBossKey;
   final VoidCallback? onHome;
   final ThemeData theme;
   final ResponsiveLayoutSettings responsiveLayout;
@@ -57,7 +59,10 @@ class WorkspacePlaybackWindow extends StatefulWidget {
 }
 
 class _WorkspacePlaybackWindowState extends State<WorkspacePlaybackWindow> {
-  final _input = ShortcutCoordinator();
+  late final _input = ShortcutCoordinator(
+    onBossKey: () async =>
+        await widget.onBossKey?.call() ?? CommandOutcome.noOp,
+  );
   final _backOwner = Object();
   WindowService? _window;
   Timer? _captionTimer;

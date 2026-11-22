@@ -101,6 +101,17 @@ final class DesktopPlaybackWindowController {
   bool _closed = false;
   Future<void>? _closing;
 
+  Future<void> hideForBossKey(WindowService mainWindow) async {
+    if (_closed) return;
+    await Future.wait([
+      // On macOS the main service hides the entire application. Linux uses
+      // a single native window for browsing and playback.
+      if (Platform.isWindows)
+        for (final host in _hosts.toList()) host._minimizeForBossKey(),
+      mainWindow.hideForBossKey(),
+    ]);
+  }
+
   Future<void> close() => _closing ??= _close();
 
   Future<void> _close() async {
@@ -155,6 +166,7 @@ class _DesktopPlaybackWindowState extends State<DesktopPlaybackWindow> {
   bool _createRequested = false;
   bool _activateRequested = false;
   bool _titleRequested = false;
+  bool _minimizeOnOpen = false;
   Object? _opening;
   final _openingTasks = <Future<void>>{};
   Future<void> _retiring = Future.value();
@@ -227,7 +239,18 @@ class _DesktopPlaybackWindowState extends State<DesktopPlaybackWindow> {
     _createRequested = false;
     _activateRequested = false;
     _titleRequested = false;
+    _minimizeOnOpen = false;
     _opening = null;
+  }
+
+  Future<void> _minimizeForBossKey() async {
+    _activateRequested = false;
+    final window = _window;
+    if (window != null && window.isOpen) {
+      await window.windowService.hideForBossKey();
+    } else if (_createRequested || _opening != null) {
+      _minimizeOnOpen = true;
+    }
   }
 
   Future<void> _open() async {
@@ -291,7 +314,11 @@ class _DesktopPlaybackWindowState extends State<DesktopPlaybackWindow> {
       if (!window.isOpen) {
         throw StateError('Playback window closed while updating its title.');
       }
-      if (widget.activationToken != initialActivation) window.activate();
+      final minimizeOnOpen = _minimizeOnOpen;
+      _minimizeOnOpen = false;
+      if (!minimizeOnOpen && widget.activationToken != initialActivation) {
+        window.activate();
+      }
       if (!mounted ||
           !identical(_opening, request) ||
           widget.playback == null ||
@@ -312,10 +339,20 @@ class _DesktopPlaybackWindowState extends State<DesktopPlaybackWindow> {
       // The scheduler still considers that frame scheduled, so scheduleFrame
       // and scheduleForcedFrame would both return without waking the new view.
       WidgetsBinding.instance.platformDispatcher.scheduleFrame();
+      if (minimizeOnOpen) {
+        try {
+          await window.windowService.hideForBossKey();
+        } catch (error, stack) {
+          FlutterError.reportError(
+            FlutterErrorDetails(exception: error, stack: stack),
+          );
+        }
+      }
     } catch (error) {
       if (created != null) _disposeAfterFrame(created);
       if (mounted && identical(_opening, request)) {
         _opening = null;
+        _minimizeOnOpen = false;
         widget.onError(error);
       }
     }

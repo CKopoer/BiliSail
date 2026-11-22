@@ -79,6 +79,7 @@ class SqliteSettingsRepository implements SettingsRepository {
       shortcuts: ShortcutSettings.fromJson(
         decoded['shortcuts'],
         useAppleDefaults: defaultShortcuts.useAppleDefaults,
+        desktopShortcuts: defaultShortcuts.desktopShortcuts,
       ),
       sidebarStyle:
           SidebarStyle.values

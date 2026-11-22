@@ -3783,6 +3783,58 @@ void main() {
     },
   );
 
+  test(
+    'pausing all sessions keeps sources, position and manual pause intent',
+    () async {
+      final manager = _manager();
+      addTearDown(manager.close);
+      final first = manager.acquire('first');
+      final second = manager.acquire('second');
+      await first.open(_detail('1'), _part('1'));
+      await second.open(_detail('2'), _part('2'));
+      const position = Duration(seconds: 12);
+      await first.seek(position);
+      final firstMedia = first.media;
+      final secondMedia = second.media;
+      expect(first.snapshots.value.phase, PlaybackPhase.playing);
+      expect(second.snapshots.value.phase, PlaybackPhase.playing);
+
+      await manager.pauseAll();
+      await manager.updateWorkspace(
+        allowConcurrent: false,
+        activeTabId: 'second',
+      );
+      await manager.updateWorkspace(
+        allowConcurrent: true,
+        activeTabId: 'first',
+      );
+      expect(first.media, same(firstMedia));
+      expect(second.media, same(secondMedia));
+      expect(first.snapshots.value.position, position);
+      expect(first.snapshots.value.phase, PlaybackPhase.paused);
+      expect(second.snapshots.value.phase, PlaybackPhase.paused);
+      await first.play();
+      expect(first.snapshots.value.phase, PlaybackPhase.playing);
+      expect(second.snapshots.value.phase, PlaybackPhase.paused);
+    },
+  );
+
+  test('pause all revokes autoplay while a source is resolving', () async {
+    final repository = _FakeRepository();
+    final manager = _manager(repository: repository);
+    addTearDown(manager.close);
+    final session = manager.acquire('first');
+    final open = session.open(_detail('1'), _part('1'));
+    await _flush();
+    await manager.pauseAll();
+    repository.pendingResolves['1']!.complete(
+      _media('1', 80, const Duration(minutes: 2)),
+    );
+    await open;
+    expect((session.engine as _FakeEngine).playCount, 0);
+    expect(session.snapshots.value.phase, PlaybackPhase.paused);
+  });
+
   test('exclusive workspace policy suspends other sources and preserves manual pause and preferences', () async {
     final manager = _manager();
     addTearDown(manager.close);

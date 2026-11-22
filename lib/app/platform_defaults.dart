@@ -7,6 +7,12 @@ ShortcutSettings shortcutSettingsForPlatform(TargetPlatform platform) =>
     ShortcutSettings.defaults(
       useAppleDefaults:
           platform == TargetPlatform.macOS || platform == TargetPlatform.iOS,
+      desktopShortcuts: switch (platform) {
+        TargetPlatform.windows ||
+        TargetPlatform.macOS ||
+        TargetPlatform.linux => true,
+        _ => false,
+      },
     );
 
 ShortcutSettings get defaultShortcuts =>

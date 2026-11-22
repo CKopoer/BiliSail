@@ -10,9 +10,10 @@ import '../features/settings/domain/shortcut_settings.dart';
 
 /// Composition only: the dispatcher knows neither settings nor application IDs.
 final class ShortcutCoordinator extends ShortcutDispatcher<Object> {
-  ShortcutCoordinator()
+  ShortcutCoordinator({Future<CommandOutcome> Function()? onBossKey})
     : super(
         scopeFor: (command) => switch (command) {
+          ShortcutAction.bossKey => CommandScope.application,
           ShortcutAction.newTab ||
           ShortcutAction.closeTab ||
           ShortcutAction.nextTab ||
@@ -46,7 +47,8 @@ final class ShortcutCoordinator extends ShortcutDispatcher<Object> {
           ReservedShortcut.imageZoomOut,
         }.contains(command),
         editorException: (command, chord) =>
-            ((command == ShortcutAction.nextTab ||
+            ((command == ShortcutAction.bossKey ||
+                    command == ShortcutAction.nextTab ||
                     command == ShortcutAction.previousTab) &&
                 (chord.isMouse ||
                     chord.modifiers &
@@ -71,12 +73,25 @@ final class ShortcutCoordinator extends ShortcutDispatcher<Object> {
       for (final key in ['ArrowDown', 'Minus', 'NumpadSubtract'])
         ShortcutChord(key): ReservedShortcut.imageZoomOut,
     });
+    if (onBossKey != null) {
+      register(
+        owner: this,
+        scope: CommandScope.application,
+        commands: {
+          ShortcutAction.bossKey: (stroke) => stroke.phase == InputPhase.down
+              ? onBossKey()
+              : CommandOutcome.noOp,
+        },
+        active: () => true,
+      );
+    }
     configure(const ShortcutSettings.defaults());
   }
   final routes = InputRouteObserver();
   String? _configuration;
   void configure(ShortcutSettings settings) {
-    final signature = '${settings.useAppleDefaults}:${settings.toJson()}';
+    final signature =
+        '${settings.useAppleDefaults}:${settings.desktopShortcuts}:${settings.toJson()}';
     if (_configuration == signature) return;
     _configuration = signature;
     final bindings = <ShortcutChord, Object>{};

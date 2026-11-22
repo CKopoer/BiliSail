@@ -4,24 +4,29 @@ export '../../../domain/shortcut_command.dart' show ShortcutAction;
 import '../../../domain/playback_rates.dart';
 
 final class ShortcutSettings {
-  const ShortcutSettings.defaults({this.useAppleDefaults = false})
-    : seekSeconds = 3,
-      holdDelayMs = 400,
-      holdRate = 2,
-      enabled = true,
-      _disabled = const {},
-      _overrides = const {},
-      issues = const [],
-      storedJson = null;
+  static const _defaultDisabled = {ShortcutAction.bossKey};
+
+  const ShortcutSettings.defaults({
+    this.useAppleDefaults = false,
+    this.desktopShortcuts = false,
+  }) : seekSeconds = 3,
+       holdDelayMs = 400,
+       holdRate = 2,
+       enabled = true,
+       _disabled = _defaultDisabled,
+       _overrides = const {},
+       issues = const [],
+       storedJson = null;
   ShortcutSettings({
     this.useAppleDefaults = false,
+    this.desktopShortcuts = false,
     this.seekSeconds = 3,
     this.holdDelayMs = 400,
     this.holdRate = 2,
     this.enabled = true,
     List<String> issues = const [],
     this.storedJson,
-    Set<ShortcutAction> disabled = const {},
+    Set<ShortcutAction> disabled = _defaultDisabled,
     Map<ShortcutAction, List<String>> overrides = const {},
   }) : issues = List.unmodifiable(issues),
        _disabled = Set.unmodifiable(disabled),
@@ -34,6 +39,10 @@ final class ShortcutSettings {
 
   /// Injected platform policy, never persisted over a user's explicit bindings.
   final bool useAppleDefaults;
+  final bool desktopShortcuts;
+  bool supportsAction(ShortcutAction action) =>
+      desktopShortcuts || !action.desktopOnly;
+
   final Map<String, Object?>? storedJson;
   final int seekSeconds;
   final int holdDelayMs;
@@ -50,14 +59,20 @@ final class ShortcutSettings {
             .firstOrNull
       : null;
   List<String> keysFor(ShortcutAction action) {
+    if (!supportsAction(action)) return const [];
     if (_overrides[action] case final keys?) return keys;
     final defaults = action.defaultsFor(useAppleDefaults: useAppleDefaults);
-    if (action.addedKeys.isEmpty || _overrides.isEmpty) return defaults;
+    if (_overrides.isEmpty ||
+        (!action.desktopOnly && action.addedKeys.isEmpty)) {
+      return defaults;
+    }
     return List.unmodifiable(
       defaults.where(
         (key) =>
-            !action.addedKeys.contains(key) ||
-            !_overrides.values.any((keys) => keys.contains(key)),
+            (!action.desktopOnly && !action.addedKeys.contains(key)) ||
+            !_overrides.entries.any(
+              (entry) => supportsAction(entry.key) && entry.value.contains(key),
+            ),
       ),
     );
   }
@@ -69,7 +84,12 @@ final class ShortcutSettings {
         'holdDelayMs': holdDelayMs,
         'holdRate': holdRate,
         'enabled': enabled,
-        'disabled': _disabled.map((action) => action.name).toList(),
+        'disabled': [
+          for (final action in _disabled)
+            if (action != ShortcutAction.bossKey) action.name,
+        ],
+        // Legacy snapshots have no opt-in for the boss key.
+        if (isEnabled(ShortcutAction.bossKey)) 'bossKeyEnabled': true,
         'bindings': {
           for (final entry in _overrides.entries) entry.key.name: entry.value,
         },
@@ -77,9 +97,13 @@ final class ShortcutSettings {
   static ShortcutSettings fromJson(
     Object? value, {
     bool useAppleDefaults = false,
+    bool desktopShortcuts = false,
   }) {
     if (value is! Map<String, Object?>) {
-      return ShortcutSettings.defaults(useAppleDefaults: useAppleDefaults);
+      return ShortcutSettings.defaults(
+        useAppleDefaults: useAppleDefaults,
+        desktopShortcuts: desktopShortcuts,
+      );
     }
     final bindings = value['bindings'];
     final overrides = <ShortcutAction, List<String>>{};
@@ -103,13 +127,20 @@ final class ShortcutSettings {
       }
     }
     // Newly introduced defaults must not displace older explicit bindings.
-    final explicitKeys = overrides.values.expand((keys) => keys).toSet();
+    final explicitKeys = overrides.entries
+        .where((entry) => desktopShortcuts || !entry.key.desktopOnly)
+        .expand((entry) => entry.value)
+        .toSet();
     for (final action in ShortcutAction.values) {
-      if (overrides.containsKey(action)) continue;
+      if (overrides.containsKey(action) ||
+          (action.desktopOnly && !desktopShortcuts)) {
+        continue;
+      }
       final defaults = action.defaultsFor(useAppleDefaults: useAppleDefaults);
       final introduced = {
         ...defaults.where((key) => !action.defaultKeys.contains(key)),
-        if (action == ShortcutAction.nextTab ||
+        if (action.desktopOnly ||
+            action == ShortcutAction.nextTab ||
             action == ShortcutAction.previousTab ||
             action == ShortcutAction.toggleSidebar)
           ...defaults,
@@ -122,8 +153,10 @@ final class ShortcutSettings {
           .toList();
       if (available.length != defaults.length) overrides[action] = available;
     }
+    final disabled = value['disabled'];
     final result = ShortcutSettings(
       useAppleDefaults: useAppleDefaults,
+      desktopShortcuts: desktopShortcuts,
       seekSeconds: value['seekSeconds'] is int
           ? (value['seekSeconds'] as int).clamp(1, 90)
           : 3,
@@ -137,13 +170,13 @@ final class ShortcutSettings {
           : 2,
       enabled: value['enabled'] != false,
       overrides: overrides,
-      disabled: ShortcutAction.values
-          .where(
-            (action) =>
-                value['disabled'] is List &&
-                (value['disabled'] as List).contains(action.name),
-          )
-          .toSet(),
+      disabled: {
+        for (final action in ShortcutAction.values)
+          if (action == ShortcutAction.bossKey
+              ? value['bossKeyEnabled'] != true
+              : disabled is List && disabled.contains(action.name))
+            action,
+      },
     );
     final used = <String, Set<ShortcutAction>>{};
     for (final action in ShortcutAction.values) {
@@ -164,6 +197,7 @@ final class ShortcutSettings {
     if (issues.isEmpty) return result;
     return ShortcutSettings(
       useAppleDefaults: useAppleDefaults,
+      desktopShortcuts: desktopShortcuts,
       seekSeconds: result.seekSeconds,
       holdDelayMs: result.holdDelayMs,
       holdRate: result.holdRate,
@@ -177,6 +211,7 @@ final class ShortcutSettings {
 
   ShortcutSettings withEnabled(bool value) => ShortcutSettings(
     useAppleDefaults: useAppleDefaults,
+    desktopShortcuts: desktopShortcuts,
     seekSeconds: seekSeconds,
     holdDelayMs: holdDelayMs,
     holdRate: holdRate,
@@ -187,6 +222,7 @@ final class ShortcutSettings {
   ShortcutSettings withKeys(ShortcutAction action, List<String> keys) =>
       ShortcutSettings(
         useAppleDefaults: useAppleDefaults,
+        desktopShortcuts: desktopShortcuts,
         seekSeconds: seekSeconds,
         holdDelayMs: holdDelayMs,
         holdRate: holdRate,
@@ -197,6 +233,7 @@ final class ShortcutSettings {
   ShortcutSettings withActionEnabled(ShortcutAction action, bool value) =>
       ShortcutSettings(
         useAppleDefaults: useAppleDefaults,
+        desktopShortcuts: desktopShortcuts,
         seekSeconds: seekSeconds,
         holdDelayMs: holdDelayMs,
         holdRate: holdRate,
@@ -212,6 +249,7 @@ final class ShortcutSettings {
     double? holdRate,
   }) => ShortcutSettings(
     useAppleDefaults: useAppleDefaults,
+    desktopShortcuts: desktopShortcuts,
     seekSeconds: (seekSeconds ?? this.seekSeconds).clamp(1, 90),
     holdDelayMs: (holdDelayMs ?? this.holdDelayMs).clamp(200, 1500),
     holdRate: PlaybackRates.nearest((holdRate ?? this.holdRate).clamp(1.25, 3)),

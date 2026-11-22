@@ -31,6 +31,7 @@ class ShortcutSettingsSection extends StatelessWidget {
     ShortcutAction.returnToBrowser,
     ShortcutAction.switchPlaybackWindow,
     ShortcutAction.toggleMaximized,
+    ShortcutAction.bossKey,
     ShortcutAction.previousPlayback,
     ShortcutAction.nextPlayback,
   ];
@@ -51,39 +52,44 @@ class ShortcutSettingsSection extends StatelessWidget {
     // The editor persists before closing so a failed write retains its draft.
   }
 
-  Widget _binding(BuildContext context, ShortcutAction action) => ListTile(
-    contentPadding: EdgeInsets.zero,
-    title: Text(action.label),
-    subtitle: Text(
-      settings.keysFor(action).isEmpty
-          ? '未绑定'
-          : settings
-                .keysFor(action)
-                .map(
-                  (key) => shortcutLabel(
-                    key,
-                    useAppleLabels: settings.useAppleDefaults,
-                  ),
-                )
-                .join(' / '),
-    ),
-    trailing: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(
-          tooltip: '编辑快捷键',
-          icon: const Icon(Icons.edit_outlined),
-          onPressed: () => _edit(context, action),
-        ),
-        Switch(
-          value: settings.isEnabled(action),
-          onChanged: (value) =>
-              _save(context, settings.withActionEnabled(action, value)),
-        ),
-      ],
-    ),
-    onTap: () => _edit(context, action),
-  );
+  Widget _binding(BuildContext context, ShortcutAction action) {
+    final keys = settings.keysFor(action);
+    final label = keys.isEmpty
+        ? '未绑定'
+        : keys
+              .map(
+                (key) => shortcutLabel(
+                  key,
+                  useAppleLabels: settings.useAppleDefaults,
+                ),
+              )
+              .join(' / ');
+    final usesMacLogoutKey =
+        action == ShortcutAction.bossKey &&
+        settings.useAppleDefaults &&
+        keys.contains('Shift+Meta+Q');
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(action.label),
+      subtitle: Text(usesMacLogoutKey ? '$label\n与 macOS 注销快捷键相同，可改绑' : label),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            tooltip: '编辑快捷键',
+            icon: const Icon(Icons.edit_outlined),
+            onPressed: () => _edit(context, action),
+          ),
+          Switch(
+            value: settings.isEnabled(action),
+            onChanged: (value) =>
+                _save(context, settings.withActionEnabled(action, value)),
+          ),
+        ],
+      ),
+      onTap: () => _edit(context, action),
+    );
+  }
 
   @override
   Widget build(BuildContext context) => Column(
@@ -92,7 +98,7 @@ class ShortcutSettingsSection extends StatelessWidget {
         contentPadding: EdgeInsets.zero,
         title: const Text('启用快捷键'),
         subtitle: const Text(
-          '仅控制当前活动页。输入时保留编辑；明确绑定的标签切换组合键、侧键或 Ctrl / Command 关闭组合仍可操作标签。弹窗隔离底层；图片操作不受总开关影响。',
+          '快捷键在应用窗口内生效。输入时保留编辑；明确绑定的标签切换组合键、侧键或 Ctrl / Command 关闭组合仍可操作标签。弹窗隔离底层；图片操作不受总开关影响。',
         ),
         value: settings.enabled,
         onChanged: (value) => _save(context, settings.withEnabled(value)),
@@ -100,7 +106,8 @@ class ShortcutSettingsSection extends StatelessWidget {
       for (final issue in settings.issues) Text(issue),
       const _ShortcutDiagnostics(),
       const ListTile(contentPadding: EdgeInsets.zero, title: Text('标签页与页面')),
-      for (final action in _pageActions) _binding(context, action),
+      for (final action in _pageActions.where(settings.supportsAction))
+        _binding(context, action),
       const ListTile(contentPadding: EdgeInsets.zero, title: Text('播放控制')),
       _ShortcutSlider(
         label: '前进 / 后退步长（秒）',
@@ -138,7 +145,8 @@ class ShortcutSettingsSection extends StatelessWidget {
         ),
       ),
       for (final action in ShortcutAction.values.where(
-        (action) => !_pageActions.contains(action),
+        (action) =>
+            settings.supportsAction(action) && !_pageActions.contains(action),
       ))
         _binding(context, action),
       Align(
@@ -148,6 +156,7 @@ class ShortcutSettingsSection extends StatelessWidget {
             context,
             ShortcutSettings.defaults(
               useAppleDefaults: settings.useAppleDefaults,
+              desktopShortcuts: settings.desktopShortcuts,
             ),
           ),
           child: const Text('恢复默认快捷键'),

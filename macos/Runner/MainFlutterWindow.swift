@@ -346,6 +346,11 @@ private final class DesktopWindowController {
       name: "bilisail/desktop_window", binaryMessenger: messenger
     )
     channel.setMethodCallHandler { [weak self] call, result in
+      if call.method == "hideApplication" {
+        NSApp.hide(nil)
+        result(nil)
+        return
+      }
       guard let self = self,
             let args = call.arguments as? [String: Any],
             let viewID = (args["viewId"] as? NSNumber)?.int64Value else {

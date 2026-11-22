@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:bilisail/core/platform/detached_playback_window.dart';
@@ -13,6 +14,65 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'Windows boss key minimizes both views without closing playback',
+    (tester) async {
+      const channel = MethodChannel('bilisail/desktop_window');
+      final minimized = <Object?>[];
+      final messenger = tester.binding.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'minimize') minimized.add(call.arguments);
+        return null;
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      final controller = DesktopPlaybackWindowController();
+      final prepared = Completer<void>();
+      final main = WindowService();
+      late _FakeWindow window;
+      const playbackKey = ValueKey('retained playback');
+      await tester.pumpWidget(
+        DesktopPlaybackWindow(
+          controller: controller,
+          windowFactory: ({required title, required onCloseRequested}) =>
+              window = _FakeWindow(
+                tester.view,
+                onCloseRequested,
+                onPrepare: () => prepared.future,
+              ),
+          onCloseRequested: () =>
+              fail('Boss key must preserve the playback window'),
+          onError: (error) => fail('$error'),
+          playback: const SizedBox(key: playbackKey),
+          child: const SizedBox.expand(),
+        ),
+      );
+      await tester.pump(Duration.zero);
+      await controller.hideForBossKey(main);
+      expect(minimized, [
+        {'viewId': 0},
+      ]);
+      prepared.complete();
+      await tester.pumpAndSettle();
+      expect(minimized, [
+        {'viewId': 0},
+        {'viewId': window.viewId},
+      ]);
+
+      final playback = tester.element(find.byKey(playbackKey));
+      minimized.clear();
+      await controller.hideForBossKey(main);
+      expect(minimized, [
+        {'viewId': window.viewId},
+        {'viewId': 0},
+      ]);
+      expect(window.isOpen, isTrue);
+      expect(tester.element(find.byKey(playbackKey)), same(playback));
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
+    },
+    skip: !Platform.isWindows,
+  );
+
   testWidgets(
     'detached view follows app direction without remounting playback',
     (tester) async {

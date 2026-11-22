@@ -444,13 +444,18 @@ void main() {
         );
         final legacy = await repo.load();
         expect(legacy.shortcuts.actionFor('Meta+T'), ShortcutAction.newTab);
+        expect(legacy.shortcuts.isEnabled(ShortcutAction.bossKey), isFalse);
         await repo.save(
           legacy.copyWith(
             shortcuts: legacy.shortcuts
                 .withKeys(ShortcutAction.closeTab, ['Ctrl+W'])
                 .withKeys(ShortcutAction.nextTab, ['Meta+K'])
                 .withKeys(ShortcutAction.previousTab, [])
-                .withActionEnabled(ShortcutAction.nextTab, false),
+                .withActionEnabled(ShortcutAction.nextTab, false)
+                .withActionEnabled(
+                  ShortcutAction.bossKey,
+                  platform == TargetPlatform.macOS,
+                ),
           ),
         );
         final restored = await repo.load();
@@ -460,10 +465,18 @@ void main() {
         expect(restored.shortcuts.isEnabled(ShortcutAction.nextTab), isFalse);
         expect(restored.shortcuts.keysFor(ShortcutAction.previousTab), isEmpty);
         expect(restored.shortcuts.actionFor('Meta+R'), ShortcutAction.refresh);
+        expect(
+          restored.shortcuts.actionFor('Shift+Meta+Q'),
+          platform == TargetPlatform.macOS ? ShortcutAction.bossKey : null,
+        );
         await repo.save(repo.defaults);
         expect(
           (await repo.load()).shortcuts.actionFor('Shift+Meta+BracketRight'),
           ShortcutAction.nextTab,
+        );
+        expect(
+          (await repo.load()).shortcuts.isEnabled(ShortcutAction.bossKey),
+          isFalse,
         );
         expect(database.schemaVersion, 3);
       },

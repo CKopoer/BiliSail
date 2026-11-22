@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'input_stroke.dart';
 
-enum CommandScope { workspace, page, playback, local }
+enum CommandScope { application, workspace, page, playback, local }
 
 enum CommandOutcome { completed, failed, stale, noOp, busy }
 
@@ -377,7 +377,16 @@ class ShortcutDispatcher<C> {
       );
     }
     final chord = stroke.chord;
-    final command = context.modal ? localBindings[chord] : _bindings[chord];
+    final configured = _bindings[chord];
+    final applicationCommand =
+        configured != null && scopeFor(configured) == CommandScope.application;
+    final local = context.modal ? localBindings[chord] : null;
+    final command = context.modal
+        ? local ??
+              (applicationCommand && editorException(configured, chord!)
+                  ? configured
+                  : null)
+        : configured;
     if (command == null) {
       return _result(
         DispatchResult(
@@ -412,15 +421,17 @@ class ShortcutDispatcher<C> {
         ),
       );
     }
+    final scope = local != null ? CommandScope.local : scopeFor(command);
     final targets = _targets
         .where(
           (target) =>
               !target.disposed &&
               target.active() &&
-              target.scope ==
-                  (context.modal ? CommandScope.local : scopeFor(command)) &&
+              target.scope == scope &&
               target.commands.containsKey(command) &&
-              (!context.modal || identical(target.route, context.topRoute)),
+              (!context.modal ||
+                  scope == CommandScope.application ||
+                  identical(target.route, context.topRoute)),
         )
         .toList();
     if (targets.length != 1) {
