@@ -851,6 +851,52 @@ void main() {
     expect(workspace.tabs, hasLength(2));
   });
 
+  test(
+    'dual primary navigation removes browsing pages and keeps media history',
+    () {
+      final workspace = WorkspaceTabs()..setDualMode(true);
+      workspace.acceptRoute(Uri.parse('/user/42'));
+      final profile = workspace.active;
+      workspace.acceptRoute(Uri.parse('/article/123'));
+      workspace.acceptRoute(Uri.parse('/video/A'));
+      workspace.acceptRoute(Uri.parse('/video/B'));
+      final playback = workspace.active;
+
+      expect(workspace.closeTemporaryBrowsingPages(), isTrue);
+      expect(workspace.active, same(playback));
+      expect(workspace.playbackId, playback.id);
+      expect(workspace.browseId, 'home');
+      expect(workspace.tabs.map((tab) => tab.id), ['home', playback.id]);
+      expect(workspace.updateLocation(profile.id, profile.location), isFalse);
+
+      workspace.acceptRoute(Uri.parse('/settings?section=playback'));
+      expect(workspace.canGoBack, isFalse);
+      expect(workspace.backDestination(), isNull);
+      expect(workspace.closeTemporaryBrowsingPages(), isFalse);
+      workspace.select(playback.id);
+      expect(workspace.goBack(), isTrue);
+      expect(workspace.active.location.path, '/video/A');
+      expect(workspace.goBack(), isTrue);
+      expect(
+        workspace.active.location,
+        Uri.parse('/settings?section=playback'),
+      );
+      workspace.acceptRoute(profile.location);
+      expect(workspace.activeId, isNot(profile.id));
+    },
+  );
+
+  for (final single in [false, true]) {
+    test('primary navigation cleanup preserves pages with single=$single', () {
+      final workspace = WorkspaceTabs()..setSingleMode(single);
+      workspace.acceptRoute(Uri.parse('/user/42'));
+      final profile = workspace.active;
+      expect(workspace.closeTemporaryBrowsingPages(), isFalse);
+      workspace.acceptRoute(Uri.parse('/me'));
+      expect(workspace.tabs, contains(profile));
+    });
+  }
+
   test('dual Back consumes transient pages and falls back to the My root', () {
     final workspace = WorkspaceTabs()..setDualMode(true);
     workspace.acceptRoute(Uri.parse('/me'));

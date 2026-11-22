@@ -165,6 +165,20 @@ final class WorkspaceTabs {
   List<Uri> get playbackHistory => List.unmodifiable(_playbackHistory);
   bool get canGoBackBrowsing => _browseId != 'home';
 
+  /// Selecting a primary destination leaves the temporary browsing stack.
+  bool closeTemporaryBrowsingPages() {
+    if (!_dualMode) return false;
+    final temporary = _tabs
+        .where((tab) => !tab.pinned && !tab.isPlayback)
+        .toList();
+    if (temporary.isEmpty) return false;
+    _browseId = 'home';
+    for (final tab in temporary) {
+      close(tab.id);
+    }
+    return true;
+  }
+
   /// Desktop dual windows keep media navigation out of the browser's Back.
   bool goBackBrowsing() {
     if (!canGoBackBrowsing) return false;

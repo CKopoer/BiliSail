@@ -998,6 +998,71 @@ void main() {
     );
   }
 
+  for (final (width, platform, prefix) in [
+    (390.0, TargetPlatform.android, 'workspace-bottom'),
+    (1280.0, TargetPlatform.windows, 'workspace-nav'),
+  ]) {
+    _workspaceTestWidgets(
+      'dual $prefix closes the browsing stack and retains playback',
+      (tester) async {
+        final size = Size(width, 844);
+        tester.view.devicePixelRatio = 1;
+        tester.view.display.size = size;
+        tester.view.physicalSize = size;
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.display.resetSize);
+        addTearDown(tester.view.resetPhysicalSize);
+        final disposed = <String>[];
+        final router = _router(
+          (_, tab) => _CounterPage(tab: tab, onDispose: disposed.add),
+          navigationMode: WorkspaceNavigationMode.dualTabs,
+        );
+        addTearDown(router.dispose);
+        await tester.pumpWidget(InputTestApp.router(routerConfig: router));
+        await tester.pumpAndSettle();
+        final root = tester.element(find.byType(_CounterPage));
+
+        router.go('/video/BV1234567890');
+        await tester.pumpAndSettle();
+        final playback = tester.element(find.byType(_CounterPage));
+        router.go('/user/42');
+        await tester.pumpAndSettle();
+        final profile = tester.element(find.byType(_CounterPage));
+        router.go('/article/123');
+        await tester.pumpAndSettle();
+        final article = tester.element(find.byType(_CounterPage));
+        expect(profile.mounted, isTrue);
+
+        if (platform == TargetPlatform.android) {
+          // History exposes the compact navigation while nested details are
+          // still retained in the browsing stack.
+          router.go('/history');
+          await tester.pumpAndSettle();
+        }
+        await tester.tap(find.byKey(ValueKey('$prefix-dynamic')));
+        await tester.pumpAndSettle();
+        expect(
+          router.routeInformationProvider.value.uri.queryParameters['channel'],
+          'dynamic',
+        );
+        expect(tester.element(find.byType(_CounterPage)), same(root));
+        expect(profile.mounted, isFalse);
+        expect(article.mounted, isFalse);
+        expect(playback.mounted, isTrue);
+        expect(
+          disposed,
+          unorderedEquals([
+            'tab-2',
+            'tab-3',
+            if (platform == TargetPlatform.android) 'tab-4',
+          ]),
+        );
+        expect(tester.takeException(), isNull);
+      },
+      variant: TargetPlatformVariant.only(platform),
+    );
+  }
+
   _workspaceTestWidgets(
     'Android dual playback hides its header and closes through system back',
     (tester) async {
@@ -2256,6 +2321,7 @@ GoRouter _router(
           '/live/:id',
           '/offline/:id',
           '/user/:mid',
+          '/article/:id',
           '/search',
           '/settings',
           '/history',

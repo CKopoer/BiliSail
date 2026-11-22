@@ -1331,6 +1331,10 @@ final class _BiliAppShellState extends State<BiliAppShell>
   }
 
   void _selectSection(WorkspaceSection section, {required bool compact}) {
+    if (_workspace.closeTemporaryBrowsingPages()) {
+      _prunePages();
+      setState(() {});
+    }
     switch (section) {
       case WorkspaceSection.home:
         final channels = channelsForSection(section, compact: _compactChannels);
