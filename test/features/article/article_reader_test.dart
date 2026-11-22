@@ -337,6 +337,70 @@ void main() {
     },
   );
 
+  for (final scale in [1.0, 1.25]) {
+    testWidgets(
+      'wide article resizes within 30 to 70 percent at scale $scale',
+      (tester) async {
+        final comments = DynamicCommentsFake()
+          ..items = const [CommentEntry(id: '1', author: '读者', message: '留言')];
+        await _mountReader(
+          tester,
+          size: const Size(900, 750),
+          scale: scale,
+          comments: comments,
+          document: _longArticle(paragraphs: 20),
+        );
+        final reading = find.byKey(const PageStorageKey('article-reading'));
+        final panel = find.byType(CommentsPanel);
+        final panelState = tester.state(panel);
+        final control = findMaterialTooltip('调节专栏与评论宽度');
+        final slider = find.byType(Slider);
+
+        void expectWidths(double articleWidth, double commentsWidth) {
+          expect(tester.getSize(reading).width, closeTo(articleWidth, .001));
+          expect(tester.getSize(panel).width, closeTo(commentsWidth, .001));
+          expect(tester.getRect(reading).right, tester.getRect(panel).left);
+          expect(tester.state(panel), same(panelState));
+          expect(tester.takeException(), isNull);
+        }
+
+        expectWidths(486, 414);
+        await tester.tap(control);
+        await tester.pumpAndSettle();
+        expect(find.text('专栏 54% · 评论 46%'), findsOneWidget);
+
+        final drag = await tester.startGesture(
+          tester.getCenter(slider),
+          kind: PointerDeviceKind.mouse,
+        );
+        await drag.moveBy(const Offset(-220, 0));
+        await tester.pumpAndSettle();
+        expectWidths(270, 630);
+        expect(find.text('专栏 30% · 评论 70%'), findsOneWidget);
+        await drag.moveBy(const Offset(440, 0));
+        await tester.pumpAndSettle();
+        expectWidths(630, 270);
+        expect(find.text('专栏 70% · 评论 30%'), findsOneWidget);
+        await drag.up();
+        expect(find.text('最热'), findsOneWidget);
+        final latest = tester.getCenter(find.text('最新'));
+        final refresh = tester.getCenter(findMaterialTooltip('刷新评论'));
+        expect(latest.dy, closeTo(refresh.dy, 2));
+
+        await tester.binding.setSurfaceSize(const Size(390, 750));
+        await tester.pumpAndSettle();
+        expect(control, findsNothing);
+        expect(slider, findsNothing);
+        expect(tester.getSize(reading).width, 390);
+
+        await tester.binding.setSurfaceSize(const Size(1280, 750));
+        await tester.pumpAndSettle();
+        expectWidths(896, 384);
+        expect(comments.reads, [_commentTarget.oid]);
+      },
+    );
+  }
+
   testWidgets(
     'narrow article shows persistent progress and opens comments on demand',
     (tester) async {
@@ -635,6 +699,10 @@ void main() {
         );
         expect(find.byType(CommentsPanel), findsNothing);
         expect(find.text(accessMessage ?? '该专栏已关闭评论'), findsOneWidget);
+        expect(
+          findMaterialTooltip('调节专栏与评论宽度'),
+          accessMessage == null ? findsOneWidget : findsNothing,
+        );
         expect(comments.reads, isEmpty);
       },
     );

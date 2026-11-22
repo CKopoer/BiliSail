@@ -477,50 +477,54 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
       final theme = Theme.of(context);
       final styles = CommentTextStyles(theme);
       final root = state.openRoot;
+      Widget sortButton(CommentSort sort, String label) => TextButton(
+        onPressed: state.busy ? null : () => controller.load(sort: sort),
+        child: Text(
+          label,
+          style: styles.sort.copyWith(
+            color: state.sort == sort
+                ? styles.sort.color
+                : styles.metadata.color,
+          ),
+        ),
+      );
+
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (root == null)
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 4, 8, 2),
-              child: Row(
+              child: OverflowBar(
+                alignment: MainAxisAlignment.spaceBetween,
+                overflowAlignment: OverflowBarAlignment.end,
                 children: [
-                  TextButton(
-                    onPressed: state.busy
-                        ? null
-                        : () => controller.load(sort: CommentSort.hot),
-                    child: Text(
-                      '最热',
-                      style: styles.sort.copyWith(
-                        color: state.sort == CommentSort.hot
-                            ? styles.sort.color
-                            : styles.metadata.color,
-                      ),
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(child: sortButton(CommentSort.hot, '最热')),
+                      Text('|', style: theme.textTheme.bodySmall),
+                      Flexible(child: sortButton(CommentSort.latest, '最新')),
+                    ],
                   ),
-                  Text('|', style: theme.textTheme.bodySmall),
-                  TextButton(
-                    onPressed: state.busy
-                        ? null
-                        : () => controller.load(sort: CommentSort.latest),
-                    child: Text(
-                      '最新',
-                      style: styles.sort.copyWith(
-                        color: state.sort == CommentSort.latest
-                            ? styles.sort.color
-                            : styles.metadata.color,
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (state.totalCount != null)
+                        Flexible(
+                          child: Text(
+                            '${state.totalCount} 条',
+                            style: styles.metadata,
+                          ),
+                        ),
+                      IconButton(
+                        tooltip: '刷新评论',
+                        onPressed: state.busy
+                            ? null
+                            : () => controller.load(refresh: true),
+                        icon: const Icon(Icons.refresh, size: 18),
                       ),
-                    ),
-                  ),
-                  const Spacer(),
-                  if (state.totalCount != null)
-                    Text('${state.totalCount} 条', style: styles.metadata),
-                  IconButton(
-                    tooltip: '刷新评论',
-                    onPressed: state.busy
-                        ? null
-                        : () => controller.load(refresh: true),
-                    icon: const Icon(Icons.refresh, size: 18),
+                    ],
                   ),
                 ],
               ),

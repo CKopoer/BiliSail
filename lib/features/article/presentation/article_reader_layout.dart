@@ -31,11 +31,15 @@ class ArticleReaderLayout extends StatefulWidget {
 }
 
 class _ArticleReaderLayoutState extends State<ArticleReaderLayout> {
+  static const _minArticleFraction = .3;
+  static const _maxArticleFraction = .7;
+
   final _reading = ScrollController();
   final _showBar = ValueNotifier(true);
   final _commentBack = PageBackController();
   bool _commentsSelected = false, _mountedComments = false;
   int _scrollCommentsToTop = 0;
+  double? _articleFraction;
   ContentLink? _link;
 
   @override
@@ -70,7 +74,10 @@ class _ArticleReaderLayoutState extends State<ArticleReaderLayout> {
           !wide && widget.document.accessMessage == null && _commentsSelected;
       final showComments = wide || commentsOnly;
       if (showComments) _mountedComments = true;
-      final articleWidth = wide ? (width * .54).clamp(400.0, 700.0) : width;
+      final articleFraction =
+          _articleFraction ??
+          (wide ? (700 / width).clamp(_minArticleFraction, .54) : .54);
+      final articleWidth = wide ? width * articleFraction : width;
 
       bool back() {
         if (showComments && _commentBack.goBack()) return true;
@@ -148,7 +155,10 @@ class _ArticleReaderLayoutState extends State<ArticleReaderLayout> {
             onBack: back,
             child: ArticlePageFrame(
               title: commentsOnly ? '专栏评论' : '专栏',
-              actions: commentsOnly ? const [] : widget.actions,
+              actions: [
+                if (wide) _ratioControl(articleFraction),
+                if (!commentsOnly) ...widget.actions,
+              ],
               onBack: localBack ? back : null,
               body: body!,
             ),
@@ -157,6 +167,41 @@ class _ArticleReaderLayoutState extends State<ArticleReaderLayout> {
       );
     },
   );
+
+  Widget _ratioControl(double fraction) {
+    String label(double value) {
+      final percent = (value * 100).round();
+      return '专栏 $percent% · 评论 ${100 - percent}%';
+    }
+
+    return MenuAnchor(
+      consumeOutsideTap: true,
+      style: const MenuStyle(alignment: AlignmentDirectional.bottomEnd),
+      builder: (context, controller, _) => IconButton(
+        tooltip: '调节专栏与评论宽度',
+        icon: const Icon(Icons.vertical_split_outlined),
+        onPressed: controller.isOpen ? controller.close : controller.open,
+      ),
+      menuChildren: [
+        SizedBox(
+          width: 240,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(label(fraction)),
+              Slider(
+                min: _minArticleFraction,
+                max: _maxArticleFraction,
+                value: fraction,
+                semanticFormatterCallback: label,
+                onChanged: (value) => setState(() => _articleFraction = value),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 
   Widget _comments() {
     final target = widget.document.commentTarget;
