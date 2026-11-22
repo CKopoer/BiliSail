@@ -17,6 +17,19 @@
 - 同一房间换清晰度／线路、返回保留页面沿用本次组合；新房间重新读取默认偏好。选择器捕获 source generation，保存前后均检查，旧房间／旧账号面板不能操作新源。保存失败保留面板并显示原因；关闭面板不提交。
 - `LiveStreamPlaybackRepository` 为可选领域端口，由网络仓储和离线分发适配器实现；`PlaybackMedia` 携带有界的实际组合，页面不解析协议 DTO、不请求接口、不调用 media_kit。继续复用同一个 `PlaybackSession` / engine，保留暂停、音量、线路重试和账号取消隔离。
 
+## 直播启播与默认行为（2026-11-22）
+
+对照 PiliPlus 提交 `217fb54f51f6764176319bbdedab2a7522d75401` 的[直播间控制器](https://github.com/bggRGjQaUbCoE/PiliPlus/blob/217fb54f51f6764176319bbdedab2a7522d75401/lib/pages/live_room/controller.dart)、[播放器初始化](https://github.com/bggRGjQaUbCoE/PiliPlus/blob/217fb54f51f6764176319bbdedab2a7522d75401/lib/plugin/pl_player/controller.dart)和[网络判断](https://github.com/bggRGjQaUbCoE/PiliPlus/blob/217fb54f51f6764176319bbdedab2a7522d75401/lib/utils/connectivity_utils.dart)，在现有会话与原生播放器中实现以下顺序。
+
+- 进入直播间时用入口房号请求播放地址，同时加载房间资料。资料稍后补上标题、主播信息和聊天区，失败可单独重试。短房号首次解析为真实房号沿用已打开的会话，随后刷新发现真实房号改变才切源。资料沿用能提供完整简介的现有接口。
+- 未配置直播画质时，移动端 Wi-Fi 与 Linux 非计量网络请求原画（`qn=10000`），移动端其他网络、Linux 计量网络及 Windows／macOS 请求超清（`qn=250`）。网络检测出错回退原画。已有明确画质（含自动 `qn=0`）按原值请求，实际画质由接口返回。
+- 自动模式采用服务端给出的首个支持且有地址的组合与首条线路。手动偏好依次保留协议、格式和编码的匹配。缺少目标编码时选该格式内首个编码，缺少目标格式时选该协议内首个组合。同画质换组合或线路直接复用本次响应。切换到新画质或手动重新加载才重新请求播放地址。
+- HLS 和 HTTP-FLV 先设置原生源，获得加载确认后按当前音量、1× 与播放权限发出播放指令。音视频轨道、解码和画面就绪仍单独确认。用户暂停、切房、切账号及切后台继续受会话控制。原生日志记录直播进入轨道发现、视频解码和输出等待的时间，方便区分下次慢启动卡在哪一步。
+
+本次 Windows Release 日志中，一次 HLS 原生打开到输出就绪耗时 13.08 秒，随后两次同类打开分别约 0.78 秒和 0.52 秒。房间与播放地址 API 记录的耗时均在 0.30 秒以内。旧日志缺少轨道发现、解码与输出的分段时间，无法再定位那次等待中的具体环节。
+
+Windows 受控回归延迟首个 HLS 分片后，在准备期间发出暂停，分片抵达时播放器保持暂停，恢复后音视频正常推进。公开房间 `6` 的 Windows 游客原生烟测使用超清默认值，请求和实际返回的清晰度都是 250。接口首选 HTTP-FLV 及同一响应中的 HLS 均确认解出音频和视频。此烟测使用 Debug 播放器，只验证在线启播。常规入口的 Windows Release 已重新构建，原慢场景没有同房间、同线路的发布版前后耗时对照。
+
 ## 接口与点播音轨
 
 - 直播统一调用现有 `requestLiveWbiJson`，注册精确的 live host / path，复用 WBI key 单飞与有界重签。查询参数对齐上述 PiliPlus profile；无 App token、无账号写操作，保留现有超时和 session epoch。直播默认清晰度补充服务端的杜比 `30000` 档，权限和实际 `current_qn` 以接口为准。

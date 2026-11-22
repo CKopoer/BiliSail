@@ -110,28 +110,17 @@ final class ApiContentPlaybackRepository
     if (stream == null) {
       throw const AppFailure(AppFailureKind.playback, '未取得可用的直播流');
     }
-    return PlaybackMedia(
-      liveStream: stream.preference,
-      liveStreams: streams,
-      video: PlaybackTrack(
-        urls: stream.urls,
-        codec: stream.preference.codec,
-        bandwidth: 0,
-      ),
-      audio: null,
-      quality: stream.quality,
-      qualities: stream.qualities,
+    return PlaybackMedia.live(
+      roomId: info.roomId,
+      stream: stream,
+      streams: streams,
       qualityLabels: info.qualityLabels,
-      duration: Duration.zero,
       headers: const {
         'Referer': 'https://www.bilibili.com',
         'User-Agent':
             'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
             'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.2 Safari/605.1.15',
       },
-      kind: stream.preference.format == 'flv'
-          ? PlaybackMediaKind.liveFlv
-          : PlaybackMediaKind.liveHls,
     );
   }, cancellation: cancellation);
 }

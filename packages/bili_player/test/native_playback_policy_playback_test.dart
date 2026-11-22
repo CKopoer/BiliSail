@@ -39,7 +39,7 @@ void main() {
             const Duration(seconds: 8),
           );
           if (generation > 1) await backend.resetForNextSource(operation);
-          await backend.preparePaused(
+          await backend.prepare(
             ValidatedSource.validate(
               ProgressiveSource(audio, isAudioOnly: true, isLive: live),
               const OpenOptions(play: false, volume: 0),

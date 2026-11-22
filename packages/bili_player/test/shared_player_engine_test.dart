@@ -62,13 +62,15 @@ class _Backend extends Fake implements PlaybackBackend {
   @override
   Duration get seekTimeout => const Duration(seconds: 1);
   @override
-  Future<PreparedTracks> preparePaused(
+  Future<PreparedTracks> prepare(
     ValidatedSource plan,
-    PlaybackOperation operation,
-  ) async {
+    PlaybackOperation operation, {
+    Future<void> Function()? onLiveLoaded,
+  }) async {
     writes.add('prepare');
     preparedPlan = plan;
     volume = plan.options.volume;
+    if (onLiveLoaded != null) await onLiveLoaded();
     await preparing?.future;
     return tracks;
   }
@@ -192,6 +194,89 @@ MediaTrack track(String name) => MediaTrack(
 void main() {
   final pair = DashPairSource(video: track('v'), audio: track('a'));
   TestWidgetsFlutterBinding.ensureInitialized();
+  for (final source in [
+    ManifestSource(track('hls'), isLive: true),
+    ProgressiveSource(track('flv'), isLive: true),
+  ]) {
+    test(
+      'live ${source.runtimeType} follows intent before tracks and first frame',
+      () async {
+        final tracks = Completer<void>(), frame = Completer<void>();
+        final backend = _Backend()
+          ..preparing = tracks
+          ..presentation = frame;
+        final engine = SharedPlayerEngine(createBackend: () => backend);
+        addTearDown(engine.dispose);
+        final opening = engine.open(
+          source,
+          const OpenOptions(play: true, volume: 32),
+        );
+        await tick();
+        expect(backend.playing, true);
+        expect(backend.volume, 32);
+        expect(engine.currentSnapshot.phase, PlaybackPhase.opening);
+        await engine.pause();
+        tracks.complete();
+        await tick();
+        expect(backend.playing, false);
+        await engine.play();
+        expect(backend.playing, true);
+        frame.complete();
+        await opening;
+        expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+        expect(backend.writes.where((w) => w == 'play'), hasLength(2));
+      },
+    );
+  }
+
+  test('a terminal live read interrupts first-frame readiness', () async {
+    final backend = _Backend()..presentation = Completer<void>();
+    final engine = SharedPlayerEngine(createBackend: () => backend);
+    addTearDown(engine.dispose);
+    final opening = engine.open(
+      ManifestSource(track('hls'), isLive: true),
+      const OpenOptions(play: true),
+    );
+    await tick();
+    expect(backend.playing, true);
+    expect(backend.presentationConfirmations, 1);
+    backend.signals.add(const BackendEvent(BackendEventKind.ended));
+    await expectLater(
+      opening,
+      throwsA(
+        isA<PlayerFailure>().having(
+          (failure) => failure.kind,
+          'kind',
+          PlayerFailureKind.liveReadTerminated,
+        ),
+      ),
+    );
+    expect(engine.currentSnapshot.phase, PlaybackPhase.failed);
+    expect(backend.playing, false);
+    backend.presentation!.complete();
+  });
+
+  test('a paused live load never starts before explicit play', () async {
+    final backend = _Backend()..video = Completer<void>();
+    final engine = SharedPlayerEngine(createBackend: () => backend);
+    addTearDown(engine.dispose);
+    final opening = engine.open(
+      ManifestSource(track('hls'), isLive: true),
+      const OpenOptions(),
+    );
+    await tick();
+    expect(backend.writes, isNot(contains('play')));
+    backend.video!.complete();
+    await opening;
+    expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
+    backend.audio = Completer<void>();
+    final resume = engine.play();
+    await tick();
+    expect(backend.playing, true);
+    backend.audio!.complete();
+    await resume;
+  });
+
   for (final pendingReadError in [false, true]) {
     test(
       'live playback EOF with pending network error: $pendingReadError',

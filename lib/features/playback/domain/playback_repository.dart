@@ -49,10 +49,37 @@ final class PlaybackMedia {
     this.loudness,
     this.liveStreams = const [],
     this.liveStream,
+    this.liveRoomId,
     this.audioTracks = const [],
     this.isIntentionallySilent = false,
     this.pgcSkipSegments = const [],
   });
+  factory PlaybackMedia.live({
+    required String? roomId,
+    required LivePlaybackStream stream,
+    required List<LivePlaybackStream> streams,
+    required Map<int, String> qualityLabels,
+    required Map<String, String> headers,
+  }) => PlaybackMedia(
+    liveRoomId: roomId,
+    liveStream: stream.preference,
+    liveStreams: streams,
+    video: PlaybackTrack(
+      urls: stream.urls,
+      codec: stream.preference.codec,
+      bandwidth: 0,
+    ),
+    audio: null,
+    quality: stream.quality,
+    qualities: stream.qualities,
+    qualityLabels: qualityLabels,
+    duration: Duration.zero,
+    headers: headers,
+    kind: stream.preference.format == 'flv'
+        ? PlaybackMediaKind.liveFlv
+        : PlaybackMediaKind.liveHls,
+  );
+
   final PlaybackTrack video;
   final PlaybackTrack? audio;
 
@@ -97,6 +124,7 @@ final class PlaybackMedia {
       loudness: loudness,
       liveStreams: liveStreams,
       liveStream: liveStream,
+      liveRoomId: liveRoomId,
       pgcSkipSegments: pgcSkipSegments,
     );
   }
@@ -112,6 +140,7 @@ final class PlaybackMedia {
   final AudioLoudness? loudness;
   final List<LivePlaybackStream> liveStreams;
   final LiveStreamPreference? liveStream;
+  final String? liveRoomId;
   final List<SponsorSegment> pgcSkipSegments;
 }
 
@@ -132,9 +161,17 @@ final class LivePlaybackStream {
     LiveStreamPreference preference,
   ) {
     if (preference.isAutomatic) return streams.firstOrNull;
-    return streams
-            .where((stream) => stream.preference == preference)
+    final protocols = streams.where(
+      (s) => s.preference.protocol == preference.protocol,
+    );
+    final formats = protocols.where(
+      (s) => s.preference.format == preference.format,
+    );
+    return formats
+            .where((s) => s.preference.codec == preference.codec)
             .firstOrNull ??
+        formats.firstOrNull ??
+        protocols.firstOrNull ??
         streams.firstOrNull;
   }
 }

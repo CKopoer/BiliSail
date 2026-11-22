@@ -14,6 +14,15 @@ final class PlayerEngineSelection {
   final Future<PlayerEngine> Function() create;
 }
 
+final class _OpeningLiveSource {
+  _OpeningLiveSource(OpenOptions options)
+    : volume = options.volume,
+      gainDb = options.audioGainDb;
+
+  PlayerEngine? child;
+  double volume, gainDb;
+}
+
 /// Resolves the saved backend on each open and reuses compatible runtimes.
 /// A settings change never replaces the runtime of an already playing source.
 final class ConfigurablePlayerEngine
@@ -44,6 +53,7 @@ final class ConfigurablePlayerEngine
   PlaybackOperation? _opening;
   bool _desiredPlaying = false;
   int _playRevision = 0;
+  _OpeningLiveSource? _openingLive;
   int _generation = 0;
   int _seekRevision = 0;
   bool _disposed = false;
@@ -148,6 +158,11 @@ final class ConfigurablePlayerEngine
       options.openTimeout,
     );
     _desiredPlaying = options.play;
+    final live = _openingLive = switch (source) {
+      ManifestSource(isLive: true) ||
+      ProgressiveSource(isLive: true) => _OpeningLiveSource(options),
+      _ => null,
+    };
     // Invalidate a pending child open before waiting for the command queue.
     if (!options.retainPresentation) _output.clearRetainedFrame();
     Future<void> suspend() async {
@@ -258,14 +273,15 @@ final class ConfigurablePlayerEngine
           await _release();
           return;
         }
+        live?.child = selected;
         await selected.open(
           source,
           OpenOptions(
             startPosition: options.startPosition,
             play: _desiredPlaying,
             rate: options.rate,
-            volume: options.volume,
-            audioGainDb: options.audioGainDb,
+            volume: live?.volume ?? options.volume,
+            audioGainDb: live?.gainDb ?? options.audioGainDb,
             videoDecoding: options.videoDecoding,
             androidVideoOutput: options.androidVideoOutput,
             openTimeout: operation.remaining,
@@ -287,6 +303,8 @@ final class ConfigurablePlayerEngine
               );
         _publish(_snapshot.copyWith(phase: PlaybackPhase.failed));
         throw failure;
+      } finally {
+        if (generation == _generation) _openingLive = null;
       }
     });
   }
@@ -327,6 +345,13 @@ final class ConfigurablePlayerEngine
   Future<void> play() {
     _desiredPlaying = true;
     final revision = ++_playRevision;
+    if (_openingLive case final live?) {
+      // The yet-to-be-selected child will receive the latest intent in open().
+      final child = live.child;
+      return child == null
+          ? Future.value()
+          : _withGeneration(child.play(), _generation);
+    }
     return _command((engine) async {
       if (revision == _playRevision && _desiredPlaying) await engine.play();
     });
@@ -366,20 +391,39 @@ final class ConfigurablePlayerEngine
   Future<void> setRate(double rate) =>
       _command((engine) => engine.setRate(rate));
   @override
-  Future<void> setVolume(double volume) =>
-      _command((engine) => engine.setVolume(volume));
-  @override
-  Future<void> setAudioGain(double gainDb) => _command((engine) async {
-    if (engine case AudioGainControl control) {
-      await control.setAudioGain(gainDb);
+  Future<void> setVolume(double volume) {
+    if (_openingLive case final live?) {
+      live.volume = volume;
+      final child = live.child;
+      return child == null
+          ? Future.value()
+          : _withGeneration(child.setVolume(volume), _generation);
     }
-  });
+    return _command((engine) => engine.setVolume(volume));
+  }
+
+  @override
+  Future<void> setAudioGain(double gainDb) {
+    if (_openingLive case final live?) {
+      live.gainDb = gainDb;
+      if (live.child case AudioGainControl child) {
+        return _withGeneration(child.setAudioGain(gainDb), _generation);
+      }
+      return Future.value();
+    }
+    return _command((engine) async {
+      if (engine case AudioGainControl control) {
+        await control.setAudioGain(gainDb);
+      }
+    });
+  }
 
   @override
   Future<void> stop() {
     if (_disposed) return _disposal ?? Future.value();
     _output.clearRetainedFrame();
     final generation = ++_generation;
+    _openingLive = null;
     _opening?.cancel();
     final stopped = _requestStop();
     return _enqueue(() async {
@@ -398,6 +442,7 @@ final class ConfigurablePlayerEngine
     if (_disposal case final disposal?) return disposal;
     _output.clearRetainedFrame();
     _disposed = true;
+    _openingLive = null;
     ++_generation;
     _opening?.cancel();
     final stopped = _requestStop();

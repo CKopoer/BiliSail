@@ -153,8 +153,11 @@ void main() {
   });
 
   test('live and video quality defaults normalize independently', () {
-    expect(const AppSettings.defaults().preferredLiveQuality, 10000);
-    expect(AppSettings().preferredLiveQuality, 10000);
+    expect(
+      const AppSettings.defaults().preferredLiveQuality,
+      AppSettings.networkLiveQuality,
+    );
+    expect(AppSettings().preferredLiveQuality, AppSettings.networkLiveQuality);
     for (final quality in AppSettings.liveQualityOptions.keys) {
       final settings = const AppSettings.defaults()
           .copyWith(preferredLiveQuality: quality, preferredQuality: 120)
@@ -163,12 +166,12 @@ void main() {
       expect(settings.preferredLiveQuality, quality);
       expect(settings.preferredQuality, 120);
     }
-    for (final quality in [-1, 64, 112, 99999]) {
+    for (final quality in [-2, 64, 112, 99999]) {
       final settings = AppSettings(
         preferredLiveQuality: quality,
         preferredQuality: 64,
       ).normalized();
-      expect(settings.preferredLiveQuality, 10000);
+      expect(settings.preferredLiveQuality, AppSettings.networkLiveQuality);
       expect(settings.preferredQuality, 64);
     }
     final settings = AppSettings(

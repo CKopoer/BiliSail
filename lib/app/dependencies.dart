@@ -5,6 +5,7 @@ import 'video_card_watch_later.dart';
 import 'dart:async';
 
 import '../core/platform/app_request_device.dart';
+import '../core/platform/live_network.dart';
 
 import 'dart:io';
 
@@ -422,6 +423,7 @@ class AppDependencies {
           metadataRepository: repository,
           contentRepository: repository.content,
           isRoomLive: networkContent.isRoomLive,
+          defaultLiveQuality: defaultNetworkLiveQuality,
           accountScope: () => session.accountScope,
           progress: LocalProgressStore(
             readProgress: library.resumePosition,

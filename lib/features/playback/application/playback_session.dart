@@ -45,6 +45,7 @@ class PlaybackSession extends ChangeNotifier {
     this.sponsorRepository,
     this.contentRepository,
     this.isRoomLive,
+    this.defaultLiveQuality,
     this.metadataRepository,
     this.historyRepository,
     int Function()? sessionEpoch,
@@ -146,6 +147,7 @@ class PlaybackSession extends ChangeNotifier {
   final ContentPlaybackRepository? contentRepository;
   final Future<bool> Function(LivePlaybackTarget, RequestCancellation)?
   isRoomLive;
+  final Future<int> Function()? defaultLiveQuality;
   final PlaybackProgressStore progress;
   final PlaybackStartupDiagnostics startupDiagnostics;
   final PlaybackHistoryRepository? historyRepository;
@@ -306,6 +308,7 @@ class PlaybackSession extends ChangeNotifier {
   bool _disposed = false;
   bool _closing = false;
   bool _resolving = false;
+  int? _openingLiveGeneration;
   bool _desiredPlaying = true;
   ({
     VideoId id,
@@ -598,6 +601,20 @@ class PlaybackSession extends ChangeNotifier {
     _ => part?.cid,
   };
 
+  void updateContentTitle(
+    Object owner,
+    ContentPlaybackTarget? target,
+    String? value,
+  ) {
+    if (!ownsPlayback(owner) ||
+        contentTarget != target ||
+        contentTitle == value) {
+      return;
+    }
+    contentTitle = value;
+    _notify();
+  }
+
   /// The current media owner remains the same when its workspace tab is hidden.
   bool ownsPlayback(Object owner) =>
       !_disposed && _owners.contains(owner) && identical(_activeOwner, owner);
@@ -869,7 +886,7 @@ class PlaybackSession extends ChangeNotifier {
   Future<void> open(
     VideoDetail? video,
     VideoPart? selected, {
-    int quality = 80,
+    int? quality,
     bool force = false,
     Duration? position,
     bool? desiredPlaying,
@@ -885,7 +902,9 @@ class PlaybackSession extends ChangeNotifier {
   }) => _open(
     video,
     selected,
-    quality: quality,
+    quality:
+        quality ??
+        (target is LivePlaybackTarget ? _settings.preferredLiveQuality : 80),
     force: force,
     position: position,
     desiredPlaying: desiredPlaying,
@@ -899,21 +918,6 @@ class PlaybackSession extends ChangeNotifier {
     liveStream: liveStream,
     recommendation: recommendation,
   );
-
-  Future<void> _openAfterPreview(
-    ResolvedMediaSource source,
-    OpenOptions options,
-    bool Function() isCurrent,
-  ) {
-    final previews = cardPreviews;
-    if (previews == null ||
-        (source is ProgressiveSource && source.isAudioOnly)) {
-      return engine.open(source, options);
-    }
-    return previews.openForeground(() async {
-      if (isCurrent()) await engine.open(source, options);
-    }, releaseTimeout: options.openTimeout);
-  }
 
   Future<void> _open(
     VideoDetail? video,
@@ -933,6 +937,7 @@ class PlaybackSession extends ChangeNotifier {
     bool allowColorFallback = true,
     Duration? startupBudget,
     PlaybackMedia? retryMedia,
+    PlaybackMedia? selectedLiveMedia,
     RecommendationPlaybackContext? recommendation,
   }) async {
     if (_disposed || _closing) return;
@@ -1104,6 +1109,15 @@ class PlaybackSession extends ChangeNotifier {
         PlaybackStartupStage.resolve,
         () async {
           if (retryMedia != null) return retryMedia;
+          if (selectedLiveMedia != null) return selectedLiveMedia;
+          if (target is LivePlaybackTarget &&
+              quality == AppSettings.networkLiveQuality) {
+            quality = await defaultLiveQuality?.call() ?? 10000;
+            if (!isCurrent()) {
+              throw const AppFailure(AppFailureKind.cancelled, '请求已取消');
+            }
+            _quality = quality;
+          }
           if (target != null) {
             if (contentResolver == null) {
               throw const AppFailure(AppFailureKind.playback, '内容播放服务未配置');
@@ -1230,62 +1244,66 @@ class PlaybackSession extends ChangeNotifier {
           : 0;
       final videoUri = resolved.video.urls[liveLineIndex];
       final audioUri = audio?.urls.first;
-      nativeOpenStarted = startupNow?.call() ?? _clock.elapsed;
-      await startupDiagnostics.measure(
-        generation,
-        PlaybackStartupStage.nativeOpen,
-        () => _openAfterPreview(
-          requestedAudioOnly && audio != null && audioUri != null
-              ? ProgressiveSource(
-                  MediaTrack(
-                    uri: audioUri,
-                    requestPolicy: policy,
-                    codec: audio.codec,
-                    bandwidth: audio.bandwidth,
-                  ),
-                  isAudioOnly: true,
-                )
-              : resolved.kind == PlaybackMediaKind.liveHls
-              ? ManifestSource(
-                  MediaTrack(
-                    uri: videoUri,
-                    requestPolicy: policy,
-                    isHdr: resolved.isHdr,
-                  ),
-                  isLive: true,
-                )
-              : resolved.kind == PlaybackMediaKind.liveFlv ||
-                    resolved.kind == PlaybackMediaKind.progressive
-              ? ProgressiveSource(
-                  MediaTrack(
-                    uri: videoUri,
-                    requestPolicy: policy,
-                    isHdr: resolved.isHdr,
-                  ),
-                  isLive: isLive,
-                )
-              : DashPairSource(
-                  isIntentionallySilent: resolved.isIntentionallySilent,
-                  duration: resolved.duration,
-                  video: MediaTrack(
-                    uri: videoUri,
-                    requestPolicy: policy,
-                    codec: resolved.video.codec,
-                    bandwidth: resolved.video.bandwidth,
-                    isHdr: resolved.isHdr,
-                  ),
-                  audio: audio == null || audioUri == null
-                      ? null
-                      : MediaTrack(
-                          uri: audioUri,
-                          requestPolicy: policy,
-                          codec: audio.codec,
-                          bandwidth: audio.bandwidth,
-                        ),
-                ),
+      final source = requestedAudioOnly && audio != null && audioUri != null
+          ? ProgressiveSource(
+              MediaTrack(
+                uri: audioUri,
+                requestPolicy: policy,
+                codec: audio.codec,
+                bandwidth: audio.bandwidth,
+              ),
+              isAudioOnly: true,
+            )
+          : resolved.kind == PlaybackMediaKind.liveHls
+          ? ManifestSource(
+              MediaTrack(
+                uri: videoUri,
+                requestPolicy: policy,
+                isHdr: resolved.isHdr,
+              ),
+              isLive: true,
+            )
+          : resolved.kind == PlaybackMediaKind.liveFlv ||
+                resolved.kind == PlaybackMediaKind.progressive
+          ? ProgressiveSource(
+              MediaTrack(
+                uri: videoUri,
+                requestPolicy: policy,
+                isHdr: resolved.isHdr,
+              ),
+              isLive: isLive,
+            )
+          : DashPairSource(
+              isIntentionallySilent: resolved.isIntentionallySilent,
+              duration: resolved.duration,
+              video: MediaTrack(
+                uri: videoUri,
+                requestPolicy: policy,
+                codec: resolved.video.codec,
+                bandwidth: resolved.video.bandwidth,
+                isHdr: resolved.isHdr,
+              ),
+              audio: audio == null || audioUri == null
+                  ? null
+                  : MediaTrack(
+                      uri: audioUri,
+                      requestPolicy: policy,
+                      codec: audio.codec,
+                      bandwidth: audio.bandwidth,
+                    ),
+            );
+      Future<void> openSource() async {
+        if (!isCurrent()) return;
+        if (isLive) _openingLiveGeneration = generation;
+        await engine.open(
+          source,
           OpenOptions(
             startPosition: resume,
-            play: false,
+            play:
+                isLive &&
+                _playbackAllowed &&
+                _desiredPlaying &&
+                !sleepTimer.elapsed,
             rate: isLive ? 1 : oldRate,
             volume: oldVolume,
             audioGainDb: _audioGainFor(resolved),
@@ -1299,8 +1317,20 @@ class PlaybackSession extends ChangeNotifier {
             openTimeout: openBudget,
             retainPresentation: retryMedia != null,
           ),
-          isCurrent,
-        ),
+        );
+      }
+
+      nativeOpenStarted = startupNow?.call() ?? _clock.elapsed;
+      final previews = cardPreviews;
+      await startupDiagnostics.measure(
+        generation,
+        PlaybackStartupStage.nativeOpen,
+        previews == null || requestedAudioOnly
+            ? openSource
+            : () => previews.openForeground(
+                openSource,
+                releaseTimeout: openBudget,
+              ),
       );
       if (!isCurrent()) return;
       media = resolved;
@@ -1423,6 +1453,12 @@ class PlaybackSession extends ChangeNotifier {
             failure.kind,
             failure.generation,
             compatibilityMedia,
+            verifyRoom:
+                failure.kind == PlayerFailureKind.liveReadTerminated &&
+                    compatibilityMedia?.kind == PlaybackMediaKind.liveHls &&
+                    target is LivePlaybackTarget
+                ? target
+                : null,
           );
         }
         _notify();
@@ -1436,6 +1472,7 @@ class PlaybackSession extends ChangeNotifier {
         _notify();
       }
     } finally {
+      if (_openingLiveGeneration == generation) _openingLiveGeneration = null;
       if (isCurrent() && _reopening) {
         _reopening = false;
         _notify();
@@ -2476,6 +2513,7 @@ class PlaybackSession extends ChangeNotifier {
     if (!_desiredPlaying) _cancelRecovery();
     if (_resolving) {
       _notify();
+      if (_openingLiveGeneration == _generation) await _command(_syncPlayback);
       return;
     }
     await _command(_syncPlayback);
@@ -2500,6 +2538,7 @@ class PlaybackSession extends ChangeNotifier {
     _desiredPlaying = true;
     if (_resolving) {
       _notify();
+      if (_openingLiveGeneration == _generation) await _command(_syncPlayback);
       return;
     }
     await _command(_syncPlayback);
@@ -2534,6 +2573,15 @@ class PlaybackSession extends ChangeNotifier {
     bool forcePlay = false,
   }) {
     final generation = _generation;
+    if (_resolving && _openingLiveGeneration == generation) {
+      // Permission or intent can change while the native live load is pending,
+      // even before the engine publishes its first snapshot for this source.
+      sleepTimer.checkDeadline();
+      if (sleepTimer.elapsed) _desiredPlaying = false;
+      return _playbackAllowed && _desiredPlaying && sourceMatchesAccount
+          ? engine.play()
+          : engine.pause();
+    }
     final operation = (_playbackCommands ?? Future<void>.value()).then((
       _,
     ) async {
@@ -2887,16 +2935,10 @@ class PlaybackSession extends ChangeNotifier {
         (line == _liveLine && error == null)) {
       return;
     }
-    await open(
-      null,
-      null,
+    await changeLiveStream(
+      _liveStreamPreference,
       quality: _quality,
-      liveLine: line,
-      force: true,
-      desiredPlaying: _desiredPlaying,
-      volume: snapshots.value.volume,
-      target: contentTarget,
-      title: contentTitle,
+      line: line,
     );
   }
 
@@ -2905,11 +2947,30 @@ class PlaybackSession extends ChangeNotifier {
     required int quality,
     required int line,
   }) async {
-    if (!isLive || media == null) return;
-    await open(
+    final current = media;
+    if (!isLive || current == null || !sourceMatchesAccount) return;
+    final stream = LivePlaybackStream.select(current.liveStreams, preference);
+    // A play-info response already contains every stream and CDN for this
+    // quality. A new quality or an explicit reload needs a fresh response.
+    final selected =
+        quality != _quality && quality != (stream?.quality ?? current.quality)
+        ? null
+        : stream != null
+        ? PlaybackMedia.live(
+            roomId: current.liveRoomId,
+            stream: stream,
+            streams: current.liveStreams,
+            qualityLabels: current.qualityLabels,
+            headers: current.headers,
+          )
+        : preference == _liveStreamPreference
+        ? current
+        : null;
+    await _open(
       null,
       null,
       quality: quality,
+      selectedLiveMedia: selected,
       liveLine: line,
       liveStream: preference,
       force: true,

@@ -65,6 +65,37 @@ void main() {
       },
     );
   }
+  test(
+    'unavailable HLS preference keeps the deepest available match',
+    () async {
+      final requests = ApiRequests();
+      final api = BiliApiClient(
+        transport: _Transport(),
+        sessionProvider: requests,
+      );
+      addTearDown(api.close);
+      final repository = ApiContentPlaybackRepository(
+        PgcClient(api),
+        LiveClient(api),
+        requests,
+      );
+      for (final (format, codec) in [('fmp4', 'av1'), ('absent', 'hevc')]) {
+        final media = await repository.resolveLive(
+          const LivePlaybackTarget('8'),
+          quality: 400,
+          preference: LiveStreamPreference(
+            protocol: 'http_hls',
+            format: format,
+            codec: codec,
+          ),
+          cancellation: RequestCancellation(),
+        );
+        expect(media.liveStream?.protocol, 'http_hls');
+        expect(media.liveStream?.format, format == 'fmp4' ? 'fmp4' : 'ts');
+        expect(media.video.codec, format == 'fmp4' ? 'avc' : 'av1');
+      }
+    },
+  );
   for (final (quality, hlsFirst) in [(0, false), (400, true), (10000, false)]) {
     test(
       'automatic live playback follows server stream and line order: qn=$quality hlsFirst=$hlsFirst',

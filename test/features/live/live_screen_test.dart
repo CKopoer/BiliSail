@@ -102,7 +102,7 @@ void main() {
       roomId: roomId,
       onOpenUser: onOpenUser,
       composerBuilder: composerBuilder,
-      playerBuilder: playerBuilder ?? (_, _) => const _PlayerProbe(),
+      playerBuilder: playerBuilder ?? (_, _, _) => const _PlayerProbe(),
     );
     await tester.pumpWidget(
       UncontrolledProviderScope(
@@ -315,7 +315,7 @@ void main() {
         tester,
         width: 371,
         height: 648,
-        playerBuilder: (_, _) {
+        playerBuilder: (_, _, _) {
           playerBuilds++;
           return const _PlayerProbe();
         },
@@ -416,7 +416,7 @@ void main() {
     var playerBuilds = 0;
     await showPage(
       tester,
-      playerBuilder: (_, _) {
+      playerBuilder: (_, _, _) {
         playerBuilds++;
         return const _PlayerProbe();
       },
@@ -492,7 +492,7 @@ void main() {
       var playerBuilds = 0;
       await showPage(
         tester,
-        playerBuilder: (_, _) {
+        playerBuilder: (_, _, _) {
           playerBuilds++;
           return const _PlayerProbe();
         },
@@ -523,7 +523,7 @@ void main() {
     addTearDown(primary.dispose);
     final page = LiveScreen(
       roomId: '12',
-      playerBuilder: (context, _) => Text(
+      playerBuilder: (context, _, _) => Text(
         'player-theme',
         style: TextStyle(color: Theme.of(context).colorScheme.primary),
       ),
@@ -576,7 +576,7 @@ void main() {
               home: Scaffold(
                 body: LiveScreen(
                   roomId: '12',
-                  playerBuilder: (_, _) {
+                  playerBuilder: (_, _, _) {
                     playerBuilds++;
                     return SizedBox.expand(
                       key: const Key('keyboard-player'),
@@ -1878,6 +1878,41 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+    'player starts while room details are pending and survives their failure and retry',
+    (tester) async {
+      final gate = repository.pendingRoom = Completer<LiveRoom>();
+      final playbackIds = <RoomId>[];
+      await showPage(
+        tester,
+        playerBuilder: (_, id, _) {
+          playbackIds.add(id);
+          return const _PlayerProbe();
+        },
+      );
+      final owner = tester.state(find.byType(_PlayerProbe));
+      expect(find.text('正在加载直播间…'), findsOneWidget);
+      gate.completeError(const AppFailure(AppFailureKind.network, '详情暂不可用'));
+      await tester.pump();
+      expect(find.text('详情暂不可用'), findsOneWidget);
+      expect(tester.state(find.byType(_PlayerProbe)), same(owner));
+      repository.pendingRoom = null;
+      repository.canonicalRoom = const LiveRoom(
+        id: RoomId('12345'),
+        title: '真实房间',
+        anchorName: '主播',
+        isLive: true,
+      );
+      await container
+          .read(liveControllerProvider(const RoomId('12')).notifier)
+          .load();
+      await tester.pump();
+      expect(tester.state(find.byType(_PlayerProbe)), same(owner));
+      expect(find.text('详情暂不可用'), findsNothing);
+      expect(playbackIds.toSet(), {const RoomId('12')});
+    },
+  );
+
   testWidgets('short room ID keeps player on the sidebar message controller', (
     tester,
   ) async {
@@ -1891,9 +1926,9 @@ void main() {
     RoomId? canonical;
     await showPage(
       tester,
-      playerBuilder: (context, room) {
+      playerBuilder: (context, _, room) {
         requested = LiveDanmakuRoomScope.requestedIdOf(context);
-        canonical = room.id;
+        canonical = room?.id;
         return const _PlayerProbe();
       },
     );
@@ -1924,6 +1959,7 @@ final class _RealtimeRepository implements LiveChatRepository {
 final class _Repository implements LiveRepository {
   AppFailure? superChatFailure;
   LiveRoom? canonicalRoom;
+  Completer<LiveRoom>? pendingRoom;
   List<LiveSuperChatMessage> scMessages = superChats;
   List<LiveChatMessage> chatMessages = const [
     LiveChatMessage(userName: '普通观众', text: '普通聊天消息'),
@@ -1938,7 +1974,7 @@ final class _Repository implements LiveRepository {
   Future<LiveRoom> loadRoom(
     RoomId id, {
     required RequestCancellation cancellation,
-  }) async => canonicalRoom ?? room;
+  }) async => pendingRoom == null ? canonicalRoom ?? room : pendingRoom!.future;
 
   @override
   Future<LivePlayInfo> loadPlayInfo(

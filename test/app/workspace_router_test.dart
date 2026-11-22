@@ -607,7 +607,7 @@ void main() {
         initialLocation: path,
         playerBuilder: (_, _, _) => const Text('测试播放器'),
         pgcPlayerBuilder: (_, _, _) => const Text('测试播放器'),
-        livePlayerBuilder: (_, _) => const Text('测试播放器'),
+        livePlayerBuilder: (_, _, _) => const Text('测试播放器'),
       );
       addTearDown(router.dispose);
       await tester.pumpWidget(
@@ -2208,7 +2208,8 @@ void main() {
           playerBuilder: (_, _, _) => const Text('视频播放器'),
           pgcPlayerBuilder: (_, _, episode) =>
               Text('影视播放器 ${episode.episodeId}'),
-          livePlayerBuilder: (_, room) => Text('直播播放器 ${room.id.value}'),
+          livePlayerBuilder: (_, id, room) =>
+              Text('直播播放器 ${(room?.id ?? id).value}'),
         );
         addTearDown(() async {
           router.dispose();
@@ -2731,7 +2732,8 @@ void main() {
       final router = createBiliRouter(
         initialLocation: '/user/42',
         playerBuilder: (_, _, _) => const SizedBox(),
-        livePlayerBuilder: (_, room) => Text('直播播放器 ${room.id.value}'),
+        livePlayerBuilder: (_, id, room) =>
+            Text('直播播放器 ${(room?.id ?? id).value}'),
         liveComposerBuilder: (_, _, {required compact}) => const SizedBox(),
       );
       addTearDown(router.dispose);

@@ -63,8 +63,11 @@ class _LiveStreamPickerState extends ConsumerState<LiveStreamPicker> {
     setState(() {
       _preference = preference;
       _line = 0;
-      final available = _selected?.qualities ?? widget.media.qualities;
-      if (!available.contains(_quality)) _quality = 0;
+      final stream = _selected;
+      final available = stream?.qualities ?? widget.media.qualities;
+      if (_quality != 0 && !available.contains(_quality)) {
+        _quality = stream?.quality ?? widget.media.quality;
+      }
     });
   }
 

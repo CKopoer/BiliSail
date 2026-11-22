@@ -201,7 +201,7 @@ class SqliteSettingsRepository implements SettingsRepository {
       },
       preferredLiveQuality: switch (decoded['preferredLiveQuality']) {
         final int quality => quality,
-        _ => 10000,
+        _ => AppSettings.networkLiveQuality,
       },
       preferredVideoCodec:
           VideoCodecPreference.values

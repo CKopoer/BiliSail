@@ -28,7 +28,8 @@ import 'live_room_header.dart';
 
 typedef LivePlayerBuilder = Widget Function(
   BuildContext context,
-  LiveRoom room,
+  RoomId playbackId,
+  LiveRoom? room,
 );
 typedef LiveComposerBuilder = Widget Function(
   BuildContext context,
@@ -77,8 +78,9 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
   LiveConnectionPhase _displayedChatConnectionPhase = LiveConnectionPhase.idle;
   LiveRoom? _playerRoom;
   String? _playerRequestedId;
+  late RoomId _playbackId;
   LivePlayerBuilder? _playerBuilder;
-  Widget? _playerWidget;
+  late Widget _playerWidget;
   final _chatContent = LiveChatContentCache();
   final _chatRows =
       <
@@ -236,13 +238,8 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
       );
     }
     final page = ref.watch(
-      liveControllerProvider(id).select(
-        (state) => (
-          room: state.room,
-          loading: state.loading,
-          message: state.roomMessage,
-        ),
-      ),
+      liveControllerProvider(id)
+          .select((state) => (room: state.room, message: state.roomMessage)),
     );
     ref.listen(liveControllerProvider(id), (previous, next) {
       if (!identical(previous?.superChats, next.superChats) &&
@@ -280,24 +277,25 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
     }
 
     final room = page.room;
-    if (room == null) {
-      if (page.message case final message?) {
-        return StateView.error(message: message, onAction: controller.load);
-      }
-      return const StateView.loading(message: '正在加载直播间…');
-    }
 
     // Keep the actual builder below the room scope so inherited dependencies
     // still rebuild it, while chat, audience and sidebar updates reuse its tree.
     if (!identical(_playerRoom, room) ||
         _playerRequestedId != widget.roomId ||
         _playerBuilder != widget.playerBuilder) {
+      if (_playerRequestedId != widget.roomId) {
+        _playbackId = room?.id ?? id;
+      } else if (_playerRoom case final previous?
+          when room != null && previous.id != room.id) {
+        // A refresh can point the same short ID at a different canonical room.
+        _playbackId = room.id;
+      }
       _playerRoom = room;
       _playerRequestedId = widget.roomId;
       _playerBuilder = widget.playerBuilder;
-      _playerWidget = _player(context, room);
+      _playerWidget = _player(id, _playbackId, room);
     }
-    final player = _playerWidget ??= _player(context, room);
+    final player = _playerWidget;
     return PlaybackLayoutBuilder(
       builder: (context, constraints, listening) {
         final wide =
@@ -309,16 +307,18 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
             page: PlaybackSplitPage.live,
             enabled: wide && !listening,
             showInfo: _infoVisible,
-            dimensions: room.isLive ? dimensions : null,
+            dimensions: room?.isLive == false ? null : dimensions,
             contentKey: id,
-            summaryIdentity: room,
-            summaryBuilder: (context, {required measuring}) => LiveRoomHeader(
-              room: room,
-              requestedId: id,
-              compact: false,
-              belowPlayer: true,
-              onOpenUser: widget.onOpenUser,
-            ),
+            summaryIdentity: room ?? id,
+            summaryBuilder: room == null
+                ? null
+                : (context, {required measuring}) => LiveRoomHeader(
+                    room: room,
+                    requestedId: id,
+                    compact: false,
+                    belowPlayer: true,
+                    onOpenUser: widget.onOpenUser,
+                  ),
             builder: (context, maxSummaryHeight, bottomSummary) {
               final playerWidth = _infoVisible && wide
                   ? math.max(
@@ -388,8 +388,17 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
                       child: Offstage(
                         offstage: !_infoVisible,
                         child: Builder(
-                          builder: (context) =>
-                              _sidebar(context, room, controller),
+                          builder: (context) => room != null
+                              ? _sidebar(context, room, controller)
+                              : switch (page.message) {
+                                  final message? => StateView.error(
+                                    message: message,
+                                    onAction: controller.load,
+                                  ),
+                                  null => const StateView.loading(
+                                    message: '正在加载直播间…',
+                                  ),
+                                },
                         ),
                       ),
                     ),
@@ -403,14 +412,15 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
     );
   }
 
-  Widget _player(BuildContext context, LiveRoom room) => ColoredBox(
+  Widget _player(RoomId id, RoomId playbackId, LiveRoom? room) => ColoredBox(
     key: _playerKey,
     color: Colors.black,
-    child: room.isLive
+    child: room?.isLive != false
         ? LiveDanmakuRoomScope(
-            requestedId: RoomId(widget.roomId),
+            requestedId: id,
             child: Builder(
-              builder: (context) => widget.playerBuilder(context, room),
+              builder: (context) =>
+                  widget.playerBuilder(context, playbackId, room),
             ),
           )
         : Builder(

@@ -82,6 +82,41 @@ void main() {
     MediaTrack(uri: Uri.file('video.mp4'), requestPolicy: MediaRequestPolicy()),
   );
   test(
+    'live intent applies during selection and before child readiness',
+    () async {
+      final child = _Engine()..openGate = Completer<void>();
+      final selection = Completer<PlayerEngineSelection>();
+      final engine = ConfigurablePlayerEngine.select(
+        selectEngine: () => selection.future,
+      );
+      addTearDown(() async {
+        await engine.dispose();
+        await child.closeStreams();
+      });
+      final live = ManifestSource(
+        MediaTrack(
+          uri: Uri.parse('https://example.org/live.m3u8'),
+          requestPolicy: MediaRequestPolicy(),
+        ),
+        isLive: true,
+      );
+      final opening = engine.open(live, const OpenOptions(play: false));
+      await engine.play().timeout(const Duration(seconds: 1));
+      await engine.setVolume(0);
+      selection.complete(PlayerEngineSelection('mpv', () async => child));
+      await Future<void>.delayed(Duration.zero);
+      expect(child.openedOptions?.play, true);
+      expect(child.openedOptions?.volume, 0);
+      await engine.pause();
+      await engine.play().timeout(const Duration(seconds: 1));
+      expect(child.playCalls, 1);
+      child.openGate!.complete();
+      await opening;
+      expect(child.playCalls, 1);
+    },
+  );
+
+  test(
     'same settings reuse the engine; switching backend awaits disposal',
     () async {
       final first = _Engine(), second = _Engine();

@@ -982,6 +982,135 @@ void main() {
       },
     );
   }
+  test(
+    'network default resolves once per room, explicit qn bypasses detection',
+    () async {
+      final content = _FakeContentRepository();
+      var reads = 0;
+      final session = PlaybackSession(
+        engine: _FakeEngine(),
+        repository: _FakeRepository(),
+        progress: _FakeProgress(),
+        contentRepository: content,
+        accountScope: () => 'guest',
+        defaultLiveQuality: () async {
+          reads++;
+          return 250;
+        },
+      );
+      addTearDown(session.close);
+      final owner = Object();
+      session.attach(owner);
+      await session.activate(
+        owner,
+        null,
+        null,
+        target: const LivePlaybackTarget('12'),
+      );
+      expect(content.qualities, [250]);
+      expect(session.requestedQuality, 250);
+      await session.changeQuality(0);
+      await session.retry();
+      expect(content.qualities, [250, 0, 0]);
+      session.configureSettings(AppSettings(preferredLiveQuality: 10000));
+      await session.activate(
+        owner,
+        null,
+        null,
+        target: const LivePlaybackTarget('34'),
+      );
+      expect(content.qualities.last, 10000);
+      expect(reads, 1);
+    },
+  );
+
+  test(
+    'pause and navigation revoke autoplay during a live native open',
+    () async {
+      final gate = Completer<void>();
+      final engine = _FakeEngine()..nextOpen = gate;
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(),
+        progress: _FakeProgress(),
+        contentRepository: _FakeContentRepository(),
+        accountScope: () => 'guest',
+      );
+      addTearDown(session.close);
+      final opening = session.open(
+        null,
+        null,
+        target: const LivePlaybackTarget('12'),
+      );
+      await _flush();
+      expect(engine.openOptions.single.play, true);
+      await session.setPlaybackAllowed(false);
+      expect(engine.pauseCount, greaterThan(0));
+      await session.pause();
+      final plays = engine.playCount;
+      await session.setPlaybackAllowed(true);
+      expect(engine.playCount, plays);
+      await session.play();
+      expect(engine.playCount, plays + 1);
+      await session.pause();
+      gate.complete();
+      await opening;
+      expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
+    },
+  );
+
+  test(
+    'same-quality format and CDN changes reuse the returned addresses',
+    () async {
+      LivePlaybackStream stream(String protocol, String format) =>
+          LivePlaybackStream(
+            preference: LiveStreamPreference(
+              protocol: protocol,
+              format: format,
+              codec: 'avc',
+            ),
+            urls: [
+              for (final host in ['one.example', 'two.example'])
+                Uri.https(host, '/$format'),
+            ],
+            quality: 250,
+            qualities: const [250],
+          );
+      final hls = stream('http_hls', 'ts');
+      final flv = stream('http_stream', 'flv');
+      final content = _PreferredLiveRepository()
+        ..resolvedMedia = PlaybackMedia.live(
+          roomId: '12345',
+          stream: hls,
+          streams: [hls, flv],
+          qualityLabels: const {},
+          headers: const {},
+        );
+      final engine = _FakeEngine();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(),
+        progress: _FakeProgress(),
+        contentRepository: content,
+        accountScope: () => 'guest',
+      );
+      addTearDown(session.close);
+      await session.open(
+        null,
+        null,
+        quality: 10000,
+        target: const LivePlaybackTarget('12'),
+      );
+      await session.changeLiveStream(flv.preference, quality: 250, line: 1);
+      expect(engine.openedUris.last, flv.urls.last);
+      expect(engine.sources.last, isA<ProgressiveSource>());
+      expect(session.media?.liveRoomId, '12345');
+      expect(content.qualities, [10000]);
+      await session.changeQuality(400);
+      expect(content.qualities, [10000, 400]);
+    },
+  );
+
   test('live stream preference follows room changes, switches and navigation checkpoints', () async {
     const saved = LiveStreamPreference(
       protocol: 'http_hls',
@@ -1866,6 +1995,7 @@ void main() {
       );
       await session.changeLiveLine(2);
       expect(session.liveLine, 2);
+      expect(content.qualities, [10000]);
       expect(engine.openedUris.last.path, '/live-2.m3u8');
       expect(engine.openOptions.last.startPosition, Duration.zero);
       expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
@@ -1943,11 +2073,11 @@ void main() {
       );
       addTearDown(session.close);
       await session.open(null, null, target: const LivePlaybackTarget('8'));
-      final gate = Completer<PlaybackMedia>();
-      content.pending = gate;
+      final gate = Completer<void>();
+      engine.nextStop = gate;
       final switching = session.changeLiveLine(1);
       await _flush();
-      final cancellation = content.cancellations.last;
+      expect(content.qualities, hasLength(1));
       if (invalidation == 'new-room') {
         await session.open(null, null, target: const LivePlaybackTarget('9'));
       } else if (invalidation == 'account') {
@@ -1956,10 +2086,9 @@ void main() {
         await session.close();
       }
       final opens = engine.openOptions.length;
-      gate.complete(_media('stale', 400, Duration.zero));
+      gate.complete();
       await switching;
       expect(engine.openOptions.length, opens);
-      if (invalidation != 'account') expect(cancellation.isCancelled, isTrue);
       if (invalidation == 'new-room') {
         expect(session.contentTarget, const LivePlaybackTarget('9'));
         expect(session.liveLine, 0);
@@ -7750,7 +7879,7 @@ final class _FakeEngine implements PlayerEngine, AudioGainControl {
     }
     emit(
       PlaybackSnapshot(
-        phase: PlaybackPhase.paused,
+        phase: options.play ? PlaybackPhase.playing : PlaybackPhase.paused,
         generation: _current.generation + 1,
         position: options.startPosition,
         duration: openDuration,

@@ -60,6 +60,7 @@ class SharedPlayerEngine
   bool _waitingForPair = false, _backendBuffering = false;
   bool _requiresAudio = false, _requiresVideo = false, _audioConfirmed = false;
   bool _live = false, _preview = false;
+  bool _liveLoadAccepted = false;
   double _gainDb = 0;
   bool _publishing = false;
   final _pendingSnapshots = <PlaybackSnapshot>[];
@@ -219,6 +220,7 @@ class SharedPlayerEngine
     ++_intentRevision;
     ++_seekRevision;
     ++_gainRevision;
+    _liveLoadAccepted = false;
     _openOperation?.cancel();
     _playOperation?.cancel();
     _seekOperation?.cancel();
@@ -387,7 +389,20 @@ class SharedPlayerEngine
           (event) => _event(event, generation, backend),
         );
         final tracks = await operation.wait(
-          backend.preparePaused(plan, operation),
+          backend.prepare(
+            plan,
+            operation,
+            onLiveLoaded: plan.live
+                ? () async {
+                    operation.check();
+                    await _control(generation, (b) => b.setRate(1));
+                    await _applyVolume(generation);
+                    operation.check();
+                    _liveLoadAccepted = true;
+                    await _playOpeningLive(generation);
+                  }
+                : null,
+          ),
         );
         if ((plan.requiresVideo && !tracks.hasVideo) ||
             (!tracks.hasVideo && !tracks.hasAudio) ||
@@ -407,13 +422,39 @@ class SharedPlayerEngine
             ? await operation.wait(backend.confirmVideo(operation))
             : null;
         operation.check();
-        await _control(
-          generation,
-          (b) => b.setRate(_live ? 1 : _snapshot.rate),
-        );
+        if (!plan.live) {
+          await _control(generation, (b) => b.setRate(_snapshot.rate));
+        }
+        Future<void> confirmReady() async {
+          if (_snapshot.desiredPlaying &&
+              _pendingSeek == null &&
+              _requiresAudio &&
+              !_audioConfirmed) {
+            final intent = _intentRevision;
+            final playOperation = _playOperation = PlaybackOperation(
+              generation,
+              operation.remaining,
+            );
+            try {
+              await playOperation.wait(backend.confirmAudio(playOperation));
+              if (intent == _intentRevision) _audioConfirmed = true;
+            } on SourceSuperseded {
+              operation.check();
+            }
+          }
+          if (_requiresVideo) {
+            await operation.wait(backend.confirmPresentation(operation));
+          }
+        }
+
         var startupIntent = _intentRevision;
         do {
           startupIntent = _intentRevision;
+          if (plan.live) {
+            // Native play/pause already follows the current intent during load.
+            await confirmReady();
+            continue;
+          }
           await finishSynchronizedStartup(
             shouldPlay: () =>
                 startupIntent == _intentRevision &&
@@ -431,27 +472,7 @@ class SharedPlayerEngine
             ),
             pause: () =>
                 operation.wait(_control(generation, (b) => b.pauseAndWait())),
-            confirmReady: () async {
-              if (_snapshot.desiredPlaying &&
-                  _pendingSeek == null &&
-                  _requiresAudio &&
-                  !_audioConfirmed) {
-                final intent = _intentRevision;
-                final playOperation = _playOperation = PlaybackOperation(
-                  generation,
-                  operation.remaining,
-                );
-                try {
-                  await playOperation.wait(backend.confirmAudio(playOperation));
-                  if (intent == _intentRevision) _audioConfirmed = true;
-                } on SourceSuperseded {
-                  operation.check();
-                }
-              }
-              if (_requiresVideo) {
-                await operation.wait(backend.confirmPresentation(operation));
-              }
-            },
+            confirmReady: confirmReady,
             applyVolume: () => operation.wait(_applyVolume(generation)),
             checkActive: operation.check,
           );
@@ -518,7 +539,7 @@ class SharedPlayerEngine
 
   Future<void> _applyVolume(int generation) async {
     await _control(generation, (backend) async {
-      // Read the latest user settings while both native tracks are paused.
+      // Read current settings when the serialized native command runs.
       await backend.setGainDb(_gainDb);
       if (!_current(generation, backend)) return;
       await backend.setVolume(_preview ? 0 : _snapshot.volume);
@@ -527,6 +548,18 @@ class SharedPlayerEngine
 
   void _event(BackendEvent event, int generation, PlaybackBackend backend) {
     if (!_current(generation, backend)) return;
+    if (_opening &&
+        _liveLoadAccepted &&
+        (event.kind == BackendEventKind.ended ||
+            event.kind == BackendEventKind.failure)) {
+      // Live can reach EOF while the output is still waiting for its first
+      // frame. Release it through the same bounded open-failure path.
+      final kind = event.kind == BackendEventKind.ended
+          ? PlayerFailureKind.liveReadTerminated
+          : event.failureKind;
+      _openOperation?.cancel(PlayerFailure(kind, '直播在准备过程中中断', generation));
+      return;
+    }
     if (event.kind == BackendEventKind.buffering) {
       _backendBuffering = event.value ?? false;
     }
@@ -744,6 +777,12 @@ class SharedPlayerEngine
     return result.future;
   }
 
+  Future<void> _playOpeningLive(int generation) => _control(
+    generation,
+    (backend) => backend.play(),
+    allowed: () => _liveLoadAccepted && _snapshot.desiredPlaying,
+  );
+
   @override
   Future<void> play() {
     if (_disposed ||
@@ -753,6 +792,7 @@ class SharedPlayerEngine
     }
     ++_intentRevision;
     _publish(_snapshot.copyWith(desiredPlaying: true));
+    if (_opening && _liveLoadAccepted) return _playOpeningLive(_generation);
     if (_opening || _seeking) return Future.value();
     return _runPlay(_generation);
   }
@@ -774,10 +814,15 @@ class SharedPlayerEngine
         intent == _intentRevision &&
         !_snapshot.isSeeking;
     try {
+      if (_live) {
+        await operation.wait(
+          _control(generation, (b) => b.play(), allowed: allowed),
+        );
+      }
       if (!_audioConfirmed) {
         _waitingForPair = true;
         _publish(_snapshot.copyWith(phase: _phase()));
-        // preparePaused already stopped the pair and applied the user settings.
+        // A paused open already applied the user settings.
         // A first play only needs the evidence deferred by a paused open.
         if (_requiresAudio) {
           await operation.wait(backend.confirmAudio(operation));
@@ -786,9 +831,11 @@ class SharedPlayerEngine
           await operation.wait(backend.confirmPresentation(operation));
         }
       }
-      await operation.wait(
-        _control(generation, (b) => b.play(), allowed: allowed),
-      );
+      if (!_live) {
+        await operation.wait(
+          _control(generation, (b) => b.play(), allowed: allowed),
+        );
+      }
       if (!_current(generation, backend) || !allowed()) return;
       _audioConfirmed = true;
       _waitingForPair = false;
@@ -993,7 +1040,7 @@ class SharedPlayerEngine
     }
     if (_disposed) return Future.value();
     _publish(_snapshot.copyWith(volume: volume));
-    if (_opening) return Future.value();
+    if (_opening && !_liveLoadAccepted) return Future.value();
     return _control(
       _generation,
       (b) => b.setVolume(_preview ? 0 : _snapshot.volume),
@@ -1007,7 +1054,7 @@ class SharedPlayerEngine
     }
     final generation = _generation;
     final revision = ++_gainRevision;
-    if (_opening) {
+    if (_opening && !_liveLoadAccepted) {
       _gainDb = gainDb;
       return;
     }

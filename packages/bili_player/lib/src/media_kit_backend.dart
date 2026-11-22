@@ -91,6 +91,15 @@ final class MediaKitBackend
     if (!_disposed && !_events.isClosed) _events.add(event);
   }
 
+  void _enterStage(NativeReadinessStage stage) {
+    _readinessStage = stage;
+    if (_snapshot.phase == PlaybackPhase.opening &&
+        (diagnosticSourceKind == DiagnosticSourceKind.liveManifest ||
+            diagnosticSourceKind == DiagnosticSourceKind.liveProgressive)) {
+      _diagnose(PlayerDiagnosticKind.openStageChanged);
+    }
+  }
+
   void _diagnose(
     PlayerDiagnosticKind kind, {
     NativeErrorSummary? nativeError,
@@ -420,10 +429,11 @@ final class MediaKitBackend
   }
 
   @override
-  Future<PreparedTracks> preparePaused(
+  Future<PreparedTracks> prepare(
     ValidatedSource plan,
-    PlaybackOperation operation,
-  ) async {
+    PlaybackOperation operation, {
+    Future<void> Function()? onLiveLoaded,
+  }) async {
     _preparation = operation;
     _bufferDiagnostics?.dispose();
     _bufferDiagnostics = null;
@@ -575,7 +585,10 @@ final class MediaKitBackend
         )
         .timeout(_remaining(watch, openBudget));
     if (generation != _generation || _disposed) throw const SourceSuperseded();
-    _readinessStage = NativeReadinessStage.tracks;
+    // Live autoplay can advance as soon as mpv accepts the load. Track and
+    // presentation checks below still own the opening deadline.
+    if (onLiveLoaded != null) await onLiveLoaded();
+    _enterStage(NativeReadinessStage.tracks);
     if (source is DashPairSource || source is DashVideoSource) {
       // Player.open acknowledges playlist setup. Wait for the actual
       // demuxed tracks after headers have been applied.
@@ -635,7 +648,7 @@ final class MediaKitBackend
     }
     if (requireVideoOutput) {
       // Track metadata is available through the SDK before presentation is
-      // admitted. Reconfigure paused output, then verify its converted frame.
+      // admitted. Configure the output, then verify its converted frame.
       try {
         _requiresVideoColorMapping = configureNativeVideoColor(
           read: player.getProperty,
@@ -708,9 +721,8 @@ final class MediaKitBackend
     final openBudget = operation.remaining;
     final load = _nativeLoad!;
     // A listed track can fail decoding while mpv keeps playing the
-    // external audio. Confirm video while still paused, inside open's
-    // shared deadline, so the caller can use its bounded CDN fallback.
-    _readinessStage = NativeReadinessStage.videoDecode;
+    // external audio. Confirm video inside the shared opening deadline.
+    _enterStage(NativeReadinessStage.videoDecode);
     await _waitReady(
       player,
       generation,
@@ -729,7 +741,7 @@ final class MediaKitBackend
       _remaining(watch, openBudget),
       'Video frame did not restart for the current source.',
     );
-    _readinessStage = NativeReadinessStage.videoOutput;
+    _enterStage(NativeReadinessStage.videoOutput);
     // Decoder metadata alone does not establish a native video output.
     // mpv renders a video frame while paused; no audio probe is needed.
     await operation.wait(_videoOutput.firstFrameRendered);

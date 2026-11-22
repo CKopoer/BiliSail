@@ -118,7 +118,7 @@ final class AppSettings {
     this.playerFullscreenGesture = true,
     this.playerShrinkVideo = true,
     this.preferredQuality = 80,
-    this.preferredLiveQuality = 10000,
+    this.preferredLiveQuality = networkLiveQuality,
     this.liveStreamPreference = LiveStreamPreference.automatic,
     this.preferredAudioQuality = AudioQualityPreference.aac192,
     this.preferredVideoCodec = VideoCodecPreference.h264,
@@ -219,7 +219,7 @@ final class AppSettings {
        resumePlayback = true,
        showCollapsedProgress = true,
        preferredQuality = 80,
-       preferredLiveQuality = 10000,
+       preferredLiveQuality = networkLiveQuality,
        liveStreamPreference = LiveStreamPreference.automatic,
        preferredAudioQuality = AudioQualityPreference.aac192,
        preferredVideoCodec = VideoCodecPreference.h264,
@@ -586,7 +586,9 @@ final class AppSettings {
     videoQualityOptions.keys,
   );
   // Live qn values are independent of VOD; zero asks the server to choose.
+  static const networkLiveQuality = -1;
   static const liveQualityOptions = {
+    networkLiveQuality: '随网络（默认）',
     0: '自动',
     80: '流畅',
     150: '高清',
@@ -637,7 +639,7 @@ final class AppSettings {
           : 80,
       preferredLiveQuality: liveQualityOptions.containsKey(preferredLiveQuality)
           ? preferredLiveQuality
-          : 10000,
+          : networkLiveQuality,
       liveStreamPreference: LiveStreamPreference.fromJson(
         liveStreamPreference.toJson(),
       ),

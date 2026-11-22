@@ -355,6 +355,9 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
             position: _takeLinkPosition(),
           ),
         );
+      } else if (widget.target is LivePlaybackTarget &&
+          widget.title != oldWidget.title) {
+        _session.updateContentTitle(this, widget.target, widget.title);
       }
       if (!identical(widget.settings, oldWidget.settings)) _configure();
       _pauseInBackground(WidgetsBinding.instance.lifecycleState);

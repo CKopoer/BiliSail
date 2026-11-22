@@ -52,6 +52,17 @@ static void app_icon_method_call(FlMethodChannel* channel, FlMethodCall* call,
   fl_method_call_respond_success(call, nullptr, nullptr);
 }
 
+static void live_network_method_call(FlMethodChannel*, FlMethodCall* call, gpointer) {
+  if (g_strcmp0(fl_method_call_get_name(call), "preferOriginal") == 0) {
+    g_autoptr(FlValue) value = fl_value_new_bool(
+        !g_network_monitor_get_network_metered(g_network_monitor_get_default()));
+    fl_method_call_respond_success(call, value, nullptr);
+  } else {
+    g_autoptr(FlMethodResponse) response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
+    fl_method_call_respond(call, response, nullptr);
+  }
+}
+
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
@@ -132,6 +143,12 @@ static void my_application_activate(GApplication* application) {
       "bilisail/desktop_window", FL_METHOD_CODEC(icon_codec));
   fl_method_channel_set_method_call_handler(desktop_channel, desktop_window_method_call, window, nullptr);
   g_object_set_data_full(G_OBJECT(view), "bilisail-desktop-window-channel", desktop_channel, g_object_unref);
+
+  auto* live_network = fl_method_channel_new(
+      fl_engine_get_binary_messenger(fl_view_get_engine(view)),
+      "dev.bilisail/live_network", FL_METHOD_CODEC(icon_codec));
+  fl_method_channel_set_method_call_handler(live_network, live_network_method_call, nullptr, nullptr);
+  g_object_set_data_full(G_OBJECT(view), "bilisail-live-network", live_network, g_object_unref);
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }

@@ -897,8 +897,11 @@ void main() {
   test(
     'live quality migrates independently and survives save and reload',
     () async {
-      expect((await repository.load()).preferredLiveQuality, 10000);
-      for (final invalid in [null, '250', true, -1, 112, 99999, 250.5]) {
+      expect(
+        (await repository.load()).preferredLiveQuality,
+        AppSettings.networkLiveQuality,
+      );
+      for (final invalid in [null, '250', true, -2, 112, 99999, 250.5]) {
         await database.writeSetting(
           'preferences.v1',
           jsonEncode({
@@ -908,7 +911,7 @@ void main() {
           }),
         );
         final loaded = await repository.load();
-        expect(loaded.preferredLiveQuality, 10000);
+        expect(loaded.preferredLiveQuality, AppSettings.networkLiveQuality);
         expect(loaded.preferredQuality, 64);
       }
       for (final quality in AppSettings.liveQualityOptions.keys) {

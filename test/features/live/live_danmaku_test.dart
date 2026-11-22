@@ -263,7 +263,7 @@ void main() {
             home: Scaffold(
               body: LiveScreen(
                 roomId: '12',
-                playerBuilder: (_, _) => const SizedBox(),
+                playerBuilder: (_, _, _) => const SizedBox(),
                 composerBuilder: (_, roomId, {required compact}) =>
                     LiveDanmakuComposer(
                       roomId: roomId,

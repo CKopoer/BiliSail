@@ -13,19 +13,19 @@ final class PlaybackOperation {
   final Duration budget;
   final Stopwatch _watch = Stopwatch()..start();
   final _changes = StreamController<void>.broadcast(sync: true);
-  bool _cancelled = false;
-  bool get isCancelled => _cancelled;
+  Exception? _cancellation;
+  bool get isCancelled => _cancellation != null;
   Duration get elapsed => _watch.elapsed;
   Stream<void> get changes => _changes.stream;
-  void cancel() {
+  void cancel([PlayerFailure? failure]) {
     if (isCancelled) return;
-    _cancelled = true;
+    _cancellation = failure ?? const SourceSuperseded();
     _changes.add(null);
     unawaited(_changes.close());
   }
 
   void check() {
-    if (isCancelled) throw const SourceSuperseded();
+    if (_cancellation case final reason?) throw reason;
     if (budget - elapsed <= Duration.zero) {
       throw TimeoutException('Playback deadline');
     }
@@ -44,7 +44,7 @@ final class PlaybackOperation {
 
     // A subscription can be removed when a short command completes. Future.any
     // against a never-ending source cancellation future retains every command.
-    final subscription = changes.listen((_) => fail(const SourceSuperseded()));
+    final subscription = changes.listen((_) => fail(_cancellation!));
     final duration = timeout ?? budget - elapsed;
     final timer = Timer(
       duration > Duration.zero ? duration : Duration.zero,
@@ -54,7 +54,7 @@ final class PlaybackOperation {
       work.then<void>((value) {
         if (done.isCompleted) return;
         try {
-          if (isCancelled) throw const SourceSuperseded();
+          if (_cancellation case final reason?) throw reason;
           if (timeout == null) check();
           done.complete(value);
         } on Object catch (error, stack) {
@@ -62,7 +62,7 @@ final class PlaybackOperation {
         }
       }, onError: (Object error, StackTrace stack) => fail(error, stack)),
     );
-    if (isCancelled) fail(const SourceSuperseded());
+    if (_cancellation case final reason?) fail(reason);
     try {
       return await done.future;
     } finally {
@@ -126,10 +126,11 @@ abstract interface class PlaybackBackend {
   VideoOutput get videoOutput;
   Stream<BackendEvent> get events;
   Duration get seekTimeout;
-  Future<PreparedTracks> preparePaused(
+  Future<PreparedTracks> prepare(
     ValidatedSource plan,
-    PlaybackOperation operation,
-  );
+    PlaybackOperation operation, {
+    Future<void> Function()? onLiveLoaded,
+  });
   Future<VideoDimensions?> confirmVideo(PlaybackOperation operation);
   Future<void> confirmAudio(PlaybackOperation operation);
   Future<void> confirmPresentation(PlaybackOperation operation);

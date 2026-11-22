@@ -1,4 +1,5 @@
 import Flutter
+import Network
 import UIKit
 
 @main
@@ -6,6 +7,7 @@ import UIKit
   private lazy var downloads = BackgroundDownloads()
   private var downloadPhotos: DownloadPhotosHandler?
   private var deviceOrientation: DeviceOrientationHandler?
+  private var liveNetworkChannel: FlutterMethodChannel?
   private var appIconChannel: FlutterMethodChannel?
   override func application(
     _ application: UIApplication,
@@ -54,6 +56,23 @@ import UIKit
         }
       } else { result(FlutterMethodNotImplemented) }
     }
+    let network = FlutterMethodChannel(name: "dev.bilisail/live_network", binaryMessenger: engineBridge.applicationRegistrar.messenger())
+    network.setMethodCallHandler { call, result in
+      guard call.method == "preferOriginal" else { result(FlutterMethodNotImplemented); return }
+      let monitor = NWPathMonitor()
+      var completed = false
+      func finish(_ preferOriginal: Bool) {
+        guard !completed else { return }
+        completed = true
+        monitor.pathUpdateHandler = nil
+        monitor.cancel()
+        result(preferOriginal)
+      }
+      monitor.pathUpdateHandler = { path in finish(path.usesInterfaceType(.wifi)) }
+      monitor.start(queue: .main)
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1) { finish(true) }
+    }
+    liveNetworkChannel = network
     appIconChannel = channel
     deviceOrientation = DeviceOrientationHandler(messenger: engineBridge.applicationRegistrar.messenger())
   }

@@ -935,14 +935,14 @@ final class _WorkspacePage extends ConsumerWidget {
                 }
                 if (tab.isLive) {
                   return LiveScreen(
-                    key: PageStorageKey('live-${tab.id}'),
+                    key: PageStorageKey(('live', tab.id, account)),
                     roomId: uri.pathSegments.last,
                     autoCollapseSidebar: autoCollapseSidebar,
                     composerBuilder: liveComposerBuilder,
-                    playerBuilder: (context, room) => _workspacePlayer(
+                    playerBuilder: (context, id, room) => _workspacePlayer(
                       context,
                       () =>
-                          livePlayerBuilder?.call(context, room) ??
+                          livePlayerBuilder?.call(context, id, room) ??
                           const StateView.empty(message: '直播播放服务未配置'),
                     ),
                     onOpenUser: (user) =>

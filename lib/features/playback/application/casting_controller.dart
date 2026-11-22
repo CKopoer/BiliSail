@@ -31,7 +31,7 @@ CastMediaRequest? castRequestFor(PlaybackSession session) {
   }
   if (session.contentTarget case LivePlaybackTarget(:final roomId)) {
     return CastMediaRequest.live(
-      roomId: roomId,
+      roomId: media.liveRoomId ?? roomId,
       quality: media.quality,
       danmakuEnabled: session.danmakuEnabled,
     );

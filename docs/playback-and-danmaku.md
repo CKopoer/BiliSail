@@ -1,5 +1,7 @@
 # 播放、直播与弹幕设计
 
+2026-11-22 对齐 PiliPlus 的直播启播流程。房间资料和播放地址并行获取。HLS／HTTP-FLV 获得原生加载确认后按当前播放意图开始，随后确认音视频与首帧。默认画质、同画质切流和首帧前暂停规则见[直播选择器与启播](validation/live-stream-audio-preferences-2026-10-30.md#直播启播与默认行为2026-11-22)。
+
 2026-11-20 将在线点播的前向解封装缓冲上限由 4 MiB 提高至 8 MiB，后向缓冲为 4 MiB，默认预读窗口为 16 秒乘起播倍速。悬停预览仍使用 5 秒窗口。
 
 2026-11-18 补齐 Windows 原生 TLS 续读边界：本项目固定 FFmpeg 对不完整 TLS 记录可能无限返回 `EAGAIN`，仅 `network-timeout=5` 无法限制这层等待。保留已对齐的 PiliPlus 缓存／同步与错误重试逻辑，为 lavf 配置 `rw_timeout=5000000`，由原生在超时后按字节续读。运行进程线程栈、实际 PiliPlus 原生库对照和双轨截断回归见[持续缓冲修复](validation/windows-tls-buffering-2026-11-18.md)。

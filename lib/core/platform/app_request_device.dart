@@ -9,14 +9,21 @@ final class AppRequestDevice {
   const AppRequestDevice();
   static const _channel = MethodChannel('dev.bilisail/app_request_device');
 
+  Future<Map<String, Object?>?> _read({
+    Duration timeout = const Duration(seconds: 2),
+  }) => _channel.invokeMapMethod<String, Object?>('read').timeout(timeout);
+
+  Future<bool?> usesWifi() async {
+    final facts = await _read(timeout: const Duration(seconds: 1));
+    return facts == null ? null : facts['network'] == 'wifi';
+  }
+
   Future<AppDeviceInfo> load() async {
     if (defaultTargetPlatform != TargetPlatform.android) {
       return const AppDeviceInfo();
     }
     try {
-      final data = await _channel
-          .invokeMapMethod<String, Object?>('read')
-          .timeout(const Duration(seconds: 2));
+      final data = await _read();
       String value(String key, String fallback) {
         final text = data?[key];
         return text is String &&

@@ -11,6 +11,88 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
       LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
 
+  testWidgets('live HLS accepts pause before its first segment arrives', (
+    tester,
+  ) async {
+    initializePlayerBackend();
+    final directory = Platform.environment['BILI_CONTENT_MEDIA_DIR']!;
+    final segmentRequested = Completer<void>();
+    final sendSegment = Completer<void>();
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    server.listen((request) async {
+      final name = request.uri.pathSegments.last;
+      final playlist = name == 'live.m3u8';
+      if (!playlist && !RegExp(r'^segment-[0-9]+\.ts$').hasMatch(name)) {
+        request.response.statusCode = HttpStatus.notFound;
+      } else {
+        if (!playlist) {
+          if (!segmentRequested.isCompleted) segmentRequested.complete();
+          await sendSegment.future;
+        }
+        request.response.headers.contentType = playlist
+            ? ContentType('application', 'vnd.apple.mpegurl')
+            : ContentType('video', 'mp2t');
+        request.response.add(await File('$directory/$name').readAsBytes());
+      }
+      await request.response.close();
+    });
+    final stages = <NativeReadinessStage>[];
+    final engine = MediaKitEngine(
+      onDiagnostic: (event) {
+        if (event.kind == PlayerDiagnosticKind.openStageChanged &&
+            event.readinessStage != null) {
+          stages.add(event.readinessStage!);
+        }
+      },
+    );
+    try {
+      await tester.pumpWidget(MaterialApp(home: VideoSurface(engine: engine)));
+      final opening = engine.open(
+        ManifestSource(
+          MediaTrack(
+            uri: Uri.http('127.0.0.1:${server.port}', '/live.m3u8'),
+            requestPolicy: MediaRequestPolicy(),
+          ),
+          isLive: true,
+        ),
+        const OpenOptions(play: true, volume: 0),
+      );
+      await _until(
+        tester,
+        () =>
+            segmentRequested.isCompleted &&
+            stages.contains(NativeReadinessStage.tracks),
+      );
+      expect(engine.currentSnapshot.phase, PlaybackPhase.opening);
+      expect(engine.inspectDiagnostics().hasDecodedVideo, false);
+      await _withFrames(tester, engine.pause());
+      sendSegment.complete();
+      await _withFrames(tester, opening);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
+      expect(
+        stages,
+        containsAllInOrder([
+          NativeReadinessStage.tracks,
+          NativeReadinessStage.videoDecode,
+          NativeReadinessStage.videoOutput,
+        ]),
+      );
+      await _withFrames(tester, engine.play());
+      await _until(
+        tester,
+        () =>
+            engine.currentSnapshot.position > const Duration(milliseconds: 300),
+      );
+      expect(engine.inspectDiagnostics().hasDecodedVideo, true);
+      expect(engine.inspectDiagnostics().hasDecodedAudio, true);
+    } finally {
+      if (!sendSegment.isCompleted) sendSegment.complete();
+      await _withFrames(tester, engine.dispose());
+      await tester.pumpWidget(const SizedBox.shrink());
+      await server.close(force: true);
+    }
+  });
+
   for (final readTimeout in [false, true]) {
     testWidgets(
       readTimeout

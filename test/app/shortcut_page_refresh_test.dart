@@ -118,8 +118,7 @@ void main() {
       final router = createBiliRouter(
         initialLocation: '/live/1',
         playerBuilder: (_, _, _) => const SizedBox(),
-        livePlayerBuilder: (_, room) =>
-            _panel(LivePlaybackTarget(room.id.value)),
+        livePlayerBuilder: (_, id, _) => _panel(LivePlaybackTarget(id.value)),
       );
       addTearDown(session.close);
       addTearDown(auth.dispose);

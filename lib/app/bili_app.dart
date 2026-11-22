@@ -276,19 +276,21 @@ class _BiliAppState extends ConsumerState<BiliApp> {
           builder: (_) => const AccountDialog(),
         ),
       ),
-      livePlayerBuilder: (context, room) => Consumer(
+      livePlayerBuilder: (context, playbackId, room) => Consumer(
         builder: (context, ref, _) {
+          final requestedId =
+              LiveDanmakuRoomScope.requestedIdOf(context) ?? playbackId;
           final settings =
               ref.watch(settingsControllerProvider).value ??
               ref.read<AppSettings>(settingsDefaultsProvider);
-          final requestedId =
-              LiveDanmakuRoomScope.requestedIdOf(context) ?? room.id;
           return LivePlayerDanmaku(
             roomId: requestedId,
             settings: settings,
             builder: (context, overlay) => PlaybackPanel(
-              target: LivePlaybackTarget(room.id.value),
-              title: room.title,
+              // Both room APIs accept short IDs. Keep the session identity stable
+              // when the independent room metadata supplies its canonical ID.
+              target: LivePlaybackTarget(playbackId.value),
+              title: room?.title ?? '直播间',
               danmakuComposerBuilder: (context) => LiveDanmakuComposer(
                 roomId: requestedId,
                 playerStyle: true,

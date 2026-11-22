@@ -266,7 +266,7 @@ void main() {
           home: Scaffold(
             body: LiveScreen(
               roomId: requested.value,
-              playerBuilder: (_, _) {
+              playerBuilder: (_, _, _) {
                 playerBuilds++;
                 return const ColoredBox(color: Colors.black);
               },
@@ -303,7 +303,7 @@ void main() {
           home: Scaffold(
             body: LiveScreen(
               roomId: requested.value,
-              playerBuilder: (_, _) => _PlayerProbe(
+              playerBuilder: (_, _, _) => _PlayerProbe(
                 onInitialize: () => initialized++,
                 onDispose: () => disposed++,
               ),
@@ -352,7 +352,7 @@ void main() {
           child: Scaffold(
             body: LiveScreen(
               roomId: requested.value,
-              playerBuilder: (_, _) {
+              playerBuilder: (_, _, _) {
                 playerBuilds++;
                 return const SizedBox();
               },
