@@ -387,6 +387,35 @@ void main() {
   );
 
   testWidgets(
+    'expanded room details stay fully visible as a portrait window widens',
+    (tester) async {
+      await showPage(
+        tester,
+        width: 390,
+        height: 700,
+        composerBuilder: (_, _, {required compact}) =>
+            const SizedBox(height: 38),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(findMaterialTooltip('展开房间详情'));
+      await tester.pumpAndSettle();
+      await tester.binding.setSurfaceSize(const Size(680, 700));
+      await tester.pumpAndSettle();
+
+      final header = tester.getRect(find.byType(LiveRoomHeader));
+      final refresh = find.widgetWithText(TextButton, '刷新消息');
+      expect(tester.getRect(refresh).bottom, lessThanOrEqualTo(header.bottom));
+      expect(refresh.hitTestable(), findsOneWidget);
+      final watched = find.byKey(const ValueKey('live-watched-count'));
+      expect(tester.getRect(watched).bottom, lessThanOrEqualTo(header.bottom));
+      expect(
+        tester.getSize(find.byKey(const ValueKey('live-chat-list'))).height,
+        greaterThan(0),
+      );
+    },
+  );
+
+  testWidgets(
     'expanded room keeps chat and SC usable with a short keyboard viewport',
     (tester) async {
       await showPage(

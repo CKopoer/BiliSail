@@ -558,7 +558,12 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
                   if (!below) ...[
                     ConstrainedBox(
                       constraints: BoxConstraints(
-                        maxHeight: constraints.maxHeight * .4,
+                        // Reserve space for chat in the stacked layout. Only
+                        // scroll the room details once that space is needed.
+                        maxHeight: compact
+                            ? constraints.maxHeight -
+                                  math.min(96.0, constraints.maxHeight * .6)
+                            : constraints.maxHeight * .4,
                       ),
                       child: header,
                     ),
