@@ -51,6 +51,7 @@ final class SqliteDownloadRepository implements DownloadRepository {
   final DateTime Function() _clock;
   final _changes = StreamController<DownloadQueueState>.broadcast();
   final Map<String, DownloadTask> _tasks = {};
+  List<String>? _visibleTaskIds;
   final Map<String, _Run> _runs = {};
   final Set<String> _removing = {};
   final Set<String> _backgroundFailed = {};
@@ -82,9 +83,22 @@ final class SqliteDownloadRepository implements DownloadRepository {
   @override
   Stream<DownloadQueueState> get changes => _changes.stream;
 
-  List<DownloadTask> _visible() =>
-      _tasks.values.where((task) => task.scope == _scope).toList()
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  List<DownloadTask> _visible() {
+    final ids = _visibleTaskIds ??= _sortVisibleTaskIds();
+    return [for (final id in ids) _tasks[id]!];
+  }
+
+  List<String> _sortVisibleTaskIds() {
+    final tasks = _tasks.values.where((task) => task.scope == _scope).toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return [for (final task in tasks) task.id];
+  }
+
+  // Existing tasks keep their creation time and scope as they advance.
+  void _insertTask(DownloadTask task) {
+    _tasks[task.id] = task;
+    _visibleTaskIds = null;
+  }
 
   void _emit() {
     if (!_closed) _changes.add(current);
@@ -95,6 +109,7 @@ final class SqliteDownloadRepository implements DownloadRepository {
 
   Future<void> _load() async {
     _scope = sources.accountScope;
+    _visibleTaskIds = null;
     _epoch = sources.sessionEpoch;
     final loadingScope = _scope;
     final loadingEpoch = _epoch;
@@ -142,7 +157,7 @@ final class SqliteDownloadRepository implements DownloadRepository {
             loadingEpoch != sources.sessionEpoch) {
           return;
         }
-        _tasks[restored.id] = restored;
+        _insertTask(restored);
         if (!identical(restored, task)) await _save(restored);
         if (restored.status == DownloadStatus.completed) {
           try {
@@ -335,7 +350,7 @@ final class SqliteDownloadRepository implements DownloadRepository {
         await _files.deleteOwned(task);
         return;
       }
-      _tasks[id] = task;
+      _insertTask(task);
       await _save(task);
       _emit();
     }
@@ -931,6 +946,7 @@ final class SqliteDownloadRepository implements DownloadRepository {
         return;
       }
       _tasks.remove(id);
+      _visibleTaskIds = null;
       _emit();
       try {
         if (deleteFiles) {
@@ -950,7 +966,7 @@ final class SqliteDownloadRepository implements DownloadRepository {
         );
       } catch (_) {
         if (scope == _scope && epoch == _epoch && !_tasks.containsKey(id)) {
-          _tasks[id] = current;
+          _insertTask(current);
           _emit();
         }
         rethrow;
@@ -1025,6 +1041,7 @@ final class SqliteDownloadRepository implements DownloadRepository {
         await Future.wait(_runs.values.map((run) => run.future).toList());
         await _writes;
         _tasks.clear();
+        _visibleTaskIds = null;
         _backgroundFailed.clear();
         _scope = sources.accountScope;
         _epoch = sources.sessionEpoch;

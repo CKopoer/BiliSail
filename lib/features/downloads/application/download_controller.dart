@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/app_failure.dart';
@@ -69,10 +70,25 @@ final class DownloadTaskEntry {
     required this.partTitle,
     required this.searchText,
     required this.completed,
+    required this._completedTask,
   });
 
   final String id, scope, videoTitle, partTitle, searchText;
   final bool completed;
+  final DownloadTask? _completedTask;
+
+  bool _matchesCompletedLayout(DownloadTask task) {
+    final previous = _completedTask;
+    return identical(previous, task) ||
+        previous != null &&
+            previous.selection.quality == task.selection.quality &&
+            previous.selection.codec == task.selection.codec &&
+            previous.selection.output == task.selection.output &&
+            previous.downloadedBytes == task.downloadedBytes &&
+            previous.totalBytes == task.totalBytes &&
+            previous.failure?.message == task.failure?.message &&
+            listEquals(previous.warnings, task.warnings);
+  }
 }
 
 final class DownloadQueueIndexController extends Notifier<DownloadQueueIndex> {
@@ -84,7 +100,6 @@ final class DownloadQueueIndexController extends Notifier<DownloadQueueIndex> {
     final queue = ref.watch(downloadControllerProvider);
     final previousStructure = _previous?.structure;
     final tasksById = <String, DownloadTask>{};
-    final entriesById = <String, DownloadTaskEntry>{};
     final entries = <DownloadTaskEntry>[];
     var unchanged = previousStructure?.entries.length == queue.tasks.length;
     var transferred = 0;
@@ -107,7 +122,8 @@ final class DownloadQueueIndexController extends Notifier<DownloadQueueIndex> {
       final entry =
           sameTitle &&
               previous.scope == task.scope &&
-              previous.completed == completed
+              previous.completed == completed &&
+              (!completed || previous._matchesCompletedLayout(task))
           ? previous
           : DownloadTaskEntry._(
               id: task.id,
@@ -119,13 +135,13 @@ final class DownloadQueueIndexController extends Notifier<DownloadQueueIndex> {
                   : '${task.item.video.title} ${task.item.part.title}'
                         .toLowerCase(),
               completed: completed,
+              completedTask: completed ? task : null,
             );
       if (unchanged &&
           !identical(previousStructure?.entries[entries.length], entry)) {
         unchanged = false;
       }
       entries.add(entry);
-      entriesById[task.id] = entry;
     }
     final structure =
         previousStructure != null &&
@@ -138,7 +154,9 @@ final class DownloadQueueIndexController extends Notifier<DownloadQueueIndex> {
             activeCount: active,
             resumableCount: resumable,
           );
-    _entriesById = entriesById;
+    if (!unchanged) {
+      _entriesById = {for (final entry in entries) entry.id: entry};
+    }
     return _previous = DownloadQueueIndex._(
       tasksById: tasksById,
       structure: structure,

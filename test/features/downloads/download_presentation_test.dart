@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:bilisail/app/theme.dart';
+import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
@@ -453,7 +454,7 @@ void main() {
     });
   }
 
-  testWidgets('scrolling many completed downloads decodes local thumbnails', (
+  testWidgets('scrollbar drag admits only nearby local thumbnails', (
     tester,
   ) async {
     final directory = Directory.systemTemp.createTempSync('download_covers');
@@ -483,11 +484,27 @@ void main() {
       }),
     );
     addTearDown(repository.close);
+    final visible = ValueNotifier(true);
+    addTearDown(visible.dispose);
+    var cardBuilds = 0;
+    var fileLoads = 0;
     await _pump(
       tester,
-      DownloadsScreen(
-        coverProvider: (task) =>
-            FileImage(File('${directory.path}/${task.id}.img')),
+      ValueListenableBuilder(
+        valueListenable: visible,
+        builder: (context, active, child) => Offstage(
+          offstage: !active,
+          child: WorkspaceActivity(active: active, child: child!),
+        ),
+        child: DownloadsScreen(
+          coverProvider: (task) {
+            cardBuilds++;
+            return _CountingFileImage(
+              File('${directory.path}/${task.id}.img'),
+              () => fileLoads++,
+            );
+          },
+        ),
       ),
       repository,
       _SourceRepository(),
@@ -495,6 +512,16 @@ void main() {
     );
     await tester.tap(find.text('已完成'));
     await tester.pumpAndSettle();
+    expect(fileLoads, 2);
+    visible.value = false;
+    await tester.pump();
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pump();
+    expect(fileLoads, 2);
+    visible.value = true;
+    await tester.pump();
 
     Future<void> expectThumbnails() async {
       for (var attempt = 0; attempt < 100; attempt++) {
@@ -517,10 +544,40 @@ void main() {
     await expectThumbnails();
     final firstVisibleTask = find.byType(Card).first;
     final initialCard = tester.element(firstVisibleTask);
-    tester.widget<ListView>(find.byType(ListView)).controller!.jumpTo(12000);
-    await tester.pumpAndSettle();
+    final position = tester
+        .widget<ListView>(find.bySubtype<ListView>())
+        .controller!
+        .position;
+    final drag = position.drag(DragStartDetails(), () {});
+    fileLoads = 0;
+    cardBuilds = 0;
+    drag.update(
+      DragUpdateDetails(
+        delta: const Offset(0, -12000),
+        primaryDelta: -12000,
+        globalPosition: Offset.zero,
+      ),
+    );
+    await tester.pump();
+    drag.cancel();
+    final coldBuilds = cardBuilds;
     expect(tester.element(firstVisibleTask), isNot(same(initialCard)));
+    final loadsOnDrag = fileLoads;
+    expect(loadsOnDrag, lessThanOrEqualTo(2));
     await expectThumbnails();
+    expect(fileLoads, inInclusiveRange(1, 10));
+
+    position.jumpTo(0);
+    await tester.pump();
+    cardBuilds = 0;
+    position.jumpTo(12000);
+    await tester.pump();
+    expect(position.pixels, 12000);
+    expect(cardBuilds, lessThan(coldBuilds));
+    debugPrint(
+      'download scrollbar probe: dragLoads=$loadsOnDrag '
+      'coldCards=$coldBuilds warmCards=$cardBuilds',
+    );
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
@@ -639,6 +696,18 @@ final class _SourceRepository implements DownloadSourceRepository {
     DownloadSelection selection, {
     required RequestCancellation cancellation,
   }) => throw UnimplementedError();
+}
+
+final class _CountingFileImage extends FileImage {
+  const _CountingFileImage(super.file, this.onLoad);
+
+  final VoidCallback onLoad;
+
+  @override
+  ImageStreamCompleter loadImage(FileImage key, ImageDecoderCallback decode) {
+    onLoad();
+    return super.loadImage(key, decode);
+  }
 }
 
 final class _DownloadRepository implements DownloadRepository {

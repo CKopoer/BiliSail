@@ -1,6 +1,6 @@
-import 'package:material_ui/material_ui.dart';
-
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../shared/ui/app_dialog.dart';
 import '../../../core/presentation/workspace_activity.dart';
@@ -10,11 +10,13 @@ import '../../../domain/video_codec.dart';
 import '../../../shared/ui/app_cover_image.dart';
 import '../../../shared/ui/page_tab_style.dart';
 import '../../../shared/ui/paging_tab_strip.dart';
+import '../../../shared/ui/sliver_cached_extent_list.dart';
 import '../../../shared/ui/smooth_scroll_behavior.dart';
 import '../../../shared/ui/state_view.dart';
 import '../application/download_controller.dart';
 import '../domain/download_models.dart';
 import 'download_destination_dialog.dart';
+import 'download_local_cover.dart';
 
 String downloadByteText(int bytes) {
   if (bytes < 1024) return '$bytes B';
@@ -50,7 +52,7 @@ String downloadCodecText(VideoCodecPreference codec) => switch (codec) {
   VideoCodecPreference.dolbyVision => '杜比视界',
 };
 
-final class DownloadsScreen extends ConsumerStatefulWidget {
+final class DownloadsScreen extends StatelessWidget {
   const DownloadsScreen({
     super.key,
     this.onPlay,
@@ -67,12 +69,25 @@ final class DownloadsScreen extends ConsumerStatefulWidget {
   final bool showHeading;
 
   @override
-  ConsumerState<DownloadsScreen> createState() => _DownloadsScreenState();
+  Widget build(BuildContext context) => TickerMode(
+    enabled: WorkspaceActivity.isVisible(context),
+    child: _DownloadsContent(this),
+  );
 }
 
-final class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
+final class _DownloadsContent extends ConsumerStatefulWidget {
+  const _DownloadsContent(this.screen);
+
+  final DownloadsScreen screen;
+
+  @override
+  ConsumerState<_DownloadsContent> createState() => _DownloadsScreenState();
+}
+
+final class _DownloadsScreenState extends ConsumerState<_DownloadsContent> {
   final _searchController = TextEditingController();
   final _scrollController = HeaderScrollController();
+  final _coverLoader = DownloadCoverLoader();
   bool _completed = false;
   String _query = '';
   String _normalizedQuery = '';
@@ -109,6 +124,7 @@ final class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
 
   @override
   void dispose() {
+    _coverLoader.dispose();
     _searchController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -142,6 +158,7 @@ final class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screen = widget.screen;
     _scrollController.configure(
       context,
       active: WorkspaceActivity.isActive(context),
@@ -167,7 +184,7 @@ final class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
         LayoutBuilder(
           builder: (context, constraints) {
             final actionsInHeading =
-                widget.showHeading && constraints.maxWidth >= 600;
+                screen.showHeading && constraints.maxWidth >= 600;
             final actions = [
               IconButton(
                 tooltip: '刷新下载',
@@ -182,7 +199,7 @@ final class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
                     preferences: ref
                         .read(downloadControllerProvider)
                         .preferences,
-                    allowCustomDirectory: widget.allowCustomDirectory,
+                    allowCustomDirectory: screen.allowCustomDirectory,
                   ),
                 ),
                 icon: const Icon(Icons.settings_outlined),
@@ -191,7 +208,7 @@ final class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (widget.showHeading)
+                if (screen.showHeading)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 12, 12, 4),
                     child: Row(
@@ -254,141 +271,166 @@ final class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
         ),
         const Divider(height: 1),
         Expanded(
-          child: ListView.builder(
-            controller: _scrollController,
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 72),
-            itemCount: shown.length + 3,
-            findChildIndexCallback: (key) => switch (key) {
-              ValueKey<int>(:final value) => value,
-              ValueKey<String>(:final value) => _shownIndices[value],
-              _ => null,
-            },
-            itemBuilder: (context, index) {
-              if (index == 0) {
-                return LayoutBuilder(
-                  key: const ValueKey(0),
-                  builder: (context, constraints) {
-                    final search = ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 360),
-                      child: TextField(
-                        controller: _searchController,
-                        onChanged: (text) => setState(() {
-                          _query = text;
-                          _normalizedQuery = text.trim().toLowerCase();
-                        }),
-                        decoration: const InputDecoration(
-                          prefixIcon: Icon(Icons.search_rounded, size: 20),
-                          hintText: '搜索标题或分集',
-                        ),
-                      ),
-                    );
-                    final actions = Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
-                      children: [
-                        OutlinedButton.icon(
-                          onPressed: activeCount == 0
-                              ? null
-                              : () => _run(controller.pauseAll),
-                          icon: const Icon(Icons.pause_rounded, size: 18),
-                          label: const Text('全部暂停'),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: resumableCount == 0
-                              ? null
-                              : () => _run(controller.resumeAll),
-                          icon: const Icon(Icons.play_arrow_rounded, size: 18),
-                          label: const Text('全部继续'),
-                        ),
-                      ],
-                    );
-                    final textScale =
-                        MediaQuery.textScalerOf(context).scale(14) / 14;
-                    if (constraints.maxWidth >= 720 * textScale) {
-                      return Row(
-                        children: [
-                          Expanded(
-                            child: Align(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              const padding = EdgeInsets.fromLTRB(20, 16, 20, 72);
+              final cardWidth =
+                  constraints.maxWidth -
+                  padding.horizontal -
+                  _DownloadTaskCard.padding.horizontal;
+              final textScale = MediaQuery.textScalerOf(context).scale(14) / 14;
+              return _DownloadListView(
+                reuseExtents: _completed,
+                controller: _scrollController,
+                padding: padding,
+                itemCount: shown.length + 3,
+                findChildIndexCallback: (key) => switch (key) {
+                  ValueKey<int>(:final value) => value,
+                  ValueKey<String>(:final value) => _shownIndices[value],
+                  _ => null,
+                },
+                itemBuilder: (context, index) {
+                  if (index == 0) {
+                    return LayoutBuilder(
+                      key: const ValueKey(0),
+                      builder: (context, constraints) {
+                        final search = ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 360),
+                          child: TextField(
+                            controller: _searchController,
+                            onChanged: (text) => setState(() {
+                              _query = text;
+                              _normalizedQuery = text.trim().toLowerCase();
+                            }),
+                            decoration: const InputDecoration(
+                              prefixIcon: Icon(Icons.search_rounded, size: 20),
+                              hintText: '搜索标题或分集',
+                            ),
+                          ),
+                        );
+                        final actions = Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed: activeCount == 0
+                                  ? null
+                                  : () => _run(controller.pauseAll),
+                              icon: const Icon(Icons.pause_rounded, size: 18),
+                              label: const Text('全部暂停'),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: resumableCount == 0
+                                  ? null
+                                  : () => _run(controller.resumeAll),
+                              icon: const Icon(
+                                Icons.play_arrow_rounded,
+                                size: 18,
+                              ),
+                              label: const Text('全部继续'),
+                            ),
+                          ],
+                        );
+                        final textScale =
+                            MediaQuery.textScalerOf(context).scale(14) / 14;
+                        if (constraints.maxWidth >= 720 * textScale) {
+                          return Row(
+                            children: [
+                              Expanded(
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: search,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              actions,
+                            ],
+                          );
+                        }
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Align(
                               alignment: Alignment.centerLeft,
                               child: search,
                             ),
-                          ),
-                          const SizedBox(width: 16),
-                          actions,
-                        ],
-                      );
-                    }
+                            const SizedBox(height: 8),
+                            actions,
+                          ],
+                        );
+                      },
+                    );
+                  }
+                  if (index == 1) {
+                    return const _DownloadTransferredLabel(key: ValueKey(1));
+                  }
+                  if (index == 2) {
                     return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      key: const ValueKey(2),
                       children: [
-                        Align(alignment: Alignment.centerLeft, child: search),
-                        const SizedBox(height: 8),
-                        actions,
+                        if (!initialized)
+                          const SizedBox(
+                            height: 260,
+                            child: StateView.loading(),
+                          )
+                        else if (failure != null)
+                          SizedBox(
+                            height: 180,
+                            child: StateView.error(
+                              message: failure.message,
+                              onAction: () => _run(controller.refresh),
+                            ),
+                          ),
+                        if (initialized && shown.isEmpty)
+                          SizedBox(
+                            height: 240,
+                            child: StateView.empty(
+                              message: _query.isNotEmpty
+                                  ? '没有匹配的下载任务'
+                                  : _completed
+                                  ? '还没有已完成的下载'
+                                  : '还没有下载任务',
+                              icon: Icons.download_outlined,
+                            ),
+                          ),
                       ],
                     );
-                  },
-                );
-              }
-              if (index == 1) {
-                return const _DownloadTransferredLabel(key: ValueKey(1));
-              }
-              if (index == 2) {
-                return Column(
-                  key: const ValueKey(2),
-                  children: [
-                    if (!initialized)
-                      const SizedBox(height: 260, child: StateView.loading())
-                    else if (failure != null)
-                      SizedBox(
-                        height: 180,
-                        child: StateView.error(
-                          message: failure.message,
-                          onAction: () => _run(controller.refresh),
-                        ),
-                      ),
-                    if (initialized && shown.isEmpty)
-                      SizedBox(
-                        height: 240,
-                        child: StateView.empty(
-                          message: _query.isNotEmpty
-                              ? '没有匹配的下载任务'
-                              : _completed
-                              ? '还没有已完成的下载'
-                              : '还没有下载任务',
-                          icon: Icons.download_outlined,
-                        ),
-                      ),
-                  ],
-                );
-              }
-              final id = shown[index - 3].id;
-              return Padding(
-                key: ValueKey(id),
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _DownloadTaskRow(
-                  id: id,
-                  onPause: () => _run(() => controller.pause(id)),
-                  onResume: () => _run(() => controller.resume(id)),
-                  onRemove: () {
-                    final task = _task(id);
-                    if (task != null) _remove(task);
-                  },
-                  onPlay: widget.onPlay == null
-                      ? null
-                      : () {
-                          final task = _task(id);
-                          if (task != null) widget.onPlay?.call(task);
-                        },
-                  onOpenDirectory: widget.onOpenDirectory == null
-                      ? null
-                      : () => _run(() async {
-                          final task = _task(id);
-                          if (task != null) {
-                            await widget.onOpenDirectory?.call(task.directory);
-                          }
-                        }),
-                  coverProvider: widget.coverProvider,
-                ),
+                  }
+                  final id = shown[index - 3].id;
+                  return Padding(
+                    key: ValueKey(id),
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _DownloadTaskRow(
+                      id: id,
+                      coverLoader: _coverLoader,
+                      narrow: cardWidth < 480,
+                      inlineActions: cardWidth >= 640 * textScale,
+                      onPause: () => _run(() => controller.pause(id)),
+                      onResume: () => _run(() => controller.resume(id)),
+                      onRemove: () {
+                        final task = _task(id);
+                        if (task != null) _remove(task);
+                      },
+                      onPlay: screen.onPlay == null
+                          ? null
+                          : () {
+                              final task = _task(id);
+                              if (task != null) screen.onPlay?.call(task);
+                            },
+                      onOpenDirectory: screen.onOpenDirectory == null
+                          ? null
+                          : () => _run(() async {
+                              final task = _task(id);
+                              if (task != null) {
+                                await screen.onOpenDirectory?.call(
+                                  task.directory,
+                                );
+                              }
+                            }),
+                      coverProvider: screen.coverProvider,
+                    ),
+                  );
+                },
               );
             },
           ),
@@ -396,6 +438,26 @@ final class _DownloadsScreenState extends ConsumerState<DownloadsScreen> {
       ],
     );
   }
+}
+
+final class _DownloadListView extends ListView {
+  _DownloadListView({
+    required this.reuseExtents,
+    required super.controller,
+    required super.padding,
+    required super.itemCount,
+    required super.findChildIndexCallback,
+    required super.itemBuilder,
+  }) : super.builder();
+
+  // Progress and speed can change an offscreen queue row's natural height.
+  final bool reuseExtents;
+
+  @override
+  Widget buildChildLayout(BuildContext context) => SliverCachedExtentList(
+    delegate: childrenDelegate,
+    cacheExtents: reuseExtents,
+  );
 }
 
 final class _DownloadTransferredLabel extends ConsumerWidget {
@@ -419,6 +481,9 @@ final class _DownloadTransferredLabel extends ConsumerWidget {
 final class _DownloadTaskRow extends ConsumerWidget {
   const _DownloadTaskRow({
     required this.id,
+    required this.coverLoader,
+    required this.narrow,
+    required this.inlineActions,
     required this.onPause,
     required this.onResume,
     required this.onRemove,
@@ -428,18 +493,26 @@ final class _DownloadTaskRow extends ConsumerWidget {
   });
 
   final String id;
+  final DownloadCoverLoader coverLoader;
+  final bool narrow, inlineActions;
   final VoidCallback onPause, onResume, onRemove;
   final VoidCallback? onPlay, onOpenDirectory;
   final ImageProvider<Object>? Function(DownloadTask)? coverProvider;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final task = ref.watch(
-      downloadQueueIndexProvider.select((index) => index.tasksById[id]),
+    final details = ref.watch(
+      downloadQueueIndexProvider.select((index) {
+        final task = index.tasksById[id];
+        return task == null ? null : _DownloadCardDetails(task);
+      }),
     );
-    if (task == null) return const SizedBox.shrink();
+    if (details == null) return const SizedBox.shrink();
     return _DownloadTaskCard(
-      task: task,
+      task: details.task,
+      coverLoader: coverLoader,
+      narrow: narrow,
+      inlineActions: inlineActions,
       onPause: onPause,
       onResume: onResume,
       onRemove: onRemove,
@@ -450,9 +523,38 @@ final class _DownloadTaskRow extends ConsumerWidget {
   }
 }
 
+/// A byte or speed update has no effect on the card's static content.
+final class _DownloadCardDetails {
+  const _DownloadCardDetails(this.task);
+
+  final DownloadTask task;
+
+  Object get _fields => (
+    task.id,
+    task.scope,
+    task.directory,
+    task.item,
+    task.selection,
+    task.status,
+    task.failure,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is _DownloadCardDetails &&
+      _fields == other._fields &&
+      listEquals(task.warnings, other.task.warnings);
+
+  @override
+  int get hashCode => Object.hash(_fields, Object.hashAll(task.warnings));
+}
+
 final class _DownloadTaskCard extends StatelessWidget {
   const _DownloadTaskCard({
     required this.task,
+    required this.coverLoader,
+    required this.narrow,
+    required this.inlineActions,
     required this.onPause,
     required this.onResume,
     required this.onRemove,
@@ -460,7 +562,11 @@ final class _DownloadTaskCard extends StatelessWidget {
     this.onOpenDirectory,
     this.coverProvider,
   });
+  static const padding = EdgeInsets.all(14);
+
   final DownloadTask task;
+  final DownloadCoverLoader coverLoader;
+  final bool narrow, inlineActions;
   final VoidCallback onPause, onResume, onRemove;
   final VoidCallback? onPlay, onOpenDirectory;
   final ImageProvider<Object>? Function(DownloadTask)? coverProvider;
@@ -501,250 +607,282 @@ final class _DownloadTaskCard extends StatelessWidget {
       DownloadStatus.queued => scheme.surfaceContainerHigh,
       _ => scheme.primaryContainer,
     };
-    final total = task.totalBytes;
-    final bytes = total == null
-        ? downloadByteText(task.downloadedBytes)
-        : '${downloadByteText(task.downloadedBytes)} / ${downloadByteText(total)}';
+    final coverWidth = narrow ? 96.0 : 160.0;
+    final localCover = completed ? coverProvider?.call(task) : null;
+    // Keep the decoded frame thumbnail-sized even for tall covers.
+    final coverDecodeEdge =
+        (coverWidth * MediaQuery.devicePixelRatioOf(context)).ceil().clamp(
+          1,
+          640,
+        );
+    final coverPlaceholder = ColoredBox(
+      color: scheme.surfaceContainerHigh,
+      child: Icon(Icons.download_done_rounded, color: scheme.primary),
+    );
+    final cover = ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        width: coverWidth,
+        height: narrow ? 54 : 90,
+        child: localCover != null
+            ? DownloadLocalCover(
+                loader: coverLoader,
+                image: ResizeImage(
+                  localCover,
+                  width: coverDecodeEdge,
+                  height: coverDecodeEdge,
+                  policy: ResizeImagePolicy.fit,
+                ),
+                placeholder: coverPlaceholder,
+              )
+            : completed || task.item.video.coverUrl.isEmpty
+            ? coverPlaceholder
+            : AppCoverImage(
+                url: task.item.video.coverUrl,
+                errorBuilder: (_, _, _) => ColoredBox(
+                  color: scheme.surfaceContainerHigh,
+                  child: const Icon(Icons.movie_outlined),
+                ),
+              ),
+      ),
+    );
+    final transferDetails = _DownloadTransferDetails(
+      taskId: task.id,
+      showSpeed: task.status == DownloadStatus.downloading,
+      badge: DecoratedBox(
+        decoration: BoxDecoration(
+          color: statusBackground,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(statusIcon, size: 14, color: statusColor),
+              const SizedBox(width: 5),
+              Text(
+                status,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: statusColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    final actions = Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      alignment: WrapAlignment.end,
+      children: [
+        if (completed && onPlay != null)
+          TextButton.icon(
+            onPressed: onPlay,
+            icon: const Icon(Icons.play_arrow_rounded, size: 18),
+            label: const Text('播放'),
+          ),
+        if (task.active)
+          TextButton.icon(
+            onPressed: onPause,
+            icon: const Icon(Icons.pause_rounded, size: 18),
+            label: const Text('暂停'),
+          ),
+        if (task.status == DownloadStatus.paused ||
+            task.status == DownloadStatus.failed)
+          TextButton.icon(
+            onPressed: onResume,
+            icon: Icon(
+              task.status == DownloadStatus.failed
+                  ? Icons.refresh_rounded
+                  : Icons.play_arrow_rounded,
+              size: 18,
+            ),
+            label: Text(task.status == DownloadStatus.failed ? '重试' : '继续'),
+          ),
+        if (completed && onOpenDirectory != null)
+          TextButton.icon(
+            onPressed: onOpenDirectory,
+            icon: const Icon(Icons.folder_open_outlined, size: 18),
+            label: const Text('打开目录'),
+          ),
+        TextButton.icon(
+          onPressed: onRemove,
+          style: TextButton.styleFrom(foregroundColor: scheme.onSurfaceVariant),
+          icon: const Icon(Icons.delete_outline_rounded, size: 18),
+          label: const Text('删除任务'),
+        ),
+      ],
+    );
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final narrow = constraints.maxWidth < 480;
-            final coverWidth = narrow ? 96.0 : 160.0;
-            final localCover = completed ? coverProvider?.call(task) : null;
-            // Keep the decoded frame thumbnail-sized even for tall covers.
-            final coverDecodeEdge =
-                (coverWidth * MediaQuery.devicePixelRatioOf(context))
-                    .ceil()
-                    .clamp(1, 640);
-            final cover = ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: SizedBox(
-                width: coverWidth,
-                height: narrow ? 54 : 90,
-                child: localCover != null
-                    ? Image(
-                        image: ResizeImage(
-                          localCover,
-                          width: coverDecodeEdge,
-                          height: coverDecodeEdge,
-                          policy: ResizeImagePolicy.fit,
-                        ),
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => ColoredBox(
-                          color: scheme.surfaceContainerHigh,
-                          child: Icon(
-                            Icons.download_done_rounded,
-                            color: scheme.primary,
-                          ),
-                        ),
-                      )
-                    : completed || task.item.video.coverUrl.isEmpty
-                    ? ColoredBox(
-                        color: scheme.surfaceContainerHigh,
-                        child: Icon(
-                          Icons.download_done_rounded,
-                          color: scheme.primary,
-                        ),
-                      )
-                    : AppCoverImage(
-                        url: task.item.video.coverUrl,
-                        errorBuilder: (_, _, _) => ColoredBox(
-                          color: scheme.surfaceContainerHigh,
-                          child: const Icon(Icons.movie_outlined),
-                        ),
-                      ),
-              ),
-            );
-            final textScale = MediaQuery.textScalerOf(context).scale(14) / 14;
-            final inlineActions = constraints.maxWidth >= 640 * textScale;
-            final transferDetails = Wrap(
-              spacing: 12,
-              runSpacing: 6,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: statusBackground,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(statusIcon, size: 14, color: statusColor),
-                        const SizedBox(width: 5),
-                        Text(
-                          status,
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            color: statusColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                Text(bytes, style: theme.textTheme.bodySmall),
-                if (task.status == DownloadStatus.downloading &&
-                    task.bytesPerSecond > 0)
-                  Text(
-                    '${downloadByteText(task.bytesPerSecond)}/s',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: scheme.primary,
-                    ),
-                  ),
-              ],
-            );
-            final actions = Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              alignment: WrapAlignment.end,
-              children: [
-                if (completed && onPlay != null)
-                  TextButton.icon(
-                    onPressed: onPlay,
-                    icon: const Icon(Icons.play_arrow_rounded, size: 18),
-                    label: const Text('播放'),
-                  ),
-                if (task.active)
-                  TextButton.icon(
-                    onPressed: onPause,
-                    icon: const Icon(Icons.pause_rounded, size: 18),
-                    label: const Text('暂停'),
-                  ),
-                if (task.status == DownloadStatus.paused ||
-                    task.status == DownloadStatus.failed)
-                  TextButton.icon(
-                    onPressed: onResume,
-                    icon: Icon(
-                      task.status == DownloadStatus.failed
-                          ? Icons.refresh_rounded
-                          : Icons.play_arrow_rounded,
-                      size: 18,
-                    ),
-                    label: Text(
-                      task.status == DownloadStatus.failed ? '重试' : '继续',
-                    ),
-                  ),
-                if (completed && onOpenDirectory != null)
-                  TextButton.icon(
-                    onPressed: onOpenDirectory,
-                    icon: const Icon(Icons.folder_open_outlined, size: 18),
-                    label: const Text('打开目录'),
-                  ),
-                TextButton.icon(
-                  onPressed: onRemove,
-                  style: TextButton.styleFrom(
-                    foregroundColor: scheme.onSurfaceVariant,
-                  ),
-                  icon: const Icon(Icons.delete_outline_rounded, size: 18),
-                  label: const Text('删除任务'),
-                ),
-              ],
-            );
-            return Column(
+        padding: padding,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    cover,
-                    SizedBox(width: narrow ? 12 : 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            task.item.video.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleSmall,
-                          ),
-                          const SizedBox(height: 5),
-                          Text(
-                            task.item.part.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall,
-                          ),
-                          if (!narrow) ...[
-                            const SizedBox(height: 10),
-                            _DownloadFormatLabels(task: task),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                if (narrow) ...[
-                  const SizedBox(height: 12),
-                  _DownloadFormatLabels(task: task),
-                ],
-                const SizedBox(height: 12),
-                if (inlineActions)
-                  Row(
+                cover,
+                SizedBox(width: narrow ? 12 : 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(child: transferDetails),
-                      const SizedBox(width: 12),
-                      actions,
+                      Text(
+                        task.item.video.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        task.item.part.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      if (!narrow) ...[
+                        const SizedBox(height: 10),
+                        _DownloadFormatLabels(task: task),
+                      ],
                     ],
-                  )
-                else
-                  transferDetails,
-                if (!completed) ...[
-                  const SizedBox(height: 10),
-                  LinearProgressIndicator(
-                    minHeight: 4,
-                    borderRadius: BorderRadius.circular(4),
-                    color: statusColor,
-                    backgroundColor: scheme.surfaceContainerHighest,
-                    value:
-                        (task.status == DownloadStatus.muxing
-                            ? task.muxProgress
-                            : task.progress) ??
-                        switch (task.status) {
-                          DownloadStatus.resolving ||
-                          DownloadStatus.downloading ||
-                          DownloadStatus.verifying => null,
-                          DownloadStatus.muxing => null,
-                          _ => 0,
-                        },
                   ),
-                ],
-                if (task.failure case final failure?) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    failure.message,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.error,
-                    ),
-                  ),
-                ],
-                for (final warning in task.warnings)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text(
-                      '提示：$warning',
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  ),
-                if (!inlineActions) ...[
-                  const SizedBox(height: 12),
-                  const Divider(height: 1),
-                  const SizedBox(height: 6),
-                  Align(alignment: Alignment.centerRight, child: actions),
-                ],
+                ),
               ],
-            );
-          },
+            ),
+            if (narrow) ...[
+              const SizedBox(height: 12),
+              _DownloadFormatLabels(task: task),
+            ],
+            const SizedBox(height: 12),
+            if (inlineActions)
+              Row(
+                children: [
+                  Expanded(child: transferDetails),
+                  const SizedBox(width: 12),
+                  actions,
+                ],
+              )
+            else
+              transferDetails,
+            if (!completed) ...[
+              const SizedBox(height: 10),
+              _DownloadProgressIndicator(
+                taskId: task.id,
+                status: task.status,
+                color: statusColor,
+              ),
+            ],
+            if (task.failure case final failure?) ...[
+              const SizedBox(height: 10),
+              Text(
+                failure.message,
+                style: theme.textTheme.bodySmall?.copyWith(color: scheme.error),
+              ),
+            ],
+            for (final warning in task.warnings)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text('提示：$warning', style: theme.textTheme.bodySmall),
+              ),
+            if (!inlineActions) ...[
+              const SizedBox(height: 12),
+              const Divider(height: 1),
+              const SizedBox(height: 6),
+              Align(alignment: Alignment.centerRight, child: actions),
+            ],
+          ],
         ),
       ),
+    );
+  }
+}
+
+final class _DownloadTransferDetails extends ConsumerWidget {
+  const _DownloadTransferDetails({
+    required this.taskId,
+    required this.showSpeed,
+    required this.badge,
+  });
+
+  final String taskId;
+  final bool showSpeed;
+  final Widget badge;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final (downloaded, total, speed) = ref.watch(
+      downloadQueueIndexProvider.select((index) {
+        final task = index.tasksById[taskId];
+        return (
+          task?.downloadedBytes ?? 0,
+          task?.totalBytes,
+          showSpeed ? task?.bytesPerSecond ?? 0 : 0,
+        );
+      }),
+    );
+    final theme = Theme.of(context);
+    final bytes = downloadByteText(downloaded);
+    return Wrap(
+      spacing: 12,
+      runSpacing: 6,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        badge,
+        Text(
+          total == null ? bytes : '$bytes / ${downloadByteText(total)}',
+          style: theme.textTheme.bodySmall,
+        ),
+        if (speed > 0)
+          Text(
+            '${downloadByteText(speed)}/s',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.primary,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+final class _DownloadProgressIndicator extends ConsumerWidget {
+  const _DownloadProgressIndicator({
+    required this.taskId,
+    required this.status,
+    required this.color,
+  });
+
+  final String taskId;
+  final DownloadStatus status;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final progress = ref.watch(
+      downloadQueueIndexProvider.select((index) {
+        final task = index.tasksById[taskId];
+        return status == DownloadStatus.muxing
+            ? task?.muxProgress
+            : task?.progress;
+      }),
+    );
+    return LinearProgressIndicator(
+      minHeight: 4,
+      borderRadius: BorderRadius.circular(4),
+      color: color,
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+      value:
+          progress ??
+          switch (status) {
+            DownloadStatus.resolving ||
+            DownloadStatus.downloading ||
+            DownloadStatus.verifying ||
+            DownloadStatus.muxing => null,
+            _ => 0,
+          },
     );
   }
 }

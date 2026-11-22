@@ -152,6 +152,49 @@ void main() {
     },
   );
 
+  test('snapshots keep creation order through transfers and removal', () async {
+    await repository.close();
+    await db.close();
+    var now = DateTime(2026, 11, 22);
+    await openRepository(
+      clock: () => now = now.add(const Duration(milliseconds: 1)),
+    );
+    slow = true;
+    final items = [
+      for (var index = 1; index <= 3; index++)
+        DownloadItem(
+          video: item.video,
+          part: VideoPart(
+            cid: '$index',
+            page: index,
+            title: 'P$index',
+            duration: item.part.duration,
+          ),
+        ),
+    ];
+    Iterable<String> order(DownloadQueueState state) =>
+        state.tasks.map((task) => task.item.part.cid);
+    final finished = repository.changes
+        .firstWhere(
+          (state) =>
+              state.tasks.length == items.length &&
+              state.tasks.every(
+                (task) => task.status == DownloadStatus.completed,
+              ),
+        )
+        .timeout(const Duration(seconds: 5));
+    await repository.enqueue(items, const DownloadSelection());
+    final queued = repository.current;
+    expect(order(queued), ['3', '2', '1']);
+    final completed = await finished;
+    expect(order(completed), ['3', '2', '1']);
+    expect(queued.tasks.first.status, isNot(DownloadStatus.completed));
+    expect(completed.tasks.first.downloadedBytes, media.length * 2);
+    await repository.remove(completed.tasks[1].id, deleteFiles: false);
+    expect(order(repository.current), ['3', '1']);
+    expect(order(completed), ['3', '2', '1']);
+  });
+
   test(
     'manual pause while the system service starts keeps the task paused',
     () async {
