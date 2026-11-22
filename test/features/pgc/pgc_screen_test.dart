@@ -114,6 +114,8 @@ void main() {
     expect(findMaterialTooltip('收起影视信息'), findsOneWidget);
     expect(tester.getSize(find.byType(_TrackedPlayer)).width, 520);
     final episodes = tester.state(find.byType(PgcEpisodePanel));
+    final description = find.text(_season.description);
+    expect(tester.widget<Text>(description).maxLines, 2);
     layout.value = layout.value.copyWith(
       playbackSplitStyles: {PlaybackSplitPage.pgc: PlaybackSplitStyle.below},
     );
@@ -126,17 +128,30 @@ void main() {
     );
     expect(tester.getTopLeft(find.text('选集')).dx, greaterThanOrEqualTo(520));
     expect(tester.state(find.byType(PgcEpisodePanel)), same(episodes));
-    await tester.tap(find.text('展开').first);
+    expect(tester.widget<Text>(description).maxLines, isNull);
+    tester.view.physicalSize = const Size(899, 800);
+    await tester.pumpAndSettle();
+    expect(tester.widget<Text>(description).maxLines, 2);
+    tester.view.physicalSize = const Size(900, 800);
+    await tester.pumpAndSettle();
+    expect(tester.widget<Text>(description).maxLines, isNull);
+    await tester.tap(find.text('收起'));
     await tester.pumpAndSettle();
     await tester.tap(findMaterialTooltip('收起影视信息'));
     await tester.pumpAndSettle();
     expect(tester.getSize(player), const Size(900, 800));
     await tester.tap(findMaterialTooltip('展开影视信息'));
     await tester.pumpAndSettle();
-    expect(find.text('收起'), findsOneWidget);
+    expect(tester.widget<Text>(description).maxLines, 2);
+    tester
+        .widget<PlaybackPageCommands>(find.byType(PlaybackPageCommands))
+        .toggleDescription!();
+    await tester.pumpAndSettle();
+    expect(tester.widget<Text>(description).maxLines, isNull);
     tester.view.physicalSize = const Size(899, 800);
     await tester.pumpAndSettle();
     expect(findMaterialTooltip('收起影视信息'), findsNothing);
+    expect(tester.widget<Text>(description).maxLines, isNull);
     layout.value = const ResponsiveLayoutSettings.defaults();
     tester.view.physicalSize = const Size(900, 800);
     await tester.pumpAndSettle();

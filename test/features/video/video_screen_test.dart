@@ -169,6 +169,7 @@ void main() {
       addTearDown(layout.dispose);
       final session = PlaybackLayoutSessionFake();
       addTearDown(session.dispose);
+      final extras = _ExtrasRepository(tags: const ['测试标签']);
       var created = 0, disposed = 0;
       await tester.pumpWidget(
         ProviderScope(
@@ -176,9 +177,7 @@ void main() {
             playbackSessionProvider.overrideWithValue(session),
             authControllerProvider.overrideWith(_GuestAuthController.new),
             videoRepositoryProvider.overrideWithValue(_VideoRepository()),
-            videoExtrasRepositoryProvider.overrideWithValue(
-              _ExtrasRepository(),
-            ),
+            videoExtrasRepositoryProvider.overrideWithValue(extras),
           ],
           child: InputTestApp(
             home: ValueListenableBuilder(
@@ -220,6 +219,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.getSize(find.byType(_TrackedPlayer)).width, 520);
       // A real decoded aspect ratio enables auto in the already open split.
+      expect(find.text('测试简介'), findsNothing);
+      expect(extras.tagRequests, 0);
       session.snapshots.value = session.snapshots.value.copyWith(
         videoDimensions: const VideoDimensions(16, 9),
       );
@@ -234,6 +235,18 @@ void main() {
         tester.getTopLeft(find.text('选集与推荐')).dx,
         greaterThanOrEqualTo(520),
       );
+      expect(find.text('测试简介').hitTestable(), findsOneWidget);
+      expect(find.text('测试标签'), findsOneWidget);
+      await tester.tap(findMaterialTooltip('收起视频信息'));
+      await tester.pumpAndSettle();
+      await tester.tap(findMaterialTooltip('展开视频信息'));
+      await tester.pumpAndSettle();
+      expect(extras.tagRequests, 1);
+      tester
+          .widget<PlaybackPageCommands>(find.byType(PlaybackPageCommands))
+          .toggleDescription!();
+      await tester.pumpAndSettle();
+      expect(find.text('测试简介'), findsNothing);
       await tester.tap(find.text('展开'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('评论'));

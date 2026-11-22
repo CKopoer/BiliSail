@@ -85,7 +85,7 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
   int? _tab;
   bool? _infoVisibilityOverride;
   bool _wide = false;
-  PgcSeasonId? _expandedDescription;
+  ({PgcSeasonId season, bool expanded})? _descriptionOverride;
   ContentLink? _contentLink;
 
   bool get _infoVisible =>
@@ -214,6 +214,18 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
 
   void _toggleInfo() => setState(() => _infoVisibilityOverride = !_infoVisible);
 
+  bool _descriptionExpanded(PgcSeasonId season, {required bool below}) {
+    final choice = _descriptionOverride;
+    return choice != null && choice.season == season ? choice.expanded : below;
+  }
+
+  void _toggleDescription(PgcSeasonId season, {required bool below}) {
+    final expanded = _descriptionExpanded(season, below: below);
+    setState(
+      () => _descriptionOverride = (season: season, expanded: !expanded),
+    );
+  }
+
   Widget _buildPage(BuildContext context) {
     final defaultShowComments = widget.defaultShowComments;
     if (_tab == null && defaultShowComments != null) {
@@ -246,17 +258,17 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
       onLoopCompleted: () =>
           _stepEpisode(season, selected, 1, completed: true, loop: true),
       toggleInfo: _toggleInfo,
-      toggleDescription: () => setState(() {
+      toggleDescription: () {
         if (_infoVisible &&
             PlaybackSplitLayout.readInfoBelow(_sidebarKey.currentContext)) {
-          _expandedDescription = _expandedDescription == season.id
-              ? null
-              : season.id;
+          _toggleDescription(season.id, below: true);
           return;
         }
-        _infoVisibilityOverride = !_infoVisible || tab != 0;
-        _tab = 0;
-      }),
+        setState(() {
+          _infoVisibilityOverride = !_infoVisible || tab != 0;
+          _tab = 0;
+        });
+      },
       toggleComments: () => setState(() {
         _tab = _infoVisible && tab == 1 ? 0 : 1;
         _infoVisibilityOverride = true;
@@ -658,12 +670,8 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
         ),
         _PgcDescription(
           text: season.description,
-          expanded: !measuring && _expandedDescription == season.id,
-          onToggle: () => setState(() {
-            _expandedDescription = _expandedDescription == season.id
-                ? null
-                : season.id;
-          }),
+          expanded: !measuring && _descriptionExpanded(season.id, below: below),
+          onToggle: () => _toggleDescription(season.id, below: below),
         ),
         if (selected != null && !selected.playable) ...[
           const SizedBox(height: 4),

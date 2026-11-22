@@ -114,8 +114,8 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
   ({int epoch, VideoPart part})? _interactivePart;
   int? _tab;
   final _infoVisibilityOverride = ValueNotifier<bool?>(null);
-  bool _descriptionExpanded = false;
-  bool _tagsRequested = false;
+  bool? _descriptionExpandedOverride;
+  ProviderSubscription<AsyncValue<List<String>>>? _tagSubscription;
   bool _queueExpanded = true;
   String? _reversedCollectionId;
   String? _reversedDisplayCollectionId;
@@ -211,8 +211,9 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
       _selectedCid = widget.initialCid;
       _interactivePart = null;
       _tab = null;
-      _descriptionExpanded = false;
-      _tagsRequested = false;
+      _descriptionExpandedOverride = null;
+      _tagSubscription?.close();
+      _tagSubscription = null;
     }
     if (oldWidget.initialCid != widget.initialCid) {
       _selectedCid = widget.initialCid;
@@ -245,9 +246,6 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
     // Start the related read alongside detail without rebuilding the player
     // and intro header when only that read changes.
     ref.listen(relatedVideosProvider(widget.id), (_, _) {});
-    // Retain the first tag read across description/sliver disposal until this
-    // page closes or changes video, without rebuilding it when tags arrive.
-    if (_tagsRequested) ref.listen(videoTagsProvider(widget.id), (_, _) {});
     final detail = ref.watch(videoDetailProvider(widget.id));
     final loaded = detail.asData?.value;
     final pending = _pendingAdvance;
@@ -691,7 +689,19 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
     required bool below,
     bool measuring = false,
   }) {
-    final expanded = !measuring && _descriptionExpanded;
+    final expanded = !measuring && (_descriptionExpandedOverride ?? below);
+    if (expanded && _tagSubscription == null) {
+      // The visible panel starts the read. Retain it across layout changes.
+      final id = widget.id;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && widget.id == id) {
+          _tagSubscription ??= ref.listenManual(
+            videoTagsProvider(id),
+            (_, _) {},
+          );
+        }
+      });
+    }
     final author = VideoAuthorHeader(
       video: video,
       onLogin: widget.onLogin,
@@ -728,9 +738,8 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                   minimumSize: const Size(0, 30),
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                onPressed: () => setState(() {
-                  _setDescriptionExpanded(!_descriptionExpanded);
-                }),
+                onPressed: () =>
+                    setState(() => _descriptionExpandedOverride = !expanded),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -820,10 +829,10 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
   }
 
   void _toggleVideoDetails(int tab, bool showInfo) {
-    if (tab == 0 &&
-        showInfo &&
-        PlaybackSplitLayout.readInfoBelow(_infoKey.currentContext)) {
-      setState(() => _setDescriptionExpanded(!_descriptionExpanded));
+    final below = PlaybackSplitLayout.readInfoBelow(_infoKey.currentContext);
+    final expanded = _descriptionExpandedOverride ?? below;
+    if (tab == 0 && showInfo && below) {
+      setState(() => _descriptionExpandedOverride = !expanded);
       return;
     }
     final alreadyVisible =
@@ -834,14 +843,9 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
       // Keep the introductory pane and its description disclosure separate.
       final sameTab = currentTab == tab && alreadyVisible;
       _queueExpanded = false;
-      if (tab == 0) _setDescriptionExpanded(!sameTab || !_descriptionExpanded);
+      if (tab == 0) _descriptionExpandedOverride = !sameTab || !expanded;
       _tab = tab == 1 && sameTab ? 0 : tab;
     });
-  }
-
-  void _setDescriptionExpanded(bool expanded) {
-    _descriptionExpanded = expanded;
-    _tagsRequested = true;
   }
 
   Widget _player(VideoDetail video, VideoPart part) {
