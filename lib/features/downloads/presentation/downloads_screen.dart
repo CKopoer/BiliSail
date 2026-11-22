@@ -512,15 +512,26 @@ final class _DownloadTaskCard extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final narrow = constraints.maxWidth < 480;
+            final coverWidth = narrow ? 96.0 : 160.0;
             final localCover = completed ? coverProvider?.call(task) : null;
+            // Keep the decoded frame thumbnail-sized even for tall covers.
+            final coverDecodeEdge =
+                (coverWidth * MediaQuery.devicePixelRatioOf(context))
+                    .ceil()
+                    .clamp(1, 640);
             final cover = ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: SizedBox(
-                width: narrow ? 96 : 160,
+                width: coverWidth,
                 height: narrow ? 54 : 90,
                 child: localCover != null
                     ? Image(
-                        image: localCover,
+                        image: ResizeImage(
+                          localCover,
+                          width: coverDecodeEdge,
+                          height: coverDecodeEdge,
+                          policy: ResizeImagePolicy.fit,
+                        ),
                         fit: BoxFit.cover,
                         errorBuilder: (_, _, _) => ColoredBox(
                           color: scheme.surfaceContainerHigh,

@@ -57,12 +57,13 @@ Future<void> _pump(
   _DownloadRepository repository,
   _SourceRepository source, {
   Size size = const Size(800, 700),
+  double pixelRatio = 1,
   double textScale = 1,
   GlobalKey? captureKey,
   PublicDownloadStorage? storage,
 }) async {
-  tester.view.physicalSize = size;
-  tester.view.devicePixelRatio = 1;
+  tester.view.physicalSize = size * pixelRatio;
+  tester.view.devicePixelRatio = pixelRatio;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(
@@ -77,6 +78,7 @@ Future<void> _pump(
         home: MediaQuery(
           data: MediaQueryData(
             size: size,
+            devicePixelRatio: pixelRatio,
             textScaler: TextScaler.linear(textScale),
           ),
           child: RepaintBoundary(
@@ -450,6 +452,78 @@ void main() {
       await repository.close();
     });
   }
+
+  testWidgets('scrolling many completed downloads decodes local thumbnails', (
+    tester,
+  ) async {
+    final directory = Directory.systemTemp.createTempSync('download_covers');
+    addTearDown(() => directory.deleteSync(recursive: true));
+    final cover = await tester.runAsync(() async {
+      final recorder = ui.PictureRecorder();
+      Canvas(recorder).drawColor(Colors.blue, BlendMode.src);
+      final picture = recorder.endRecording();
+      try {
+        final image = await picture.toImage(1600, 2400);
+        try {
+          return (await image.toByteData(format: ui.ImageByteFormat.png))!
+              .buffer
+              .asUint8List();
+        } finally {
+          image.dispose();
+        }
+      } finally {
+        picture.dispose();
+      }
+    });
+    if (cover == null) fail('Could not create local cover fixture');
+    final repository = _DownloadRepository(
+      tasks: List.generate(467, (index) {
+        File('${directory.path}/$index.img').writeAsBytesSync(cover);
+        return _task(index, DownloadStatus.completed);
+      }),
+    );
+    addTearDown(repository.close);
+    await _pump(
+      tester,
+      DownloadsScreen(
+        coverProvider: (task) =>
+            FileImage(File('${directory.path}/${task.id}.img')),
+      ),
+      repository,
+      _SourceRepository(),
+      pixelRatio: 2,
+    );
+    await tester.tap(find.text('已完成'));
+    await tester.pumpAndSettle();
+
+    Future<void> expectThumbnails() async {
+      for (var attempt = 0; attempt < 100; attempt++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)),
+        );
+        await tester.pump();
+        final images = tester.widgetList<RawImage>(find.byType(RawImage));
+        if (images.isNotEmpty && images.every((raw) => raw.image != null)) {
+          for (final raw in images) {
+            expect(raw.image!.width, 213);
+            expect(raw.image!.height, 320);
+          }
+          return;
+        }
+      }
+      fail('Local thumbnails did not load');
+    }
+
+    await expectThumbnails();
+    final firstVisibleTask = find.byType(Card).first;
+    final initialCard = tester.element(firstVisibleTask);
+    tester.widget<ListView>(find.byType(ListView)).controller!.jumpTo(12000);
+    await tester.pumpAndSettle();
+    expect(tester.element(firstVisibleTask), isNot(same(initialCard)));
+    await expectThumbnails();
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
 
   testWidgets('320px large text download dialog scrolls without overflow', (
     tester,
