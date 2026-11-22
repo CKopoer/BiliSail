@@ -19,6 +19,7 @@ final class CommentEntry {
     this.likeCount = 0,
     this.liked = false,
     this.isPinned = false,
+    this.isUpPinned = false,
     this.isUpAuthor = false,
     this.upLiked = false,
     this.upReplied = false,
@@ -66,10 +67,24 @@ final class CommentEntry {
   final String? ipLocation;
   final int likeCount, replyCount;
   final bool liked;
-  final bool isPinned, isUpAuthor, upLiked, upReplied;
+  final bool isPinned, isUpPinned, isUpAuthor, upLiked, upReplied;
   final String? rootId, parentId;
   final List<CommentEntry> replies;
-  CommentEntry withLike(bool value) => CommentEntry(
+  CommentEntry withLike(bool value) => _copy(
+    likes: (likeCount + (value ? 1 : -1)).clamp(0, 1 << 31),
+    liked: value,
+  );
+  CommentEntry withReplies(List<CommentEntry> value, {int? count}) =>
+      _copy(replies: List.unmodifiable(value), count: count);
+  CommentEntry withUpPin(bool value) => _copy(upPinned: value);
+
+  CommentEntry _copy({
+    int? likes,
+    bool? liked,
+    bool? upPinned,
+    int? count,
+    List<CommentEntry>? replies,
+  }) => CommentEntry(
     id: id,
     author: author,
     message: message,
@@ -94,54 +109,18 @@ final class CommentEntry {
     authorId: authorId,
     publishedAt: publishedAt,
     ipLocation: ipLocation,
-    likeCount: (likeCount + (value ? 1 : -1)).clamp(0, 1 << 31),
-    liked: value,
-    isPinned: isPinned,
+    likeCount: likes ?? likeCount,
+    liked: liked ?? this.liked,
+    isPinned: upPinned ?? isPinned,
+    isUpPinned: upPinned ?? isUpPinned,
     isUpAuthor: isUpAuthor,
     upLiked: upLiked,
     upReplied: upReplied,
-    replyCount: replyCount,
+    replyCount: count ?? replyCount,
     rootId: rootId,
     parentId: parentId,
-    replies: replies,
+    replies: replies ?? this.replies,
   );
-  CommentEntry withReplies(List<CommentEntry> value, {int? count}) =>
-      CommentEntry(
-        id: id,
-        author: author,
-        message: message,
-        visibility: visibility,
-        submissionMessage: submissionMessage,
-        level: level,
-        verifyType: verifyType,
-        vipLabel: vipLabel,
-        nicknameColor: nicknameColor,
-        medalName: medalName,
-        medalLevel: medalLevel,
-        pendantUrl: pendantUrl,
-        decorationImageUrl: decorationImageUrl,
-        decorationName: decorationName,
-        decorationFanNumber: decorationFanNumber,
-        decorationFanColor: decorationFanColor,
-        emotes: emotes,
-        mentionedUsers: mentionedUsers,
-        linkTitles: linkTitles,
-        pictures: pictures,
-        avatarUrl: avatarUrl,
-        authorId: authorId,
-        publishedAt: publishedAt,
-        ipLocation: ipLocation,
-        likeCount: likeCount,
-        liked: liked,
-        isPinned: isPinned,
-        isUpAuthor: isUpAuthor,
-        upLiked: upLiked,
-        upReplied: upReplied,
-        replyCount: count ?? replyCount,
-        rootId: rootId,
-        parentId: parentId,
-        replies: List.unmodifiable(value),
-      );
 }
 
 final class CommentPage {
@@ -150,7 +129,9 @@ final class CommentPage {
     required this.hasMore,
     this.totalCount,
     this.nextCursor,
+    this.upperId,
   });
+  final UserId? upperId;
   final List<CommentEntry> items;
   final bool hasMore;
   final int? totalCount;
@@ -228,4 +209,22 @@ final class CommentEmote {
 
 abstract interface class CommentEmotesRepository {
   Future<List<CommentEmotePackage>> emotes(RequestCancellation cancellation);
+}
+
+abstract interface class CommentModerationRepository
+    implements CommentsRepository {
+  Future<void> delete(String oid, String id, RequestCancellation cancellation);
+  Future<void> setPinned(
+    String oid,
+    String id,
+    bool pinned,
+    RequestCancellation cancellation,
+  );
+  Future<void> report(
+    String oid,
+    String id,
+    int reason,
+    String description,
+    RequestCancellation cancellation,
+  );
 }

@@ -46,7 +46,12 @@ void main() {
               ? await api.getVideoCommentsByCursor('42')
               : await api.getVideoComments('42', commentType: 17);
           expect(result.items.map((c) => c.id), ['10', '11']);
+          expect(result.upperMid, '9007199254740993');
           expect(result.items.first.isPinned, isTrue);
+          expect(
+            result.items.first.isUpPinned,
+            source == 'upper.top' || source == 'top.upper',
+          );
           expect(result.items.first.isUpAuthor, isFalse);
           expect(result.items.first.upLiked, isFalse);
           expect(result.items.first.upReplied, isFalse);

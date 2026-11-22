@@ -12,7 +12,7 @@ import '../domain/comment_composer.dart';
 
 final class ApiCommentsRepository
     implements
-        CommentsRepository,
+        CommentModerationRepository,
         CommentLocationRepository,
         CommentEmotesRepository,
         CommentComposerRepository {
@@ -65,6 +65,7 @@ final class ApiCommentsRepository
     likeCount: v.likeCount,
     liked: v.liked,
     isPinned: v.isPinned,
+    isUpPinned: v.isUpPinned,
     isUpAuthor: v.isUpAuthor,
     upLiked: v.upLiked,
     upReplied: v.upReplied,
@@ -73,7 +74,8 @@ final class ApiCommentsRepository
     parentId: v.parentId,
     replies: List.unmodifiable(v.replies.map(_entry)),
   );
-  static CommentPage _page(ApiPage<ApiVideoComment> p) => CommentPage(
+  static CommentPage _page(ApiCommentPage p) => CommentPage(
+    upperId: UserId.tryParse(p.upperMid),
     items: List.unmodifiable(p.items.map(_entry)),
     hasMore: p.hasMore,
     totalCount: p.totalCount,
@@ -220,6 +222,50 @@ final class ApiCommentsRepository
     ),
     cancellation,
   );
+  @override
+  Future<void> delete(
+    String oid,
+    String id,
+    RequestCancellation cancellation,
+  ) => _write(
+    (ctx) => api.deleteComment(oid, id, commentType: type.value, context: ctx),
+    cancellation,
+  );
+  @override
+  Future<void> setPinned(
+    String oid,
+    String id,
+    bool pinned,
+    RequestCancellation cancellation,
+  ) => _write(
+    (ctx) => api.setCommentPinned(
+      oid,
+      id,
+      pinned,
+      commentType: type.value,
+      context: ctx,
+    ),
+    cancellation,
+  );
+  @override
+  Future<void> report(
+    String oid,
+    String id,
+    int reason,
+    String description,
+    RequestCancellation cancellation,
+  ) => _write(
+    (ctx) => api.reportComment(
+      oid,
+      id,
+      commentType: type.value,
+      reason: reason,
+      content: description,
+      context: ctx,
+    ),
+    cancellation,
+  );
+
   @override
   Future<CommentEntry> send(
     String oid,

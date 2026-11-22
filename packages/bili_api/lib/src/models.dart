@@ -158,6 +158,17 @@ final class ApiVideoPage {
 
 enum ApiCommentSort { hot, latest }
 
+final class ApiCommentPage extends ApiPage<ApiVideoComment> {
+  const ApiCommentPage(
+    super.items, {
+    required super.hasMore,
+    super.nextCursor,
+    super.totalCount,
+    this.upperMid,
+  });
+  final String? upperMid;
+}
+
 final class ApiVideoComment {
   const ApiVideoComment({
     required this.id,
@@ -169,6 +180,7 @@ final class ApiVideoComment {
     this.ipLocation,
     this.liked = false,
     this.isPinned = false,
+    this.isUpPinned = false,
     this.isUpAuthor = false,
     this.upLiked = false,
     this.upReplied = false,
@@ -215,7 +227,7 @@ final class ApiVideoComment {
   final Map<String, String> linkTitles;
   final List<Uri> pictures;
   final bool liked;
-  final bool isPinned, isUpAuthor, upLiked, upReplied;
+  final bool isPinned, isUpPinned, isUpAuthor, upLiked, upReplied;
   final int replyCount;
   final String? rootId;
   final String? parentId;

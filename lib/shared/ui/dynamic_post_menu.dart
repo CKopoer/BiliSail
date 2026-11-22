@@ -1,7 +1,4 @@
-import 'dart:ui' as ui;
-
 import 'package:material_ui/material_ui.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -18,6 +15,7 @@ import '../../features/profile/application/profile_actions_controller.dart';
 import '../../features/video/domain/video_card_interactions.dart';
 import 'app_dialog.dart';
 import 'app_notice.dart';
+import 'save_widget_image.dart';
 import 'dynamic_compose_editor.dart';
 import 'dynamic_post_card.dart';
 import 'dynamic_publish_forms.dart';
@@ -631,28 +629,13 @@ class _DynamicPostSaveDialogState extends ConsumerState<DynamicPostSaveDialog> {
   bool _busy = false;
   Future<void> _save() async {
     setState(() => _busy = true);
-    ui.Image? image;
     try {
-      final boundary = _key.currentContext?.findRenderObject();
-      if (boundary is! RenderRepaintBoundary) {
-        throw StateError('Missing preview');
-      }
-      final size = boundary.size;
-      if (size.height > 20000 || size.width * size.height > 40000000) {
-        throw StateError('Preview too large');
-      }
-      image = await boundary.toImage(pixelRatio: 1);
-      final data = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (data == null || data.lengthInBytes > 32 * 1024 * 1024) {
-        throw StateError('Snapshot too large');
-      }
-      final bytes = Uint8List.sublistView(data);
-      await ref.read(imageExportServiceProvider).save(bytes);
+      final exporter = ref.read(imageExportServiceProvider);
+      await exporter.save(await captureWidgetPng(_key));
       if (mounted) showAppNotice(context, '动态图片已保存');
     } catch (_) {
       if (mounted) showAppNotice(context, '无法保存动态图片，请稍后重试或复制动态链接');
     } finally {
-      image?.dispose();
       if (mounted) setState(() => _busy = false);
     }
   }

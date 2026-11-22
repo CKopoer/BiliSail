@@ -11,11 +11,13 @@ class CommentActions extends StatelessWidget {
     required this.busy,
     required this.onLike,
     required this.onReply,
+    required this.onMore,
   });
 
   final CommentEntry comment;
   final bool busy;
   final VoidCallback onLike, onReply;
+  final ValueChanged<BuildContext>? onMore;
 
   @override
   Widget build(BuildContext context) {
@@ -25,30 +27,58 @@ class CommentActions extends StatelessWidget {
       padding: const EdgeInsets.only(top: 4, bottom: 6),
       child: Row(
         children: [
-          Flexible(
-            child: _CommentActionButton(
-              icon: comment.liked
-                  ? Icons.thumb_up_alt
-                  : Icons.thumb_up_alt_outlined,
-              label: '${comment.likeCount}',
-              semanticLabel: comment.liked ? '取消点赞评论' : '点赞评论',
-              selected: comment.liked,
-              style: comment.liked
-                  ? style.copyWith(color: theme.colorScheme.primary)
-                  : style,
-              onPressed: busy ? null : onLike,
+          Expanded(
+            child: Row(
+              children: [
+                Flexible(
+                  child: _CommentActionButton(
+                    icon: comment.liked
+                        ? Icons.thumb_up_alt
+                        : Icons.thumb_up_alt_outlined,
+                    label: '${comment.likeCount}',
+                    semanticLabel: comment.liked ? '取消点赞评论' : '点赞评论',
+                    selected: comment.liked,
+                    style: comment.liked
+                        ? style.copyWith(color: theme.colorScheme.primary)
+                        : style,
+                    onPressed: busy ? null : onLike,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                _CommentActionButton(
+                  icon: BiliIcons.reply,
+                  label: '回复',
+                  semanticLabel: '回复评论',
+                  style: style,
+                  onPressed: busy ? null : onReply,
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: 12),
-          _CommentActionButton(
-            icon: BiliIcons.reply,
-            label: '回复',
-            semanticLabel: '回复评论',
-            style: style,
-            onPressed: busy ? null : onReply,
-          ),
+          CommentMoreButton(onMore: onMore),
         ],
       ),
+    );
+  }
+}
+
+class CommentMoreButton extends StatelessWidget {
+  const CommentMoreButton({super.key, required this.onMore});
+  final ValueChanged<BuildContext>? onMore;
+
+  @override
+  Widget build(BuildContext context) {
+    final open = onMore == null ? null : () => onMore!(context);
+    return IconButton(
+      tooltip: '更多评论操作',
+      icon: const Icon(Icons.more_vert, size: 18),
+      color: CommentTextStyles(Theme.of(context)).action.color,
+      style: IconButton.styleFrom(
+        minimumSize: const Size(32, 32),
+        padding: EdgeInsets.zero,
+      ),
+      onPressed: open,
+      onLongPress: open,
     );
   }
 }

@@ -57,6 +57,8 @@ final class CommentsState {
     this.loadFailed = false,
     this.signedIn = false,
     this.accountScope = 'guest',
+    this.viewerId,
+    this.upperId,
     this.sessionEpoch = 0,
     this.busy = false,
     this.message,
@@ -86,7 +88,32 @@ final class CommentsState {
   final CommentEntry? openRoot, replyTarget;
   final Set<String> uncertain;
   final String? focusedCommentId;
+  final UserId? viewerId, upperId;
+  bool get isUpper => signedIn && viewerId != null && upperId == viewerId;
+  bool canDelete(CommentEntry comment) =>
+      signedIn && (isUpper || viewerId != null && viewerId == comment.authorId);
+
+  // Look up the current list entry when a menu opens or confirms. Reply previews
+  // sometimes omit root, but their containing thread is still unambiguous.
+  ({CommentEntry entry, String? rootId})? findComment(String id) {
+    final detail = openRoot;
+    if (detail != null) {
+      if (detail.id == id) return (entry: detail, rootId: null);
+      for (final reply in replyItems) {
+        if (reply.id == id) return (entry: reply, rootId: detail.id);
+      }
+    }
+    for (final root in items) {
+      if (root.id == id) return (entry: root, rootId: null);
+      for (final reply in root.replies) {
+        if (reply.id == id) return (entry: reply, rootId: root.id);
+      }
+    }
+    return null;
+  }
+
   CommentsState copy({
+    UserId? upperId,
     List<CommentEmotePackage>? emotePackages,
     bool? emotesLoading,
     String? emotesMessage,
@@ -126,6 +153,8 @@ final class CommentsState {
     loading: loading ?? this.loading,
     loadFailed: loadFailed ?? this.loadFailed,
     signedIn: signedIn,
+    viewerId: viewerId,
+    upperId: upperId ?? this.upperId,
     accountScope: accountScope,
     sessionEpoch: sessionEpoch,
     busy: busy ?? this.busy,
@@ -184,6 +213,7 @@ class CommentsController extends Notifier<CommentsState> {
     _initialReplyUsed = true;
     return CommentsState(
       signedIn: auth.isSignedIn,
+      viewerId: UserId.tryParse(auth.mid),
       accountScope: _repository.accountScope,
       sessionEpoch: _repository.sessionEpoch,
       replyTarget: reply,
@@ -248,6 +278,12 @@ class CommentsController extends Notifier<CommentsState> {
     return changed == null ? entries : List.unmodifiable(changed);
   }
 
+  static bool _confirmsAction(CommentEntry comment, String key) =>
+      key == 'like:${comment.id}' ||
+      key == 'pin:${comment.id}' ||
+      key == 'delete:${comment.id}' ||
+      comment.replies.any((reply) => _confirmsAction(reply, key));
+
   static String? _error(Object e) => e is AppFailure
       ? e.kind == AppFailureKind.cancelled
             ? null
@@ -303,12 +339,13 @@ class CommentsController extends Notifier<CommentsState> {
         nextCursor: p.nextCursor,
         clearCursor: p.nextCursor == null,
         totalCount: p.totalCount,
+        upperId: p.upperId,
         hasMore:
             p.hasMore && items.length > previousCount && items.length < 500,
         loading: false,
         uncertain: Set.unmodifiable(
           state.uncertain.where(
-            (v) => !p.items.any((c) => v == 'like:${c.id}'),
+            (v) => !p.items.any((c) => _confirmsAction(c, v)),
           ),
         ),
       );
@@ -358,6 +395,7 @@ class CommentsController extends Notifier<CommentsState> {
       );
       state = state.copy(
         openRoot: result.root,
+        upperId: result.page.upperId,
         loading: false,
         focusedCommentId: location.focusId,
         replyItems: List.unmodifiable([
@@ -436,6 +474,7 @@ class CommentsController extends Notifier<CommentsState> {
       final items = _merge(state.replyItems, p.items);
       state = state.copy(
         replyItems: items,
+        upperId: p.upperId,
         replyPage: page,
         replyHasMore:
             p.hasMore &&
@@ -444,7 +483,7 @@ class CommentsController extends Notifier<CommentsState> {
         replyLoading: false,
         uncertain: Set.unmodifiable(
           state.uncertain.where(
-            (v) => !p.items.any((c) => v == 'like:${c.id}'),
+            (v) => !p.items.any((c) => _confirmsAction(c, v)),
           ),
         ),
       );
@@ -504,6 +543,7 @@ class CommentsController extends Notifier<CommentsState> {
     Future<void> Function(CommentsRepository) operation,
   ) async {
     if (!state.signedIn ||
+        !isCurrentAccount(state.accountScope, state.sessionEpoch) ||
         state.busy ||
         state.loading ||
         state.replyLoading ||
@@ -534,6 +574,98 @@ class CommentsController extends Notifier<CommentsState> {
       );
       return false;
     }
+  }
+
+  Future<bool> deleteComment(String id) async {
+    final target = state.findComment(id);
+    final repository = _repository;
+    if (target == null ||
+        !state.canDelete(target.entry) ||
+        repository is! CommentModerationRepository) {
+      return false;
+    }
+    if (!await _perform(
+      'delete:$id',
+      (_) => repository.delete(oid, id, _write),
+    )) {
+      return false;
+    }
+    final rootId = target.rootId;
+    CommentEntry removeReply(CommentEntry root) => root.withReplies(
+      root.replies.where((c) => c.id != id).toList(),
+      count: (root.replyCount - 1).clamp(0, root.replyCount),
+    );
+    final close = state.openRoot?.id == id;
+    // The video cursor counts all replies. Legacy page.count counts roots.
+    final removedCount = type == CommentTargetType.video
+        ? 1 + (rootId == null ? target.entry.replyCount : 0)
+        : rootId == null
+        ? 1
+        : 0;
+    final total = state.totalCount;
+    state = state.copy(
+      items: rootId == null
+          ? List.unmodifiable(state.items.where((c) => c.id != id))
+          : _updateEntries(state.items, rootId, removeReply),
+      totalCount: total == null ? null : (total - removedCount).clamp(0, total),
+      openRoot: rootId != null && state.openRoot?.id == rootId
+          ? removeReply(state.openRoot!)
+          : null,
+      clearFocus: close || state.focusedCommentId == id,
+      clearTarget:
+          close ||
+          state.replyTarget?.id == id ||
+          state.replyTarget?.rootId == id,
+      replyItems: List.unmodifiable(state.replyItems.where((c) => c.id != id)),
+    );
+    if (close) closeReplies();
+    return true;
+  }
+
+  Future<bool> setPinned(String id, bool pinned) async {
+    final target = state.findComment(id);
+    final repository = _repository;
+    if (!state.isUpper ||
+        target == null ||
+        target.rootId != null ||
+        target.entry.isUpPinned == pinned ||
+        repository is! CommentModerationRepository) {
+      return false;
+    }
+    if (!await _perform(
+      'pin:$id',
+      (_) => repository.setPinned(oid, id, pinned, _write),
+    )) {
+      return false;
+    }
+    CommentEntry update(CommentEntry entry) {
+      if (entry.id == id) return entry.withUpPin(pinned);
+      if (pinned && entry.isUpPinned) return entry.withUpPin(false);
+      return entry;
+    }
+
+    final items = state.items.map(update).toList();
+    if (pinned && state.page > 0) {
+      items.removeWhere((c) => c.id == id);
+      items.insert(0, target.entry.withUpPin(true));
+    }
+    state = state.copy(
+      items: List.unmodifiable(items.take(500)),
+      openRoot: state.openRoot == null ? null : update(state.openRoot!),
+    );
+    return true;
+  }
+
+  Future<bool> reportComment(String id, int reason, String description) async {
+    final repository = _repository;
+    if (state.findComment(id) == null ||
+        repository is! CommentModerationRepository) {
+      return false;
+    }
+    return _perform(
+      'report:$id',
+      (_) => repository.report(oid, id, reason, description, _write),
+    );
   }
 
   Future<bool> toggleLike(CommentEntry comment) async {
