@@ -402,6 +402,55 @@ void main() {
   }
 
   testWidgets(
+    'article width is saved on release and restored for a new reader',
+    (tester) async {
+      final settings = _WritableSettings();
+      final comments = DynamicCommentsFake();
+      await _mountReader(
+        tester,
+        size: const Size(900, 750),
+        settings: settings,
+        comments: comments,
+        document: _longArticle(paragraphs: 1),
+      );
+      final control = findMaterialTooltip('调节专栏与评论宽度');
+      final slider = find.byType(Slider);
+      final reading = find.byKey(const PageStorageKey('article-reading'));
+      await tester.tap(control);
+      await tester.pumpAndSettle();
+      final drag = await tester.startGesture(tester.getCenter(slider));
+      await drag.moveBy(const Offset(220, 0));
+      await tester.pumpAndSettle();
+      expect(tester.getSize(reading).width, closeTo(630, .001));
+      expect(settings.writes, isEmpty);
+      await drag.up();
+      await tester.pumpAndSettle();
+      expect(settings.writes, [.7]);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await _mountReader(
+        tester,
+        address: _opus,
+        settings: settings,
+        comments: comments,
+        document: _document(_opus, '另一篇专栏', '正文'),
+      );
+      expect(find.text('另一篇专栏'), findsOneWidget);
+      expect(tester.getSize(reading).width, closeTo(896, .001));
+      await tester.tap(control);
+      await tester.pumpAndSettle();
+      expect(find.text('专栏 70% · 评论 30%'), findsOneWidget);
+
+      settings.fail = true;
+      await tester.drag(slider, const Offset(-220, 0));
+      await tester.pumpAndSettle();
+      expect(tester.getSize(reading).width, closeTo(896, .001));
+      expect(settings.writes, [.7]);
+      expect(find.text('分栏比例保存失败，请重试'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'narrow article shows persistent progress and opens comments on demand',
     (tester) async {
       final comments = DynamicCommentsFake()..items = [];
@@ -759,6 +808,8 @@ Future<void> _mountReader(
   WidgetTester tester, {
   required CommentsRepository comments,
   required ArticleDocument document,
+  ArticleAddress address = _column,
+  SettingsRepository settings = const _Settings(),
   Size size = const Size(1280, 750),
   TargetPlatform platform = TargetPlatform.windows,
   double scale = 1,
@@ -774,7 +825,7 @@ Future<void> _mountReader(
   final auth = DynamicAuthFake(signedIn: false);
   addTearDown(auth.stream.close);
   final reader = ArticleScreen(
-    address: _column,
+    address: address,
     onOpenUser: onOpenUser ?? (_) {},
     onOpenLink: (_) {},
     onOpenWeb: onOpenWeb ?? (_) {},
@@ -787,6 +838,7 @@ Future<void> _mountReader(
           _Repository((_, _) async => document),
         ),
         authRepositoryProvider.overrideWithValue(auth),
+        settingsRepositoryProvider.overrideWithValue(settings),
         if (originals != null)
           originalImageRepositoryProvider.overrideWithValue(originals),
         commentsRepositoryProvider(CommentTargetType.article)
@@ -803,12 +855,14 @@ Future<void> _mountReader(
             minThumbLength: 18,
           ),
         ),
-        builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(context)
-              .copyWith(textScaler: TextScaler.linear(scale)),
-          child: imageCache == null
-              ? child!
-              : AppImageCacheScope(cache: imageCache, child: child!),
+        builder: (context, child) => AppNoticeHost(
+          child: MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.linear(scale)),
+            child: imageCache == null
+                ? child!
+                : AppImageCacheScope(cache: imageCache, child: child!),
+          ),
         ),
         home: Scaffold(
           body: link == null
@@ -914,6 +968,22 @@ final class _Settings implements SettingsRepository {
   Future<AppSettings> load() async => _settings;
   @override
   Future<void> save(AppSettings settings) async {}
+}
+
+final class _WritableSettings implements SettingsRepository {
+  AppSettings _saved = _settings;
+  final writes = <double?>[];
+  bool fail = false;
+
+  @override
+  Future<AppSettings> load() async => _saved;
+
+  @override
+  Future<void> save(AppSettings settings) async {
+    if (fail) throw StateError('save failed');
+    _saved = settings;
+    writes.add(settings.responsiveLayout.articleWidthFraction);
+  }
 }
 
 final class _Repository extends Fake implements ArticleRepository {

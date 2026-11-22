@@ -318,7 +318,7 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 54,
+        'schemaVersion': 55,
         'appIcon': value.appIcon.name,
         'recommendations': value.recommendations.toJson(),
         'navigationBarMode': value.navigationBarMode.name,
@@ -332,6 +332,7 @@ class SqliteSettingsRepository implements SettingsRepository {
           'playbackSplitStyle': value.responsiveLayout.playbackSplitStyle.name,
           'playbackSideBySideWidth':
               value.responsiveLayout.playbackSideBySideWidth,
+          'articleWidthFraction': value.responsiveLayout.articleWidthFraction,
         },
         'defaultDynamicTab': value.defaultDynamicTab.name,
         'fullscreenSwipeControls': value.fullscreenSwipeControls,
@@ -442,6 +443,10 @@ class SqliteSettingsRepository implements SettingsRepository {
       playbackSideBySideWidth: value['playbackSideBySideWidth'] is int
           ? value['playbackSideBySideWidth'] as int
           : 1000,
+      articleWidthFraction: switch (value['articleWidthFraction']) {
+        final num fraction => fraction.toDouble(),
+        _ => null,
+      },
     );
   }
 

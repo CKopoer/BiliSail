@@ -1,6 +1,6 @@
 enum PlaybackSplitStyle { automatic, right, below }
 
-/// Width breakpoints in Flutter logical pixels, independent of the platform.
+/// Responsive layout preferences, with width breakpoints in logical pixels.
 final class ResponsiveLayoutSettings {
   ResponsiveLayoutSettings({
     List<int>? videoGridMinWidths,
@@ -8,6 +8,7 @@ final class ResponsiveLayoutSettings {
     int sidebarExpandedWidth = 1600,
     int playbackSideBySideWidth = 1000,
     this.playbackSplitStyle = PlaybackSplitStyle.automatic,
+    double? articleWidthFraction,
   }) : videoGridMinWidths =
            videoGridMinWidths != null &&
                validVideoGridWidths(videoGridMinWidths)
@@ -24,14 +25,24 @@ final class ResponsiveLayoutSettings {
        playbackSideBySideWidth =
            playbackSideBySideWidth >= 600 && playbackSideBySideWidth <= 6000
            ? playbackSideBySideWidth
-           : 1000;
+           : 1000,
+       articleWidthFraction =
+           articleWidthFraction != null &&
+               articleWidthFraction >= minArticleWidthFraction &&
+               articleWidthFraction <= maxArticleWidthFraction
+           ? articleWidthFraction
+           : null;
 
   const ResponsiveLayoutSettings.defaults()
     : videoGridMinWidths = null,
       navigationBarBreakpoint = 600,
       sidebarExpandedWidth = 1600,
       playbackSideBySideWidth = 1000,
-      playbackSplitStyle = PlaybackSplitStyle.automatic;
+      playbackSplitStyle = PlaybackSplitStyle.automatic,
+      articleWidthFraction = null;
+
+  static const minArticleWidthFraction = .3;
+  static const maxArticleWidthFraction = .7;
 
   static const defaultVideoGridMinWidths = [
     300,
@@ -55,6 +66,9 @@ final class ResponsiveLayoutSettings {
   final int playbackSideBySideWidth;
   final PlaybackSplitStyle playbackSplitStyle;
 
+  /// Null uses the reader's automatic width based on the available space.
+  final double? articleWidthFraction;
+
   static bool validVideoGridWidths(List<int>? values) {
     if (values == null || values.length != 11) return false;
     var previous = 199;
@@ -72,6 +86,7 @@ final class ResponsiveLayoutSettings {
     int? sidebarExpandedWidth,
     int? playbackSideBySideWidth,
     PlaybackSplitStyle? playbackSplitStyle,
+    double? articleWidthFraction,
   }) => ResponsiveLayoutSettings(
     videoGridMinWidths: resetVideoGrid
         ? null
@@ -82,5 +97,6 @@ final class ResponsiveLayoutSettings {
     playbackSplitStyle: playbackSplitStyle ?? this.playbackSplitStyle,
     playbackSideBySideWidth:
         playbackSideBySideWidth ?? this.playbackSideBySideWidth,
+    articleWidthFraction: articleWidthFraction ?? this.articleWidthFraction,
   );
 }

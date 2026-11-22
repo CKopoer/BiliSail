@@ -137,6 +137,13 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
       ),
     ),
   );
+  Future<void> setArticleWidthFraction(double value) => update(
+    (current) => current.copyWith(
+      responsiveLayout: current.responsiveLayout.copyWith(
+        articleWidthFraction: value,
+      ),
+    ),
+  );
   Future<void> setDefaultDynamicTab(DynamicPageTab value) =>
       update((current) => current.copyWith(defaultDynamicTab: value));
   Future<void> setAllowConcurrentPlayback(bool value) =>

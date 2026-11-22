@@ -1,17 +1,21 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../../core/presentation/motion_preferences.dart';
 import '../../../core/presentation/page_back_scope.dart';
 import '../../../core/presentation/workspace_activity.dart';
 import '../../../domain/content_link.dart';
+import '../../../domain/responsive_layout_settings.dart';
 import '../../../domain/user.dart';
+import '../../../shared/ui/app_notice.dart';
 import '../../../shared/ui/comments_panel.dart';
 import '../../../shared/ui/content_link_scope.dart';
+import '../../settings/application/settings_controller.dart';
 import '../domain/article_document.dart';
 import 'article_action_bar.dart';
 import 'article_page_frame.dart';
 
-class ArticleReaderLayout extends StatefulWidget {
+class ArticleReaderLayout extends ConsumerStatefulWidget {
   const ArticleReaderLayout({
     super.key,
     required this.document,
@@ -27,19 +31,17 @@ class ArticleReaderLayout extends StatefulWidget {
   final ValueChanged<UserId> onOpenUser;
 
   @override
-  State<ArticleReaderLayout> createState() => _ArticleReaderLayoutState();
+  ConsumerState<ArticleReaderLayout> createState() =>
+      _ArticleReaderLayoutState();
 }
 
-class _ArticleReaderLayoutState extends State<ArticleReaderLayout> {
-  static const _minArticleFraction = .3;
-  static const _maxArticleFraction = .7;
-
+class _ArticleReaderLayoutState extends ConsumerState<ArticleReaderLayout> {
   final _reading = ScrollController();
   final _showBar = ValueNotifier(true);
   final _commentBack = PageBackController();
   bool _commentsSelected = false, _mountedComments = false;
   int _scrollCommentsToTop = 0;
-  double? _articleFraction;
+  double? _articleFractionDraft;
   ContentLink? _link;
 
   @override
@@ -59,7 +61,15 @@ class _ArticleReaderLayoutState extends State<ArticleReaderLayout> {
   }
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
+  Widget build(BuildContext context) => _layout(
+    ref.watch(
+      settingsControllerProvider.select(
+        (settings) => settings.value?.responsiveLayout.articleWidthFraction,
+      ),
+    ),
+  );
+
+  Widget _layout(double? savedArticleFraction) => LayoutBuilder(
     builder: (context, bounds) {
       final width = bounds.maxWidth.clamp(0.0, 1440.0);
       final wide =
@@ -75,8 +85,14 @@ class _ArticleReaderLayoutState extends State<ArticleReaderLayout> {
       final showComments = wide || commentsOnly;
       if (showComments) _mountedComments = true;
       final articleFraction =
-          _articleFraction ??
-          (wide ? (700 / width).clamp(_minArticleFraction, .54) : .54);
+          _articleFractionDraft ??
+          savedArticleFraction ??
+          (wide
+              ? (700 / width).clamp(
+                  ResponsiveLayoutSettings.minArticleWidthFraction,
+                  .54,
+                )
+              : .54);
       final articleWidth = wide ? width * articleFraction : width;
 
       bool back() {
@@ -168,6 +184,18 @@ class _ArticleReaderLayoutState extends State<ArticleReaderLayout> {
     },
   );
 
+  Future<void> _saveArticleFraction(double fraction) async {
+    if (_articleFractionDraft == null) return;
+    setState(() => _articleFractionDraft = null);
+    try {
+      await ref
+          .read(settingsControllerProvider.notifier)
+          .setArticleWidthFraction(fraction);
+    } catch (_) {
+      if (mounted) showAppNotice(context, '分栏比例保存失败，请重试');
+    }
+  }
+
   Widget _ratioControl(double fraction) {
     String label(double value) {
       final percent = (value * 100).round();
@@ -176,6 +204,12 @@ class _ArticleReaderLayoutState extends State<ArticleReaderLayout> {
 
     return MenuAnchor(
       consumeOutsideTap: true,
+      onClose: () {
+        if (_articleFractionDraft == null) return;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) setState(() => _articleFractionDraft = null);
+        });
+      },
       style: const MenuStyle(alignment: AlignmentDirectional.bottomEnd),
       builder: (context, controller, _) => IconButton(
         tooltip: '调节专栏与评论宽度',
@@ -190,11 +224,13 @@ class _ArticleReaderLayoutState extends State<ArticleReaderLayout> {
             children: [
               Text(label(fraction)),
               Slider(
-                min: _minArticleFraction,
-                max: _maxArticleFraction,
+                min: ResponsiveLayoutSettings.minArticleWidthFraction,
+                max: ResponsiveLayoutSettings.maxArticleWidthFraction,
                 value: fraction,
                 semanticFormatterCallback: label,
-                onChanged: (value) => setState(() => _articleFraction = value),
+                onChanged: (value) =>
+                    setState(() => _articleFractionDraft = value),
+                onChangeEnd: _saveArticleFraction,
               ),
             ],
           ),

@@ -19,6 +19,7 @@ void main() {
         expect(settings.responsiveLayout.navigationBarBreakpoint, 600);
         expect(settings.responsiveLayout.sidebarExpandedWidth, 1600);
         expect(settings.responsiveLayout.playbackSideBySideWidth, 1000);
+        expect(settings.responsiveLayout.articleWidthFraction, isNull);
         expect(
           settings.responsiveLayout.playbackSplitStyle,
           PlaybackSplitStyle.automatic,
@@ -86,6 +87,7 @@ void main() {
       expect(loaded.responsiveLayout.sidebarExpandedWidth, 1280);
       expect(loaded.responsiveLayout.videoGridMinWidths, widths);
       expect(loaded.responsiveLayout.playbackSideBySideWidth, 900);
+      expect(loaded.responsiveLayout.articleWidthFraction, isNull);
       expect(loaded.theme, AppThemePreference.dark);
       expect(
         loaded.responsiveLayout.playbackSplitStyle,
@@ -183,6 +185,37 @@ void main() {
       },
     );
 
+    test('article width fractions round trip and invalid values use automatic width', () async {
+      for (final fraction in [.3, .568, .7]) {
+        await repository.save(
+          AppSettings(
+            responsiveLayout: ResponsiveLayoutSettings(
+              articleWidthFraction: fraction,
+            ),
+          ),
+        );
+        final reopened = SqliteSettingsRepository(database);
+        expect(
+          (await reopened.load()).responsiveLayout.articleWidthFraction,
+          fraction,
+        );
+      }
+
+      for (final invalid in [null, '.5', false, .29, .71, 1]) {
+        await database.writeSetting(
+          'preferences.v1',
+          jsonEncode({
+            'schemaVersion': 54,
+            'responsiveLayout': {'articleWidthFraction': invalid},
+          }),
+        );
+        expect(
+          (await repository.load()).responsiveLayout.articleWidthFraction,
+          isNull,
+        );
+      }
+    });
+
     test(
       'custom settings round trip and defaults restore without a DB migration',
       () async {
@@ -211,7 +244,7 @@ void main() {
           isA<Map<String, Object?>>().having(
             (map) => map['schemaVersion'],
             'schema version',
-            54,
+            55,
           ),
         );
         expect(database.schemaVersion, 3);
@@ -238,6 +271,7 @@ void main() {
         controller.setNavigationBreakpoints(800, 1280),
         controller.setPlaybackSideBySideWidth(900),
         controller.setPlaybackSplitStyle(PlaybackSplitStyle.below),
+        controller.setArticleWidthFraction(.64),
         controller.setVideoGridMinWidths(
           [...ResponsiveLayoutSettings.defaultVideoGridMinWidths]..[2] = 1000,
         ),
@@ -246,6 +280,7 @@ void main() {
       expect(repository.value.responsiveLayout.sidebarExpandedWidth, 1280);
       expect(repository.value.responsiveLayout.playbackSideBySideWidth, 900);
       expect(repository.value.responsiveLayout.videoGridMinWidths?[2], 1000);
+      expect(repository.value.responsiveLayout.articleWidthFraction, .64);
       repository.fail = true;
       await expectLater(
         controller.setNavigationBreakpoints(1500, 1800),
@@ -283,6 +318,7 @@ void main() {
       expect(repository.value.responsiveLayout.navigationBarBreakpoint, 600);
       expect(repository.value.responsiveLayout.sidebarExpandedWidth, 1600);
       expect(repository.value.responsiveLayout.playbackSideBySideWidth, 1000);
+      expect(repository.value.responsiveLayout.articleWidthFraction, isNull);
     },
   );
 }
