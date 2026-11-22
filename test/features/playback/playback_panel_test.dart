@@ -8470,14 +8470,16 @@ void main() {
       }
       await _pumpFrames(tester);
       final stillFixed = action != 'source' && action != 'manual rate';
-      const rate = 2.0;
-      expect(engine.currentSnapshot.rate, rate);
+      expect(engine.currentSnapshot.rate, 2);
       final hold = await _startRateHold(tester);
-      expect(engine.currentSnapshot.rate, stillFixed ? 1 : 2);
-      expect(find.text(stillFixed ? '上滑解除固定' : '上滑固定倍速'), findsOneWidget);
+      expect(engine.currentSnapshot.rate, 1);
+      expect(find.text(stillFixed ? '上滑解除固定' : '上滑恢复 1.0x'), findsOneWidget);
+      await hold.moveBy(const Offset(0, -60));
+      await _pumpFrames(tester);
+      expect(find.text(stillFixed ? '已解除固定' : '已恢复 1.0x'), findsOneWidget);
       await hold.up();
       await _pumpFrames(tester);
-      expect(engine.currentSnapshot.rate, rate);
+      expect(engine.currentSnapshot.rate, 1);
       await tester.pumpWidget(const SizedBox());
       await _pumpFrames(tester);
       expect(tester.takeException(), isNull);
@@ -8576,9 +8578,9 @@ void main() {
     );
   }
 
-  for (final target in [
-    const PgcPlaybackTarget('12', cid: '123'),
-    const OfflinePlaybackTarget('local-task'),
+  for (final (target, rate) in [
+    (const PgcPlaybackTarget('12', cid: '123'), 3.0),
+    (const OfflinePlaybackTarget('local-task'), 1.5),
   ]) {
     testWidgets(
       'touch rate pin uses configured speed for ${target.runtimeType}',
@@ -8592,7 +8594,7 @@ void main() {
             _FakeWindowService(),
             AppSettings(
               shortcuts: const ShortcutSettings.defaults().withPlayback(
-                holdRate: 3,
+                holdRate: rate,
               ),
             ),
             target: target,
@@ -8600,13 +8602,13 @@ void main() {
         );
         await _pumpFrames(tester);
         await _pinTouchRate(tester);
-        expect(engine.currentSnapshot.rate, 3);
+        expect(engine.currentSnapshot.rate, rate);
         final next = await _startRateHold(tester);
         expect(engine.currentSnapshot.rate, 1);
         expect(find.text('上滑解除固定'), findsOneWidget);
         await next.up();
         await _pumpFrames(tester);
-        expect(engine.currentSnapshot.rate, 3);
+        expect(engine.currentSnapshot.rate, rate);
         await tester.pumpWidget(const SizedBox());
         await _pumpFrames(tester);
       },

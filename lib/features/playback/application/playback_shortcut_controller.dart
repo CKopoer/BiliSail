@@ -47,10 +47,13 @@ final class PlaybackShortcutController extends ChangeNotifier {
       _fixedRate == session.commandRate;
   String? get touchHoldHint {
     if (!_accelerating || _holdInput != _RateHoldInput.touch) return null;
-    if (_touchHoldCommitted) {
-      return _touchHoldWasFixed ? '已解除固定' : '已固定倍速';
+    if (_touchHoldWasFixed) {
+      return _touchHoldCommitted ? '已解除固定' : '上滑解除固定';
     }
-    return _touchHoldWasFixed ? '上滑解除固定' : '上滑固定倍速';
+    if (_touchHoldRate == 1.0) {
+      return _touchHoldCommitted ? '已恢复 1.0x' : '上滑恢复 1.0x';
+    }
+    return _touchHoldCommitted ? '已固定倍速' : '上滑固定倍速';
   }
 
   double _savedVolume = 100;
@@ -134,7 +137,9 @@ final class PlaybackShortcutController extends ChangeNotifier {
     }
     _touchHoldWasFixed = isRateFixed;
     _touchHoldCommitted = false;
-    final rate = _touchHoldWasFixed ? 1.0 : settings().holdRate;
+    final rate = _touchHoldWasFixed || session.commandRate >= 2.0
+        ? 1.0
+        : settings().holdRate;
     _touchHoldRate = rate;
     _beginRateHold(rate: rate);
   }
@@ -153,7 +158,7 @@ final class PlaybackShortcutController extends ChangeNotifier {
       return;
     }
     _touchHoldCommitted = true;
-    _fixedRate = _touchHoldWasFixed ? null : rate;
+    _fixedRate = rate == 1.0 ? null : rate;
     _fixedRateGeneration = session.sourceGeneration;
     final request = Object();
     _fixedRateRequest = request;

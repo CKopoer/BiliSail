@@ -3092,6 +3092,47 @@ void main() {
       expect(engine.currentSnapshot.rate, 2);
     },
   );
+  for (final (openingRate, holdRate) in [(1.5, 2.0), (2.0, 1.0), (3.0, 1.0)]) {
+    test('touch hold on a new video opened at ${openingRate}x', () async {
+      final manager = _manager();
+      addTearDown(manager.close);
+      final first = manager.acquire('first');
+      await first.open(_detail('1'), _part('1'));
+      await first.setRate(openingRate);
+
+      final next = manager.acquire('next');
+      await next.open(_detail('2'), _part('2'));
+      expect(next.snapshots.value.rate, openingRate);
+      final shortcuts = PlaybackShortcutController(
+        session: next,
+        settings: () => const ShortcutSettings.defaults(),
+        active: () => true,
+        fullscreen: () => false,
+        toggleFullscreen: () {},
+        toggleDanmaku: () {},
+        volumeFeedback: (_) {},
+      );
+      addTearDown(shortcuts.dispose);
+
+      shortcuts.prepareTouchHold();
+      shortcuts.beginTouchHold();
+      await _flush();
+      expect(next.snapshots.value.rate, holdRate);
+      shortcuts.endTouchHold();
+      await _flush();
+      expect(next.snapshots.value.rate, openingRate);
+
+      shortcuts.prepareTouchHold();
+      shortcuts.beginTouchHold();
+      shortcuts.moveTouchHold(dx: 0, dy: -60);
+      shortcuts.endTouchHold();
+      await _flush();
+      expect(next.snapshots.value.rate, holdRate);
+      expect(shortcuts.isRateFixed, holdRate > 1);
+      await next.open(_detail('3'), _part('3'));
+      expect(next.snapshots.value.rate, holdRate);
+    });
+  }
   test(
     'release of a queued hold skips its cancelled rate and redundant restore',
     () async {
