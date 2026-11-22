@@ -220,6 +220,8 @@ abstract interface class PlayerEngine {
 - `PlayerCapabilities` 表示实际可用的外部音轨、字幕、codec/容器、截图等；系统 PiP/媒体键属于 PlatformServices，不能混为后端能力。
 - `VideoSurface` 是 bili_player 的 Flutter UI 出口；`bili_player_control.dart` 提供不依赖 Flutter 的控制、诊断和输出生命周期契约，`VideoOutputSource` 提供稳定的输出对象。`VideoCompositionAdapter` 在应用根统一注入，负责画面构建与前景合成；当前仍使用 media-kit Video 与原 Stack，测试可分别替换 engine、output 和 composition。实现与后续平台边界见[输出与合成拆分](player-output-composition-design.md)。
 
+2026-11-22 修复点播正常结束时进度条停在片尾前的问题。用现有 Windows libmpv 加载样片的 DASH 双轨，测得媒体总时长 16.114 秒，原生确认 EOF 时仍报告最后一帧的位置 15.760 秒。共享引擎在确认正常结束后将已知时长的进度同步到终点，播放过程中沿用原生位置，提前结束仍走原有中断判定。[复现视频](https://www.bilibili.com/video/BV1LK411Y7Gp)
+
 从用户偏好、服务端授权的 representation、后端支持和当前设备能力的交集选轨。优先使用经过验证的 H.264/AAC 组合；HEVC/AV1、HDR、高帧率逐项测试，不仅凭 codec 名宣称硬解成功。
 
 2026-11-02 修复 Windows Dolby Vision Profile 5 的绿／紫偏色：从容器元数据识别后，在解码前设置 libplacebo RPU／色彩转换，输出 BT.709／sRGB 的 SDR 纹理；该源自动模式使用 copy 硬解，其他视频保留原路径。公开样片、实际纹理对照及大会员／其他平台未测项见[Profile 5 验证](validation/dolby-vision-profile5-2026-11-02.md)。

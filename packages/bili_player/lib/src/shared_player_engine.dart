@@ -630,8 +630,6 @@ class SharedPlayerEngine
         }
         final position = event.position ?? _snapshot.position;
         final duration = _snapshot.duration;
-        // At audio-only EOF the sampled audio clock can lag behind the
-        // container duration, especially at higher playback rates.
         if (_requiresVideo &&
             !_live &&
             _snapshot.desiredPlaying &&
@@ -649,7 +647,9 @@ class SharedPlayerEngine
           unawaited(_fail(PlayerFailureKind.videoInterrupted));
           return;
         }
-        final completed = !_requiresVideo && duration > Duration.zero
+        // The last video frame can precede the end of the audio track, and
+        // the sampled clock can still lag when the backend confirms EOF.
+        final completed = duration > Duration.zero
             ? _timeline(position: duration)
             : _snapshot.copyWith(position: position);
         _publish(
