@@ -90,9 +90,6 @@ final class ArticleParser {
   }
 
   ApiArticle legacy(Map<String, Object?> data, String id) {
-    if (data['id'] != null && articleId(data['id']) != id) {
-      throw ApiFailure(ApiFailureCategory.protocol, endpoint);
-    }
     final content = _text(data['content']);
     final blocks = _paragraphs(
       articleMap(articleMap(data['opus'])['content'])['paragraphs'],

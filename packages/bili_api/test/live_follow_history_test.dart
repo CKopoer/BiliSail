@@ -15,6 +15,36 @@ Map<String, Object?> contentHistory(String business, String id) => {
 };
 
 void main() {
+  test(
+    'history and search separate a collection ID from its saved CV',
+    () async {
+      final transport = Transport(
+        (_) => {
+          'code': 0,
+          'data': {
+            'list': [
+              {
+                ...contentHistory('article-list', '17'),
+                'history': {'business': 'article-list', 'oid': 17, 'cid': 123},
+              },
+            ],
+            'cursor': {'max': 0, 'view_at': 0, 'business': ''},
+          },
+        },
+      );
+      final history = WatchHistoryClient(BiliApiClient(transport: transport));
+      for (final keyword in ['', '关键词']) {
+        final page = await history.load(
+          type: ApiHistoryType.article,
+          keyword: keyword,
+        );
+        expect(page.items.single.contentId, '17');
+        expect(page.items.single.cid, '123');
+        expect(page.items.single.deletionKey, 'article-list_9007199254740997');
+      }
+    },
+  );
+
   test('course season links preserve their own target kind', () async {
     final raw = contentHistory('cheese', '0')
       ..['uri'] = 'bilibili://cheese/play/ss123?from=history';

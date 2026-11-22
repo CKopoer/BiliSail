@@ -109,6 +109,10 @@ final class ApiLibraryRepository
                 deletionKey: item.deletionKey,
                 isLive: item.isLive,
                 courseSeason: item.courseSeason,
+                collectionArticleId:
+                    item.business == 'article-list' && item.cid.isNotEmpty
+                    ? item.cid
+                    : null,
               );
             }
             final detail = details[item.bvid];

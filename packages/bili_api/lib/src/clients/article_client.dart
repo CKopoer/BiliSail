@@ -15,12 +15,25 @@ final class ArticleClient {
   }) async {
     if (!isArticleId(id)) throw ArgumentError('Invalid article ID');
     final active = api.boundedReadContext(context);
-    final redirect = opus
-        ? null
-        : await api.articleRedirect(id, context: active);
-    final opusId = opus ? id : _redirectOpusId(redirect);
-    if (opusId == null) return _readCv(id, active);
+    if (opus) return _readOpus(id, active);
+    final redirect = await api.articleRedirect(id, context: active);
+    final redirectedId = _redirectOpusId(redirect);
+    if (redirectedId != null) return _readOpus(redirectedId, active);
 
+    final data = await _loadCv(id, active);
+    // The legacy response can identify a migrated work even when the site
+    // omits the redirect. Its embedded paragraphs can have missing text.
+    final opusId = articleId(articleMap(data['opus'])['opus_id']);
+    return opusId == null
+        ? _parseCv(id, data)
+        : _readOpus(opusId, active, legacy: (id: id, data: data));
+  }
+
+  Future<ApiArticle> _readOpus(
+    String opusId,
+    ApiRequestContext context, {
+    ({String id, Map<String, Object?> data})? legacy,
+  }) async {
     const endpoint = 'opus_detail';
     final data = await api.requestWbiJson(
       '/x/polymer/web-dynamic/v1/opus/detail',
@@ -37,7 +50,7 @@ final class ArticleClient {
             'eva3CardOpus,eva3CardVideo,eva3CardComment,eva3CardVote,eva3CardUser',
       },
       endpoint,
-      context: active,
+      context: context,
     );
     final fallback = articleMap(data['fallback'])['id'];
     if (fallback != null) {
@@ -45,8 +58,12 @@ final class ArticleClient {
       if (cvId == null) {
         throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
       }
-      // A fallback is already a resolved legacy identity. Do not probe again.
-      return _readCv(cvId, active);
+      // A fallback is already resolved. Reuse the same CV response if we
+      // have it, without probing or resolving its opus identity again.
+      final cvData = legacy != null && legacy.id == cvId
+          ? legacy.data
+          : await _loadCv(cvId, context);
+      return _parseCv(cvId, cvData);
     }
     return ArticleParser(
       Uri.https('www.bilibili.com', '/opus/$opusId'),
@@ -54,7 +71,10 @@ final class ArticleClient {
     ).opus(data, opusId);
   }
 
-  Future<ApiArticle> _readCv(String id, ApiRequestContext context) async {
+  Future<Map<String, Object?>> _loadCv(
+    String id,
+    ApiRequestContext context,
+  ) async {
     const endpoint = 'article_view';
     final data = await api.requestWbiJson(
       '/x/article/view',
@@ -62,11 +82,16 @@ final class ArticleClient {
       endpoint,
       context: context,
     );
-    return ArticleParser(
-      Uri.https('www.bilibili.com', '/read/cv$id'),
-      endpoint,
-    ).legacy(data, id);
+    if (data['id'] != null && articleId(data['id']) != id) {
+      throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
+    }
+    return data;
   }
+
+  ApiArticle _parseCv(String id, Map<String, Object?> data) => ArticleParser(
+    Uri.https('www.bilibili.com', '/read/cv$id'),
+    'article_view',
+  ).legacy(data, id);
 
   Future<ApiArticleCollection> collection(
     String id, {

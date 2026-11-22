@@ -151,8 +151,9 @@ final class WatchHistoryClient {
       final course = business == 'cheese' ? _courseTarget(item['uri']) : null;
       final courseEpisode = _id(history['epid']);
       final contentId = switch (business) {
-        'live' || 'article' => _id(history['oid']),
-        'article-list' => _id(history['cid']),
+        // A collection history row has the collection in oid and the read
+        // article's CV number in cid.
+        'live' || 'article' || 'article-list' => _id(history['oid']),
         'cheese' => courseEpisode ?? course?.id,
         _ => null,
       };

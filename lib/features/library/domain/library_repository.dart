@@ -35,6 +35,7 @@ final class WatchHistoryEntry {
     this.deletionKey,
   }) : contentType = null,
        contentId = null,
+       collectionArticleId = null,
        contentTitle = '',
        contentCoverUrl = '',
        contentAuthor = '',
@@ -53,6 +54,7 @@ final class WatchHistoryEntry {
     this.deletionKey,
     this.isLive = false,
     this.courseSeason = false,
+    this.collectionArticleId,
   }) : contentType = type,
        contentId = id,
        contentTitle = title,
@@ -71,6 +73,7 @@ final class WatchHistoryEntry {
   final VideoPart? part;
   final HistoryContentType? contentType;
   final String? contentId;
+  final String? collectionArticleId;
   final String contentTitle, contentCoverUrl, contentAuthor;
   final UserId? contentAuthorId;
   final bool isLive;
@@ -85,9 +88,11 @@ final class WatchHistoryEntry {
   (HistoryContentType, String, String?) get identity => (
     type,
     contentId ?? episodeId ?? video?.id.value ?? '',
-    contentType == HistoryContentType.course
-        ? (courseSeason ? 'season' : 'episode')
-        : part?.cid,
+    switch (type) {
+      HistoryContentType.course => courseSeason ? 'season' : 'episode',
+      HistoryContentType.articleList => collectionArticleId,
+      _ => part?.cid,
+    },
   );
   final Duration position;
   final DateTime watchedAt;
@@ -97,9 +102,10 @@ final class WatchHistoryEntry {
   Uri get location => switch (type) {
     HistoryContentType.live => Uri(path: '/live/$contentId'),
     HistoryContentType.article => Uri(path: '/article/$contentId'),
-    HistoryContentType.articleList => Uri.parse(
-      ArticleCollectionId(contentId ?? '').location,
-    ),
+    HistoryContentType.articleList => Uri.parse(switch (collectionArticleId) {
+      final id? => ArticleAddress(ArticleKind.column, id).location,
+      null => ArticleCollectionId(contentId ?? '').location,
+    }),
     HistoryContentType.course => Uri.https(
       'www.bilibili.com',
       '/cheese/play/${courseSeason ? 'ss' : 'ep'}$contentId',

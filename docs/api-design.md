@@ -205,6 +205,8 @@ ApiPage<T> { items, nextCursor, hasMore }
 | 旧专栏收藏／取消 | POST `/x/article/favorites/add`、`/x/article/favorites/del` | 表单 `id`、`csrf`，无 WBI |
 | 图文作品收藏／取消 | POST `/x/community/cosmo/interface/simple_action` | 查询 CSRF，JSON `entity.object_id_str` 为 opus ID、`entity.type.biz=2`、`action=3/4`，无 WBI |
 
+2026-11-22 补充专栏迁移和历史文集身份。CV 地址的匿名 HEAD 没有返回有效作品地址时，读取 `/x/article/view`。校验返回的 CV 身份后，若 `opus.opus_id` 有效，使用它读取完整的新版正文，沿用同一 Web 会话、取消信号和总时限。新版端点明确回退至刚读取的 CV 时，复用该响应。集合历史的 `history.oid` 是文集号，`history.cid` 是阅读篇目的 CV 号，删除键继续使用根 `kid`。历史和搜索共用该字段解析。
+
 动态点赞、转发与消息分享沿用现有协议，评论沿用响应指定的业务身份。交互和参考来源见[应用内专栏阅读](validation/article-reader-2026-11-20.md)。
 
 ## 5. 会话与凭据

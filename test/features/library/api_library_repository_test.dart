@@ -158,6 +158,12 @@ void main() {
                 'epid': 14,
               },
             },
+          {
+            'kid': 100,
+            'title': 'Collection without a saved CV',
+            'view_at': 1791324000,
+            'history': {'business': 'article-list', 'oid': 12, 'cid': 0},
+          },
         ]),
       },
     );
@@ -176,18 +182,28 @@ void main() {
     expect(result.items.map((e) => e.location.toString()), [
       '/live/12',
       '/article/12',
-      '/article-list/13',
+      '/article/13',
       'https://www.bilibili.com/cheese/play/ep14',
+      '/article-list/12',
     ]);
     expect(result.items.map((e) => e.type), [
       HistoryContentType.live,
       HistoryContentType.article,
       HistoryContentType.articleList,
       HistoryContentType.course,
+      HistoryContentType.articleList,
     ]);
     expect(result.items.every((e) => e.video == null && e.part == null), true);
     expect(result.items.first.isLive, true);
-    expect(result.items.last.deletionKey, 'cheese_99');
+    final collection = result.items[2];
+    expect(collection.identity, (HistoryContentType.articleList, '12', '13'));
+    expect(collection.deletionKey, 'article-list_99');
+    expect(result.items[3].deletionKey, 'cheese_99');
+    expect(result.items.last.identity, (
+      HistoryContentType.articleList,
+      '12',
+      null,
+    ));
   });
   test(
     'search forwards keyword and page while keeping enriched history metadata',

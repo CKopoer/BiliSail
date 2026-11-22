@@ -352,6 +352,98 @@ void main() {
   );
 
   test(
+    'uses the resolved opus when the anonymous CV redirect has no target',
+    () async {
+      final transport = _Transport({
+        _legacy: {
+          'id': 123,
+          'opus': {
+            'opus_id': _id,
+            'content': {
+              'paragraphs': [
+                {'para_type': 1, 'text': <String, Object?>{}},
+              ],
+            },
+          },
+        },
+        _opus: {
+          'item': {
+            'id_str': _id,
+            'modules': [
+              {
+                'module_content': {'paragraphs': _paragraphs},
+              },
+            ],
+          },
+        },
+      });
+      final article = await ArticleClient(
+        BiliApiClient(transport: transport),
+      ).read('123', opus: false);
+      expect(article.url.path, '/opus/$_id');
+      expect(article.blocks.first.text.single.text, '图文正文');
+      expect(transport.headCalls, hasLength(1));
+      expect(transport.getCalls.map((call) => call.path), [
+        '/x/web-interface/nav',
+        _legacy,
+        _opus,
+      ]);
+    },
+  );
+
+  test(
+    'reuses the CV response when its opus falls back to the same CV',
+    () async {
+      final transport = _Transport({
+        _legacy: {
+          'id': 123,
+          'opus': {'opus_id': _id},
+          'content': '<p>旧版正文</p>',
+        },
+        _opus: {
+          'fallback': {'id': '123'},
+        },
+      });
+      final article = await ArticleClient(
+        BiliApiClient(transport: transport),
+      ).read('123', opus: false);
+      expect(article.url.path, '/read/cv123');
+      expect(article.blocks.single.text.single.text, '旧版正文');
+      expect(transport.headCalls, hasLength(1));
+      expect(transport.getCalls.map((call) => call.path), [
+        '/x/web-interface/nav',
+        _legacy,
+        _opus,
+      ]);
+    },
+  );
+
+  test('does not resolve an opus from a mismatched CV response', () async {
+    final transport = _Transport({
+      _legacy: {
+        'id': 456,
+        'opus': {'opus_id': _id},
+      },
+    });
+    await expectLater(
+      ArticleClient(
+        BiliApiClient(transport: transport),
+      ).read('123', opus: false),
+      throwsA(
+        isA<ApiFailure>().having(
+          (e) => e.category,
+          'category',
+          ApiFailureCategory.protocol,
+        ),
+      ),
+    );
+    expect(transport.getCalls.map((call) => call.path), [
+      '/x/web-interface/nav',
+      _legacy,
+    ]);
+  });
+
+  test(
     'opus fallback reads legacy structured body without probing again',
     () async {
       final transport = _Transport({
