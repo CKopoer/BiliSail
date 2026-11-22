@@ -865,6 +865,21 @@ final class _WorkspacePage extends ConsumerWidget {
                   return OfflineScreen(
                     key: PageStorageKey('offline-${tab.id}'),
                     taskId: uri.pathSegments.last,
+                    autoCollapseSidebar: autoCollapseSidebar,
+                    onTaskChanged: (id) {
+                      final route = Uri(
+                        path: '/offline/$id',
+                        queryParameters: {'tab': tab.id},
+                      );
+                      final navigation = WorkspacePageNavigation.maybeOf(
+                        context,
+                      );
+                      if (navigation != null) {
+                        navigation.navigate(route);
+                      } else {
+                        context.go(route.toString());
+                      }
+                    },
                     playerBuilder: (context, task) => _workspacePlayer(
                       context,
                       () =>

@@ -216,7 +216,7 @@ class _BiliAppState extends ConsumerState<BiliApp> {
           return PlaybackPanel(
             detail: VideoDetail(
               summary: task.item.video,
-              description: '',
+              description: task.item.work?.description ?? '',
               parts: [task.item.part],
               aid: task.item.aid,
             ),

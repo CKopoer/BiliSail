@@ -114,6 +114,75 @@ void main() {
   });
 
   test(
+    'shared season metadata survives restart alongside legacy episodes',
+    () async {
+      DownloadItem episode(int index, {bool legacy = false}) => DownloadItem(
+        video: item.video,
+        part: VideoPart(
+          cid: '$index',
+          page: index,
+          title: '第$index集',
+          duration: item.part.duration,
+        ),
+        episodeId: '$index',
+        seasonId: '600',
+        work: legacy
+            ? null
+            : const DownloadWork(description: '整季简介', seasonType: 4),
+        section: legacy ? null : '花絮',
+        episodeTitle: legacy ? null : '特别篇',
+        episodeLongTitle: legacy ? null : '幕后',
+      );
+      await repository.enqueue([
+        episode(1, legacy: true),
+      ], const DownloadSelection());
+      await _waitFor(repository, DownloadStatus.completed);
+      final oldId = repository.current.tasks.single.id;
+      await db.customStatement(
+        r"""UPDATE download_tasks SET record_json=json_set(record_json,'$.version',2)""",
+      );
+      await repository.enqueue([episode(3)], const DownloadSelection());
+      final newId = repository.current.tasks
+          .firstWhere((t) => t.id != oldId)
+          .id;
+      await repository.close();
+      await db.close();
+      await openRepository();
+      final old = await repository.offlineTask(oldId);
+      final newer = repository.current.tasks.firstWhere((t) => t.id == newId);
+      expect(old.item.work?.description, '整季简介');
+      expect(old.item.category(old.item.work), DownloadCategory.guochuang);
+      expect(old.item.section, isNull);
+      expect(newer.item.work, same(old.item.work));
+      expect(
+        (
+          newer.item.section,
+          newer.item.episodeTitle,
+          newer.item.episodeLongTitle,
+        ),
+        ('花絮', '特别篇', '幕后'),
+      );
+      expect(
+        (await db.customSelect('SELECT record_json FROM download_tasks').get())
+            .every((row) => !row.read<String>('record_json').contains('整季简介')),
+        isTrue,
+      );
+      await repository.remove(newId, deleteFiles: false);
+      expect(repository.current.works.length, 1);
+      await repository.remove(oldId, deleteFiles: false);
+      expect(repository.current.works, isEmpty);
+      expect(
+        await db
+            .customSelect(
+              "SELECT key FROM settings WHERE key LIKE 'downloads.work.%'",
+            )
+            .get(),
+        isEmpty,
+      );
+    },
+  );
+
+  test(
     'background execution spans concurrent and queued jobs until idle',
     () async {
       await repository.close();

@@ -55,6 +55,7 @@ final class SqliteDownloadRepository implements DownloadRepository {
   final DateTime Function() _clock;
   final _changes = StreamController<DownloadQueueState>.broadcast();
   final Map<String, DownloadTask> _tasks = {};
+  Map<String, DownloadWork> _works = const {};
   List<String>? _visibleTaskIds;
   final Map<String, _Run> _runs = {};
   final Set<String> _removing = {};
@@ -82,6 +83,7 @@ final class SqliteDownloadRepository implements DownloadRepository {
     initialized: _initialized,
     failure: _failure,
     canMerge: _muxer.available,
+    works: _works,
   );
 
   @override
@@ -135,6 +137,26 @@ final class SqliteDownloadRepository implements DownloadRepository {
         // A damaged preference does not make the download index inaccessible.
       }
     }
+    final prefix = _workPrefix(loadingScope);
+    final snapshots = await db
+        .customSelect(
+          'SELECT key,value FROM settings WHERE key >= ? AND key < ?',
+          // Work keys begin with an ASCII kind (video, season or episode).
+          variables: [Variable(prefix), Variable('$prefix~')],
+        )
+        .get();
+    if (loadingScope != sources.accountScope ||
+        loadingEpoch != sources.sessionEpoch) {
+      return;
+    }
+    final works = <String, DownloadWork>{};
+    for (final row in snapshots) {
+      final work = _decodeWork(row.read<String>('value'));
+      if (work != null) {
+        works[row.read<String>('key').substring(prefix.length)] = work;
+      }
+    }
+    _works = Map.unmodifiable(works);
     final rows = await db
         .customSelect(
           'SELECT record_json FROM download_tasks WHERE scope = ?',
@@ -147,7 +169,7 @@ final class SqliteDownloadRepository implements DownloadRepository {
         return;
       }
       try {
-        final task = _decodeTask(row.read<String>('record_json'));
+        final task = _decodeTask(row.read<String>('record_json'), _works);
         if (task.scope != _scope) continue;
         var restored = task;
         if (task.active) {
@@ -359,8 +381,15 @@ final class SqliteDownloadRepository implements DownloadRepository {
         await _files.deleteOwned(task);
         return;
       }
+      final work = item.work;
+      // A simultaneous delete may remove the previous last member. Commit
+      // the work and this new member together even when memory has a snapshot.
+      await _save(task, newWork: work);
+      if (!_batchCurrent(scope, epoch)) return;
+      if (work != null && !identical(_works[item.workKey], work)) {
+        _works = Map.unmodifiable({..._works, item.workKey: work});
+      }
       _insertTask(task);
-      await _save(task);
       _emit();
     }
     if (_batchCurrent(scope, epoch)) _pump();
@@ -828,16 +857,22 @@ final class SqliteDownloadRepository implements DownloadRepository {
     etag: track.etag,
   );
 
-  Future<void> _save(DownloadTask task) {
+  Future<void> _save(DownloadTask task, {DownloadWork? newWork}) {
     final next = _writes.then(
-      (_) => db.transaction(
-        () => db.customStatement(
+      (_) => db.transaction(() async {
+        if (newWork != null) {
+          await db.writeSetting(
+            '${_workPrefix(task.scope)}${task.item.workKey}',
+            _encodeWork(newWork),
+          );
+        }
+        await db.customStatement(
           '''INSERT INTO download_tasks(id,scope,item_key,record_json) VALUES (?,?,?,?)
       ON CONFLICT(id) DO UPDATE SET scope=excluded.scope,
       item_key=excluded.item_key,record_json=excluded.record_json''',
           [task.id, task.scope, task.item.key, _encodeTask(task)],
-        ),
-      ),
+        );
+      }),
     );
     _writes = next.then((_) {}, onError: (Object _, StackTrace _) {});
     return next;
@@ -982,10 +1017,35 @@ final class SqliteDownloadRepository implements DownloadRepository {
           await _files.deleteOwned(current);
         }
         await _writes;
-        await db.customStatement(
-          'DELETE FROM download_tasks WHERE id = ? AND scope = ?',
-          [id, scope],
-        );
+        final orphan = await db.transaction(() async {
+          await db.customStatement(
+            'DELETE FROM download_tasks WHERE id = ? AND scope = ?',
+            [id, scope],
+          );
+          final key = current.item.workKey;
+          final removed = await db.customUpdate(
+            r'''DELETE FROM settings WHERE key = ? AND NOT EXISTS (
+              SELECT 1 FROM download_tasks WHERE scope = ? AND
+              CASE WHEN json_valid(record_json) THEN COALESCE(
+                'season:' || json_extract(record_json,'$.seasonId'),
+                'episode:' || json_extract(record_json,'$.episodeId'),
+                'video:' || json_extract(record_json,'$.video.id')) END = ?)''',
+            variables: [
+              Variable('${_workPrefix(scope)}$key'),
+              Variable(scope),
+              Variable(key),
+            ],
+          );
+          return removed > 0;
+        });
+        if (orphan &&
+            scope == _scope &&
+            !_tasks.values.any(
+              (t) => t.scope == scope && t.item.workKey == current.item.workKey,
+            )) {
+          _works = Map.unmodifiable({..._works}..remove(current.item.workKey));
+          _emit();
+        }
       } catch (_) {
         if (scope == _scope && epoch == _epoch && !_tasks.containsKey(id)) {
           _insertTask(current);
@@ -1063,6 +1123,7 @@ final class SqliteDownloadRepository implements DownloadRepository {
         await Future.wait(_runs.values.map((run) => run.future).toList());
         await _writes;
         _tasks.clear();
+        _works = const {};
         _visibleTaskIds = null;
         _backgroundFailed.clear();
         _scope = sources.accountScope;
@@ -1164,7 +1225,7 @@ final class _Run {
 }
 
 String _encodeTask(DownloadTask task) => jsonEncode({
-  'version': 2,
+  'version': 3,
   'id': task.id,
   'scope': task.scope,
   'directory': task.directory,
@@ -1188,6 +1249,10 @@ String _encodeTask(DownloadTask task) => jsonEncode({
   'aid': task.item.aid,
   'episodeId': task.item.episodeId,
   'seasonId': task.item.seasonId,
+  if (task.item.section != null) 'section': task.item.section,
+  if (task.item.episodeTitle != null) 'episodeTitle': task.item.episodeTitle,
+  if (task.item.episodeLongTitle != null)
+    'episodeLongTitle': task.item.episodeLongTitle,
   'selection': {
     'quality': task.selection.quality,
     'codec': task.selection.codec.name,
@@ -1219,10 +1284,44 @@ String _encodeTask(DownloadTask task) => jsonEncode({
   'durationMs': task.duration?.inMilliseconds,
 });
 
-DownloadTask _decodeTask(String text) {
+String _workPrefix(String scope) =>
+    'downloads.work.v1/${Uri.encodeComponent(scope)}/';
+
+String _encodeWork(DownloadWork work) => jsonEncode({
+  'description': work.description,
+  'partCount': work.partCount,
+  'seasonType': work.seasonType,
+  'collectionId': work.collectionId,
+  'collectionTitle': work.collectionTitle,
+  'collectionPosition': work.collectionPosition,
+});
+
+DownloadWork? _decodeWork(String text) {
+  try {
+    if (jsonDecode(text) case final Map<String, Object?> value) {
+      return DownloadWork(
+        description: value['description'] as String? ?? '',
+        partCount: value['partCount'] as int?,
+        seasonType: value['seasonType'] as int?,
+        collectionId: value['collectionId'] as String?,
+        collectionTitle: value['collectionTitle'] as String?,
+        collectionPosition: value['collectionPosition'] as int?,
+      );
+    }
+  } on FormatException {
+    return null;
+  } on TypeError {
+    return null;
+  }
+  return null;
+}
+
+DownloadTask _decodeTask(String text, Map<String, DownloadWork> works) {
   try {
     final value = jsonDecode(text) as Map<String, dynamic>;
     final video = value['video'] as Map<String, dynamic>;
+    final seasonId = value['seasonId'] as String?;
+    final episodeId = value['episodeId'] as String?;
     final part = value['part'] as Map<String, dynamic>;
     final selection = value['selection'] as Map<String, dynamic>;
     final tracks = value['tracks'] as List<dynamic>;
@@ -1262,8 +1361,17 @@ DownloadTask _decodeTask(String text) {
           duration: Duration(milliseconds: part['durationMs'] as int),
         ),
         aid: value['aid'] as String?,
-        episodeId: value['episodeId'] as String?,
-        seasonId: value['seasonId'] as String?,
+        episodeId: episodeId,
+        seasonId: seasonId,
+        work:
+            works[seasonId != null
+                ? 'season:$seasonId'
+                : episodeId != null
+                ? 'episode:$episodeId'
+                : 'video:${video['id']}'],
+        section: value['section'] as String?,
+        episodeTitle: value['episodeTitle'] as String?,
+        episodeLongTitle: value['episodeLongTitle'] as String?,
       ),
       selection: DownloadSelection(
         quality: selection['quality'] as int,

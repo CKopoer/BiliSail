@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../domain/app_failure.dart';
 import '../../../domain/request_cancellation.dart';
 import '../domain/download_repository.dart';
+import '../domain/offline_library.dart';
 import '../domain/public_download_storage.dart';
 
 final publicDownloadStorageProvider = Provider<PublicDownloadStorage?>(
@@ -34,6 +35,23 @@ final downloadQueueIndexProvider =
       DownloadQueueIndexController,
       DownloadQueueIndex
     >(DownloadQueueIndexController.new);
+
+final offlineLibraryProvider = Provider.autoDispose
+    .family<OfflineLibrary, String>((ref, scope) {
+      final entries = ref.watch(
+        downloadQueueIndexProvider.select((index) => index.structure.completed),
+      );
+      final works = ref.watch(
+        downloadControllerProvider.select((queue) => queue.works),
+      );
+      return OfflineLibrary(
+        entries
+            .where((e) => e.scope == scope)
+            .map((entry) => entry._completedTask)
+            .nonNulls,
+        works,
+      );
+    });
 
 /// Built in O(N) per snapshot; each visible task then selects its value in O(1).
 final class DownloadQueueIndex {
@@ -70,17 +88,21 @@ final class DownloadTaskEntry {
     required this.partTitle,
     required this.searchText,
     required this.completed,
+    required this.category,
     required this._completedTask,
   });
 
   final String id, scope, videoTitle, partTitle, searchText;
   final bool completed;
+  final DownloadCategory category;
   final DownloadTask? _completedTask;
 
   bool _matchesCompletedLayout(DownloadTask task) {
     final previous = _completedTask;
     return identical(previous, task) ||
         previous != null &&
+            identical(previous.item, task.item) &&
+            previous.createdAt == task.createdAt &&
             previous.selection.quality == task.selection.quality &&
             previous.selection.codec == task.selection.codec &&
             previous.selection.output == task.selection.output &&
@@ -119,10 +141,14 @@ final class DownloadQueueIndexController extends Notifier<DownloadQueueIndex> {
           previous.videoTitle == task.item.video.title &&
           previous.partTitle == task.item.part.title;
       final completed = task.status == DownloadStatus.completed;
+      final category = task.item.category(
+        queue.works[task.item.workKey] ?? task.item.work,
+      );
       final entry =
           sameTitle &&
               previous.scope == task.scope &&
               previous.completed == completed &&
+              previous.category == category &&
               (!completed || previous._matchesCompletedLayout(task))
           ? previous
           : DownloadTaskEntry._(
@@ -135,6 +161,7 @@ final class DownloadQueueIndexController extends Notifier<DownloadQueueIndex> {
                   : '${task.item.video.title} ${task.item.part.title}'
                         .toLowerCase(),
               completed: completed,
+              category: category,
               completedTask: completed ? task : null,
             );
       if (unchanged &&
@@ -217,6 +244,7 @@ final class DownloadController extends Notifier<DownloadQueueState> {
 
   Future<void> enqueue(List<DownloadItem> items, DownloadSelection selection) =>
       _repository.enqueue(items, selection);
+  Future<DownloadTask> openOffline(String id) => _repository.offlineTask(id);
   Future<void> pause(String id) => _repository.pause(id);
   Future<void> resume(String id) => _repository.resume(id);
   Future<void> pauseAll() => _repository.pauseAll();

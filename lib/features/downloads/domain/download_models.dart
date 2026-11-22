@@ -44,10 +44,36 @@ final class DownloadItem {
     this.aid,
     this.episodeId,
     this.seasonId,
+    this.work,
+    this.section,
+    this.episodeTitle,
+    this.episodeLongTitle,
   });
   final VideoSummary video;
   final VideoPart part;
   final String? aid, episodeId, seasonId;
+  final DownloadWork? work;
+  final String? section, episodeTitle, episodeLongTitle;
+  String get displayPartTitle {
+    final short = episodeTitle?.trim() ?? '',
+        long = episodeLongTitle?.trim() ?? '';
+    if (short.isEmpty) return long.isEmpty ? part.title : long;
+    final label = RegExp(r'^[0-9]+$').hasMatch(short) ? '第 $short 集' : short;
+    return long.isEmpty || short == long ? label : '$label · $long';
+  }
+
+  String get workKey => seasonId != null
+      ? 'season:$seasonId'
+      : episodeId != null
+      ? 'episode:$episodeId'
+      : 'video:${video.id.value}';
+  DownloadCategory category(DownloadWork? metadata) => episodeId == null
+      ? DownloadCategory.video
+      : switch (metadata?.seasonType) {
+          1 => DownloadCategory.bangumi,
+          4 => DownloadCategory.guochuang,
+          _ => DownloadCategory.cinema,
+        };
   String get key =>
       '${episodeId == null ? 'video:${video.id.value}' : 'episode:$episodeId'}:${part.cid}';
   bool get isValid =>
@@ -55,21 +81,41 @@ final class DownloadItem {
       RegExp(r'^[1-9][0-9]*$').hasMatch(part.cid) &&
       (episodeId == null || RegExp(r'^[1-9][0-9]*$').hasMatch(episodeId ?? ''));
 
-  static List<DownloadItem> fromVideo(VideoDetail detail) => List.unmodifiable(
-    detail.parts.map(
-      (part) =>
-          DownloadItem(video: detail.summary, part: part, aid: detail.aid),
-    ),
-  );
-  static List<DownloadItem> fromSeason(PgcSeason season) => List.unmodifiable(
-    season.episodes
-        .where(
-          (episode) =>
-              episode.available &&
-              RegExp(r'^[1-9][0-9]*$').hasMatch(episode.cid ?? ''),
-        )
-        .map(
-          (episode) => DownloadItem(
+  static List<DownloadItem> fromVideo(VideoDetail detail) {
+    final collection = detail.collection;
+    final position =
+        collection?.entries.indexWhere(
+          (entry) => entry.id == detail.summary.id,
+        ) ??
+        -1;
+    final work = DownloadWork(
+      description: detail.description,
+      partCount: detail.parts.length,
+      collectionId: position < 0 ? null : collection?.id,
+      collectionTitle: position < 0 ? null : collection?.title,
+      collectionPosition: position < 0 ? null : position,
+    );
+    return List.unmodifiable([
+      for (final part in detail.parts)
+        DownloadItem(
+          video: detail.summary,
+          part: part,
+          aid: detail.aid,
+          work: work,
+        ),
+    ]);
+  }
+
+  static List<DownloadItem> fromSeason(PgcSeason season) {
+    final work = DownloadWork(
+      description: season.description,
+      seasonType: season.type,
+    );
+    return List.unmodifiable([
+      for (final (index, episode) in season.episodes.indexed)
+        if (episode.available &&
+            RegExp(r'^[1-9][0-9]*$').hasMatch(episode.cid ?? ''))
+          DownloadItem(
             video: VideoSummary(
               id: VideoId(episode.bvid ?? ''),
               title: season.title,
@@ -79,16 +125,46 @@ final class DownloadItem {
             ),
             part: VideoPart(
               cid: episode.cid ?? '',
-              page: season.episodes.indexOf(episode) + 1,
+              page: index + 1,
               title: episode.displayTitle,
               duration: episode.duration ?? Duration.zero,
             ),
             aid: episode.aid,
             episodeId: episode.episodeId,
             seasonId: season.seasonId,
+            work: work,
+            section: pgcEpisodeSection(episode),
+            episodeTitle: episode.title,
+            episodeLongTitle: episode.longTitle,
           ),
-        ),
-  );
+    ]);
+  }
+}
+
+enum DownloadCategory {
+  all('全部'),
+  video('视频'),
+  bangumi('番剧'),
+  guochuang('国创'),
+  cinema('影视');
+
+  const DownloadCategory(this.label);
+  final String label;
+}
+
+/// Shared by all parts of a BV or all episodes of one season in an account.
+final class DownloadWork {
+  const DownloadWork({
+    this.description = '',
+    this.partCount,
+    this.seasonType,
+    this.collectionId,
+    this.collectionTitle,
+    this.collectionPosition,
+  });
+  final String description;
+  final int? partCount, seasonType, collectionPosition;
+  final String? collectionId, collectionTitle;
 }
 
 final class DownloadSelection {
@@ -312,10 +388,12 @@ final class DownloadQueueState {
     this.initialized = false,
     this.failure,
     this.canMerge = false,
+    this.works = const {},
   }) : tasks = List.unmodifiable(tasks);
   final List<DownloadTask> tasks;
   final DownloadPreferences preferences;
   final bool initialized;
   final AppFailure? failure;
   final bool canMerge;
+  final Map<String, DownloadWork> works;
 }

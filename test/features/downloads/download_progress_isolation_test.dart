@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bilisail/core/presentation/workspace_activity.dart';
+import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
@@ -19,10 +20,17 @@ DownloadTask _task(
   DownloadStatus status = DownloadStatus.paused,
   String scope = 'user:1',
   String? title,
+  String? seasonId,
+  int? seasonType,
 }) => DownloadTask(
   id: '$index',
   scope: scope,
   item: DownloadItem(
+    seasonId: seasonId,
+    episodeId: seasonId == null ? null : '$index',
+    work: seasonType == null
+        ? null
+        : DownloadWork(seasonType: seasonType, description: '作品简介 $index'),
     video: VideoSummary(
       id: const VideoId('BV1234567890'),
       title: title ?? 'Video $index',
@@ -89,6 +97,151 @@ Future<void> _pump(
 }
 
 void main() {
+  testWidgets(
+    'a missing file leaves the player and other local entries usable at large text',
+    (tester) async {
+      final first = _task(
+        1,
+        status: DownloadStatus.completed,
+        seasonId: '77',
+        seasonType: 4,
+      );
+      final second = _task(
+        2,
+        status: DownloadStatus.completed,
+        seasonId: '77',
+        seasonType: 4,
+      );
+      final repository = _Repository([first, second]);
+      addTearDown(repository.close);
+      final failed = Completer<DownloadTask>();
+      repository.pending['2'] = failed.future;
+      await _pump(
+        tester,
+        repository,
+        Theme(
+          data: ThemeData.dark(),
+          child: OfflineScreen(
+            taskId: '1',
+            playerBuilder: (_, task) => Text('播放文件 ${task.id}'),
+          ),
+        ),
+        size: const Size(320, 760),
+        textScale: 2,
+      );
+      await tester.pumpAndSettle();
+      final target = find.text('Episode 2');
+      await tester.dragUntilVisible(
+        target,
+        find.byType(CustomScrollView).last,
+        const Offset(0, -120),
+      );
+      await tester.tap(target);
+      await tester.pump();
+      repository.setTasks([
+        first,
+        second.copyWith(status: DownloadStatus.failed),
+      ]);
+      failed.completeError(const AppFailure(AppFailureKind.storage, '本地文件已移走'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(find.text('本地文件已移走'), findsOneWidget);
+      expect(find.text('播放文件 1'), findsOneWidget);
+      expect(find.text('Episode 2'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'completed categories combine the query with reliable season types',
+    (tester) async {
+      final tasks = [
+        _task(1, status: DownloadStatus.completed),
+        for (final (index, type) in [(2, 1), (3, 4), (4, 2), (5, null)])
+          _task(
+            index,
+            status: DownloadStatus.completed,
+            seasonId: '$index',
+            seasonType: type,
+          ),
+        _task(6, seasonId: '6', seasonType: 1),
+      ];
+      final repository = _Repository(tasks);
+      addTearDown(repository.close);
+      await _pump(tester, repository, const DownloadsScreen());
+      await tester.tap(find.text('已完成'));
+      await tester.pumpAndSettle();
+      for (final (label, ids) in [
+        ('视频', [1]),
+        ('番剧', [2]),
+        ('国创', [3]),
+        ('影视', [4, 5]),
+      ]) {
+        await tester.tap(find.text(label));
+        await tester.pumpAndSettle();
+        for (var i = 1; i <= 6; i++) {
+          expect(
+            find.text('Video $i'),
+            ids.contains(i) ? findsOneWidget : findsNothing,
+          );
+        }
+      }
+      await tester.enterText(find.byType(TextField), 'Episode 5');
+      await tester.pump();
+      expect(find.text('Video 5'), findsOneWidget);
+      expect(find.text('Video 4'), findsNothing);
+      await tester.tap(find.text('全部'));
+      await tester.pumpAndSettle();
+      expect(find.text('Video 5'), findsOneWidget);
+      expect(find.text('Video 1'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'browsing the library preserves playback and a late verification cannot replace a later pick',
+    (tester) async {
+      final tasks = [
+        _task(1, status: DownloadStatus.completed),
+        _task(2, status: DownloadStatus.completed),
+        _task(
+          3,
+          status: DownloadStatus.completed,
+          seasonId: '9',
+          seasonType: 4,
+        ),
+      ];
+      final repository = _Repository(tasks);
+      addTearDown(repository.close);
+      final selected = <String>[];
+      await _pump(
+        tester,
+        repository,
+        OfflineScreen(
+          taskId: '1',
+          onTaskChanged: selected.add,
+          playerBuilder: (_, t) => Text('播放文件 ${t.id}'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final delayed = Completer<DownloadTask>();
+      repository.pending['2'] = delayed.future;
+      await tester.tap(find.text('P3 · Episode 2'));
+      await tester.pump();
+      await tester.tap(find.text('全部下载'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Video 3'));
+      await tester.pumpAndSettle();
+      expect(selected, isEmpty);
+      expect(find.text('播放文件 1'), findsOneWidget);
+      await tester.tap(find.text('Episode 3'));
+      await tester.pumpAndSettle();
+      expect(find.text('本季剧集'), findsOneWidget);
+      expect(find.text('作品简介 3'), findsOneWidget);
+      delayed.complete(tasks[1]);
+      await tester.pumpAndSettle();
+      expect(selected, ['3']);
+      expect(find.text('播放文件 3'), findsOneWidget);
+    },
+  );
   test(
     'derived queue index is released after its last UI subscription',
     () async {
@@ -415,14 +568,14 @@ void main() {
     await tester.pumpAndSettle();
     final finder = find.byKey(const ValueKey('offline-listening-player'));
     final element = tester.element(finder);
-    expect(tester.getSize(finder).height, (390 - 40) * 9 / 16);
+    expect(tester.getSize(finder).height, 390 * 9 / 16);
     await session.setAudioOnly(true);
     await tester.pumpAndSettle();
     expect(tester.getSize(finder).height, 400);
     expect(tester.element(finder), same(element));
     await session.setAudioOnly(false);
     await tester.pumpAndSettle();
-    expect(tester.getSize(finder).height, (390 - 40) * 9 / 16);
+    expect(tester.getSize(finder).height, 390 * 9 / 16);
     expect(tester.element(finder), same(element));
     expect(tester.takeException(), isNull);
   });
@@ -547,8 +700,11 @@ final class _Repository implements DownloadRepository {
   @override
   Future<DownloadTask> offlineTask(String id) async {
     verifications++;
+    if (pending[id] case final future?) return future;
     return _state.tasks.firstWhere((task) => task.id == id);
   }
+
+  final pending = <String, Future<DownloadTask>>{};
 
   @override
   Future<void> pause(String id) async {}

@@ -89,10 +89,12 @@ final class _DownloadsScreenState extends ConsumerState<_DownloadsContent> {
   final _scrollController = HeaderScrollController();
   final _coverLoader = DownloadCoverLoader();
   bool _completed = false;
+  DownloadCategory _category = DownloadCategory.all;
   String _query = '';
   String _normalizedQuery = '';
   DownloadQueueStructure? _shownStructure;
   bool _shownCompleted = false;
+  DownloadCategory _shownCategory = DownloadCategory.all;
   String _shownQuery = '';
   List<DownloadTaskEntry> _shown = const [];
   Map<String, int> _shownIndices = const {};
@@ -100,17 +102,24 @@ final class _DownloadsScreenState extends ConsumerState<_DownloadsContent> {
   List<DownloadTaskEntry> _shownEntries(DownloadQueueStructure structure) {
     if (identical(_shownStructure, structure) &&
         _shownCompleted == _completed &&
+        _shownCategory == _category &&
         _shownQuery == _normalizedQuery) {
       return _shown;
     }
     _shownStructure = structure;
     _shownCompleted = _completed;
+    _shownCategory = _category;
     _shownQuery = _normalizedQuery;
     final group = _completed ? structure.completed : structure.queued;
-    _shown = _normalizedQuery.isEmpty
+    final filterCategory = _completed && _category != DownloadCategory.all;
+    _shown = _normalizedQuery.isEmpty && !filterCategory
         ? group
         : group
-              .where((entry) => entry.searchText.contains(_normalizedQuery))
+              .where(
+                (entry) =>
+                    (!filterCategory || entry.category == _category) &&
+                    entry.searchText.contains(_normalizedQuery),
+              )
               .toList(growable: false);
     _shownIndices = {
       for (var index = 0; index < _shown.length; index++)
@@ -270,6 +279,18 @@ final class _DownloadsScreenState extends ConsumerState<_DownloadsContent> {
           },
         ),
         const Divider(height: 1),
+        if (_completed)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: PagingTabStrip<DownloadCategory>(
+              tabs: DownloadCategory.values,
+              value: _category,
+              buttonStyle: PageTabStyle.buttonStyle(context, fontSize: 14),
+              onSelected: (category) => setState(() => _category = category),
+              labelBuilder: (_, category) => Text(category.label),
+            ),
+          ),
         Expanded(
           child: LayoutBuilder(
             builder: (context, constraints) {
@@ -333,6 +354,12 @@ final class _DownloadsScreenState extends ConsumerState<_DownloadsContent> {
                         );
                         final textScale =
                             MediaQuery.textScalerOf(context).scale(14) / 14;
+                        if (_completed) {
+                          return Align(
+                            alignment: Alignment.centerLeft,
+                            child: search,
+                          );
+                        }
                         if (constraints.maxWidth >= 720 * textScale) {
                           return Row(
                             children: [
@@ -388,7 +415,9 @@ final class _DownloadsScreenState extends ConsumerState<_DownloadsContent> {
                               message: _query.isNotEmpty
                                   ? '没有匹配的下载任务'
                                   : _completed
-                                  ? '还没有已完成的下载'
+                                  ? _category == DownloadCategory.all
+                                        ? '还没有已完成的下载'
+                                        : '还没有已完成的${_category.label}下载'
                                   : '还没有下载任务',
                               icon: Icons.download_outlined,
                             ),

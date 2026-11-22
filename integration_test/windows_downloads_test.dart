@@ -80,20 +80,37 @@ void main() {
         PlaybackSession? session;
         try {
           await downloads.initialize();
-          await downloads.enqueue([_item], DownloadSelection(output: output));
+          final items = DownloadItem.fromVideo(
+            VideoDetail(
+              summary: _item.video,
+              description: '断网后的投稿简介',
+              parts: [
+                _item.part,
+                const VideoPart(
+                  cid: '102',
+                  page: 2,
+                  title: '第二段',
+                  duration: Duration(seconds: 12),
+                ),
+              ],
+            ),
+          );
+          await downloads.enqueue(items, DownloadSelection(output: output));
           await _until(
             tester,
-            () => downloads.current.tasks.any(
+            () => downloads.current.tasks.every(
               (task) =>
                   task.status == DownloadStatus.completed ||
                   task.status == DownloadStatus.failed,
             ),
           );
-          final task = downloads.current.tasks.single;
+          final task = downloads.current.tasks.firstWhere(
+            (t) => t.item.part.page == 1,
+          );
           expect(task.failure, isNull);
           expect(task.status, DownloadStatus.completed);
           expect(task.tracks.every((track) => track.complete), isTrue);
-          expect(transfers, 2);
+          expect(transfers, 4);
           await downloads.close();
           await database.close();
           // There is no network service when the restored task is opened.
@@ -108,8 +125,8 @@ void main() {
           );
           await downloads.initialize();
           expect(
-            downloads.current.tasks.single.status,
-            DownloadStatus.completed,
+            downloads.current.tasks.map((t) => t.status),
+            everyElement(DownloadStatus.completed),
           );
           final offline = OfflinePlaybackRepository(
             downloads: downloads,
@@ -201,10 +218,24 @@ void main() {
           );
           expect(engine.inspectDiagnostics().audioChannels, greaterThan(0));
           await player.pause();
+          expect(find.text('断网后的投稿简介'), findsOneWidget);
+          final nextPart = find.text('P2 · 第二段');
+          await tester.ensureVisible(nextPart);
+          await tester.tap(nextPart);
+          await _until(
+            tester,
+            () =>
+                player.part?.cid == '102' &&
+                player.media != null &&
+                !player.isResolving,
+          );
+          expect(player.error, isNull);
+          expect(player.media?.video.urls.single.scheme, 'file');
+          expect(player.snapshots.value.phase, isNot(PlaybackPhase.playing));
           expect(history.calls, 0);
           expect(
             sources.resolutions,
-            1,
+            2,
             reason:
                 'Restored offline playback must not re-resolve the remote URL',
           );

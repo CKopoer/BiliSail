@@ -630,43 +630,46 @@ void main() {
   });
 
   for (final width in [390.0, 1000.0]) {
-    testWidgets('offline player has finite 16:9 bounds at ${width.toInt()}px', (
-      tester,
-    ) async {
-      final repository = _DownloadRepository(
-        tasks: [_task(1, DownloadStatus.completed)],
-      );
-      BoxConstraints? playerConstraints;
-      await _pump(
-        tester,
-        OfflineScreen(
-          taskId: '1',
-          playerBuilder: (_, _) => LayoutBuilder(
-            builder: (_, constraints) {
-              playerConstraints = constraints;
-              return const Stack(
-                fit: StackFit.expand,
-                children: [ColoredBox(color: Colors.black)],
-              );
-            },
+    testWidgets(
+      'offline player shares the responsive layout at ${width.toInt()}px',
+      (tester) async {
+        final repository = _DownloadRepository(
+          tasks: [_task(1, DownloadStatus.completed)],
+        );
+        BoxConstraints? playerConstraints;
+        await _pump(
+          tester,
+          OfflineScreen(
+            taskId: '1',
+            playerBuilder: (_, _) => LayoutBuilder(
+              builder: (_, constraints) {
+                playerConstraints = constraints;
+                return const Stack(
+                  fit: StackFit.expand,
+                  children: [ColoredBox(color: Colors.black)],
+                );
+              },
+            ),
           ),
-        ),
-        repository,
-        _SourceRepository(),
-        size: Size(width, 800),
-      );
-      await tester.pump(const Duration(milliseconds: 300));
-      expect(playerConstraints, isNotNull);
-      expect(playerConstraints!.hasBoundedWidth, isTrue);
-      expect(playerConstraints!.hasBoundedHeight, isTrue);
-      expect(
-        playerConstraints!.maxHeight,
-        closeTo(playerConstraints!.maxWidth * 9 / 16, 0.1),
-      );
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox());
-      await repository.close();
-    });
+          repository,
+          _SourceRepository(),
+          size: Size(width, 800),
+        );
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(playerConstraints, isNotNull);
+        expect(playerConstraints!.hasBoundedWidth, isTrue);
+        expect(playerConstraints!.hasBoundedHeight, isTrue);
+        if (width >= 1000) {
+          expect(playerConstraints!.maxWidth, width - 380);
+          expect(playerConstraints!.maxHeight, 800);
+        } else {
+          expect(playerConstraints!.maxHeight, closeTo(width * 9 / 16, 0.1));
+        }
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        await repository.close();
+      },
+    );
   }
 }
 
