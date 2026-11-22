@@ -439,18 +439,24 @@ final class _SettingsCategoryPageState
                             onPlaybackChanged:
                                 controller.setPlaybackSideBySideWidth,
                           ),
-                          _choices(
-                            '左右布局样式',
-                            s.responsiveLayout.playbackSplitStyle,
-                            const {
-                              PlaybackSplitStyle.automatic: '自动',
-                              PlaybackSplitStyle.right: '信息在右侧',
-                              PlaybackSplitStyle.below: '信息在下方',
-                            },
-                            controller.setPlaybackSplitStyle,
-                          ),
+                          for (final (page, label) in const [
+                            (PlaybackSplitPage.video, '视频页左右布局样式'),
+                            (PlaybackSplitPage.pgc, '番剧页左右布局样式'),
+                            (PlaybackSplitPage.live, '直播页左右布局样式'),
+                          ])
+                            _choices(
+                              label,
+                              s.responsiveLayout.playbackSplitStyleFor(page),
+                              const {
+                                PlaybackSplitStyle.automatic: '自动',
+                                PlaybackSplitStyle.right: '信息在右侧',
+                                PlaybackSplitStyle.below: '信息在下方',
+                              },
+                              (style) =>
+                                  controller.setPlaybackSplitStyle(page, style),
+                            ),
                           const Text(
-                            '自动模式会在画面上下留白足够时，将视频、影视或直播信息放到画面下方。',
+                            '进入左右布局后，自动模式会在画面上下留白足够时将信息放到画面下方。',
                             style: TextStyle(fontSize: 12),
                           ),
                           _choices('动态页默认标签', s.defaultDynamicTab, const {

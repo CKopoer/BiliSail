@@ -115,7 +115,7 @@ void main() {
     expect(tester.getSize(find.byType(_TrackedPlayer)).width, 520);
     final episodes = tester.state(find.byType(PgcEpisodePanel));
     layout.value = layout.value.copyWith(
-      playbackSplitStyle: PlaybackSplitStyle.below,
+      playbackSplitStyles: {PlaybackSplitPage.pgc: PlaybackSplitStyle.below},
     );
     await tester.pumpAndSettle();
     final player = find.byType(_TrackedPlayer);

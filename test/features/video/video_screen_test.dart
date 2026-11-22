@@ -207,7 +207,9 @@ void main() {
       expect(tester.getSize(find.byType(_TrackedPlayer)).width, 900);
       layout.value = ResponsiveLayoutSettings(
         playbackSideBySideWidth: 900,
-        playbackSplitStyle: PlaybackSplitStyle.automatic,
+        playbackSplitStyles: {
+          PlaybackSplitPage.video: PlaybackSplitStyle.automatic,
+        },
       );
       await tester.pumpAndSettle();
       expect(tester.getSize(find.byType(_TrackedPlayer)).width, 520);
@@ -239,7 +241,9 @@ void main() {
       expect(find.text('测试简介').hitTestable(), findsOneWidget);
       layout.value = ResponsiveLayoutSettings(
         playbackSideBySideWidth: 900,
-        playbackSplitStyle: PlaybackSplitStyle.right,
+        playbackSplitStyles: {
+          PlaybackSplitPage.video: PlaybackSplitStyle.right,
+        },
       );
       await tester.pumpAndSettle();
       expect(tester.getSize(player).height, 800);

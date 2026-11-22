@@ -319,7 +319,7 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 55,
+        'schemaVersion': 56,
         'appIcon': value.appIcon.name,
         'recommendations': value.recommendations.toJson(),
         'navigationBarMode': value.navigationBarMode.name,
@@ -330,7 +330,12 @@ class SqliteSettingsRepository implements SettingsRepository {
           'navigationBarBreakpoint':
               value.responsiveLayout.navigationBarBreakpoint,
           'sidebarExpandedWidth': value.responsiveLayout.sidebarExpandedWidth,
-          'playbackSplitStyle': value.responsiveLayout.playbackSplitStyle.name,
+          'playbackSplitStyles': {
+            for (final page in PlaybackSplitPage.values)
+              page.name: value.responsiveLayout
+                  .playbackSplitStyleFor(page)
+                  .name,
+          },
           'playbackSideBySideWidth':
               value.responsiveLayout.playbackSideBySideWidth,
           'articleWidthFraction': value.responsiveLayout.articleWidthFraction,
@@ -428,6 +433,9 @@ class SqliteSettingsRepository implements SettingsRepository {
       return const ResponsiveLayoutSettings.defaults();
     }
     final widths = value['videoGridMinWidths'];
+    final splitStyles = value['playbackSplitStyles'];
+    final stylesByName = PlaybackSplitStyle.values.asNameMap();
+    final legacyStyle = stylesByName[value['playbackSplitStyle']];
     return ResponsiveLayoutSettings(
       videoGridMinWidths: widths is List && widths.every((item) => item is int)
           ? widths.cast<int>()
@@ -438,9 +446,14 @@ class SqliteSettingsRepository implements SettingsRepository {
       sidebarExpandedWidth: value['sidebarExpandedWidth'] is int
           ? value['sidebarExpandedWidth'] as int
           : 1600,
-      playbackSplitStyle:
-          PlaybackSplitStyle.values.asNameMap()[value['playbackSplitStyle']] ??
-          ResponsiveLayoutSettings.defaultPlaybackSplitStyle,
+      playbackSplitStyles: {
+        for (final page in PlaybackSplitPage.values)
+          page:
+              (splitStyles is Map<String, Object?>
+                  ? stylesByName[splitStyles[page.name]]
+                  : legacyStyle) ??
+              ResponsiveLayoutSettings.defaultPlaybackSplitStyle,
+      },
       playbackSideBySideWidth: value['playbackSideBySideWidth'] is int
           ? value['playbackSideBySideWidth'] as int
           : 1000,

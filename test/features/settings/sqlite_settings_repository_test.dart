@@ -93,7 +93,7 @@ void main() {
         final snapshot = jsonDecode(
           (await database.readSetting('preferences.v1'))!,
         ) as Map<String, Object?>;
-        expect(snapshot['schemaVersion'], 55);
+        expect(snapshot['schemaVersion'], 56);
         expect(snapshot['wheelScrollAnimation'], mode.name);
       }
       expect(database.schemaVersion, 3);

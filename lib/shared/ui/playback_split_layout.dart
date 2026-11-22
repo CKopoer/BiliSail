@@ -12,6 +12,7 @@ import 'responsive_layout_scope.dart';
 class PlaybackSplitLayout extends StatefulWidget {
   const PlaybackSplitLayout({
     super.key,
+    required this.page,
     required this.enabled,
     required this.showInfo,
     required this.dimensions,
@@ -22,6 +23,7 @@ class PlaybackSplitLayout extends StatefulWidget {
   });
 
   static const sidebarWidth = 380.0;
+  final PlaybackSplitPage page;
   final bool enabled;
   final bool showInfo;
   final VideoDimensions? dimensions;
@@ -73,7 +75,8 @@ class _PlaybackSplitLayoutState extends State<PlaybackSplitLayout> {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, bounds) {
-      final style = ResponsiveLayoutScope.of(context).playbackSplitStyle;
+      final style = ResponsiveLayoutScope.of(context)
+          .playbackSplitStyleFor(widget.page);
       final width = math.max(
         0.0,
         bounds.maxWidth - PlaybackSplitLayout.sidebarWidth,

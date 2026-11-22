@@ -1,5 +1,7 @@
 enum PlaybackSplitStyle { automatic, right, below }
 
+enum PlaybackSplitPage { video, pgc, live }
+
 /// Responsive layout preferences, with width breakpoints in logical pixels.
 final class ResponsiveLayoutSettings {
   ResponsiveLayoutSettings({
@@ -7,7 +9,7 @@ final class ResponsiveLayoutSettings {
     int navigationBarBreakpoint = 600,
     int sidebarExpandedWidth = 1600,
     int playbackSideBySideWidth = 1000,
-    this.playbackSplitStyle = defaultPlaybackSplitStyle,
+    Map<PlaybackSplitPage, PlaybackSplitStyle> playbackSplitStyles = const {},
     double? articleWidthFraction,
   }) : videoGridMinWidths =
            videoGridMinWidths != null &&
@@ -26,6 +28,7 @@ final class ResponsiveLayoutSettings {
            playbackSideBySideWidth >= 600 && playbackSideBySideWidth <= 6000
            ? playbackSideBySideWidth
            : 1000,
+       playbackSplitStyles = Map.unmodifiable(playbackSplitStyles),
        articleWidthFraction =
            articleWidthFraction != null &&
                articleWidthFraction >= minArticleWidthFraction &&
@@ -38,7 +41,7 @@ final class ResponsiveLayoutSettings {
       navigationBarBreakpoint = 600,
       sidebarExpandedWidth = 1600,
       playbackSideBySideWidth = 1000,
-      playbackSplitStyle = defaultPlaybackSplitStyle,
+      playbackSplitStyles = const {},
       articleWidthFraction = null;
 
   static const defaultPlaybackSplitStyle = PlaybackSplitStyle.right;
@@ -65,7 +68,10 @@ final class ResponsiveLayoutSettings {
   final int navigationBarBreakpoint;
   final int sidebarExpandedWidth;
   final int playbackSideBySideWidth;
-  final PlaybackSplitStyle playbackSplitStyle;
+  final Map<PlaybackSplitPage, PlaybackSplitStyle> playbackSplitStyles;
+
+  PlaybackSplitStyle playbackSplitStyleFor(PlaybackSplitPage page) =>
+      playbackSplitStyles[page] ?? defaultPlaybackSplitStyle;
 
   /// Null uses the reader's automatic width based on the available space.
   final double? articleWidthFraction;
@@ -86,7 +92,7 @@ final class ResponsiveLayoutSettings {
     int? navigationBarBreakpoint,
     int? sidebarExpandedWidth,
     int? playbackSideBySideWidth,
-    PlaybackSplitStyle? playbackSplitStyle,
+    Map<PlaybackSplitPage, PlaybackSplitStyle>? playbackSplitStyles,
     double? articleWidthFraction,
   }) => ResponsiveLayoutSettings(
     videoGridMinWidths: resetVideoGrid
@@ -95,7 +101,7 @@ final class ResponsiveLayoutSettings {
     navigationBarBreakpoint:
         navigationBarBreakpoint ?? this.navigationBarBreakpoint,
     sidebarExpandedWidth: sidebarExpandedWidth ?? this.sidebarExpandedWidth,
-    playbackSplitStyle: playbackSplitStyle ?? this.playbackSplitStyle,
+    playbackSplitStyles: playbackSplitStyles ?? this.playbackSplitStyles,
     playbackSideBySideWidth:
         playbackSideBySideWidth ?? this.playbackSideBySideWidth,
     articleWidthFraction: articleWidthFraction ?? this.articleWidthFraction,

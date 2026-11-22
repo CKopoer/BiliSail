@@ -8,6 +8,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/presentation/workspace_activity.dart';
+import '../../../domain/responsive_layout_settings.dart';
 import '../../../domain/user.dart';
 import '../../../shared/ui/playback_sidebar_toggle.dart';
 import '../../../shared/ui/playback_split_layout.dart';
@@ -305,6 +306,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
         _wide = wide;
         return PlaybackVideoDimensions(
           builder: (context, dimensions) => PlaybackSplitLayout(
+            page: PlaybackSplitPage.live,
             enabled: wide && !listening,
             showInfo: _infoVisible,
             dimensions: room.isLive ? dimensions : null,

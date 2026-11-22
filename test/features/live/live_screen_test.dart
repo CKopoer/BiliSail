@@ -190,7 +190,9 @@ void main() {
     'decoded live picture places room details below while preserving chat, SC and composer',
     (tester) async {
       layout.value = layout.value.copyWith(
-        playbackSplitStyle: PlaybackSplitStyle.automatic,
+        playbackSplitStyles: {
+          PlaybackSplitPage.live: PlaybackSplitStyle.automatic,
+        },
       );
       container.read(playbackSessionProvider);
       await showPage(
@@ -218,7 +220,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('live-tab-1')));
       await tester.pumpAndSettle();
       layout.value = layout.value.copyWith(
-        playbackSplitStyle: PlaybackSplitStyle.right,
+        playbackSplitStyles: {PlaybackSplitPage.live: PlaybackSplitStyle.right},
       );
       await tester.pumpAndSettle();
       expect(

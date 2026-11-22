@@ -1456,7 +1456,7 @@ void main() {
     }
     expect(tester.takeException(), isNull);
   });
-  testWidgets('appearance starts with information on the right', (
+  testWidgets('appearance sets each playback page split style independently', (
     tester,
   ) async {
     final repository = _SettingsRepository();
@@ -1467,27 +1467,48 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    final group = find
-        .ancestor(of: find.text('左右布局样式'), matching: find.byType(Column))
-        .first;
-    Finder choice(String title) => find.descendant(
-      of: group,
+    Finder choice(String group, String title) => find.descendant(
+      of: find
+          .ancestor(of: find.text(group), matching: find.byType(Column))
+          .first,
       matching: find.widgetWithText(ChoiceChip, title),
     );
-    expect(tester.widget<ChoiceChip>(choice('信息在右侧')).selected, isTrue);
-    for (final (label, style) in [
-      ('信息在下方', PlaybackSplitStyle.below),
-      ('自动', PlaybackSplitStyle.automatic),
-      ('信息在右侧', PlaybackSplitStyle.right),
-    ]) {
-      final chip = choice(label);
+    const choices = [
+      ('视频页左右布局样式', '信息在下方'),
+      ('番剧页左右布局样式', '自动'),
+      ('直播页左右布局样式', '信息在下方'),
+    ];
+    for (final (group, _) in choices) {
+      expect(
+        tester.widget<ChoiceChip>(choice(group, '信息在右侧')).selected,
+        isTrue,
+      );
+    }
+    for (final (group, label) in choices) {
+      final chip = choice(group, label);
       await tester.ensureVisible(chip);
       await tester.pumpAndSettle();
       await tester.tap(chip);
       await tester.pumpAndSettle();
-      expect(repository.settings.responsiveLayout.playbackSplitStyle, style);
-      expect(tester.widget<ChoiceChip>(chip).selected, isTrue);
     }
+    expect(repository.settings.responsiveLayout.playbackSplitStyles, {
+      PlaybackSplitPage.video: PlaybackSplitStyle.below,
+      PlaybackSplitPage.pgc: PlaybackSplitStyle.automatic,
+      PlaybackSplitPage.live: PlaybackSplitStyle.below,
+    });
+    for (final (group, label) in choices) {
+      expect(tester.widget<ChoiceChip>(choice(group, label)).selected, isTrue);
+    }
+    final right = choice('直播页左右布局样式', '信息在右侧');
+    await tester.ensureVisible(right);
+    await tester.pumpAndSettle();
+    await tester.tap(right);
+    await tester.pumpAndSettle();
+    expect(repository.settings.responsiveLayout.playbackSplitStyles, {
+      PlaybackSplitPage.video: PlaybackSplitStyle.below,
+      PlaybackSplitPage.pgc: PlaybackSplitStyle.automatic,
+      PlaybackSplitPage.live: PlaybackSplitStyle.right,
+    });
   });
 
   testWidgets('appearance saves each navigation mode', (tester) async {

@@ -27,6 +27,7 @@ void main() {
                 previewing: previewing,
                 child: Scaffold(
                   body: PlaybackPageLayout(
+                    splitPage: PlaybackSplitPage.video,
                     wide: true,
                     showInfo: showInfo,
                     listening: false,
@@ -117,8 +118,11 @@ void main() {
                 data: MediaQuery.of(context)
                     .copyWith(textScaler: TextScaler.linear(scale)),
                 child: ResponsiveLayoutScope(
-                  settings: ResponsiveLayoutSettings(playbackSplitStyle: style),
+                  settings: ResponsiveLayoutSettings(
+                    playbackSplitStyles: {PlaybackSplitPage.video: style},
+                  ),
                   child: PlaybackPageLayout(
+                    splitPage: PlaybackSplitPage.video,
                     wide: true,
                     showInfo: showInfo,
                     listening: listening,
@@ -216,6 +220,7 @@ void main() {
         scrollBehavior: const SmoothScrollBehavior(),
         home: Scaffold(
           body: PlaybackPageLayout(
+            splitPage: PlaybackSplitPage.video,
             wide: size.width >= 1000,
             showInfo: showInfo,
             listening: listening,

@@ -10,6 +10,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/app_failure.dart';
+import '../../../domain/responsive_layout_settings.dart';
 import '../../../shared/ui/app_notice.dart';
 import '../../../shared/ui/app_dialog.dart';
 import '../../../core/network/api_requests.dart';
@@ -615,6 +616,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                                   builder: (context, override, _) {
                                     final visible = override ?? defaultShowInfo;
                                     return PlaybackPageLayout(
+                                      splitPage: PlaybackSplitPage.video,
                                       minimumInfoHeight: 480,
                                       summaryIdentity: (
                                         video,

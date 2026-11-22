@@ -130,10 +130,16 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
       ),
     ),
   );
-  Future<void> setPlaybackSplitStyle(PlaybackSplitStyle value) => update(
+  Future<void> setPlaybackSplitStyle(
+    PlaybackSplitPage page,
+    PlaybackSplitStyle value,
+  ) => update(
     (current) => current.copyWith(
       responsiveLayout: current.responsiveLayout.copyWith(
-        playbackSplitStyle: value,
+        playbackSplitStyles: {
+          ...current.responsiveLayout.playbackSplitStyles,
+          page: value,
+        },
       ),
     ),
   );

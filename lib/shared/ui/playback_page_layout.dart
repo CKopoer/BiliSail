@@ -4,6 +4,7 @@ import 'package:bili_player/bili_player.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/presentation/workspace_activity.dart';
+import '../../domain/responsive_layout_settings.dart';
 import 'playback_sidebar_toggle.dart';
 import 'playback_split_layout.dart';
 import 'scroll_collapsing_header.dart';
@@ -13,6 +14,7 @@ import 'scroll_collapsing_header.dart';
 class PlaybackPageLayout extends StatefulWidget {
   const PlaybackPageLayout({
     super.key,
+    required this.splitPage,
     required this.wide,
     required this.showInfo,
     required this.listening,
@@ -28,6 +30,7 @@ class PlaybackPageLayout extends StatefulWidget {
     this.summaryIdentity,
   });
 
+  final PlaybackSplitPage splitPage;
   final bool wide;
   final bool showInfo;
   final bool listening;
@@ -111,6 +114,7 @@ class _PlaybackPageLayoutState extends State<PlaybackPageLayout> {
           ? bounds.maxHeight
           : math.max(bounds.maxHeight, collapsed + widget.minimumInfoHeight);
       return PlaybackSplitLayout(
+        page: widget.splitPage,
         enabled: widget.wide && !widget.listening,
         showInfo: widget.showInfo,
         dimensions: dimensions,

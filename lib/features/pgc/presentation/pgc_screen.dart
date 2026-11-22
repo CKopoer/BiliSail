@@ -12,6 +12,7 @@ import '../../../shared/ui/content_link_scope.dart';
 import '../../../core/input/input_stroke.dart';
 import '../../../domain/video.dart';
 import '../../../domain/playback_mode.dart';
+import '../../../domain/responsive_layout_settings.dart';
 import '../../../core/input/shortcut_dispatcher.dart';
 import '../../../core/presentation/input_scope.dart';
 import '../../playback/application/playback_session.dart';
@@ -404,6 +405,7 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
             builder: (context, constraints, listening) =>
                 PlaybackVideoDimensions(
                   builder: (context, dimensions) => PlaybackPageLayout(
+                    splitPage: PlaybackSplitPage.pgc,
                     wide: wide,
                     showInfo: showInfo,
                     listening: listening,
