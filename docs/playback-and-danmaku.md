@@ -222,7 +222,9 @@ abstract interface class PlayerEngine {
 - `PlayerCapabilities` 表示实际可用的外部音轨、字幕、codec/容器、截图等；系统 PiP/媒体键属于 PlatformServices，不能混为后端能力。
 - `VideoSurface` 是 bili_player 的 Flutter UI 出口；`bili_player_control.dart` 提供不依赖 Flutter 的控制、诊断和输出生命周期契约，`VideoOutputSource` 提供稳定的输出对象。`VideoCompositionAdapter` 在应用根统一注入，负责画面构建与前景合成；当前仍使用 media-kit Video 与原 Stack，测试可分别替换 engine、output 和 composition。实现与后续平台边界见[输出与合成拆分](player-output-composition-design.md)。
 
-2026-11-22 修复点播正常结束时进度条停在片尾前的问题。用现有 Windows libmpv 加载样片的 DASH 双轨，测得媒体总时长 16.114 秒，原生确认 EOF 时仍报告最后一帧的位置 15.760 秒。共享引擎在确认正常结束后将已知时长的进度同步到终点，播放过程中沿用原生位置，提前结束仍走原有中断判定。[复现视频](https://www.bilibili.com/video/BV1LK411Y7Gp)
+2026-11-22 验证点播尾部进度。用现有 BiliSail 和 PiliPlus Windows libmpv 加载同一 DASH 双轨，两者在 16.114 秒的媒体上都确认到达 EOF，`time-pos` 分别为 15.790 秒和 15.760 秒。[复现视频](https://www.bilibili.com/video/BV1LK411Y7Gp)
+
+PiliPlus `217fb54f` 及其锁定的 media-kit `73771ec3` 分别处理完成事件与位置采样。其视频进度条继续使用位置流的整秒值。BiliSail 的视频快照也保留原生位置和缓存终点，普通、全屏及收起的进度条和时间标签在确认完成后显示到总时长。提前结束仍走原有中断判定。该显示逻辑在本项目独立实现。[PiliPlus 完成与位置订阅](https://github.com/bggRGjQaUbCoE/PiliPlus/blob/217fb54f51f6764176319bbdedab2a7522d75401/lib/plugin/pl_player/controller.dart#L1063-L1096) · [锁定 SDK 的 EOF 处理](https://github.com/My-Responsitories/media-kit/blob/73771ec38176be2d984a3049c28177bce23b54a0/media_kit/lib/src/player/native/player/real.dart#L1392-L1421)
 
 从用户偏好、服务端授权的 representation、后端支持和当前设备能力的交集选轨。优先使用经过验证的 H.264/AAC 组合；HEVC/AV1、HDR、高帧率逐项测试，不仅凭 codec 名宣称硬解成功。
 

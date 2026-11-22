@@ -1167,38 +1167,46 @@ void main() {
     },
   );
 
-  test('DASH EOF fills the timeline when the last video sample precedes the audio end', () async {
-    const duration = Duration(milliseconds: 16113);
-    const lastVideoPosition = Duration(milliseconds: 15760);
-    final backend = _Backend()
-      ..tracks = const PreparedTracks(
-        hasVideo: true,
-        hasAudio: true,
-        externalAudioSelected: true,
-        duration: duration,
+  test(
+    'DASH EOF preserves the last video position and buffer endpoint',
+    () async {
+      const duration = Duration(milliseconds: 16113);
+      const lastVideoPosition = Duration(milliseconds: 15760);
+      const buffered = Duration(milliseconds: 15900);
+      final backend = _Backend()
+        ..tracks = const PreparedTracks(
+          hasVideo: true,
+          hasAudio: true,
+          externalAudioSelected: true,
+          duration: duration,
+        );
+      final engine = SharedPlayerEngine(createBackend: () => backend);
+      addTearDown(engine.dispose);
+      await engine.open(pair, const OpenOptions(play: true));
+      backend.signals.add(
+        const BackendEvent(
+          BackendEventKind.sample,
+          position: lastVideoPosition,
+          buffered: buffered,
+        ),
       );
-    final engine = SharedPlayerEngine(createBackend: () => backend);
-    addTearDown(engine.dispose);
-    await engine.open(pair, const OpenOptions(play: true));
-    backend.signals.add(
-      const BackendEvent(BackendEventKind.sample, position: lastVideoPosition),
-    );
-    expect(engine.currentSnapshot.position, lastVideoPosition);
-    expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+      expect(engine.currentSnapshot.position, lastVideoPosition);
+      expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
 
-    final completed = engine.snapshots.firstWhere(
-      (snapshot) => snapshot.phase == PlaybackPhase.ended,
-    );
-    backend.signals.add(
-      const BackendEvent(BackendEventKind.ended, position: lastVideoPosition),
-    );
+      final completed = engine.snapshots.firstWhere(
+        (snapshot) => snapshot.phase == PlaybackPhase.ended,
+      );
+      backend.signals.add(
+        const BackendEvent(BackendEventKind.ended, position: lastVideoPosition),
+      );
 
-    final snapshot = await completed;
-    expect(snapshot.position, duration);
-    expect(snapshot.duration, duration);
-    expect(snapshot.buffered, duration);
-    expect(snapshot.desiredPlaying, isFalse);
-  });
+      final snapshot = await completed;
+      expect(snapshot.position, lastVideoPosition);
+      expect(snapshot.duration, duration);
+      expect(snapshot.buffered, buffered);
+      expect(snapshot.desiredPlaying, isFalse);
+    },
+  );
 
   test(
     'audio-only EOF completes even when the sampled clock trails the end',

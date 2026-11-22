@@ -647,9 +647,9 @@ class SharedPlayerEngine
           unawaited(_fail(PlayerFailureKind.videoInterrupted));
           return;
         }
-        // The last video frame can precede the end of the audio track, and
-        // the sampled clock can still lag when the backend confirms EOF.
-        final completed = duration > Duration.zero
+        // At audio-only EOF the sampled audio clock can lag behind the
+        // container duration, especially at higher playback rates.
+        final completed = !_requiresVideo && duration > Duration.zero
             ? _timeline(position: duration)
             : _snapshot.copyWith(position: position);
         _publish(

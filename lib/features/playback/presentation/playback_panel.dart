@@ -2304,7 +2304,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                               PlaybackSnapshotBuilder(
                                 snapshots: session.snapshots,
                                 select: (snapshot) => (
-                                  snapshot.position,
+                                  snapshot._displayedProgressPosition,
                                   snapshot.duration,
                                   snapshot.buffered,
                                 ),
@@ -2359,7 +2359,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                                       value:
                                                           ((preview ??
                                                                           snapshot
-                                                                              .position)
+                                                                              ._displayedProgressPosition)
                                                                       .inMilliseconds /
                                                                   snapshot
                                                                       .duration
@@ -2569,7 +2569,8 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                                         snapshots:
                                                             session.snapshots,
                                                         select: (snapshot) => (
-                                                          snapshot.position,
+                                                          snapshot
+                                                              ._displayedProgressPosition,
                                                           snapshot.duration,
                                                           snapshot.buffered,
                                                         ),
@@ -2586,7 +2587,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                                             position:
                                                                 preview ??
                                                                 snapshot
-                                                                    .position,
+                                                                    ._displayedProgressPosition,
                                                             duration: snapshot
                                                                 .duration,
                                                             buffered: snapshot
@@ -2945,13 +2946,15 @@ class _ControlBar extends StatelessWidget {
       height: layout.timeHeight,
       child: PlaybackSnapshotBuilder(
         snapshots: session.snapshots,
-        select: (snapshot) =>
-            (snapshot.position.inSeconds, snapshot.duration.inSeconds),
+        select: (snapshot) => (
+          snapshot._displayedProgressPosition.inSeconds,
+          snapshot.duration.inSeconds,
+        ),
         builder: (context, snapshot) => RepaintBoundary(
           child: Text(
             session.isLive
                 ? '直播中'
-                : '${_time(snapshot.position)} / ${_time(snapshot.duration)}',
+                : '${_time(snapshot._displayedProgressPosition)} / ${_time(snapshot.duration)}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(color: Colors.white70, fontSize: 11),
@@ -3707,6 +3710,14 @@ class _LiveReloadButton extends StatelessWidget {
       ),
     );
   }
+}
+
+extension on PlaybackSnapshot {
+  // The last decoded video timestamp can precede the end of the audio track.
+  Duration get _displayedProgressPosition =>
+      phase == PlaybackPhase.ended && duration > Duration.zero
+      ? duration
+      : position;
 }
 
 String _time(Duration value) {

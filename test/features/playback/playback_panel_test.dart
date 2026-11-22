@@ -6718,6 +6718,78 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await _pumpFrames(tester);
   });
+  for (final fullscreen in [false, true]) {
+    testWidgets(
+      'completed video fills the displayed timeline fullscreen=$fullscreen',
+      (tester) async {
+        const duration = Duration(milliseconds: 16113);
+        const lastPosition = Duration(milliseconds: 15760);
+        const buffered = Duration(milliseconds: 15900);
+        final engine = _FakeEngine();
+        final session = _session(engine);
+        addTearDown(session.close);
+        await tester.pumpWidget(
+          _app(session, _FakeWindowService(), const AppSettings.defaults()),
+        );
+        await _pumpFrames(tester);
+        await _showControls(tester);
+        if (fullscreen) {
+          await tester.tap(findMaterialTooltip('全屏（F）'));
+          await _pumpFrames(tester);
+        }
+
+        engine._emit(
+          engine.currentSnapshot.copyWith(
+            phase: PlaybackPhase.paused,
+            position: lastPosition,
+            duration: duration,
+            buffered: buffered,
+            desiredPlaying: false,
+          ),
+        );
+        await tester.pump();
+        final timeline = find.byType(PlaybackTimelineBar);
+        expect(
+          tester.widget<PlaybackTimelineBar>(timeline).position,
+          lastPosition,
+        );
+        expect(find.text('00:15 / 00:16'), findsOneWidget);
+
+        // A backend can report completion without another position sample.
+        engine._emit(
+          engine.currentSnapshot.copyWith(phase: PlaybackPhase.ended),
+        );
+        await tester.pump();
+        expect(tester.widget<PlaybackTimelineBar>(timeline).position, duration);
+        expect(tester.widget<PlaybackTimelineBar>(timeline).buffered, buffered);
+        expect(find.text('00:16 / 00:16'), findsOneWidget);
+        expect(session.snapshots.value.position, lastPosition);
+        expect(session.snapshots.value.buffered, buffered);
+
+        await tester.tapAt(_surfacePoint(tester));
+        await tester.pump(const Duration(milliseconds: 400));
+        final collapsed = find.byKey(
+          const ValueKey('player-collapsed-progress'),
+        );
+        final cache = find.byKey(const ValueKey('player-collapsed-buffer'));
+        expect(tester.widget<LinearProgressIndicator>(collapsed).value, 1);
+        expect(
+          tester.widget<LinearProgressIndicator>(cache).value,
+          buffered.inMilliseconds / duration.inMilliseconds,
+        );
+
+        engine._emit(
+          engine.currentSnapshot.copyWith(phase: PlaybackPhase.paused),
+        );
+        await tester.pump();
+        expect(
+          tester.widget<LinearProgressIndicator>(collapsed).value,
+          lastPosition.inMilliseconds / duration.inMilliseconds,
+        );
+      },
+    );
+  }
+
   testWidgets(
     'collapsed small-window progress tracks position, buffer, setting and content kind',
     (tester) async {
