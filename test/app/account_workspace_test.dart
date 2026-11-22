@@ -706,14 +706,15 @@ void main() {
     FocusManager.instance.primaryFocus?.unfocus();
     router.go('/downloads');
     await tester.pumpAndSettle();
-    final downloadsState = tester.state(find.byType(DownloadsScreen));
-    await tester.enterText(
-      find.descendant(
-        of: find.byType(DownloadsScreen),
-        matching: find.byType(TextField),
-      ),
-      '保留根下载筛选',
+    final downloadsPage = tester.element(find.byType(DownloadsScreen));
+    final downloadSearch = find.descendant(
+      of: find.byType(DownloadsScreen),
+      matching: find.byType(TextField),
     );
+    final searchController = tester
+        .widget<TextField>(downloadSearch)
+        .controller;
+    await tester.enterText(downloadSearch, '保留根下载筛选');
     FocusManager.instance.primaryFocus?.unfocus();
     router.go('/settings?section=shortcuts');
     await tester.pumpAndSettle();
@@ -754,7 +755,11 @@ void main() {
     expect(downloads.refreshes, downloadRefreshes);
     router.go('/downloads');
     await tester.pumpAndSettle();
-    expect(tester.state(find.byType(DownloadsScreen)), same(downloadsState));
+    expect(tester.element(find.byType(DownloadsScreen)), same(downloadsPage));
+    expect(
+      tester.widget<TextField>(downloadSearch).controller,
+      same(searchController),
+    );
     expect(find.text('保留根下载筛选'), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.f5);
     await tester.pumpAndSettle();

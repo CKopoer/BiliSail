@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
@@ -111,19 +112,63 @@ void main() {
     },
   );
 
+  test('completed row layout changes invalidate the queue structure', () async {
+    final completed = _task(0, status: DownloadStatus.completed);
+    final repository = _Repository([completed, _task(1)]);
+    addTearDown(repository.close);
+    final container = ProviderContainer(
+      overrides: [downloadRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+    final subscription = container.listen(
+      downloadQueueIndexProvider,
+      (_, _) {},
+    );
+    final original = subscription.read().structure;
+
+    repository.progress('1', 4096);
+    await container.pump();
+    expect(subscription.read().structure, same(original));
+
+    repository.setTasks([
+      completed.copyWith(warnings: ['需要重新下载离线字幕']),
+      repository.current.tasks.last,
+    ]);
+    await container.pump();
+    expect(subscription.read().structure, isNot(same(original)));
+    subscription.close();
+  });
+
   testWidgets('large queue builds lazily and isolates byte progress', (
     tester,
   ) async {
     final repository = _Repository(List.generate(500, _task));
     addTearDown(repository.close);
-    await _pump(tester, repository, const DownloadsScreen());
+    final activity = ValueNotifier((active: true, previewing: false));
+    addTearDown(activity.dispose);
+    await _pump(
+      tester,
+      repository,
+      ValueListenableBuilder(
+        valueListenable: activity,
+        child: const DownloadsScreen(),
+        builder: (context, value, child) => Offstage(
+          offstage: !value.active && !value.previewing,
+          child: WorkspaceActivity(
+            active: value.active,
+            previewing: value.previewing,
+            child: child!,
+          ),
+        ),
+      ),
+    );
 
     final cardFinder = find.byWidgetPredicate(
       (widget) => widget.runtimeType.toString() == '_DownloadTaskCard',
     );
     final mountedCards = cardFinder.evaluate().length;
     final delegate = tester
-        .widget<ListView>(find.byType(ListView))
+        .widget<ListView>(find.bySubtype<ListView>())
         .childrenDelegate;
     final eagerCards = delegate is SliverChildListDelegate
         ? delegate.children
@@ -142,27 +187,46 @@ void main() {
     };
     addTearDown(() => debugOnRebuildDirtyWidget = previousHook);
 
-    for (var tick = 1; tick <= 10; tick++) {
+    for (var tick = 2; tick <= 11; tick++) {
       repository.progress('0', tick * 1024);
       await tester.pump();
       await tester.pump();
     }
     debugPrint(
       'download progress probe: eager=$eagerCards '
-      'mounted=$mountedCards screenBuilds=${builds['DownloadsScreen'] ?? 0} '
-      'cardBuilds=${builds['_DownloadTaskCard'] ?? 0}',
+      'mounted=$mountedCards screenBuilds=${builds['_DownloadsContent'] ?? 0} '
+      'cardBuilds=${builds['_DownloadTaskCard'] ?? 0} '
+      'transferBuilds=${builds['_DownloadTransferDetails'] ?? 0}',
     );
-    expect(find.text('已传输 1018 KB'), findsOneWidget);
+    expect(find.text('已传输 1020 KB'), findsOneWidget);
     expect(eagerCards, 0);
     expect(mountedCards, lessThan(20));
-    expect(builds['DownloadsScreen'] ?? 0, 0);
-    expect(builds['_DownloadTaskCard'] ?? 0, 10);
+    expect(builds['_DownloadsContent'] ?? 0, 0);
+    expect(builds['_DownloadTaskCard'] ?? 0, 0);
+    expect(builds['_DownloadTransferDetails'], 10);
+    expect(builds['_DownloadProgressIndicator'], 10);
     builds.clear();
     repository.progress('499', 10000);
     await tester.pump();
     await tester.pump();
-    expect(builds['DownloadsScreen'] ?? 0, 0);
+    expect(builds['_DownloadsContent'] ?? 0, 0);
     expect(builds['_DownloadTaskCard'] ?? 0, 0);
+    expect(builds['_DownloadTransferDetails'] ?? 0, 0);
+
+    activity.value = (active: false, previewing: false);
+    await tester.pump();
+    builds.clear();
+    repository.progress('0', 20 * 1024);
+    await tester.pump();
+    await tester.pump();
+    expect(builds['_DownloadTransferredLabel'] ?? 0, 0);
+    expect(builds['_DownloadTransferDetails'] ?? 0, 0);
+    expect(builds['_DownloadProgressIndicator'] ?? 0, 0);
+
+    activity.value = (active: false, previewing: true);
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('40 KB / 195 KB'), findsOneWidget);
   });
 
   testWidgets(
@@ -286,7 +350,7 @@ void main() {
       await tester.pump();
       final scrollable = find
           .descendant(
-            of: find.byType(ListView),
+            of: find.bySubtype<ListView>(),
             matching: find.byType(Scrollable),
           )
           .first;
