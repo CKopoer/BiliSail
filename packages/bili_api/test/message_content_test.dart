@@ -67,6 +67,14 @@ void main() {
         expect(item.targetUrl.toString(), expected);
         expect(item.imageUrl?.host, 'i0.hdslb.com');
       }
+      final articleShare = await parse(7, {
+        'source': 6,
+        'id': '88',
+        'title': '- 哔哩哔哩专栏',
+        'headline': '专栏标题',
+      });
+      expect(articleShare.title, '专栏标题');
+      expect(articleShare.targetUrl?.path, '/read/cv88');
       final oldShare = await parse(4, {
         'title': '旧分享',
         'url': 'https://www.bilibili.com/video/BV1234567890',

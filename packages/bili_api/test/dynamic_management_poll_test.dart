@@ -397,7 +397,7 @@ void main() {
         authorId: '9',
         source: 11,
       );
-      final body = transport.calls.single.body as Map;
+      final body = transport.calls.last.body as Map;
       expect(body['msg[msg_type]'], '7');
       expect(jsonDecode(body['msg[content]'] as String), {
         'id': dyn,

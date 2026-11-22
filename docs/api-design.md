@@ -209,6 +209,8 @@ ApiPage<T> { items, nextCursor, hasMore }
 
 动态点赞、转发与消息分享沿用现有协议，评论沿用响应指定的业务身份。交互和参考来源见[应用内专栏阅读](validation/article-reader-2026-11-20.md)。
 
+2026-11-22 Web 私信发送使用 `api.vc.bilibili.com` 的 POST `/web_im/v1/web_im/send_msg`。沿用消息站 Origin／Referer、目标域 Web Cookie 和表单 CSRF，查询参数 `w_sender_uid`、`w_receiver_id`、`w_dev_id` 参与 WBI 签名，`w_dev_id` 与表单 `msg[dev_id]` 一致。文本、图片和分享卡片复用这条发送路径，响应为 Web JSON，无分页。密钥读取和发送共用账号／取消／总时限，发送只提交一次。专栏卡片使用 `msg_type=7`、`source=6`，携带 CV 号和正文标题。
+
 ## 5. 会话与凭据
 
 普通视频云端进度使用 Web GET `/x/player/wbi/v2`；2026-11-09 修复影视续播，PGC 改读 GET `/pgc/view/web/season` 的 `user_status.progress`（`last_ep_id` 十进制 ID，`last_time` 秒），仅恢复匹配剧集的位置。两类点播继续 POST `/x/click-interface/web/heartbeat`：本地优先、云端仅在本地缺失时补充，上报使用已有 Web Cookie/CSRF，单次写入不重放，不使用参考实现的 App 签名。字段单位、容量、取消和验证边界见 [云端播放进度](validation/cloud-playback-progress.md)和[番剧续播修复](validation/pgc-resume-2026-11-09.md)。上表 `/x/v2/history/report` 保留参考源码定位，不是本项目的 Web 上报端点。

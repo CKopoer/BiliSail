@@ -168,7 +168,11 @@ final class ApiDynamicRepository
       id: post.commentTarget?.type.value == 17
           ? post.id
           : post.commentTarget?.oid ?? post.id,
-      title: post.text.isNotEmpty ? post.text : post.title,
+      title:
+          post.commentTarget?.type != CommentTargetType.article &&
+              post.text.isNotEmpty
+          ? post.text
+          : post.title,
       author: post.authorName,
       authorId: post.authorId?.value ?? '',
       source: switch (post.commentTarget?.type.value) {
@@ -249,12 +253,13 @@ final class ApiDynamicRepository
       return await operation(context);
     } on ApiFailure catch (error) {
       if (context.cancellation?.isCancelled == true) rethrow;
-      if (const {
-        ApiFailureCategory.network,
-        ApiFailureCategory.timeout,
-        ApiFailureCategory.protocol,
-        ApiFailureCategory.http,
-      }.contains(error.category)) {
+      if (error.endpointId != 'wbi_key' &&
+          const {
+            ApiFailureCategory.network,
+            ApiFailureCategory.timeout,
+            ApiFailureCategory.protocol,
+            ApiFailureCategory.http,
+          }.contains(error.category)) {
         throw const DynamicWriteUncertain();
       }
       rethrow;

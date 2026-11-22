@@ -5,8 +5,11 @@ import 'dart:typed_data';
 import 'package:bili_api/bili_api.dart';
 import 'package:bilisail/core/network/api_requests.dart';
 import 'package:bilisail/domain/app_failure.dart';
+import 'package:bilisail/domain/comment_target.dart';
+import 'package:bilisail/domain/dynamic_post.dart' show DynamicPost;
 import 'package:bilisail/domain/local_image.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/features/dynamic/data/api_dynamic_composer_repository.dart';
 import 'package:bilisail/features/dynamic/data/api_dynamic_repository.dart';
 import 'package:bilisail/features/dynamic/data/api_dynamic_topic_repository.dart';
@@ -25,6 +28,9 @@ class _Transport
   int status = 503, code = 0, posts = 0;
   Completer<ApiHttpResponse>? pending;
   Map<String, Object?>? json;
+  Map<String, String>? form;
+  Uri? formUri;
+  bool hasWbiKeys = true;
   Object? data = const {'dyn_id_str': '123'};
   Future<ApiHttpResponse> result() async {
     posts++;
@@ -44,7 +50,28 @@ class _Transport
     required Map<String, String> headers,
     required Duration timeout,
     ApiCancellation? cancellation,
-  }) => throw UnimplementedError();
+  }) async {
+    expect(uri.path, '/x/web-interface/nav');
+    return ApiHttpResponse(
+      200,
+      Uint8List.fromList(
+        utf8.encode(
+          jsonEncode({
+            'code': 0,
+            'data': {
+              if (hasWbiKeys)
+                'wbi_img': {
+                  'img_url': 'https://i0.hdslb.com/bfs/wbi/${'a' * 32}.png',
+                  'sub_url': 'https://i0.hdslb.com/bfs/wbi/${'b' * 32}.png',
+                },
+            },
+          }),
+        ),
+      ),
+      const {},
+    );
+  }
+
   @override
   Future<ApiHttpResponse> postForm(
     Uri uri, {
@@ -52,7 +79,12 @@ class _Transport
     required Map<String, String> headers,
     required Duration timeout,
     ApiCancellation? cancellation,
-  }) => result();
+  }) {
+    form = fields;
+    formUri = uri;
+    return result();
+  }
+
   @override
   Future<ApiHttpResponse> postJson(
     Uri uri, {
@@ -90,8 +122,8 @@ void main() {
       sessionProvider: requests,
       cookieJar: ApiCookieJar()
         ..receive(Uri.https('api.bilibili.com', '/'), [
-          'SESSDATA=fixture; Path=/; Secure',
-          'bili_jct=fixture; Path=/; Secure',
+          'SESSDATA=fixture; Domain=.bilibili.com; Path=/; Secure',
+          'bili_jct=fixture; Domain=.bilibili.com; Path=/; Secure',
         ]),
     );
     composer = ApiDynamicComposerRepository(
@@ -105,6 +137,55 @@ void main() {
       accountScope: () => 'user:7',
     );
   });
+  test(
+    'article sharing sends the CV and title after successful WBI preparation',
+    () async {
+      final repository = ApiDynamicRepository(
+        DynamicClient(composer.client.api),
+        requests,
+        accountScope: () => 'user:7',
+      );
+      final post = DynamicPost(
+        id: '9007199254740993123',
+        title: '专栏标题',
+        text: '动态摘要',
+        authorId: const UserId('10'),
+        authorName: '作者',
+        commentTarget: const CommentTarget('88', CommentTargetType.article),
+      );
+      transport.hasWbiKeys = false;
+      await expectLater(
+        repository.shareMessage(post, const UserId('9'), RequestCancellation()),
+        throwsA(
+          isA<AppFailure>().having(
+            (e) => e.kind,
+            'kind',
+            AppFailureKind.protocol,
+          ),
+        ),
+      );
+      expect(transport.posts, 0);
+
+      transport.hasWbiKeys = true;
+      transport.status = 200;
+      await repository.shareMessage(
+        post,
+        const UserId('9'),
+        RequestCancellation(),
+      );
+      expect(transport.posts, 1);
+      expect(transport.formUri?.queryParameters['w_sender_uid'], '7');
+      expect(transport.formUri?.queryParameters['w_receiver_id'], '9');
+      expect(jsonDecode(transport.form!['msg[content]']!), {
+        'id': '88',
+        'title': '- 哔哩哔哩专栏',
+        'headline': '专栏标题',
+        'source': 6,
+        'author': '作者',
+        'author_id': '10',
+      });
+    },
+  );
   test('unknown publication, favorite and report each make one attempt and expose uncertainty', () async {
     await expectLater(
       composer.create(

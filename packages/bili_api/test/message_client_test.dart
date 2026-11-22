@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -40,6 +41,7 @@ final class Transport implements ApiTransport, ApiFormTransport {
   Object? Function(Uri) handler = (_) => {};
   ApiHttpResponse postResult = response({});
   ApiHttpResponse? getResult;
+  Future<ApiHttpResponse>? pendingWbiKeys;
   bool provideWbiKeys = true;
   int posts = 0, gets = 0;
   Map<String, String> fields = {}, headers = {};
@@ -55,7 +57,7 @@ final class Transport implements ApiTransport, ApiFormTransport {
     this.uri = uri;
     this.headers = headers;
     if (provideWbiKeys && uri.path == '/x/web-interface/nav') {
-      return response(wbiKeyData());
+      return pendingWbiKeys ?? response(wbiKeyData());
     }
     return getResult ?? response(handler(uri));
   }
@@ -74,6 +76,11 @@ final class Transport implements ApiTransport, ApiFormTransport {
     this.headers = headers;
     return postResult;
   }
+}
+
+final class _Session implements ApiSessionProvider {
+  @override
+  int sessionEpoch = 0;
 }
 
 void main() {
@@ -325,7 +332,100 @@ void main() {
       expect(transport.fields['csrf'], 'csrf-fixture');
       expect(transport.fields['csrf_token'], 'csrf-fixture');
       expect(transport.headers['Origin'], 'https://message.bilibili.com');
+      final query = transport.uri!.queryParameters;
+      expect(query['w_sender_uid'], '123');
+      expect(query['w_receiver_id'], '456');
+      expect(query['w_dev_id'], transport.fields['msg[dev_id]']);
+      expect(query['w_dev_id'], matches(r'^[0-9A-F-]{36}$'));
+      expect(query['w_rid'], matches(r'^[0-9a-f]{32}$'));
       expect(transport.posts, 1);
+    },
+  );
+  test(
+    'article share signs the Web send and carries the CV card in its form',
+    () async {
+      const sender = '9007199254740993123';
+      const receiver = '9007199254740993124';
+      const cv = '9007199254740993125';
+      final cover = Uri.https('i0.hdslb.com', '/cover.png');
+      await client.shareDynamic(
+        sender,
+        receiver,
+        id: cv,
+        title: '专栏标题 & 分享',
+        author: '作者',
+        authorId: '7',
+        source: 6,
+        thumbnail: cover,
+      );
+      expect(transport.uri!.path, '/web_im/v1/web_im/send_msg');
+      final query = transport.uri!.queryParameters;
+      final device = transport.fields['msg[dev_id]']!;
+      final expectedQuery =
+          WbiSigner.fromUrls(
+            'https://i0.hdslb.com/bfs/wbi/${'a' * 32}.png',
+            'https://i0.hdslb.com/bfs/wbi/${'b' * 32}.png',
+          ).sign(
+            {
+              'w_sender_uid': sender,
+              'w_receiver_id': receiver,
+              'w_dev_id': device,
+            },
+            DateTime.fromMillisecondsSinceEpoch(
+              int.parse(query['wts']!) * 1000,
+            ),
+          );
+      expect(query, expectedQuery);
+      expect(transport.fields['msg[msg_type]'], '7');
+      expect(transport.fields['csrf'], 'csrf-fixture');
+      expect(jsonDecode(transport.fields['msg[content]']!), {
+        'id': cv,
+        'title': '- 哔哩哔哩专栏',
+        'headline': '专栏标题 & 分享',
+        'source': 6,
+        'thumb': cover.toString(),
+        'author': '作者',
+        'author_id': '7',
+      });
+      expect(transport.posts, 1);
+
+      transport.postResult = response(null, code: -403);
+      await expectLater(
+        client.sendText(sender, receiver, '确认过的另一条消息'),
+        throwsA(isA<ApiFailure>().having((e) => e.businessCode, 'code', -403)),
+      );
+      expect(transport.gets, 1);
+      expect(transport.posts, 2);
+      expect(transport.fields['msg[dev_id]'], device);
+    },
+  );
+  test(
+    'an account change during key retrieval prevents sending the old message',
+    () async {
+      final session = _Session();
+      final keys = Completer<ApiHttpResponse>();
+      transport.pendingWbiKeys = keys.future;
+      final api = BiliApiClient(
+        transport: transport,
+        cookieJar: cookies(),
+        sessionProvider: session,
+      );
+      addTearDown(api.close);
+      final pending = MessageClient(api).sendText('123', '456', '旧会话的消息');
+      expect(transport.gets, 1);
+      session.sessionEpoch++;
+      keys.complete(response(wbiKeyData()));
+      await expectLater(
+        pending,
+        throwsA(
+          isA<ApiFailure>().having(
+            (e) => e.category,
+            'category',
+            ApiFailureCategory.cancelled,
+          ),
+        ),
+      );
+      expect(transport.posts, 0);
     },
   );
   test(
@@ -337,6 +437,7 @@ void main() {
         throwsA(isA<ApiFailure>()),
       );
       expect(transport.posts, 1);
+      expect(transport.gets, 1);
       final scoped = MessageClient(
         BiliApiClient(
           transport: transport,
@@ -348,6 +449,7 @@ void main() {
         throwsA(isA<ApiFailure>()),
       );
       expect(transport.posts, 1);
+      expect(transport.gets, 1);
     },
   );
   test('cancelled sends and invalid input never reach transport', () async {

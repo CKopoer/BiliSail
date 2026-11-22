@@ -121,6 +121,16 @@ final class BiliApiClient {
   static final _api = Uri.https('api.bilibili.com', '/');
   static final _passport = Uri.https('passport.bilibili.com', '/');
   static const _readAttemptTimeout = Duration(seconds: 2);
+  static const _messageSendPath = '/web_im/v1/web_im/send_msg';
+  // Reuse one Web IM device ID for all sends from this client.
+  late final String _messageDeviceId = [
+    _appRandomHex(4),
+    _appRandomHex(2),
+    '4${_appRandomHex(2).substring(1)}',
+    '${(8 + _appRandom.nextInt(4)).toRadixString(16)}'
+        '${_appRandomHex(2).substring(1)}',
+    _appRandomHex(6),
+  ].join('-').toUpperCase();
 
   /// Pin one deadline and account epoch across a multi-step protocol read.
   ApiRequestContext boundedReadContext(ApiRequestContext? context) =>
@@ -777,7 +787,7 @@ final class BiliApiClient {
     ApiRequestContext? context,
   }) {
     if (!const {
-      '/web_im/v1/web_im/send_msg',
+      _messageSendPath,
       '/session_svr/v1/session_svr/update_ack',
       '/session_svr/v1/session_svr/set_top',
       '/session_svr/v1/session_svr/remove_session',
@@ -790,11 +800,25 @@ final class BiliApiClient {
     }.contains(path)) {
       throw ArgumentError('Unsupported message mutation');
     }
+    final uri = Uri.https('api.vc.bilibili.com', path);
+    if (path != _messageSendPath) {
+      return _submitForm(uri, endpoint, fields, context);
+    }
+    final sender = fields['msg[sender_uid]'];
+    final receiver = fields['msg[receiver_id]'];
+    if (sender == null || receiver == null) {
+      throw ArgumentError('Message sender and receiver are required');
+    }
     return _submitForm(
-      Uri.https('api.vc.bilibili.com', path),
+      uri,
       endpoint,
-      fields,
+      {...fields, 'msg[dev_id]': _messageDeviceId},
       context,
+      wbiParameters: {
+        'w_sender_uid': sender,
+        'w_receiver_id': receiver,
+        'w_dev_id': _messageDeviceId,
+      },
     );
   }
 
@@ -989,6 +1013,7 @@ final class BiliApiClient {
     ApiRequestContext? context, {
     Map<String, Object?>? jsonBody,
     ({Uint8List bytes, String mimeType})? upload,
+    Map<String, String>? wbiParameters,
   }) async {
     final live = uri.host == 'api.live.bilibili.com';
     final message = uri.host == 'api.vc.bilibili.com';
@@ -1007,6 +1032,11 @@ final class BiliApiClient {
     _mutationCredentials(uri, endpoint);
     _riskControl.check(uri, endpoint, epoch, _clock());
     if (prepareWebRequests) await _webDevice.ensure(context);
+    if (wbiParameters != null) {
+      // Key acquisition is a read. The signed mutation below still runs once.
+      final signed = await _signed(wbiParameters, context);
+      uri = uri.replace(queryParameters: signed);
+    }
     check();
     final credentials = _mutationCredentials(uri, endpoint);
     final cookie = credentials.cookie, csrf = credentials.csrf;

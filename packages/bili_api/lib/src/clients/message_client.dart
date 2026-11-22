@@ -343,7 +343,6 @@ final class MessageClient {
       'msg[msg_status]': '0',
       'msg[content]': jsonEncode({'content': text}),
       'msg[timestamp]': '${DateTime.now().millisecondsSinceEpoch ~/ 1000}',
-      'msg[dev_id]': '0',
       'msg[new_face_version]': '1',
       'from_firework': '0',
       'build': '0',
@@ -374,6 +373,7 @@ final class MessageClient {
             (thumbnail.scheme != 'https' || thumbnail.userInfo.isNotEmpty))) {
       throw ArgumentError('Invalid dynamic share');
     }
+    final caption = String.fromCharCodes(title.runes.take(1000));
     await api.submitMessageForm('/web_im/v1/web_im/send_msg', endpoint, {
       'msg[sender_uid]': sender,
       'msg[receiver_id]': receiver,
@@ -382,15 +382,14 @@ final class MessageClient {
       'msg[msg_status]': '0',
       'msg[content]': jsonEncode({
         'id': id,
-        'title': title.substring(0, title.length.clamp(0, 1000)),
-        'headline': '',
+        'title': source == 6 ? '- 哔哩哔哩专栏' : caption,
+        'headline': source == 6 ? caption : '',
         'source': source,
         if (thumbnail != null) 'thumb': thumbnail.toString(),
         'author': author,
         'author_id': authorId,
       }),
       'msg[timestamp]': '${DateTime.now().millisecondsSinceEpoch ~/ 1000}',
-      'msg[dev_id]': '0',
       'msg[new_face_version]': '1',
       'from_firework': '0',
       'build': '0',
@@ -470,7 +469,6 @@ final class MessageClient {
         'size': picture.sizeKiB,
       }),
       'msg[timestamp]': '${DateTime.now().millisecondsSinceEpoch ~/ 1000}',
-      'msg[dev_id]': '0',
       'msg[new_face_version]': '1',
       'from_firework': '0',
       'build': '0',
@@ -541,6 +539,9 @@ final class MessageClient {
             _ => ApiMessageContentKind.unsupported,
           };
     final title = _firstText([
+      if (kind == ApiMessageContentKind.share &&
+          const {6, '6'}.contains(content['source']))
+        content['headline'],
       content['title'],
       content['main_title'],
       content['name'],
