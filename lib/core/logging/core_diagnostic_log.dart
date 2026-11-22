@@ -17,6 +17,7 @@ enum CoreDiagnosticEvent {
   requestFinished,
   sessionChanged,
   downloadState,
+  downloadMediaScan,
   logExported,
   logExportFailed,
 }
@@ -57,6 +58,8 @@ final class CoreDiagnosticLog {
     int? active,
     int? queued,
     int? failed,
+    String? mediaFormat,
+    String? mediaScanResult,
   }) {
     _writer.record({
       'time': DateTime.now().toUtc().toIso8601String(),
@@ -66,6 +69,8 @@ final class CoreDiagnosticLog {
       'active': ?active,
       'queued': ?queued,
       'failed': ?failed,
+      'mediaFormat': ?mediaFormat,
+      'mediaScanResult': ?mediaScanResult,
       if (error != null) 'errorType': _safeType(error),
       if (error is AppFailure) 'failure': error.kind.name,
       if (stack != null) 'stack': _safeStack(stack),

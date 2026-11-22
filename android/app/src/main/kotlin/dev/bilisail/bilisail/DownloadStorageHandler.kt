@@ -6,6 +6,7 @@ import android.content.ActivityNotFoundException
 import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.CancellationSignal
 import android.os.Build
@@ -326,7 +327,7 @@ internal class DownloadStorageHandler(private val activity: Activity, messenger:
                 require(!OsConstants.S_ISLNK(Os.lstat(component.path).st_mode))
                 component = component.parentFile ?: throw IllegalArgumentException()
             }
-            val mime = if (name == "audio.m4s") "audio/mp4" else if (name.endsWith("mkv")) "video/x-matroska" else "video/mp4"
+            val mime = downloadMimeType(name)
             val uri = if (destination.startsWith("file:")) {
                 val target = File(externalDirectory(Uri.parse(destination).path!!), "${id}_$name")
                 if (!target.createNewFile()) throw IOException("目标文件已存在，请更换文件夹后重试")
@@ -375,7 +376,50 @@ internal class DownloadStorageHandler(private val activity: Activity, messenger:
             }
         }
         save(key, record.put("ready", true))
-        return items(record)
+        val published = items(record)
+        val merged = published.entries.singleOrNull()
+        if (destination.startsWith("file:") && merged != null) {
+            Uri.parse(merged.value).path?.let { scanMergedVideo(it, merged.key) }
+        }
+        return published
+    }
+
+    private fun downloadMimeType(name: String): String = when (name) {
+        "audio.m4s" -> "audio/mp4"
+        "media.mkv" -> "video/x-matroska"
+        else -> "video/mp4"
+    }
+
+    private fun scanMergedVideo(path: String, name: String) {
+        val format = when (name) {
+            "media.mp4" -> "mp4"
+            "media.mkv" -> "mkv"
+            else -> return
+        }
+        // All result delivery runs on the main thread, including the deadline.
+        var reported = false
+        fun report(result: String) {
+            if (reported || closed.get()) return
+            reported = true
+            channel.invokeMethod("mediaScanFinished", mapOf("format" to format, "result" to result))
+        }
+        val deadline = Runnable { report("timedOut") }
+        main.postDelayed(deadline, 15_000)
+        fun finish(result: String) {
+            main.post {
+                main.removeCallbacks(deadline)
+                report(result)
+            }
+        }
+        try {
+            MediaScannerConnection.scanFile(
+                activity.applicationContext,
+                arrayOf(path),
+                arrayOf(downloadMimeType(name)),
+            ) { _, uri -> finish(if (uri != null) "scanned" else "noUri") }
+        } catch (_: RuntimeException) {
+            finish("requestFailed")
+        }
     }
 
     private fun deleteRecord(key: String, record: JSONObject) {

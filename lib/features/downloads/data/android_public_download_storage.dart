@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 
+import '../../../core/logging/core_diagnostic_log.dart';
 import '../../../domain/app_failure.dart';
 import '../../../domain/request_cancellation.dart';
 import '../domain/download_models.dart';
@@ -10,6 +11,30 @@ import '../domain/public_download_storage.dart';
 final class AndroidPublicDownloadStorage implements PublicDownloadStorage {
   const AndroidPublicDownloadStorage();
   static const _channel = MethodChannel('dev.bilisail/download_storage');
+
+  void startMediaScanLogging(CoreDiagnosticLog diagnostics) {
+    _channel.setMethodCallHandler((call) async {
+      if (call.method != 'mediaScanFinished') throw MissingPluginException();
+      if (call.arguments
+          case {'format': final String format, 'result': final String result}
+          when (format == 'mp4' || format == 'mkv') &&
+              (result == 'scanned' ||
+                  result == 'noUri' ||
+                  result == 'requestFailed' ||
+                  result == 'timedOut')) {
+        diagnostics.record(
+          CoreDiagnosticEvent.downloadMediaScan,
+          outcome: result == 'scanned'
+              ? CoreDiagnosticOutcome.success
+              : CoreDiagnosticOutcome.failed,
+          mediaFormat: format,
+          mediaScanResult: result,
+        );
+      }
+    });
+  }
+
+  void stopMediaScanLogging() => _channel.setMethodCallHandler(null);
 
   Future<T?> _call<T>(String method, [Map<String, Object?>? args]) async {
     try {

@@ -161,6 +161,7 @@ class AppDependencies {
     this.cardPreviews,
     this.settings,
     this.downloads,
+    this._androidDownloadStorage,
     this.downloadSources,
     this._downloadAccountSubscription,
     this._downloadDiagnosticSubscription,
@@ -194,6 +195,7 @@ class AppDependencies {
   final VideoCardPreviewPlayback cardPreviews;
   final SqliteSettingsRepository settings;
   final SqliteDownloadRepository downloads;
+  final AndroidPublicDownloadStorage? _androidDownloadStorage;
   final ApiDownloadSourceRepository downloadSources;
   final StreamSubscription<Object?> _downloadAccountSubscription;
   final files = const FileAccessService();
@@ -312,6 +314,9 @@ class AppDependencies {
       accountScope: () => session.accountScope,
       cdnPreference: cdnPreference,
     );
+    final androidDownloadStorage = Platform.isAndroid
+        ? const AndroidPublicDownloadStorage()
+        : null;
     late final SqliteDownloadRepository downloads;
     downloads = SqliteDownloadRepository(
       database,
@@ -324,9 +329,7 @@ class AppDependencies {
       transfer: Platform.isIOS
           ? const HttpDownloadTransfer(background: IosBackgroundTransfer())
           : null,
-      publicStorage: Platform.isAndroid
-          ? const AndroidPublicDownloadStorage()
-          : null,
+      publicStorage: androidDownloadStorage,
       defaultDirectory: const FileAccessService().defaultDownloadDirectory,
       files: DownloadFileStore(
         trustedDocumentsDirectory:
@@ -483,12 +486,16 @@ class AppDependencies {
       cardPreviews,
       settings,
       downloads,
+      androidDownloadStorage,
       downloadSources,
       downloadAccountSubscription,
       downloadDiagnosticSubscription,
       appRecommendationCredentials ??
           SystemCredentialStore(keyPrefix: 'bilisail.app_recommendation.v1'),
     );
+    if (coreLog != null) {
+      androidDownloadStorage?.startMediaScanLogging(coreLog);
+    }
     return dependencies;
   }
 
@@ -507,7 +514,7 @@ class AppDependencies {
         ),
         downloadRepositoryProvider.overrideWithValue(downloads),
         publicDownloadStorageProvider.overrideWithValue(
-          Platform.isAndroid ? const AndroidPublicDownloadStorage() : null,
+          _androidDownloadStorage,
         ),
         downloadSourceRepositoryProvider.overrideWithValue(downloadSources),
         sessionEpochProvider.overrideWithValue(() => requests.sessionEpoch),
@@ -814,6 +821,7 @@ class AppDependencies {
       // Flush the final history observation while its account epoch is valid.
       await playback.close();
     } finally {
+      _androidDownloadStorage?.stopMediaScanLogging();
       try {
         // SDK-managed HWNDs must retire while the shared engine and its message
         // loop are still alive, after their Flutter views have unmounted.
