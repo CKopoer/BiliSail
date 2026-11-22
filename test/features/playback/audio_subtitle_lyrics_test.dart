@@ -94,6 +94,15 @@ void main() {
               .controller!
           as FixedExtentScrollController;
 
+  Future<void> scrollWheel(WidgetTester tester, double delta) =>
+      tester.sendEventToBinding(
+        PointerScrollEvent(
+          position: tester.getCenter(find.byType(ListWheelScrollView)),
+          scrollDelta: Offset(0, delta),
+          kind: PointerDeviceKind.mouse,
+        ),
+      );
+
   test(
     'listening defaults to lyrics without changing video subtitle default',
     () async {
@@ -158,8 +167,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       expect(engine.seeks, 0);
       engine.advance(const Duration(seconds: 91));
-      await tester.pump();
-      expect(controller(tester).selectedItem, isNot(9));
+      final held = controller(tester).selectedItem;
+      await tester.pump(const Duration(seconds: 5));
+      expect(controller(tester).selectedItem, held);
+      expect(held, isNot(9));
       await gesture.up();
       await tester.pumpAndSettle();
       expect(engine.seeks, 0);
@@ -179,29 +190,97 @@ void main() {
     });
   }
 
+  testWidgets('following resumes four seconds after a fling settles', (
+    tester,
+  ) async {
+    await listen();
+    engine.advance(const Duration(seconds: 51));
+    await mount(tester);
+    final scroll = controller(tester);
+    await tester.fling(
+      find.byType(ListWheelScrollView),
+      const Offset(0, -160),
+      1600,
+    );
+    expect(scroll.position.isScrollingNotifier.value, isTrue);
+    await tester.pumpAndSettle(const Duration(milliseconds: 16));
+    final browsed = scroll.selectedItem;
+    expect(browsed, greaterThan(5));
+
+    engine.advance(const Duration(seconds: 31));
+    await tester.pump(const Duration(milliseconds: 3900));
+    expect(scroll.selectedItem, browsed);
+    expect(scroll.position.isScrollingNotifier.value, isFalse);
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pumpAndSettle();
+    expect(scroll.selectedItem, 3);
+    expect(engine.seeks, 0);
+
+    engine.advance(const Duration(seconds: 41));
+    await tester.pumpAndSettle();
+    expect(scroll.selectedItem, 4);
+  });
+
+  testWidgets('wheel activity restarts the delay even at the scroll limit', (
+    tester,
+  ) async {
+    await listen();
+    engine.advance(const Duration(seconds: 51));
+    await mount(tester);
+    final scroll = controller(tester);
+    await scrollWheel(tester, -1000);
+    await tester.pumpAndSettle();
+    expect(scroll.selectedItem, 0);
+
+    await tester.pump(const Duration(seconds: 3));
+    await scrollWheel(tester, -140);
+    await tester.pump(const Duration(seconds: 3));
+    expect(scroll.selectedItem, 0);
+    expect(scroll.position.isScrollingNotifier.value, isFalse);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    expect(scroll.selectedItem, 5);
+    expect(engine.seeks, 0);
+    expect(engine.currentSnapshot.position, const Duration(seconds: 51));
+    expect(engine.currentSnapshot.desiredPlaying, isFalse);
+  });
+
+  testWidgets('trackpad browsing waits until the gesture ends', (tester) async {
+    await listen();
+    engine.advance(const Duration(seconds: 51));
+    await mount(tester);
+    final scroll = controller(tester);
+    final origin = tester.getCenter(find.byType(ListWheelScrollView));
+    final gesture = await tester.createGesture(
+      kind: PointerDeviceKind.trackpad,
+    );
+    await gesture.panZoomStart(origin);
+    await gesture.panZoomUpdate(origin, pan: const Offset(0, -150));
+    await gesture.panZoomUpdate(origin, pan: const Offset(0, -280));
+    await tester.pump();
+    final browsed = scroll.selectedItem;
+    expect(browsed, greaterThan(5));
+    await tester.pump(const Duration(seconds: 5));
+    expect(scroll.selectedItem, browsed);
+    await gesture.panZoomEnd();
+    await tester.pumpAndSettle();
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+    expect(scroll.selectedItem, 5);
+    expect(engine.seeks, 0);
+  });
+
   testWidgets('mouse wheel only browses and clicking resumes following', (
     tester,
   ) async {
     await listen();
     engine.advance(const Duration(seconds: 51));
     await mount(tester);
-    final center = tester.getCenter(find.byType(ListWheelScrollView));
-    await tester.sendEventToBinding(
-      PointerScrollEvent(
-        position: center,
-        scrollDelta: const Offset(0, 140),
-        kind: PointerDeviceKind.mouse,
-      ),
-    );
+    await scrollWheel(tester, 140);
     await tester.pump(const Duration(milliseconds: 100));
     expect(engine.seeks, 0);
-    await tester.sendEventToBinding(
-      PointerScrollEvent(
-        position: center,
-        scrollDelta: const Offset(0, 70),
-        kind: PointerDeviceKind.mouse,
-      ),
-    );
+    await scrollWheel(tester, 70);
     await tester.pump(const Duration(milliseconds: 100));
     expect(engine.seeks, 0);
     await tester.pump(const Duration(milliseconds: 100));
@@ -213,6 +292,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(engine.currentSnapshot.position, Duration(seconds: next * 10));
     expect(engine.seeks, 1);
+    final lookups = session.subtitleLookupCount;
+    await tester.pump(const Duration(seconds: 5));
+    expect(session.subtitleLookupCount, lookups);
     engine.advance(Duration(seconds: (next + 1) * 10));
     await tester.pumpAndSettle();
     expect(controller(tester).selectedItem, next + 1);
@@ -373,19 +455,12 @@ void main() {
     await gesture.up();
     await mount(tester);
     expect(engine.seeks, 0);
-    await tester.sendEventToBinding(
-      PointerScrollEvent(
-        position: tester.getCenter(find.byType(ListWheelScrollView)),
-        scrollDelta: const Offset(0, 120),
-        kind: PointerDeviceKind.mouse,
-      ),
-    );
-    await tester.pump(const Duration(milliseconds: 50));
+    await scrollWheel(tester, 120);
+    await tester.pumpAndSettle();
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-    await tester.pump(const Duration(milliseconds: 300));
     final backgroundLookups = session.subtitleLookupCount;
     engine.advance(const Duration(seconds: 81));
-    await tester.pump();
+    await tester.pump(const Duration(seconds: 5));
     expect(session.subtitleLookupCount, backgroundLookups);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pumpAndSettle();

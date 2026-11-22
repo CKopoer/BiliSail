@@ -22,6 +22,8 @@ class AudioSubtitleLyrics extends StatefulWidget {
 
 class _AudioSubtitleLyricsState extends State<AudioSubtitleLyrics>
     with WidgetsBindingObserver {
+  static const _resumeDelay = Duration(seconds: 4);
+
   late final List<SubtitleCue> _sourceCues = widget.session.subtitleCues;
   late final int _generation = widget.session.sourceGeneration;
   late final List<SubtitleCue> _cues;
@@ -37,6 +39,7 @@ class _AudioSubtitleLyricsState extends State<AudioSubtitleLyrics>
   bool _visible = true;
   bool _tickerEnabled = true;
   double? _itemExtent;
+  Timer? _resumeTimer;
 
   bool get _currentSource =>
       widget.session.sourceGeneration == _generation &&
@@ -62,7 +65,13 @@ class _AudioSubtitleLyricsState extends State<AudioSubtitleLyrics>
     _cues = [for (final entry in entries) entry.$2];
     _indices = {for (var i = 0; i < _cues.length; i++) _cues[i]: i};
     _readPosition();
-    _scroll = FixedExtentScrollController(initialItem: _center);
+    _scroll = FixedExtentScrollController(
+      initialItem: _center,
+      onAttach: (position) =>
+          position.isScrollingNotifier.addListener(_updateResumeTimer),
+      onDetach: (position) =>
+          position.isScrollingNotifier.removeListener(_updateResumeTimer),
+    );
     WidgetsBinding.instance.addObserver(this);
     _visible = _isVisible(WidgetsBinding.instance.lifecycleState);
   }
@@ -97,7 +106,7 @@ class _AudioSubtitleLyricsState extends State<AudioSubtitleLyrics>
     } else {
       widget.session.snapshots.removeListener(_onSnapshot);
       _revision++;
-      _browsing = false;
+      _stopBrowsing();
       _preview = null;
       // Cancel any drag/ballistic/automatic animation before hiding the view.
       if (_scroll.hasClients) _scroll.jumpToItem(_center);
@@ -179,6 +188,37 @@ class _AudioSubtitleLyricsState extends State<AudioSubtitleLyrics>
     return false;
   }
 
+  void _onPointerSignal(PointerSignalEvent event) {
+    if (_browsing && event is PointerScrollEvent && event.scrollDelta.dy != 0) {
+      // Wheel events at the list boundary don't start a scroll activity.
+      _updateResumeTimer();
+    }
+  }
+
+  void _updateResumeTimer() {
+    _cancelResumeTimer();
+    if (!_browsing ||
+        !_scroll.hasClients ||
+        _scroll.position.isScrollingNotifier.value) {
+      return;
+    }
+    // The wheel stays active through the drag and its final inertial snap.
+    _resumeTimer = Timer(_resumeDelay, () {
+      _resumeTimer = null;
+      if (mounted && _subscribed && _currentSource) _resumeFollowing();
+    });
+  }
+
+  void _cancelResumeTimer() {
+    _resumeTimer?.cancel();
+    _resumeTimer = null;
+  }
+
+  void _stopBrowsing() {
+    _browsing = false;
+    _cancelResumeTimer();
+  }
+
   Future<void> _seek(int index) async {
     final session = widget.session;
     if (!_subscribed ||
@@ -189,7 +229,7 @@ class _AudioSubtitleLyricsState extends State<AudioSubtitleLyrics>
       return;
     }
     final revision = ++_revision;
-    _browsing = false;
+    _stopBrowsing();
     setState(() => _preview = index);
     try {
       final duration = session.snapshots.value.duration;
@@ -213,14 +253,17 @@ class _AudioSubtitleLyricsState extends State<AudioSubtitleLyrics>
   }
 
   void _cancelDrag(PointerCancelEvent event) {
-    if (!_browsing) return;
+    if (_browsing) _resumeFollowing(animate: false);
+  }
+
+  void _resumeFollowing({bool animate = true}) {
     _revision++;
-    _browsing = false;
+    _stopBrowsing();
     setState(() {
       _preview = null;
       _readPosition();
     });
-    _follow(animate: false);
+    _follow(animate: animate);
   }
 
   @override
@@ -228,6 +271,7 @@ class _AudioSubtitleLyricsState extends State<AudioSubtitleLyrics>
     WidgetsBinding.instance.removeObserver(this);
     if (_subscribed) widget.session.snapshots.removeListener(_onSnapshot);
     _revision++;
+    _stopBrowsing();
     _scroll.dispose();
     super.dispose();
   }
@@ -253,7 +297,7 @@ class _AudioSubtitleLyricsState extends State<AudioSubtitleLyrics>
             // A resize/text-scale change alters pixels per sentence. Preserve
             // the media sentence rather than reinterpreting the old offset.
             _revision++;
-            _browsing = false;
+            _stopBrowsing();
             _preview = null;
             _readPosition();
             _follow(animate: false);
@@ -272,6 +316,7 @@ class _AudioSubtitleLyricsState extends State<AudioSubtitleLyrics>
             ),
             child: Listener(
               onPointerCancel: _cancelDrag,
+              onPointerSignal: _onPointerSignal,
               child: NotificationListener<ScrollNotification>(
                 onNotification: _onScroll,
                 child: ListWheelScrollView.useDelegate(
