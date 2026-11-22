@@ -3016,7 +3016,7 @@ class _ControlBar extends StatelessWidget {
         size: 20,
       ),
       itemBuilder: (_) => [
-        _VolumeSliderEntry(session: session),
+        _VolumeSliderEntry<AudioQualityPreference>(session: session),
         if (!session.isLive &&
             media != null &&
             media.audioTracks.isNotEmpty) ...[
@@ -3202,7 +3202,7 @@ class _ControlBar extends StatelessWidget {
     // On the narrowest layouts, give the time its own line instead of clipping
     // it or shrinking the buttons' hit targets.
     final compactButtonCount =
-        4 +
+        3 +
         (composer != null ? 1 : 0) +
         (showPlayInBar ? 1 : 0) +
         (showNext ? 1 : 0) +
@@ -3237,7 +3237,6 @@ class _ControlBar extends StatelessWidget {
                   ),
                 ),
               slot(_moreOptions(context)),
-              slot(volumeButton),
               slot(fullscreenButton),
             ]
           : [
@@ -3297,6 +3296,8 @@ class _ControlBar extends StatelessWidget {
       action();
     },
     itemBuilder: (_) => [
+      _VolumeSliderEntry<VoidCallback>(session: session),
+      const PopupMenuDivider(),
       if (!session.isLive)
         PopupMenuItem(
           value: () => unawaited(
@@ -3481,7 +3482,7 @@ class _ScrollablePlayerToolsState extends State<_ScrollablePlayerTools> {
   );
 }
 
-class _VolumeSliderEntry extends PopupMenuEntry<AudioQualityPreference> {
+class _VolumeSliderEntry<T> extends PopupMenuEntry<T> {
   const _VolumeSliderEntry({required this.session});
 
   final PlaybackSession session;
@@ -3490,13 +3491,13 @@ class _VolumeSliderEntry extends PopupMenuEntry<AudioQualityPreference> {
   double get height => 88;
 
   @override
-  bool represents(AudioQualityPreference? value) => false;
+  bool represents(T? value) => false;
 
   @override
-  State<_VolumeSliderEntry> createState() => _VolumeSliderEntryState();
+  State<_VolumeSliderEntry<T>> createState() => _VolumeSliderEntryState<T>();
 }
 
-class _VolumeSliderEntryState extends State<_VolumeSliderEntry> {
+class _VolumeSliderEntryState<T> extends State<_VolumeSliderEntry<T>> {
   double? _draft;
   int _dragRevision = 0;
 

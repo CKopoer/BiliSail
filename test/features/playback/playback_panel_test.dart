@@ -787,14 +787,13 @@ void main() {
       },
     );
   }
-  for (final width in [320.0, 1200.0]) {
+  group('standard volume menu', () {
     for (final fullScreen in [false, true]) {
-      if (width == 320 && !fullScreen) continue;
       testWidgets(
-        'volume menu switches available audio quality width=$width fullscreen=$fullScreen',
+        'switches available audio quality and preserves playback state fullscreen=$fullScreen',
         (tester) async {
           tester.view.devicePixelRatio = 1;
-          tester.view.physicalSize = Size(width == 320 ? 400 : 1400, 1000);
+          tester.view.physicalSize = const Size(1400, 1000);
           addTearDown(tester.view.resetPhysicalSize);
           addTearDown(tester.view.resetDevicePixelRatio);
           final engine = _FakeEngine();
@@ -808,8 +807,7 @@ void main() {
               session,
               _FakeWindowService(),
               const AppSettings.defaults(),
-              width: width,
-              textScale: width == 320 ? 2 : 1,
+              width: 1200,
             ),
           );
           await _pumpFrames(tester);
@@ -842,7 +840,11 @@ void main() {
                 .checked,
             isTrue,
           );
-          await tester.tap(find.text('Hi-Res / FLAC 无损'));
+          final lossless = find.widgetWithText(
+            CheckedPopupMenuItem<AudioQualityPreference>,
+            'Hi-Res / FLAC 无损',
+          );
+          await tester.tap(lossless);
           await _pumpFrames(tester);
           expect(session.media?.audioQuality, AudioQualityPreference.lossless);
           expect(engine.opens, 2);
@@ -853,17 +855,13 @@ void main() {
           await _showControls(tester);
           await tester.tap(findMaterialTooltip('音量'));
           await tester.pumpAndSettle();
-          final selected = find.widgetWithText(
-            CheckedPopupMenuItem<AudioQualityPreference>,
-            'Hi-Res / FLAC 无损',
-          );
           expect(
             tester
-                .widget<CheckedPopupMenuItem<AudioQualityPreference>>(selected)
+                .widget<CheckedPopupMenuItem<AudioQualityPreference>>(lossless)
                 .checked,
             isTrue,
           );
-          await tester.tap(find.text('AAC · 192K'));
+          await tester.tap(current);
           await _pumpFrames(tester);
           expect(session.media?.audioQuality, AudioQualityPreference.aac192);
           expect(engine.opens, 3);
@@ -874,7 +872,7 @@ void main() {
         },
       );
     }
-  }
+  });
   for (final (content, target) in <(String, ContentPlaybackTarget?)>[
     ('video', null),
     ('pgc', const PgcPlaybackTarget('12', cid: '123')),
@@ -6280,7 +6278,8 @@ void main() {
       tester,
     ) async {
       tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = const Size(1400, 1000);
+      final compact = width == 320;
+      tester.view.physicalSize = Size(compact ? 400 : 1400, 1000);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       final engine = _FakeEngine();
@@ -6292,7 +6291,7 @@ void main() {
           _FakeWindowService(),
           const AppSettings.defaults(),
           width: width,
-          textScale: width == 320 ? 2 : 1,
+          textScale: compact ? 2 : 1,
         ),
       );
       await _pumpFrames(tester);
@@ -6301,14 +6300,19 @@ void main() {
       await session.seek(const Duration(seconds: 45));
       final generation = engine.currentSnapshot.generation;
       final slider = find.byKey(const ValueKey('player-volume-slider'));
+      final menu = findMaterialTooltip(compact ? '更多播放选项' : '音量');
 
       for (final fullscreen in [false, true]) {
-        if (width == 320 && !fullscreen) continue;
+        if (compact && !fullscreen) continue;
         if (fullscreen) {
           await tester.tap(findMaterialTooltip('全屏（F）'));
           await _pumpFrames(tester);
         }
-        await tester.tap(findMaterialTooltip('音量'));
+        expect(
+          findMaterialTooltip('音量'),
+          compact ? findsNothing : findsOneWidget,
+        );
+        await tester.tap(menu);
         await tester.pumpAndSettle();
         expect(slider, findsOneWidget);
         expect(tester.widget<Slider>(slider).divisions, isNull);
@@ -6339,9 +6343,12 @@ void main() {
         await tester.tapAt(const Offset(5, 5));
         await tester.pumpAndSettle();
         expect(slider, findsNothing);
-        expect(find.byIcon(Icons.volume_off_outlined), findsOneWidget);
+        expect(
+          find.byIcon(Icons.volume_off_outlined),
+          compact ? findsNothing : findsOneWidget,
+        );
 
-        await tester.tap(findMaterialTooltip('音量'));
+        await tester.tap(menu);
         await tester.pumpAndSettle();
         expect(tester.widget<Slider>(slider).value, 0);
         final reopenedRect = tester.getRect(slider);

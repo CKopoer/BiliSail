@@ -96,6 +96,8 @@
 
 2026-11-02 按后续要求，普通小窗隐藏清晰度、倍速和音量的直接入口，通过“更多播放选项”调节，音质选择仍保留。宽屏／全屏沿用直接控件和点播音量菜单选音质；视频／影视共用换源、播放意图和导航检查点。范围、参考来源及验证见[小窗播放控件与音质选择](validation/player-compact-audio-controls-2026-11-02.md)。
 
+2026-11-22 全屏紧凑底栏将音量调节移入“更多播放选项”顶部，复用标准工具栏的连续音量滑块，为底栏腾出一个按钮位。见[播放控件与小窗布局](validation/responsive-player.md#行为)。
+
 2026-11-01 继续定位键盘／触摸长按倍速的剩余停顿：在常驻变速滤镜之外，点播打开前将音频输出最小缓冲设为 50 ms，减少旧速率音频队列造成的视频等待与恢复速度时的追帧。网络缓存仍沿用原策略；Windows Flutter Profile 的 ABBA 对照、PiliPlus 参考及设备边界见[输出缓冲记录](validation/hold-rate-output-buffer-2026-11-01.md)。
 
 2026-11-01 后续核对：PiliPlus 的 Windows runner 明确关闭 Impeller，本项目也改为 Skia。实际硬解仍按 `hwdec-current` 读取，不能由 `auto` 或纹理复制日志推断；渲染后端的独立全屏对照、二进制哈希及验证边界见[Windows Skia 播放记录](validation/windows-skia-playback-2026-11-01.md)。
