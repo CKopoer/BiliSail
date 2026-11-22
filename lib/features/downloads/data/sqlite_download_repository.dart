@@ -31,6 +31,8 @@ final class SqliteDownloadRepository implements DownloadRepository {
     DownloadFileStore? files,
     DownloadMuxer? muxer,
     PublicDownloadStorage? publicStorage,
+    this.requestMergedDownloadAccess,
+    this.onMergedDownloadCompleted,
     DateTime Function()? clock,
   }) : _publicStorage = publicStorage,
        _defaultDirectory = defaultDirectory,
@@ -48,6 +50,8 @@ final class SqliteDownloadRepository implements DownloadRepository {
   Future<void>? _backgroundStart;
   final DownloadFileStore _files;
   final DownloadMuxer _muxer;
+  final Future<void> Function()? requestMergedDownloadAccess;
+  final Future<void> Function(DownloadTask)? onMergedDownloadCompleted;
   final DateTime Function() _clock;
   final _changes = StreamController<DownloadQueueState>.broadcast();
   final Map<String, DownloadTask> _tasks = {};
@@ -322,6 +326,11 @@ final class SqliteDownloadRepository implements DownloadRepository {
       throw const AppFailure(AppFailureKind.storage, '下载队列最多保留 500 项');
     }
     if (pending.isEmpty) return;
+    final requestAccess = requestMergedDownloadAccess;
+    if (requestAccess != null && selection.output.isMerged) {
+      await requestAccess();
+      if (!_batchCurrent(scope, epoch)) return;
+    }
     final destination = await _publicStorage?.destination();
     final root = destination == null
         ? _preferences.directory ?? await _defaultDirectory()
@@ -677,6 +686,14 @@ final class SqliteDownloadRepository implements DownloadRepository {
       // Retaining originals after a successful commit is safe; retry cleanup
       // on the next reconciliation. Never turn usable media into a failure.
     }
+    final export = onMergedDownloadCompleted;
+    if (export != null && task.mergedMedia != null && _valid(id, run)) {
+      try {
+        await export(task);
+      } catch (_) {
+        // An optional Photos import cannot fail a committed download.
+      }
+    }
   }
 
   Future<void> _cleanupMedia(DownloadTask task) async {
@@ -871,6 +888,11 @@ final class SqliteDownloadRepository implements DownloadRepository {
         task.scope != _scope ||
         !{DownloadStatus.paused, DownloadStatus.failed}.contains(task.status)) {
       return;
+    }
+    final requestAccess = requestMergedDownloadAccess;
+    if (requestAccess != null && task.selection.output.isMerged) {
+      await requestAccess();
+      if (!_batchCurrent(scope, epoch) || !identical(_tasks[id], task)) return;
     }
     final next = (await _reconcile(task)).copyWith(
       status: DownloadStatus.queued,

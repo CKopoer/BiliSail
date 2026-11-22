@@ -18,6 +18,7 @@ enum CoreDiagnosticEvent {
   sessionChanged,
   downloadState,
   downloadMediaScan,
+  downloadPhotosExport,
   logExported,
   logExportFailed,
 }

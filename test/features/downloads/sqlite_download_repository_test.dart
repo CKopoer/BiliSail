@@ -32,6 +32,8 @@ void main() {
 
   Future<void> openRepository({
     Future<void> Function(bool)? setBackgroundActive,
+    Future<void> Function()? requestMergedDownloadAccess,
+    Future<void> Function(DownloadTask)? onMergedDownloadCompleted,
     DateTime Function()? clock,
     DownloadFileStore? files,
     String? directory,
@@ -45,6 +47,8 @@ void main() {
       setBackgroundActive: setBackgroundActive,
       muxer: muxer,
       publicStorage: publicStorage,
+      requestMergedDownloadAccess: requestMergedDownloadAccess,
+      onMergedDownloadCompleted: onMergedDownloadCompleted,
       clock: clock,
     );
     await repository.initialize();
@@ -652,9 +656,89 @@ void main() {
     return value;
   }
 
+  test('separate downloads bypass permission and Photos import', () async {
+    await repository.close();
+    await db.close();
+    final calls = <String>[];
+    await openRepository(
+      requestMergedDownloadAccess: () async => calls.add('permission'),
+      onMergedDownloadCompleted: (_) async => calls.add('import'),
+    );
+    await repository.enqueue([
+      item,
+    ], const DownloadSelection(output: DownloadOutput.separate));
+    await _waitFor(repository, DownloadStatus.completed);
+    await repository.close();
+    expect(calls, isEmpty);
+  });
+
   for (final output in [DownloadOutput.mp4, DownloadOutput.mkv]) {
     group(output.name, () {
       final mergedSelection = DownloadSelection(output: output);
+
+      test(
+        'imports committed output once and keeps it if Photos fails',
+        () async {
+          await repository.close();
+          await db.close();
+          muxer = _Muxer();
+          final permissionRequested = Completer<void>();
+          final permission = Completer<void>();
+          final imported = Completer<(DownloadTask, String, bool)>();
+          var exports = 0;
+          Future<void> export(DownloadTask task) async {
+            exports++;
+            final row = await db
+                .customSelect('SELECT record_json FROM download_tasks')
+                .getSingle();
+            final record = jsonDecode(
+              row.read<String>('record_json'),
+            ) as Map<String, Object?>;
+            final media = File('${task.directory}/${output.fileName}');
+            imported.complete((
+              task,
+              record['status'] as String,
+              await media.exists(),
+            ));
+            throw const AppFailure(
+              AppFailureKind.permission,
+              'Photos access denied',
+            );
+          }
+
+          await openRepository(
+            requestMergedDownloadAccess: () {
+              permissionRequested.complete();
+              return permission.future;
+            },
+            onMergedDownloadCompleted: export,
+          );
+          final pending = repository.enqueue([item], mergedSelection);
+          await permissionRequested.future.timeout(const Duration(seconds: 5));
+          expect(videoRequests, 0);
+          permission.complete();
+          await pending;
+          final (task, storedStatus, wasReadable) = await imported.future
+              .timeout(const Duration(seconds: 5));
+          expect(task.status, DownloadStatus.completed);
+          expect(task.mergedMedia?.output, output);
+          expect(storedStatus, 'completed');
+          expect(wasReadable, isTrue);
+          await repository.enqueue([item], mergedSelection);
+          await repository.close();
+          expect(
+            repository.current.tasks.single.status,
+            DownloadStatus.completed,
+          );
+          await db.close();
+          await openRepository(onMergedDownloadCompleted: export);
+          expect(
+            (await repository.offlineTask(task.id)).status,
+            DownloadStatus.completed,
+          );
+          expect(exports, 1);
+        },
+      );
 
       test('public merge retries without remux', () async {
         final native = await useMuxer();

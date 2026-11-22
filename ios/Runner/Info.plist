@@ -28,6 +28,8 @@
 	<true/>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>用于选择你要发送到评论或私信的图片。</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>用于在合并视频下载完成后，将它自动保存到系统相册。</string>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>

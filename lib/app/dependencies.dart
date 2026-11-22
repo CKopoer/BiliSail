@@ -1,4 +1,5 @@
 import '../features/downloads/data/android_public_download_storage.dart';
+import '../features/downloads/data/ios_download_photos_exporter.dart';
 import 'video_card_watch_later.dart';
 
 import 'dart:async';
@@ -317,6 +318,9 @@ class AppDependencies {
     final androidDownloadStorage = Platform.isAndroid
         ? const AndroidPublicDownloadStorage()
         : null;
+    final iosDownloadPhotos = Platform.isIOS
+        ? IosDownloadPhotosExporter(coreLog)
+        : null;
     late final SqliteDownloadRepository downloads;
     downloads = SqliteDownloadRepository(
       database,
@@ -330,6 +334,8 @@ class AppDependencies {
           ? const HttpDownloadTransfer(background: IosBackgroundTransfer())
           : null,
       publicStorage: androidDownloadStorage,
+      requestMergedDownloadAccess: iosDownloadPhotos?.requestAccess,
+      onMergedDownloadCompleted: iosDownloadPhotos?.save,
       defaultDirectory: const FileAccessService().defaultDownloadDirectory,
       files: DownloadFileStore(
         trustedDocumentsDirectory:
