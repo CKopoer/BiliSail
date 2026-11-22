@@ -31,6 +31,8 @@ import '../core/platform/audio_service_media_controls.dart';
 import '../core/platform/system_media_controls.dart';
 import '../core/platform/detached_playback_window.dart';
 import '../core/platform/file_access_service.dart';
+import '../features/comments/application/comment_image_saver.dart';
+import '../features/comments/data/comment_image_file.dart';
 import '../features/comments/data/comment_image_picker.dart';
 import '../features/dynamic/application/dynamic_topic_controller.dart';
 import '../features/dynamic/data/api_dynamic_topic_repository.dart';
@@ -802,6 +804,8 @@ class AppDependencies {
         originalImageRepositoryProvider.overrideWithValue(
           NetworkOriginalImageRepository(),
         ),
+        if (Platform.isIOS || Platform.isLinux)
+          commentImageSaverProvider.overrideWithValue(saveCommentImageFile),
         imageExportServiceProvider.overrideWithValue(
           const NativeImageExportService(),
         ),

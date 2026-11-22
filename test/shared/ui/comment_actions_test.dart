@@ -3,6 +3,9 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:bilisail/app/theme.dart';
+import 'package:bilisail/domain/user.dart';
+import 'package:bilisail/shared/ui/app_notice.dart';
+import 'package:bilisail/features/comments/application/comment_image_saver.dart';
 import 'package:bilisail/domain/comment_target.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
@@ -43,6 +46,75 @@ void main() {
     ]) {
       await (FontLoader(family)..addFont(rootBundle.load(asset))).load();
     }
+  });
+
+  test(
+    'own reply can be deleted without UP privileges in preview and detail',
+    () async {
+      const reply = CommentEntry(
+        id: '11',
+        author: '自己',
+        authorId: UserId('7'),
+        message: '回复',
+      );
+      final repo = _Comments(root: _root.withReplies([reply], count: 1));
+      final provider = videoCommentsControllerProvider('42');
+      final container = ProviderContainer(
+        overrides: [
+          authControllerProvider.overrideWith(_SignedIn.new),
+          commentsRepositoryProvider(CommentTargetType.video)
+              .overrideWithValue(repo),
+        ],
+      );
+      addTearDown(container.dispose);
+      container.listen(provider, (_, _) {});
+      await Future<void>.delayed(Duration.zero);
+      final controller = container.read(provider.notifier);
+      expect(await controller.deleteComment('10'), isFalse);
+      expect(await controller.setPinned('10', true), isFalse);
+      await controller.openReplies(repo.root);
+      controller.target(reply);
+      repo.pending = Completer<void>();
+      final first = controller.deleteComment('11');
+      expect(await controller.deleteComment('11'), isFalse);
+      repo.pending!.complete();
+      expect(await first, isTrue);
+      final state = container.read(provider);
+      expect(state.replyItems, isEmpty);
+      expect(state.openRoot?.replyCount, 0);
+      expect(state.items.single.replies, isEmpty);
+      expect(state.replyTarget, isNull);
+      expect(repo.writes, ['delete:11']);
+    },
+  );
+
+  test('uncertain delete blocks replay and a late response cannot update another session', () async {
+    final repo = _Comments(upper: const UserId('7'));
+    final provider = videoCommentsControllerProvider('42');
+    final container = ProviderContainer(
+      overrides: [
+        authControllerProvider.overrideWith(_SignedIn.new),
+        commentsRepositoryProvider(CommentTargetType.video)
+            .overrideWithValue(repo),
+      ],
+    );
+    addTearDown(container.dispose);
+    container.listen(provider, (_, _) {});
+    await Future<void>.delayed(Duration.zero);
+    final controller = container.read(provider.notifier);
+    repo.pending = Completer<void>();
+    final first = controller.deleteComment('10');
+    repo.pending!.completeError(const CommentWriteUncertain());
+    expect(await first, isFalse);
+    expect(await controller.deleteComment('10'), isFalse);
+    expect(repo.writes, ['delete:10']);
+    await controller.load(refresh: true);
+    repo.pending = Completer<void>();
+    final second = controller.deleteComment('10');
+    repo.sessionEpoch++;
+    repo.pending!.complete();
+    expect(await second, isFalse);
+    expect(container.read(provider).items.single.id, '10');
   });
 
   for (final type in [CommentTargetType.video, CommentTargetType.dynamic]) {
@@ -202,6 +274,138 @@ void main() {
     }
   }
 
+  testWidgets('owner can pin roots, unpin and delete only after confirmation', (
+    tester,
+  ) async {
+    final repo = _Comments(upper: const UserId('7'));
+    final container = await _mount(tester, repo);
+    final provider = videoCommentsControllerProvider('42');
+    Future<void> menu({bool preview = false}) async {
+      final buttons = find.byIcon(Icons.more_vert);
+      await tester.tap(preview ? buttons.last : buttons.first);
+      await tester.pumpAndSettle();
+    }
+
+    await menu();
+    await tester.tap(find.text('置顶'));
+    await tester.pumpAndSettle();
+    expect(repo.writes, isEmpty);
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+    expect(repo.writes, ['pin:10:true']);
+    expect(container.read(provider).items.single.isUpPinned, isTrue);
+    await menu();
+    await tester.tap(find.text('取消置顶'));
+    await tester.pumpAndSettle();
+    expect(repo.writes.last, 'pin:10:false');
+    await menu(preview: true);
+    expect(find.text('置顶'), findsNothing);
+    await tester.tap(find.text('删除'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(repo.writes, hasLength(2));
+    await menu(preview: true);
+    await tester.tap(find.text('删除'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+    expect(repo.writes.last, 'delete:11');
+    expect(container.read(provider).items.single.replies, isEmpty);
+    expect(container.read(provider).items.single.replyCount, 0);
+    expect(container.read(provider).totalCount, 1);
+  });
+
+  testWidgets(
+    'viewer long-press copies original text and report needs a reason',
+    (tester) async {
+      final repo = _Comments();
+      await _mount(tester, repo);
+      String? clipboard;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            clipboard = (call.arguments as Map)['text'] as String;
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      await tester.longPress(find.byIcon(Icons.more_vert).last);
+      await tester.pumpAndSettle();
+      expect(find.text('置顶'), findsNothing);
+      expect(find.text('删除'), findsNothing);
+      await tester.tap(find.text('复制全部'));
+      await tester.pumpAndSettle();
+      expect(clipboard, _reply.message);
+      await tester.tap(find.byIcon(Icons.more_vert).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('举报'));
+      await tester.pumpAndSettle();
+      final submit = find.widgetWithText(FilledButton, '提交举报');
+      expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+      await tester.tap(find.byType(DropdownButtonFormField<int>));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('其他').last);
+      await tester.tap(find.text('其他').last);
+      await tester.pumpAndSettle();
+      expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+      await tester.enterText(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.byType(TextField),
+        ),
+        ' 测试理由 ',
+      );
+      await tester.pump();
+      expect(tester.widget<FilledButton>(submit).onPressed, isNotNull);
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+      expect(repo.writes, ['report:10:0:测试理由']);
+    },
+  );
+
+  testWidgets('guest can export just the selected reply as PNG', (
+    tester,
+  ) async {
+    final saved = Completer<Uint8List>();
+    await _mount(
+      tester,
+      _Comments(),
+      guest: true,
+      saver: (bytes) async {
+        saved.complete(bytes);
+        return 'comment.png';
+      },
+    );
+    await tester.tap(find.byIcon(Icons.more_vert).last);
+    await tester.pumpAndSettle();
+    for (final action in ['举报', '置顶', '删除']) {
+      expect(find.text(action), findsNothing);
+    }
+    await tester.tap(find.text('保存评论'));
+    await tester.pumpAndSettle();
+    final preview = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.byType(CommentRichContent),
+    );
+    expect(tester.widget<CommentRichContent>(preview).comment.id, _reply.id);
+    await tester.runAsync(() async {
+      await tester.tap(find.text('保存图片'));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    });
+    await tester.pumpAndSettle();
+    expect(saved.isCompleted, isTrue);
+    expect((await saved.future).take(8), [137, 80, 78, 71, 13, 10, 26, 10]);
+    expect(find.byType(AlertDialog), findsNothing);
+  });
+
   testWidgets(
     'like count shares the button and busy actions cannot repeat writes',
     (tester) async {
@@ -269,6 +473,8 @@ Future<ProviderContainer> _mount(
   double width = 390,
   double scale = 1,
   bool dark = false,
+  bool guest = false,
+  CommentImageSaver? saver,
   bool touch = false,
 }) async {
   tester.view.devicePixelRatio = 1;
@@ -278,10 +484,12 @@ Future<ProviderContainer> _mount(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        authControllerProvider.overrideWith(_SignedIn.new),
+        authControllerProvider.overrideWith(guest ? _Guest.new : _SignedIn.new),
+        if (saver != null) commentImageSaverProvider.overrideWithValue(saver),
         commentsRepositoryProvider(type).overrideWithValue(repo),
       ],
       child: MaterialApp(
+        builder: AppNoticeHost.builder,
         theme: (dark ? BiliTheme.dark() : BiliTheme.light()).copyWith(
           platform: touch ? TargetPlatform.android : TargetPlatform.windows,
           materialTapTargetSize: touch
@@ -333,8 +541,15 @@ class _SignedIn extends AuthController {
   AuthState build() => const AuthState(status: AuthStatus.signedIn, mid: '7');
 }
 
-class _Comments extends Fake implements CommentsRepository {
-  _Comments({this.root = _root});
+class _Guest extends AuthController {
+  @override
+  AuthState build() => const AuthState(status: AuthStatus.guest);
+}
+
+class _Comments extends Fake implements CommentModerationRepository {
+  _Comments({this.root = _root, this.upper});
+  final UserId? upper;
+  final writes = <String>[];
 
   final CommentEntry root;
   final likes = <bool>[];
@@ -342,7 +557,7 @@ class _Comments extends Fake implements CommentsRepository {
   @override
   String get accountScope => 'user:7';
   @override
-  int get sessionEpoch => 0;
+  int sessionEpoch = 0;
   @override
   Future<CommentPage> load(
     String oid,
@@ -350,14 +565,46 @@ class _Comments extends Fake implements CommentsRepository {
     CommentSort sort,
     RequestCancellation cancellation, {
     String? cursor,
-  }) async => CommentPage(items: [root], hasMore: false);
+  }) async =>
+      CommentPage(items: [root], hasMore: false, totalCount: 2, upperId: upper);
   @override
   Future<CommentPage> replies(
     String oid,
     String rootId,
     int page,
     RequestCancellation cancellation,
-  ) async => const CommentPage(items: [_reply], hasMore: false);
+  ) async => CommentPage(items: root.replies, hasMore: false, upperId: upper);
+  @override
+  Future<void> delete(
+    String oid,
+    String id,
+    RequestCancellation cancellation,
+  ) async {
+    writes.add('delete:$id');
+    await pending?.future;
+  }
+
+  @override
+  Future<void> setPinned(
+    String oid,
+    String id,
+    bool pinned,
+    RequestCancellation cancellation,
+  ) async {
+    writes.add('pin:$id:$pinned');
+  }
+
+  @override
+  Future<void> report(
+    String oid,
+    String id,
+    int reason,
+    String description,
+    RequestCancellation cancellation,
+  ) async {
+    writes.add('report:$id:$reason:$description');
+  }
+
   @override
   Future<void> like(
     String oid,

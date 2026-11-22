@@ -699,6 +699,9 @@ final class BiliApiClient {
       '/x/v2/dm/post',
       '/x/v2/reply/action',
       '/x/v2/reply/add',
+      '/x/v2/reply/del',
+      '/x/v2/reply/top',
+      '/x/v2/reply/report',
       '/x/relation/modify',
       '/x/relation/tags/addUsers',
       '/x/relation/tag/create',
@@ -1203,7 +1206,7 @@ final class BiliApiClient {
     );
   }
 
-  Future<ApiPage<ApiVideoComment>> getVideoComments(
+  Future<ApiCommentPage> getVideoComments(
     String aid, {
     int page = 1,
     ApiCommentSort sort = ApiCommentSort.hot,
@@ -1217,7 +1220,7 @@ final class BiliApiClient {
     context: context,
   );
 
-  Future<ApiPage<ApiVideoComment>> getVideoCommentsByCursor(
+  Future<ApiCommentPage> getVideoCommentsByCursor(
     String aid, {
     String? cursor,
     ApiCommentSort sort = ApiCommentSort.hot,
@@ -1257,8 +1260,9 @@ final class BiliApiClient {
     if (hasMore && (next is! String || next.isEmpty || next.length > 4096)) {
       throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
     }
-    return ApiPage(
+    return ApiCommentPage(
       List.unmodifiable(items),
+      upperMid: _userMid(_commentMap(data['upper'])['mid']),
       hasMore: hasMore,
       nextCursor: hasMore ? next as String : null,
       totalCount: _count(paging['all_count']),
@@ -1266,9 +1270,7 @@ final class BiliApiClient {
   }
 
   /// Resolves a comment ID to its exact reply page without scanning siblings.
-  Future<
-    ({ApiVideoComment root, ApiPage<ApiVideoComment> page, int pageNumber})
-  >
+  Future<({ApiVideoComment root, ApiCommentPage page, int pageNumber})>
   getVideoCommentLocation(
     String aid,
     String rootId, {
@@ -1400,7 +1402,7 @@ final class BiliApiClient {
     return root;
   }
 
-  Future<ApiPage<ApiVideoComment>> getVideoReplies(
+  Future<ApiCommentPage> getVideoReplies(
     String aid,
     String rootId, {
     int page = 1,
@@ -1414,7 +1416,7 @@ final class BiliApiClient {
     context: context,
   );
 
-  Future<ApiPage<ApiVideoComment>> _comments(
+  Future<ApiCommentPage> _comments(
     String aid,
     int page, {
     ApiCommentSort sort = ApiCommentSort.hot,
@@ -1454,14 +1456,20 @@ final class BiliApiClient {
     // Legacy time order can return this explicit empty page to guests.
     // It is a successful server result, not a malformed comment or transport error.
     if (count == 0 && size == 0 && data['replies'] == null && items.isEmpty) {
-      return const ApiPage([], hasMore: false, totalCount: 0);
+      return ApiCommentPage(
+        const [],
+        hasMore: false,
+        totalCount: 0,
+        upperMid: _userMid(_commentMap(data['upper'])['mid']),
+      );
     }
     if (count < 0 || size < 1) {
       throw ApiFailure(ApiFailureCategory.protocol, endpoint);
     }
     final hasMore = items.isNotEmpty && page * size < count;
-    return ApiPage(
+    return ApiCommentPage(
       List.unmodifiable(items),
+      upperMid: _userMid(_commentMap(data['upper'])['mid']),
       hasMore: hasMore,
       nextCursor: hasMore ? '${page + 1}' : null,
       totalCount: count,
@@ -1476,6 +1484,13 @@ final class BiliApiClient {
     final upper = _commentMap(data['upper']);
     final upperMid = _userMid(upper['mid']);
     final top = _commentMap(data['top']);
+    final upperPinIds = {
+      for (final pin in [
+        upper['top'],
+        top['upper'],
+      ].whereType<Map<String, Object?>>())
+        _id(pin['rpid_str'] ?? pin['rpid'], endpoint),
+    };
     final pinned = <Object?>[
       if (includePinned) ...[
         ..._list(data['top_replies'] ?? const [], endpoint).take(100),
@@ -1496,9 +1511,13 @@ final class BiliApiClient {
     final seen = <String>{};
     final items = <ApiVideoComment>[];
     for (final (value, isPinned) in values.take(100)) {
+      final raw = _map(value, endpoint);
       final comment = _comment(
-        _map(value, endpoint),
+        raw,
         endpoint,
+        isUpPinned:
+            isPinned &&
+            upperPinIds.contains(_id(raw['rpid_str'] ?? raw['rpid'], endpoint)),
         isPinned: isPinned,
         upperMid: upperMid,
       );
@@ -1513,6 +1532,7 @@ final class BiliApiClient {
     int depth = 0,
     String? submissionMessage,
     bool isPinned = false,
+    bool isUpPinned = false,
     String? upperMid,
   }) {
     final member = _map(entry['member'], endpoint);
@@ -1538,13 +1558,15 @@ final class BiliApiClient {
         value == null || value == 0 || value == '0'
         ? null
         : _id(value, endpoint);
+    final upPin =
+        isUpPinned ||
+        _bool(_commentMap(entry['reply_control'])['is_up_top']) == true;
     return ApiVideoComment(
       id: _id(entry['rpid_str'] ?? entry['rpid'], endpoint),
       author: _requiredString(member['uname'], endpoint),
       authorMid: authorMid,
-      isPinned:
-          isPinned ||
-          _bool(_commentMap(entry['reply_control'])['is_up_top']) == true,
+      isPinned: isPinned || upPin,
+      isUpPinned: upPin,
       isUpAuthor: upperMid != null && authorMid == upperMid,
       upLiked: _bool(upAction['like']) ?? false,
       upReplied: _bool(upAction['reply']) ?? false,
@@ -1729,14 +1751,102 @@ final class BiliApiClient {
     int commentType = 1,
     ApiRequestContext? context,
   }) async {
-    _validateCommentId(aid);
-    _validateCommentType(commentType);
-    _validateCommentId(commentId);
-    await submitForm('/x/v2/reply/action', 'comment_like', {
-      'oid': aid,
-      'rpid': commentId,
-      'type': '$commentType',
-      'action': liked ? '1' : '0',
+    await _commentAction(
+      'action',
+      'comment_like',
+      aid,
+      commentId,
+      commentType,
+      {'action': liked ? '1' : '0'},
+      context,
+    );
+  }
+
+  Future<void> deleteComment(
+    String oid,
+    String id, {
+    required int commentType,
+    ApiRequestContext? context,
+  }) => _commentAction(
+    'del',
+    'comment_delete',
+    oid,
+    id,
+    commentType,
+    const {},
+    context,
+  );
+
+  Future<void> setCommentPinned(
+    String oid,
+    String id,
+    bool pinned, {
+    required int commentType,
+    ApiRequestContext? context,
+  }) => _commentAction('top', 'comment_pin', oid, id, commentType, {
+    'action': pinned ? '1' : '0',
+  }, context);
+
+  Future<void> reportComment(
+    String oid,
+    String id, {
+    required int commentType,
+    required int reason,
+    String content = '',
+    ApiRequestContext? context,
+  }) async {
+    final description = content.trim();
+    if (!const {
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          7,
+          8,
+          9,
+          10,
+          12,
+          15,
+          17,
+          18,
+          19,
+          20,
+          22,
+          23,
+        }.contains(reason) ||
+        ((reason == 0 || reason == 22) && description.isEmpty) ||
+        description.runes.length > 500) {
+      throw ArgumentError('Invalid comment report');
+    }
+    await _commentAction('report', 'comment_report', oid, id, commentType, {
+      'reason': '$reason',
+      if (description.isNotEmpty) 'content': description,
+      'add_blacklist': 'false',
+      'gaia_source': 'main_h5',
+      'scene': 'main',
+      'platform': 'web',
+    }, context);
+  }
+
+  Future<void> _commentAction(
+    String path,
+    String endpoint,
+    String oid,
+    String id,
+    int type,
+    Map<String, String> fields,
+    ApiRequestContext? context,
+  ) async {
+    _validateCommentId(oid);
+    _validateCommentType(type);
+    _validateCommentId(id);
+    await submitForm('/x/v2/reply/$path', endpoint, {
+      'oid': oid,
+      'rpid': id,
+      'type': '$type',
+      ...fields,
     }, context: context);
   }
 

@@ -27,6 +27,7 @@ import 'comment_rich_content.dart';
 import 'comment_badge.dart';
 import 'comment_text_styles.dart';
 import 'comment_actions.dart';
+import 'comment_more_menu.dart';
 import 'comment_mention_dialog.dart';
 import '../../features/comments/domain/comment_composer.dart';
 import '../../features/comments/application/comments_controller.dart';
@@ -905,6 +906,23 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
     );
   }
 
+  void _more(BuildContext anchor, CommentEntry comment) {
+    final target = widget.target;
+    unawaited(
+      showCommentMoreMenu(
+        context: context,
+        anchor: anchor,
+        ref: ref,
+        provider: _provider,
+        id: comment.id,
+        isCurrent: () =>
+            mounted &&
+            widget.target == target &&
+            WorkspaceActivity.isActive(context),
+      ),
+    );
+  }
+
   Widget _entry(
     CommentEntry comment, {
     required bool preview,
@@ -931,6 +949,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
       onSeek: widget.onSeek,
       onLogin: _login,
       onReplyFocus: _focus.requestFocus,
+      onMore: _more,
     ),
   );
 
@@ -1281,6 +1300,7 @@ class _CommentTile extends ConsumerStatefulWidget {
     required this.comment,
     required this.onLogin,
     required this.onReplyFocus,
+    required this.onMore,
     this.preview = true,
     this.layoutOnly = false,
     this.onOpenUser,
@@ -1295,6 +1315,7 @@ class _CommentTile extends ConsumerStatefulWidget {
   final bool preview;
   final bool layoutOnly;
   final VoidCallback onLogin, onReplyFocus;
+  final void Function(BuildContext, CommentEntry) onMore;
 
   @override
   ConsumerState<_CommentTile> createState() => _CommentTileState();
@@ -1405,6 +1426,7 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
                     busy: true,
                     onLike: _like,
                     onReply: _reply,
+                    onMore: null,
                   )
                 else
                   Consumer(
@@ -1415,6 +1437,7 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
                         busy: busy,
                         onLike: _like,
                         onReply: _reply,
+                        onMore: (anchor) => widget.onMore(anchor, c),
                       );
                     },
                   ),
@@ -1442,77 +1465,101 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
                               .map(
                                 (r) => Padding(
                                   padding: const EdgeInsets.only(bottom: 4),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
-                                      Wrap(
-                                        spacing: 5,
-                                        runSpacing: 3,
-                                        crossAxisAlignment:
-                                            WrapCrossAlignment.center,
-                                        children: [
-                                          InkWell(
-                                            onTap:
-                                                r.authorId?.isValid == true &&
-                                                    onOpenUser != null
-                                                ? () => onOpenUser(r.authorId!)
-                                                : null,
-                                            child: Text(
-                                              r.isUpAuthor
-                                                  ? r.author
-                                                  : '${r.author}：',
-                                              style: styles.previewAuthor
-                                                  .copyWith(
-                                                    color:
-                                                        r.nicknameColor != null
-                                                        ? Color(
-                                                            0xFF000000 |
-                                                                r.nicknameColor!,
-                                                          )
-                                                        : null,
-                                                  ),
-                                            ),
-                                          ),
-                                          if (r.isUpAuthor)
-                                            Row(
-                                              mainAxisSize: MainAxisSize.min,
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Wrap(
+                                              spacing: 5,
+                                              runSpacing: 3,
+                                              crossAxisAlignment:
+                                                  WrapCrossAlignment.center,
                                               children: [
-                                                const CommentBadge(label: 'UP'),
-                                                Text(
-                                                  '：',
-                                                  style: styles.previewAuthor
-                                                      .copyWith(
-                                                        color:
-                                                            r.nicknameColor !=
-                                                                null
-                                                            ? Color(
-                                                                0xFF000000 |
-                                                                    r.nicknameColor!,
-                                                              )
-                                                            : null,
-                                                      ),
+                                                InkWell(
+                                                  onTap:
+                                                      r.authorId?.isValid ==
+                                                              true &&
+                                                          onOpenUser != null
+                                                      ? () => onOpenUser(
+                                                          r.authorId!,
+                                                        )
+                                                      : null,
+                                                  child: Text(
+                                                    r.isUpAuthor
+                                                        ? r.author
+                                                        : '${r.author}：',
+                                                    style: styles.previewAuthor
+                                                        .copyWith(
+                                                          color:
+                                                              r.nicknameColor !=
+                                                                  null
+                                                              ? Color(
+                                                                  0xFF000000 |
+                                                                      r.nicknameColor!,
+                                                                )
+                                                              : null,
+                                                        ),
+                                                  ),
                                                 ),
+                                                if (r.isUpAuthor)
+                                                  Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      const CommentBadge(
+                                                        label: 'UP',
+                                                      ),
+                                                      Text(
+                                                        '：',
+                                                        style: styles
+                                                            .previewAuthor
+                                                            .copyWith(
+                                                              color:
+                                                                  r.nicknameColor !=
+                                                                      null
+                                                                  ? Color(
+                                                                      0xFF000000 |
+                                                                          r.nicknameColor!,
+                                                                    )
+                                                                  : null,
+                                                            ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                if (r.isPinned)
+                                                  const CommentBadge(
+                                                    label: '置顶',
+                                                    outlined: true,
+                                                  ),
                                               ],
                                             ),
-                                          if (r.isPinned)
-                                            const CommentBadge(
-                                              label: '置顶',
-                                              outlined: true,
+                                            CommentRichContent(
+                                              comment: r,
+                                              onOpenUser: onOpenUser,
+                                              compact: true,
+                                              onOpenLink: onOpenLink,
+                                              onSeek: onSeek,
+                                              layoutOnly: widget.layoutOnly,
                                             ),
-                                        ],
+                                            if (r.visibility ==
+                                                CommentVisibility.restricted)
+                                              Text(
+                                                '暂未公开',
+                                                style: styles.metadata,
+                                              ),
+                                          ],
+                                        ),
                                       ),
-                                      CommentRichContent(
-                                        comment: r,
-                                        onOpenUser: onOpenUser,
-                                        compact: true,
-                                        onOpenLink: onOpenLink,
-                                        onSeek: onSeek,
-                                        layoutOnly: widget.layoutOnly,
+                                      CommentMoreButton(
+                                        onMore: widget.layoutOnly
+                                            ? null
+                                            : (anchor) =>
+                                                  widget.onMore(anchor, r),
                                       ),
-                                      if (r.visibility ==
-                                          CommentVisibility.restricted)
-                                        Text('暂未公开', style: styles.metadata),
                                     ],
                                   ),
                                 ),

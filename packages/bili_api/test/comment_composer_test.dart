@@ -26,6 +26,47 @@ void main() {
         ]),
     );
   });
+  test('moderation posts once to the selected thread with Web CSRF', () async {
+    const id = '9007199254740993';
+    for (final type in [1, 11, 12, 14, 17, 33]) {
+      final fields = {
+        'oid': '42',
+        'rpid': id,
+        'type': '$type',
+        'csrf': 'fixture-csrf',
+      };
+      await api.deleteComment('42', id, commentType: type);
+      expect(transport.uri?.path, '/x/v2/reply/del');
+      expect(transport.fields, fields);
+      for (final pinned in [true, false]) {
+        await api.setCommentPinned('42', id, pinned, commentType: type);
+        expect(transport.uri?.path, '/x/v2/reply/top');
+        expect(transport.fields, {...fields, 'action': pinned ? '1' : '0'});
+      }
+      await api.reportComment(
+        '42',
+        id,
+        commentType: type,
+        reason: 22,
+        content: ' 原因 &+ ',
+      );
+      expect(transport.uri?.path, '/x/v2/reply/report');
+      expect(transport.fields, containsPair('content', '原因 &+'));
+      expect(transport.fields, containsPair('reason', '22'));
+      expect(transport.fields, containsPair('add_blacklist', 'false'));
+      for (final field in fields.entries) {
+        expect(transport.fields, containsPair(field.key, field.value));
+      }
+    }
+    for (final reason in [0, 22, 99]) {
+      await expectLater(
+        api.reportComment('42', id, commentType: 1, reason: reason),
+        throwsArgumentError,
+      );
+    }
+    expect(transport.posts, 24);
+  });
+
   test(
     'all comment identities preserve image, mention, sync and raw text fields',
     () async {
