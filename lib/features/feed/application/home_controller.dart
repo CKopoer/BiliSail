@@ -59,8 +59,6 @@ final class HomeState {
 
 final class HomeController extends Notifier<HomeState> {
   HomeController(this.query, {this.authorId});
-  // Rich posts retain images, spans and originals; bound each dynamic tab.
-  static const maxDynamicEntries = 200;
   static const maxFavoriteEntries = 500;
   // The image/text tab filters an all-types feed. Advancing empty pages are
   // valid, but a bounded scan avoids an endless layout-driven request loop.
@@ -132,15 +130,8 @@ final class HomeController extends Notifier<HomeState> {
   bool get _isDynamic =>
       query.channel == HomeChannel.dynamic ||
       query.channel == HomeChannel.videoDynamic;
-  int? get _entryLimit => _isDynamic
-      ? maxDynamicEntries
-      : query.channel == HomeChannel.favorites
-      ? maxFavoriteEntries
-      : null;
-  bool _reachedLimit(List<HomeEntry> items) {
-    final limit = _entryLimit;
-    return limit != null && items.length >= limit;
-  }
+  bool _reachedFavoriteLimit(int count) =>
+      query.channel == HomeChannel.favorites && count >= maxFavoriteEntries;
 
   RequestCancellation? _cancellation;
   int _generation = 0;
@@ -213,11 +204,8 @@ final class HomeController extends Notifier<HomeState> {
       if (!_isCurrent(generation, cancellation, repository)) return;
       final items = _mergeItems(const [], result.items);
       _trackQueuePage(result.items, 1, result.nextCursor);
-      final limitReached = _reachedLimit(items);
-      if (_isDynamic &&
-          result.hasMore &&
-          !limitReached &&
-          !_cursorAdvances(result.nextCursor)) {
+      final limitReached = _reachedFavoriteLimit(items.length);
+      if (_isDynamic && result.hasMore && !_cursorAdvances(result.nextCursor)) {
         throw const AppFailure(AppFailureKind.protocol, '动态分页游标没有前进，请重试');
       }
       _page = 1;
@@ -275,12 +263,9 @@ final class HomeController extends Notifier<HomeState> {
       if (!_isCurrent(generation, cancellation, repository)) return;
       final items = _mergeItems(current, result.items);
       _trackQueuePage(result.items, _page + 1, result.nextCursor ?? _cursor);
-      final limitReached = _reachedLimit(items);
+      final limitReached = _reachedFavoriteLimit(items.length);
       final cursorStalled =
-          _isDynamic &&
-          result.hasMore &&
-          !limitReached &&
-          !_cursorAdvances(result.nextCursor);
+          _isDynamic && result.hasMore && !_cursorAdvances(result.nextCursor);
       if (!cursorStalled) {
         _page++;
         _cursor = result.nextCursor;
@@ -524,10 +509,7 @@ final class HomeController extends Notifier<HomeState> {
           continue;
         }
       }
-      final limit = _entryLimit;
-      if (limit != null && unique.length >= limit && !unique.containsKey(key)) {
-        continue;
-      }
+      if (previous == null && _reachedFavoriteLimit(unique.length)) continue;
       unique[key] = entry;
     }
     return List.unmodifiable(unique.values);

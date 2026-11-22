@@ -355,11 +355,9 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
                         children: [
                           const SizedBox(height: 16),
                           if (feed.limitReached)
-                            Center(
+                            const Center(
                               child: Text(
-                                widget.channel == HomeChannel.favorites
-                                    ? '已显示 ${HomeController.maxFavoriteEntries} 条内容，可刷新重新加载'
-                                    : '已显示 ${HomeController.maxDynamicEntries} 条动态，可刷新查看最新内容',
+                                '已显示 ${HomeController.maxFavoriteEntries} 条内容，可刷新重新加载',
                               ),
                             ),
                           if (feed.loadingMore)

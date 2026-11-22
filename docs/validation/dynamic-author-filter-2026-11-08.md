@@ -15,7 +15,7 @@
 
 ## 生命周期与边界
 
-`DynamicAuthorsController` 按工作区 Provider scope 和账号隔离，关闭页面取消请求；沿用组合根既有账号／session epoch 重建。目录最多保留 500 名作者，每个内容标签最多保留 200 条动态，重复游标／无新作者页面停止并展示重试入口。
+`DynamicAuthorsController` 按工作区 Provider scope 和账号隔离，关闭页面取消请求，沿用组合根既有账号／session epoch 重建。目录最多保留 500 名作者，重复游标／无新作者页面停止并展示重试入口。内容标签自 2026-11-22 起按服务端游标继续加载，见[动态分页](feed-scroll-image-cache.md#动态列表分页2026-11-22)。
 
 作者内容沿用 `HomeController` 的分页、去重、取消和 generation 检查，通过独立 `dynamicAuthorFeedProvider` 区分作者。快速改选释放旧查询，迟到结果不能进入新作者列表；隐藏标签保持原列表，激活时才应用新选择，不为所有已访问标签同时请求。过滤列表切换作者时不保存无界的作者滚动快照；同一标签和作者的已挂载列表仍可跨频道切换保留位置。选择器隐藏时停用焦点和动画。
 

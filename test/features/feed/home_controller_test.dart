@@ -183,7 +183,6 @@ void main() {
           .id,
       '0',
     );
-    expect(container.read(homeControllerProvider(value)).limitReached, isFalse);
     final update = _videoPost('0', title: '更新后的标题');
     await _more(
       controller,
@@ -219,39 +218,6 @@ void main() {
       }
     },
   );
-  test('coauthored duplicates do not consume capacity and uploader can replace at the cap', () async {
-    const value = (
-      channel: HomeChannel.videoDynamic,
-      section: '最新视频',
-      scope: 'user:1',
-      folderId: null,
-    );
-    final (container, repository, _) = await _setup(value);
-    final uploader = _videoPost('primary', action: '投稿了视频');
-    repository.calls.single.result.complete(
-      HomePage(
-        [
-          _videoPost('first'),
-          for (var i = 1; i < HomeController.maxDynamicEntries + 5; i++)
-            _videoPost('$i', bvid: 'BV${i.toString().padLeft(10, '0')}'),
-          uploader,
-          _videoPost('last'),
-        ],
-        hasMore: true,
-        nextCursor: 'next',
-      ),
-    );
-    await _settle();
-    final state = container.read(homeControllerProvider(value));
-    expect(
-      state.items.requireValue,
-      hasLength(HomeController.maxDynamicEntries),
-    );
-    expect(state.items.requireValue.first, same(uploader));
-    expect(state.items.requireValue.last.id, '199');
-    expect(state.limitReached, isTrue);
-    expect(state.hasMore, isFalse);
-  });
   test(
     'video dynamic preserves reposts and entries without a valid BVID',
     () async {
@@ -328,75 +294,64 @@ void main() {
       expect(repository.calls, hasLength(2));
     },
   );
-  for (final (channel, firstPageSize) in [
-    for (final channel in [HomeChannel.dynamic, HomeChannel.videoDynamic])
-      for (final size in [190, 250]) (channel, size),
-  ]) {
-    test(
-      '${channel.name} media stays bounded from $firstPageSize initial entries',
-      () async {
+  for (final channel in [HomeChannel.dynamic, HomeChannel.videoDynamic]) {
+    for (final section in channel.sections) {
+      test('${channel.name}/$section pages past 200 entries', () async {
         final value = (
           channel: channel,
-          section: channel.sections.first,
+          section: section,
           scope: query.scope,
           folderId: null,
         );
-        final repository = Repository();
-        final container = ProviderContainer(
-          overrides: [homeRepositoryProvider.overrideWithValue(repository)],
+        final (container, repository, controller) = await _setup(value);
+        const pageSize = 20;
+        const lastPage = 12;
+        HomePage result(int page) => HomePage(
+          List.generate(pageSize, (i) {
+            final id = (page - 1) * pageSize + i + 1;
+            return channel == HomeChannel.videoDynamic || section == '视频'
+                ? _videoPost('$id', bvid: 'BV${'$id'.padLeft(10, '0')}')
+                : HomeEntry(
+                    id: '$id',
+                    title: '动态',
+                    kind: HomeEntryKind.dynamic,
+                  );
+          }),
+          hasMore: page < lastPage,
+          nextCursor: page < lastPage ? 'offset:$page' : null,
         );
-        addTearDown(container.dispose);
-        final sub = container.listen(homeControllerProvider(value), (_, _) {});
-        addTearDown(sub.close);
-        await Future<void>.delayed(Duration.zero);
-        List<HomeEntry> entries(int start, int count) => List.generate(
-          count,
-          (i) => HomeEntry(
-            id: '${start + i}',
-            title: '动态',
-            kind: HomeEntryKind.dynamic,
-          ),
-        );
-        repository.calls.single.result.complete(
-          HomePage(
-            entries(1, firstPageSize),
-            hasMore: true,
-            nextCursor: 'next',
-          ),
-        );
-        await Future<void>.delayed(Duration.zero);
-        final controller = container.read(
-          homeControllerProvider(value).notifier,
-        );
-        if (firstPageSize < HomeController.maxDynamicEntries) {
-          final pending = controller.loadMore();
-          repository.calls.last.result.complete(
-            HomePage(entries(185, 50), hasMore: true, nextCursor: 'later'),
-          );
-          await pending;
+
+        repository.calls.single.result.complete(result(1));
+        await _settle();
+        for (var page = 2; page <= lastPage; page++) {
+          expect(container.read(homeControllerProvider(value)).hasMore, isTrue);
+          await _more(controller, repository, result(page));
+          expect(repository.calls.last.page, page);
+          expect(repository.calls.last.cursor, 'offset:${page - 1}');
         }
         final state = container.read(homeControllerProvider(value));
         expect(
-          state.items.requireValue.length,
-          HomeController.maxDynamicEntries,
+          state.items.requireValue.map((item) => item.id),
+          List.generate(lastPage * pageSize, (i) => '${i + 1}'),
         );
-        expect(state.items.requireValue.last.id, '200');
-        expect(state.limitReached, isTrue);
+        expect(state.limitReached, isFalse);
         expect(state.hasMore, isFalse);
-        final calls = repository.calls.length;
         await controller.loadMore();
-        expect(repository.calls.length, calls);
+        expect(repository.calls, hasLength(lastPage));
+
         final refresh = controller.refresh();
+        expect(repository.calls.last.page, 1);
+        expect(repository.calls.last.cursor, isNull);
         repository.calls.last.result.complete(
           const HomePage([entry], hasMore: false),
         );
         await refresh;
         expect(
-          container.read(homeControllerProvider(value)).limitReached,
-          isFalse,
+          container.read(homeControllerProvider(value)).items.requireValue,
+          [entry],
         );
-      },
-    );
+      });
+    }
   }
   test('refresh cancels old read and ignores late responses', () async {
     final repository = Repository();
@@ -481,38 +436,31 @@ void main() {
       );
     },
   );
-  test(
-    'duplicates on the first page do not consume the dynamic capacity',
-    () async {
-      final (container, repository, controller) = await _setup();
-      repository.calls.single.result.complete(
-        HomePage(List.filled(250, entry), hasMore: true, nextCursor: 'first'),
-      );
-      await _settle();
-      expect(container.read(homeControllerProvider(query)).items.requireValue, [
+  test('dynamics deduplicate first-page and later entries by ID', () async {
+    final (container, repository, controller) = await _setup();
+    repository.calls.single.result.complete(
+      HomePage(List.filled(250, entry), hasMore: true, nextCursor: 'first'),
+    );
+    await _settle();
+    expect(container.read(homeControllerProvider(query)).items.requireValue, [
+      entry,
+    ]);
+    final more = controller.loadMore();
+    repository.calls.last.result.complete(
+      const HomePage([
         entry,
-      ]);
-      expect(
-        container.read(homeControllerProvider(query)).limitReached,
-        isFalse,
-      );
-      final more = controller.loadMore();
-      repository.calls.last.result.complete(
-        const HomePage([
-          entry,
-          HomeEntry(id: '2', title: '第二条', kind: HomeEntryKind.dynamic),
-          HomeEntry(id: '2', title: '更新', kind: HomeEntryKind.dynamic),
-        ], hasMore: false),
-      );
-      await more;
-      final items = container
-          .read(homeControllerProvider(query))
-          .items
-          .requireValue;
-      expect(items.map((item) => item.id), ['1', '2']);
-      expect(items.last.title, '更新');
-    },
-  );
+        HomeEntry(id: '2', title: '第二条', kind: HomeEntryKind.dynamic),
+        HomeEntry(id: '2', title: '更新', kind: HomeEntryKind.dynamic),
+      ], hasMore: false),
+    );
+    await more;
+    final items = container
+        .read(homeControllerProvider(query))
+        .items
+        .requireValue;
+    expect(items.map((item) => item.id), ['1', '2']);
+    expect(items.last.title, '更新');
+  });
   test('concurrent pagination calls make a single cursor request', () async {
     final (container, repository, controller) = await _setup();
     repository.calls.single.result.complete(
