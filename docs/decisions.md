@@ -676,3 +676,11 @@ Windows x64 本机引擎日志确认启用 `Impeller (OpenGLESSDF)`。离线原�
 **决定（2026-11-21）** 按用户选择，Windows runner 通过 `DartProject::set_impeller_switch` 关闭 Impeller，使用 Skia 渲染主窗口和播放窗口。
 
 Flutter 3.50.0 的 Windows x64 Profile 对照使用 RTX 4070 Ti SUPER、165 Hz 全屏和同一段本地 1080p60 视频。弹幕透明度 0.8 时，Skia 与 Impeller 的进程 GPU 3D 均值分别为 1.85% 和 6.08%，整卡功耗分别为 28.24 W 和 23.06 W。关闭弹幕时，两者的 3D 均值分别为 3.06% 和 3.34%。两个后端在关闭弹幕、透明度 1.0 和 0.8 的两轮采样中，mpv 视频输出与解码掉帧均为 0。
+
+## D100：macOS 和 Linux 窗口使用 Skia
+
+2026-11-22，从普通动态帖子打开视频时，BiliSail 1.3.0+5 的 macOS arm64 崩溃栈定位到 Flutter 3.50.0 的 `impeller::Canvas::SetupRenderPass`，栅格线程在读取窗口颜色纹理尺寸时解引用了空指针。Flutter 3.50.1 仍包含这条路径。上游已复现窗口缓冲区复用时返回错误尺寸的情形。[Flutter 上游记录](https://github.com/flutter/flutter/issues/185394#issuecomment-7072809754)
+
+macOS Runner 在 [Info.plist](../macos/Runner/Info.plist) 中将 `FLTEnableImpeller` 设为布尔值 `false`，主窗口和独立播放窗口共用 Skia（Metal）。Debug、Profile 和 Release 均使用这份配置。重新构建后，从动态打开视频和恢复播放窗口尺寸的行为仍需在 Mac 上复测。
+
+Linux 按用户选择同样使用 Skia。[GTK Runner](../linux/runner/my_application.cc) 在创建 Flutter 视图前调用 `fl_dart_project_set_enable_impeller(project, FALSE)`。AppImage 和 Flatpak 均使用此 Runner。
