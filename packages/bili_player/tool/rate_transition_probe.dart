@@ -84,16 +84,14 @@ Future<void> main() async {
       );
       await player.setPropertyAsync('audio-buffer', '$bufferSeconds');
       await player.setPropertyAsync('autosync', '${config.autosync}');
+      player.registerFileOptions(const {'force-media-title': 'BiliSail probe'});
       await player.open(
-        mk.Media(
-          nativeMediaUri(video.uri, audio.uri),
-          nativeOptions: const {'force-media-title': 'BiliSail probe'},
-        ),
+        mk.Media(nativeMediaUri(video.uri, audio.uri)),
         play: false,
       );
       await player.setVolume(0);
       await player.play();
-      await output.firstFrameRendered.timeout(const Duration(seconds: 10));
+      await output.waitForDecodedOutput().timeout(const Duration(seconds: 10));
       await Future<void>.delayed(const Duration(seconds: 1));
       final run = <String, Object?>{
         'requestedBufferSeconds': bufferSeconds,

@@ -43,11 +43,10 @@ cp "$work/tools/gtk-LICENSE.txt" "$work/tools/linuxdeploy-plugin-gtk.sh" "$gtk_n
 
 export APPIMAGE_EXTRACT_AND_RUN=1 NO_STRIP=1 DEPLOY_GTK_VERSION=3
 export LD_LIBRARY_PATH="$bundle/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-# The personal library plugin builds and bundles its pinned mpv source.
-# Never replace it with a host distro DLL during packaging.
+# Native Assets supplies libmpv and its immutable archive catalog.
 mpv="$bundle/lib/libmpv.so.2"
-[[ -f "$mpv" && -f "$bundle/data/licenses/mpv/SOURCE.json" ]] || {
-  echo 'Missing personally maintained libmpv and source provenance' >&2; exit 1;
+[[ -f "$mpv" && -f "$bundle/data/licenses/mpv/native_bundles.json" ]] || {
+  echo 'Missing native libmpv or bundle catalog' >&2; exit 1;
 }
 # Print the complete missing dependency set before linuxdeploy stops at the first.
 mpv_dependencies="$(ldd "$mpv")"

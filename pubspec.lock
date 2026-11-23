@@ -692,74 +692,20 @@ packages:
     dependency: "direct overridden"
     description:
       path: media_kit
-      ref: "8e16eba1b01be05927b4fa098323ed496fea380d"
-      resolved-ref: "8e16eba1b01be05927b4fa098323ed496fea380d"
-      url: "https://github.com/CKopoer/media-kit.git"
+      ref: "484639aca5ffc754a65876c22f01dbb070225732"
+      resolved-ref: "484639aca5ffc754a65876c22f01dbb070225732"
+      url: "https://github.com/Predidit/media-kit.git"
     source: git
-    version: "1.2.6"
-  media_kit_libs_android_video:
-    dependency: "direct overridden"
-    description:
-      path: "libs/android/media_kit_libs_android_video"
-      ref: "8e16eba1b01be05927b4fa098323ed496fea380d"
-      resolved-ref: "8e16eba1b01be05927b4fa098323ed496fea380d"
-      url: "https://github.com/CKopoer/media-kit.git"
-    source: git
-    version: "1.3.8"
-  media_kit_libs_ios_video:
-    dependency: "direct overridden"
-    description:
-      path: "libs/ios/media_kit_libs_ios_video"
-      ref: "8e16eba1b01be05927b4fa098323ed496fea380d"
-      resolved-ref: "8e16eba1b01be05927b4fa098323ed496fea380d"
-      url: "https://github.com/CKopoer/media-kit.git"
-    source: git
-    version: "1.1.5"
-  media_kit_libs_linux:
-    dependency: "direct overridden"
-    description:
-      path: "libs/linux/media_kit_libs_linux"
-      ref: "8e16eba1b01be05927b4fa098323ed496fea380d"
-      resolved-ref: "8e16eba1b01be05927b4fa098323ed496fea380d"
-      url: "https://github.com/CKopoer/media-kit.git"
-    source: git
-    version: "1.2.1"
-  media_kit_libs_macos_video:
-    dependency: "direct overridden"
-    description:
-      path: "libs/macos/media_kit_libs_macos_video"
-      ref: "8e16eba1b01be05927b4fa098323ed496fea380d"
-      resolved-ref: "8e16eba1b01be05927b4fa098323ed496fea380d"
-      url: "https://github.com/CKopoer/media-kit.git"
-    source: git
-    version: "1.1.5"
-  media_kit_libs_video:
-    dependency: "direct overridden"
-    description:
-      path: "libs/universal/media_kit_libs_video"
-      ref: "8e16eba1b01be05927b4fa098323ed496fea380d"
-      resolved-ref: "8e16eba1b01be05927b4fa098323ed496fea380d"
-      url: "https://github.com/CKopoer/media-kit.git"
-    source: git
-    version: "1.0.8"
-  media_kit_libs_windows_video:
-    dependency: "direct overridden"
-    description:
-      path: "libs/windows/media_kit_libs_windows_video"
-      ref: "8e16eba1b01be05927b4fa098323ed496fea380d"
-      resolved-ref: "8e16eba1b01be05927b4fa098323ed496fea380d"
-      url: "https://github.com/CKopoer/media-kit.git"
-    source: git
-    version: "1.0.12"
+    version: "1.1.11"
   media_kit_video:
     dependency: "direct overridden"
     description:
       path: media_kit_video
-      ref: "8e16eba1b01be05927b4fa098323ed496fea380d"
-      resolved-ref: "8e16eba1b01be05927b4fa098323ed496fea380d"
-      url: "https://github.com/CKopoer/media-kit.git"
+      ref: "484639aca5ffc754a65876c22f01dbb070225732"
+      resolved-ref: "484639aca5ffc754a65876c22f01dbb070225732"
+      url: "https://github.com/Predidit/media-kit.git"
     source: git
-    version: "2.0.1"
+    version: "1.2.5"
   meta:
     dependency: transitive
     description:
@@ -1292,6 +1238,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.8.1"
+  wakelock_plus_ohos:
+    dependency: transitive
+    description:
+      name: wakelock_plus_ohos
+      sha256: b22af297411555b5ec0fe43ec2960cd5f019dd23b83853214ebe6dcc97b337bd
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.0.3"
   wakelock_plus_platform_interface:
     dependency: transitive
     description:

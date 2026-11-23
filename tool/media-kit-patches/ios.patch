@@ -1,0 +1,428 @@
+--- a/ios/media_kit_video/Sources/media_kit_video/plugin/TextureHW.swift
++++ b/ios/media_kit_video/Sources/media_kit_video/plugin/TextureHW.swift
+@@ -1,3 +1,4 @@
++import Foundation
+ import Flutter
+ import OpenGLES
+ 
+@@ -13,10 +14,8 @@
+   private let context: EAGLContext
+   private let textureCache: CVOpenGLESTextureCache
+   private var renderContext: OpaquePointer?
+-  private var textureContexts = SwappableObjectManager<TextureGLESContext>(
+-    objects: [],
+-    skipCheckArgs: true
+-  )
++  private let frames = CompletedFrameStore<CVPixelBuffer>()
++  private var disposed = false
+ 
+   init(
+     handle: OpaquePointer,
+@@ -33,28 +32,26 @@
+   }
+ 
+   deinit {
+-    disposePixelBuffer()
+-    disposeMPV()
+-    OpenGLESHelpers.deleteTextureCache(textureCache)
+-
+-    // Deleting the context may cause potential RAM or VRAM memory leaks, as it
+-    // is used in the `deinit` method of the `TextureGLESContext`.
+-    // Potential fix: use a counter, and delete it only when the counter reaches
+-    // zero
++    dispose()
+     OpenGLESHelpers.deleteContext(context)
+   }
+ 
+-  public func copyPixelBuffer() -> Unmanaged<CVPixelBuffer>? {
+-    let textureContext = textureContexts.current
+-    if textureContext == nil {
+-      return nil
+-    }
+-
+-    return Unmanaged.passRetained(textureContext!.pixelBuffer)
++  public func dispose() {
++    guard !disposed else { return }
++    disposed = true
++    disposePixelBuffer()
++    disposeMPV()
++    let previousContext = EAGLContext.current()
++    EAGLContext.setCurrent(context)
++    OpenGLESHelpers.deleteTextureCache(textureCache)
++    EAGLContext.setCurrent(previousContext)
+   }
+ 
+-  public func dispose() {
+-    disposeMPV()
++  public func copyPixelBuffer() -> Unmanaged<CVPixelBuffer>? {
++    return frames.withCurrent { buffer in
++      guard let buffer = buffer else { return nil }
++      return Unmanaged.passRetained(buffer)
++    }
+   }
+ 
+   private func initMPV() {
+@@ -64,9 +61,6 @@
+       EAGLContext.setCurrent(nil)
+     }
+ 
+-    let api = UnsafeMutableRawPointer(
+-      mutating: (MPV_RENDER_API_TYPE_OPENGL as NSString).utf8String
+-    )
+     var procAddress = mpv_opengl_init_params(
+       get_proc_address: {
+         (ctx, name) in
+@@ -75,31 +69,26 @@
+       get_proc_address_ctx: nil
+     )
+ 
+-    var params: [mpv_render_param] = withUnsafeMutableBytes(of: &procAddress) {
+-      procAddress in
+-      return [
+-        mpv_render_param(type: MPV_RENDER_PARAM_API_TYPE, data: api),
+-        mpv_render_param(
+-          type: MPV_RENDER_PARAM_OPENGL_INIT_PARAMS,
+-          data: procAddress.baseAddress.map {
+-            UnsafeMutableRawPointer($0)
+-          }
+-        ),
+-        mpv_render_param(),
+-      ]
++    // All pointers must remain inside their borrowing scopes until C returns.
++    MPV_RENDER_API_TYPE_OPENGL.withCString { api in
++      withUnsafeMutablePointer(to: &procAddress) { address in
++        var params: [mpv_render_param] = [
++          mpv_render_param(type: MPV_RENDER_PARAM_API_TYPE,
++                           data: UnsafeMutableRawPointer(mutating: api)),
++          mpv_render_param(type: MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, data: address),
++          mpv_render_param(),
++        ]
++        MPVHelpers.checkError(
++          media_kit_mpv_render_context_create(&renderContext, handle, &params)
++        )
++      }
+     }
+-
+-    MPVHelpers.checkError(
+-      media_kit_mpv_render_context_create(&renderContext, handle, &params)
+-    )
+ 
+     media_kit_mpv_render_context_set_update_callback(
+       renderContext,
+       { (ctx) in
+         let that = unsafeBitCast(ctx, to: TextureHW.self)
+-        DispatchQueue.main.async {
+-          that.updateCallback()
+-        }
++        that.updateCallback()
+       },
+       UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
+     )
+@@ -119,79 +108,60 @@
+   }
+ 
+   public func resize(_ size: CGSize) {
+-    if size.width == 0 || size.height == 0 {
+-      return
+-    }
+-
+-    NSLog("TextureGL: resize: \(size.width)x\(size.height)")
+-    createPixelBuffer(size)
+-  }
+-
+-  private func createPixelBuffer(_ size: CGSize) {
+-    disposePixelBuffer()
+-
+-    textureContexts.reinit(
+-      objects: [
+-        TextureGLESContext(
+-          context: context,
+-          textureCache: textureCache,
+-          size: size
+-        ),
+-        TextureGLESContext(
+-          context: context,
+-          textureCache: textureCache,
+-          size: size
+-        ),
+-        TextureGLESContext(
+-          context: context,
+-          textureCache: textureCache,
+-          size: size
+-        ),
+-      ],
+-      skipCheckArgs: true
+-    )
++    // Keep the previous complete image until render publishes the new size.
+   }
+ 
+   private func disposePixelBuffer() {
+-    textureContexts.reinit(objects: [], skipCheckArgs: true)
++    frames.clear()
+   }
+ 
+   public func render(_ size: CGSize) {
+-    guard renderContext != nil else { return }
+-    let textureContext = textureContexts.nextAvailable()
+-    if textureContext == nil {
+-      return
++    guard !disposed, size.width.isFinite && size.height.isFinite,
++      size.width > 0 && size.height > 0,
++      size.width <= CGFloat(Int32.max) && size.height <= CGFloat(Int32.max)
++    else { return }
++    let previousContext = EAGLContext.current()
++    guard EAGLContext.setCurrent(context) else { return }
++    defer {
++      // Run after the autorelease pool releases the frame's GL wrapper, also
++      // on allocation/FBO failure. Keep cache operations in the owning context.
++      CVOpenGLESTextureCacheFlush(textureCache, 0)
++      OpenGLESHelpers.checkError("render")
++      EAGLContext.setCurrent(previousContext)
+     }
++    autoreleasepool {
++      // Each published IOSurface is write-once. Three buffers cannot prove that
++      // Flutter's Metal queue has finished sampling an older surface.
++      guard let textureContext = TextureGLESContext(
++        context: context,
++        textureCache: textureCache,
++        size: size
++      ) else { return }
+ 
+-    EAGLContext.setCurrent(context)
+-    defer {
+-      OpenGLESHelpers.checkError("render")
+-      EAGLContext.setCurrent(nil)
++      glBindFramebuffer(GLenum(GL_FRAMEBUFFER), textureContext.frameBuffer)
++      defer {
++        glBindFramebuffer(GLenum(GL_FRAMEBUFFER), 0)
++      }
++
++      var fbo = mpv_opengl_fbo(
++        fbo: Int32(textureContext.frameBuffer),
++        w: Int32(size.width),
++        h: Int32(size.height),
++        internal_format: 0
++      )
++      let status = withUnsafeMutablePointer(to: &fbo) { fboPtr in
++        var params: [mpv_render_param] = [
++          mpv_render_param(type: MPV_RENDER_PARAM_OPENGL_FBO, data: fboPtr),
++          mpv_render_param(type: MPV_RENDER_PARAM_INVALID, data: nil),
++        ]
++        return media_kit_mpv_render_context_render(renderContext, &params)
++      }
++      guard status >= 0 else { return }
++
++      // A different graphics API/queue will consume this IOSurface.
++      glFinish()
++      frames.publish(textureContext.pixelBuffer)
+     }
+-
+-    glBindFramebuffer(GLenum(GL_FRAMEBUFFER), textureContext!.frameBuffer)
+-    defer {
+-      glBindFramebuffer(GLenum(GL_FRAMEBUFFER), 0)
+-    }
+-
+-    var fbo = mpv_opengl_fbo(
+-      fbo: Int32(textureContext!.frameBuffer),
+-      w: Int32(size.width),
+-      h: Int32(size.height),
+-      internal_format: 0
+-    )
+-    let fboPtr = withUnsafeMutablePointer(to: &fbo) { $0 }
+-
+-    var params: [mpv_render_param] = [
+-      mpv_render_param(type: MPV_RENDER_PARAM_OPENGL_FBO, data: fboPtr),
+-      mpv_render_param(type: MPV_RENDER_PARAM_INVALID, data: nil),
+-    ]
+-
+-    media_kit_mpv_render_context_render(renderContext, &params)
+-
+-    glFlush()
+-
+-    textureContexts.pushAsReady(textureContext!)
+   }
+ 
+   static private func getProcAddress(
+--- a/ios/media_kit_video/Sources/media_kit_video/plugin/gles/OpenGLESHelpers.swift
++++ b/ios/media_kit_video/Sources/media_kit_video/plugin/gles/OpenGLESHelpers.swift
+@@ -24,12 +24,14 @@
+     return textureCache!
+   }
+ 
+-  static public func createPixelBuffer(_ size: CGSize) -> CVPixelBuffer {
++  static public func createPixelBuffer(_ size: CGSize) -> CVPixelBuffer? {
+     var pixelBuffer: CVPixelBuffer?
+ 
+     let attrs =
+       [
+-        kCVPixelBufferMetalCompatibilityKey: true
++        kCVPixelBufferMetalCompatibilityKey: true,
++        kCVPixelBufferOpenGLESCompatibilityKey: true,
++        kCVPixelBufferIOSurfacePropertiesKey: [:],
+       ] as CFDictionary
+ 
+     let cvret: CVReturn = CVPixelBufferCreate(
+@@ -40,16 +42,15 @@
+       attrs,
+       &pixelBuffer
+     )
+-    assert(cvret == kCVReturnSuccess, "CVPixelBufferCreate")
+-
+-    return pixelBuffer!
++    guard cvret == kCVReturnSuccess else { return nil }
++    return pixelBuffer
+   }
+ 
+   static public func createTexture(
+     _ textureCache: CVOpenGLESTextureCache,
+     _ pixelBuffer: CVPixelBuffer,
+     _ size: CGSize
+-  ) -> CVOpenGLESTexture {
++  ) -> CVOpenGLESTexture? {
+     var texture: CVOpenGLESTexture?
+ 
+     let cvret: CVReturn = CVOpenGLESTextureCacheCreateTextureFromImage(
+@@ -66,15 +67,12 @@
+       0,
+       &texture
+     )
+-    assert(
+-      cvret == kCVReturnSuccess,
+-      "CVOpenGLESTextureCacheCreateTextureFromImage"
+-    )
+-
+-    return texture!
++    guard cvret == kCVReturnSuccess else { return nil }
++    return texture
+   }
+ 
+   public enum FrameBufferError: Error {
++    case contextUnavailable
+     case status(status: GLuint)
+   }
+ 
+@@ -83,10 +81,13 @@
+     texture: CVOpenGLESTexture,
+     size: CGSize
+   ) throws -> GLuint {
+-    EAGLContext.setCurrent(context)
++    let previousContext = EAGLContext.current()
++    guard EAGLContext.setCurrent(context) else {
++      throw FrameBufferError.contextUnavailable
++    }
+     defer {
+       OpenGLESHelpers.checkError("createFrameBuffer")
+-      EAGLContext.setCurrent(nil)
++      EAGLContext.setCurrent(previousContext)
+     }
+ 
+     let textureName: GLuint = CVOpenGLESTextureGetName(texture)
+@@ -130,40 +131,15 @@
+     // automatically memory managed
+   }
+ 
+-  static public func deletePixeBuffer(
+-    _ context: EAGLContext,
+-    _ pixelBuffer: CVPixelBuffer
+-  ) {
+-    // 'CVPixelBufferRelease' is unavailable: Core Foundation objects are
+-    // automatically memory managed
+-  }
+-
+-  // BUG: `glDeleteTextures` does not release `CVOpenGLESTexture`.
+-  // `CVOpenGLESTextureCache` retains a direct or indirect reference to
+-  // `IOSurface`, which causes a memory leak until `CVOpenGLESTextureCache` is
+-  // released.
+-  static public func deleteTexture(
+-    _ context: EAGLContext,
+-    _ texture: CVOpenGLESTexture
+-  ) {
+-    EAGLContext.setCurrent(context)
+-    defer {
+-      OpenGLESHelpers.checkError("deleteTexture")
+-      EAGLContext.setCurrent(nil)
+-    }
+-
+-    var textureName: GLuint = CVOpenGLESTextureGetName(texture)
+-    glDeleteTextures(1, &textureName)
+-  }
+-
+   static public func deleteFrameBuffer(
+     _ context: EAGLContext,
+     _ frameBuffer: GLuint
+   ) {
+-    EAGLContext.setCurrent(context)
++    let previousContext = EAGLContext.current()
++    guard EAGLContext.setCurrent(context) else { return }
+     defer {
+       OpenGLESHelpers.checkError("deleteFrameBuffer")
+-      EAGLContext.setCurrent(nil)
++      EAGLContext.setCurrent(previousContext)
+     }
+ 
+     var frameBuffer = frameBuffer
+--- a/ios/media_kit_video/Sources/media_kit_video/plugin/gles/TextureGLESContext.swift
++++ b/ios/media_kit_video/Sources/media_kit_video/plugin/gles/TextureGLESContext.swift
+@@ -7,51 +7,34 @@
+   public let texture: CVOpenGLESTexture
+   public let pixelBuffer: CVPixelBuffer
+ 
+-  init(
++  init?(
+     context: EAGLContext,
+     textureCache: CVOpenGLESTextureCache,
+     size: CGSize
+   ) {
+     self.context = context
+ 
+-    // Sometimes the frameBuffer created by `createFrameBuffer` has the status
+-    // `GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT`, which makes it unusable.
+-    // This seems to be because the pixelBuffer created by `createPixelBuffer`
+-    // appears to be invalid, with no way to prevent or detect this.
+-    // So we have to try several times to create a frameBuffer valid.
+-    // This is usually the case after the second attempt.
+-    for index in 0...3 {
+-      let pixelBuffer = OpenGLESHelpers.createPixelBuffer(size)
+-
++    // Allocation/import failures are recoverable during playback. Do not retry
++    // allocations in a tight loop or terminate the host application.
++    guard let pixelBuffer = OpenGLESHelpers.createPixelBuffer(size),
+       let texture = OpenGLESHelpers.createTexture(
+         textureCache,
+         pixelBuffer,
+         size
+-      )
+-
++      ),
+       let frameBuffer = try? OpenGLESHelpers.createFrameBuffer(
+         context: context,
+         texture: texture,
+         size: size
+-      )
+-      if frameBuffer != nil {
+-        self.pixelBuffer = pixelBuffer
+-        self.texture = texture
+-        self.frameBuffer = frameBuffer!
+-        return
+-      }
+-
+-      OpenGLESHelpers.deletePixeBuffer(context, pixelBuffer)
+-      OpenGLESHelpers.deleteTexture(context, texture)
+-    }
+-
+-    NSLog("TextureGLESContext: init: unable to create a valid frameBuffer")
+-    exit(1)
++      ) else { return nil }
++    self.pixelBuffer = pixelBuffer
++    self.texture = texture
++    self.frameBuffer = frameBuffer
+   }
+ 
+   deinit {
+-    OpenGLESHelpers.deletePixeBuffer(context, pixelBuffer)
+-    OpenGLESHelpers.deleteTexture(context, texture)
++    // CoreVideo owns the GL texture name. ARC releases its wrapper and the
++    // render-scoped cache flush evicts unused entries; never delete it by name.
+     OpenGLESHelpers.deleteFrameBuffer(context, frameBuffer)
+   }
+ }

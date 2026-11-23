@@ -1,5 +1,7 @@
 # 官方基线与个人媒体 fork 统一维护
 
+本页保留 2026-11-07 至 2026-11-23 使用个人 fork 期间的来源和实测。现行依赖、仍需移植的修复及验证见 [Predidit 播放链路](predidit-playback-2026-11-23.md)。
+
 2026-11-23 修复 Windows Release 关闭主窗口时的访问冲突。Flutter 3.50.1 在销毁插件前先断开引擎与 messenger 的关联；视频插件随后调用 `SetMethodCallHandler(nullptr)`，即使未打开视频也会在 `FlutterDesktopMessengerSetCallback` 中崩溃。新的固定提交让 Flutter 的插件注册器随引擎释放处理器，视频插件继续等待管理和渲染任务结束、处理已排队的回调并销毁消息窗口。八个媒体包均使用该提交。[个人 fork 修复](https://github.com/CKopoer/media-kit/commit/8e16eba1b01be05927b4fa098323ed496fea380d) · [Windows 关闭实测](main-window-close.md#windows-release-关闭时的插件访问冲突2026-11-23)
 
 2026-11-23 修复 Windows D3D11 视频纹理重建与插件退出时的资源释放。根应用和 `bili_player` 的八个媒体包统一固定到 [3bd90a7d](https://github.com/CKopoer/media-kit/commit/3bd90a7d84a605d75da2de6196b3cea57ec92815)，父提交为 `aaa85281`。申请新纹理、取得共享句柄并验证 EGL 绑定后才替换旧表面。失败时继续使用原尺寸与上一帧，相同尺寸可重试；纹理由 `ComPtr` 单独持有。插件在销毁消息窗口前按顺序完成已接收的管理操作、渲染释放和平台回调。

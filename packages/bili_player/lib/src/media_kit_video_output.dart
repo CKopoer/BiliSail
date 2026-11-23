@@ -101,13 +101,13 @@ final class MediaKitVideoOutput
       () => unawaited(width.cancel()),
       () => unawaited(height.cancel()),
     ]);
-    // Android's SDK signal also finishes paused preparation. Presentation
-    // must wait for a sized video buffer without blocking that preparation.
+    // The SDK reports a sized texture. The current source's playback restart
+    // and decoded frame are also required before removing the presentation mask.
     final presentation = Platform.isAndroid
-        ? _viewportChannel.invokeMethod<void>(
-            'VideoOutputManager.WaitForVideoFrame',
-            {'handle': controller.player.nativeHandle.toString()},
-          )
+        ? _viewportChannel.invokeMethod<void>('BiliSail.WaitForFrame', {
+            'handle': controller.player.nativeHandle.toString(),
+            'generation': _sourceGeneration.toString(),
+          })
         : controller.waitUntilFirstFrameRendered;
     final sourceFrame = _sourceFrame;
     final currentPresentation = presentation.then((_) => sourceFrame?.future);
@@ -223,7 +223,7 @@ final class MediaKitVideoOutput
     // Initial binding sizes the surface before loading; track discovery refines
     // it while presentation is still gated by the current source's readiness.
     await _viewportChannel
-        .invokeMethod<void>('VideoOutputManager.SetSurfaceTextureSize', {
+        .invokeMethod<void>('VideoOutputManager.SetSurfaceSize', {
           'handle': player.nativeHandle.toString(),
           'width': dimensions.width.toString(),
           'height': dimensions.height.toString(),
@@ -261,18 +261,24 @@ final class MediaKitVideoOutput
 
   bool get hasVideoOutput {
     final size = dimensions;
-    return _controller.value?.id.value != null &&
+    // A new controller publishes its placeholder texture before this source
+    // decodes. A retained texture can also still contain the previous source.
+    return _sourceFrame?.isCompleted == true &&
+        _controller.value?.id.value != null &&
         size != null &&
         size.width > 0 &&
         size.height > 0;
   }
 
-  Future<void> get firstFrameRendered async {
+  Future<void> waitForDecodedOutput() async {
     final controller = _controller.value;
     if (controller == null) {
       throw StateError('No video output is bound.');
     }
-    await controller.waitUntilFirstFrameRendered;
+    // Predidit completes its Android "first frame" on a dimensions change.
+    // A SurfaceTexture pre-sized to the decoded dimensions skips that event.
+    // Presentation waits separately for this generation's consumed buffer.
+    if (!Platform.isAndroid) await controller.waitUntilFirstFrameRendered;
     Future<void> pending;
     do {
       pending = _androidSurfaceSize;
@@ -331,7 +337,11 @@ final class MediaKitVideoOutput
       return;
     }
     if (Platform.isAndroid) {
-      // Match PiliPlus: idle VO dimensions must not size a newly loaded source.
+      await _viewportChannel.invokeMethod<void>('BiliSail.BeginFrames', {
+        'handle': player.nativeHandle.toString(),
+        'generation': generation.toString(),
+      });
+      // Idle VO dimensions must not size a newly loaded source.
       await player.setPropertyAsync('force-window', 'no');
       if (await player.getPropertyAsync('force-window') != 'no') {
         throw StateError(
@@ -407,7 +417,7 @@ final class MediaKitVideoOutput
       _androidSurfaceSize = () async {
         try {
           await _viewportChannel
-              .invokeMethod<void>('VideoOutputManager.SetSurfaceTextureSize', {
+              .invokeMethod<void>('VideoOutputManager.SetSurfaceSize', {
                 'handle': player.nativeHandle.toString(),
                 'width': dimensions.width.toString(),
                 'height': dimensions.height.toString(),
@@ -427,18 +437,9 @@ final class MediaKitVideoOutput
       }();
       return;
     }
-    if (!Platform.isWindows || controller == null || dimensions == null) return;
-    // PiliPlus's controller does not forward player size events. Our native
-    // viewport patch deliberately avoids synchronous mpv reads on this thread.
-    final result = controller.setSize(
-      width: dimensions.width,
-      height: dimensions.height,
-    );
-    unawaited(
-      result.catchError((Object error) {
-        debugPrint('Windows decoded video size failed: ${error.runtimeType}');
-      }),
-    );
+    // The Predidit desktop controller applies decoded dimensions itself.
+    // Reapply a fitted viewport when that source size changes.
+    if (Platform.isWindows && controller != null) _updateViewportCap();
   }
 
   void advanceGeneration(int generation) {
@@ -640,7 +641,6 @@ final class MediaKitVideoOutput
   ) async {
     try {
       const deadline = Duration(seconds: 5);
-      final handle = player.nativeHandle;
       if (_disposed ||
           generation != _sourceGeneration ||
           revision != _viewportRevision ||
@@ -648,14 +648,25 @@ final class MediaKitVideoOutput
           !identical(_controller.value, controller)) {
         return;
       }
-      await _viewportChannel
-          .invokeMethod<void>('VideoOutputManager.SetViewportSize', {
-            'handle': handle.toString(),
-            'width': cap.width?.toString() ?? 'null',
-            'height': cap.height?.toString() ?? 'null',
-            'revision': revision.toString(),
-          })
-          .timeout(deadline);
+      // Native setSize takes an exact output size. Fit the decoded picture
+      // inside our rounded cap so rounding cannot change its aspect ratio.
+      final source = _videoDimensions;
+      final width = cap.width;
+      final height = cap.height;
+      if (source == null || width == null || height == null) {
+        await controller.setSize().timeout(deadline);
+      } else {
+        final scale = math.min(
+          1.0,
+          math.min(width / source.width, height / source.height),
+        );
+        await controller
+            .setSize(
+              width: math.max(1, (source.width * scale).round()),
+              height: math.max(1, (source.height * scale).round()),
+            )
+            .timeout(deadline);
+      }
     } on Object catch (error) {
       if (!_viewportFailureLogged) {
         _viewportFailureLogged = true;

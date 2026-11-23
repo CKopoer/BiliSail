@@ -1,24 +1,24 @@
 """Offline regression for media_kit Apple renderer handoff."""
 
-import json
+import atexit
+from functools import cache
 import os
 from pathlib import Path
+import tempfile
 import unittest
-from urllib.parse import urljoin, urlparse
-from urllib.request import url2pathname
+
+from media_kit_sources import ROOT, package_source, stage
 
 
-ROOT = Path(__file__).resolve().parent.parent
-
-
+@cache
 def package_root(name):
-    override = os.environ.get("BILISAIL_MEDIA_TEST_SOURCE")
-    if name == "media_kit_video" and override:
-        return Path(override).resolve()
-    config = ROOT / ".dart_tool/package_config.json"
-    packages = json.loads(config.read_text(encoding="utf-8"))["packages"]
-    package = next(item for item in packages if item["name"] == name)
-    return Path(url2pathname(urlparse(urljoin(config.as_uri(), package["rootUri"])).path))
+    if override := os.environ.get("BILISAIL_MEDIA_TEST_SOURCE"):
+        return Path(override).resolve(strict=True)
+    temp = tempfile.TemporaryDirectory()
+    atexit.register(temp.cleanup)
+    destination = Path(temp.name) / name
+    stage(package_source(name), destination, ["ios", "macos"])
+    return destination
 
 
 class AppleTextureStagingTest(unittest.TestCase):

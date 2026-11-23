@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:bili_player/bili_player.dart';
-import 'package:bili_player/src/shared_player_engine.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -23,15 +22,7 @@ void main() {
       ) async {
         if (directory == null) fail('BILI_TEST_MEDIA_DIR is required');
         initializePlayerBackend();
-        final children = <SharedPlayerEngine>[];
-        final engine = ConfigurablePlayerEngine.select(
-          selectEngine: () async =>
-              PlayerEngineSelection('media_kit', () async {
-                final child = MediaKitEngine();
-                children.add(child);
-                return child;
-              }),
-        );
+        final engine = MediaKitEngine();
         final failures = <PlayerFailure>[];
         final subscription = engine.failures.listen(failures.add);
         MediaTrack track(String file) => MediaTrack(
@@ -68,7 +59,7 @@ void main() {
           );
           await withFrames(tester, engine.pause());
           final before = engine.currentSnapshot.position;
-          final nativeBackend = children.single.activeBackend;
+          final nativeBackend = engine.activeBackend;
           await withFrames(
             tester,
             engine.open(
@@ -85,8 +76,7 @@ void main() {
               ),
             ),
           );
-          expect(children, hasLength(1));
-          expect(children.single.activeBackend, same(nativeBackend));
+          expect(engine.activeBackend, same(nativeBackend));
           expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
           expect(engine.currentSnapshot.generation, generation + 1);
           expect(

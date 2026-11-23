@@ -56,6 +56,8 @@ add_subdirectory("runner")
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
 include(flutter/generated_plugins.cmake)
+include(../tool/media-kit-desktop.cmake)
+bilisail_stage_video_plugin(windows)
 
 # The pinned WebView plugin's C++17 WinRT headers use the coroutine TS ABI.
 # Acknowledge their deprecation on VS 2026 without changing the coroutine ABI.
@@ -88,12 +90,6 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" AND CMAKE_GENERATOR MATCHES "^Visual St
   endforeach()
 endif()
 
-include(native/media-assets.cmake)
-bilisail_verify_media_assets()
-
-# The personal media-kit fork owns the renderer and complete native SDK.
-
-
 include(patches/window_manager/apply.cmake)
 bilisail_patch_window_manager_target()
 
@@ -111,28 +107,21 @@ endif()
 set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/data")
 set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}")
 
-# Remove obsolete Native Assets provenance before installing the library plugin.
+# An incremental build can still contain DLLs installed by the old library plugin.
 install(CODE "file(REMOVE
-  \"${INSTALL_BUNDLE_LIB_DIR}/native_assets.json\"
-  \"${INSTALL_BUNDLE_LIB_DIR}/media_kit_event_loop.dll\"
-  \"${INSTALL_BUNDLE_LIB_DIR}/media_kit_native_event_loop.dll\"
-  \"${INSTALL_BUNDLE_LIB_DIR}/data/licenses/mpv/PREDIDIT_SOURCE.md\"
-  \"${INSTALL_BUNDLE_LIB_DIR}/data/licenses/mpv/PILIPLUS_SOURCE.md\"
-  \"${INSTALL_BUNDLE_LIB_DIR}/data/licenses/mpv/SOURCE.md\"
-  \"${INSTALL_BUNDLE_LIB_DIR}/data/licenses/mpv/COPYING.LGPLv2.1\")"
-  COMPONENT Runtime)
+  \"${INSTALL_BUNDLE_LIB_DIR}/libEGL.dll\"
+  \"${INSTALL_BUNDLE_LIB_DIR}/libGLESv2.dll\"
+  \"${INSTALL_BUNDLE_LIB_DIR}/media_kit_libs_windows_video_plugin.dll\")" COMPONENT Runtime)
 
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/patches/media_kit_video/LICENSE"
-  DESTINATION "${INSTALL_BUNDLE_DATA_DIR}/licenses/media_kit_video"
-  COMPONENT Runtime)
+# Replace the retired SDK's provenance on incremental builds.
+install(CODE "file(REMOVE_RECURSE \"${INSTALL_BUNDLE_DATA_DIR}/licenses/mpv\")" COMPONENT Runtime)
 
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/native/FORK_SOURCE.md"
-  DESTINATION "${INSTALL_BUNDLE_DATA_DIR}/licenses/mpv"
-  COMPONENT Runtime)
-
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/native/mpv/SOURCE.md"
+# libmpv and the native event loop are delivered by Dart code assets.
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/native/PREDIDIT_SOURCE.md"
   "${CMAKE_CURRENT_SOURCE_DIR}/native/mpv/COPYING.LGPLv2.1"
-  "${CMAKE_CURRENT_SOURCE_DIR}/native/media-assets.cmake"
+  "${CMAKE_CURRENT_SOURCE_DIR}/native/mpv/COPYING.LGPLv3"
+  "${CMAKE_CURRENT_SOURCE_DIR}/native/mpv/COPYING.GPLv3"
+  "${BILISAIL_NATIVE_BUNDLE_CATALOG}"
   DESTINATION "${INSTALL_BUNDLE_DATA_DIR}/licenses/mpv"
   COMPONENT Runtime)
 
@@ -175,9 +164,7 @@ endif()
 set(NATIVE_ASSETS_DIR "${PROJECT_BUILD_DIR}native_assets/windows/")
 install(DIRECTORY "${NATIVE_ASSETS_DIR}"
    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
-   COMPONENT Runtime
-   PATTERN "libmpv*" EXCLUDE
-   PATTERN "media_kit*" EXCLUDE)
+   COMPONENT Runtime)
 
 # Fully re-copy the assets directory on each build to avoid having stale files
 # from a previous install.

@@ -14,6 +14,8 @@
         android:requestLegacyExternalStorage="true"
         android:enableOnBackInvokedCallback="true"
         android:icon="@mipmap/ic_launcher" android:allowBackup="false">
+        <!-- The SurfaceTexture output uses the Flutter Skia backend. -->
+        <meta-data android:name="io.flutter.embedding.android.EnableImpeller" android:value="false" />
         <activity
             android:name=".MainActivity"
             android:supportsPictureInPicture="true"

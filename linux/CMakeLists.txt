@@ -89,6 +89,8 @@ set_target_properties(${BINARY_NAME}
 # bundle libdartjni.so linked to the runner's libjvm.so.
 set(CMAKE_DISABLE_FIND_PACKAGE_JNI TRUE)
 include(flutter/generated_plugins.cmake)
+include(../tool/media-kit-desktop.cmake)
+bilisail_stage_video_plugin(linux)
 
 
 # === Installation ===
@@ -100,6 +102,8 @@ install(CODE "
 set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/data")
 set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}/lib")
 
+install(FILES "${BILISAIL_NATIVE_BUNDLE_CATALOG}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}/licenses/mpv" COMPONENT Runtime)
+
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
 
@@ -107,14 +111,6 @@ install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}
   COMPONENT Runtime)
 
 install(FILES "${FLUTTER_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
-  COMPONENT Runtime)
-
-# Discard stale Native Assets from a previous dependency graph before bundling.
-install(CODE "file(REMOVE
-  \"${INSTALL_BUNDLE_LIB_DIR}/libmpv.so.2\"
-  \"${INSTALL_BUNDLE_LIB_DIR}/media_kit_event_loop.so\"
-  \"${INSTALL_BUNDLE_LIB_DIR}/libmedia_kit_event_loop.so\"
-  \"${INSTALL_BUNDLE_LIB_DIR}/libmedia_kit_native_event_loop.so\")"
   COMPONENT Runtime)
 
 foreach(bundled_library ${PLUGIN_BUNDLED_LIBRARIES})
@@ -127,10 +123,7 @@ endforeach(bundled_library)
 set(NATIVE_ASSETS_DIR "${PROJECT_BUILD_DIR}native_assets/linux/")
 install(DIRECTORY "${NATIVE_ASSETS_DIR}"
    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
-   COMPONENT Runtime
-   PATTERN "libmpv*" EXCLUDE
-   PATTERN "libmedia_kit*" EXCLUDE
-   PATTERN "media_kit*" EXCLUDE)
+   COMPONENT Runtime)
 
 # Fully re-copy the assets directory on each build to avoid having stale files
 # from a previous install.

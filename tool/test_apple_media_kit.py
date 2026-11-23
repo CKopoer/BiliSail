@@ -15,6 +15,11 @@ SPEC.loader.exec_module(staging)
 
 
 class AppleStagingTests(unittest.TestCase):
+    def setUp(self):
+        staging_patches = patch.object(staging, "apply_patches")
+        staging_patches.start()
+        self.addCleanup(staging_patches.stop)
+
     def fixture(self, repo: Path, platform: str) -> tuple[Path, Path]:
         source = repo / "pub-cache/media_kit_video"
         (source / platform).mkdir(parents=True)

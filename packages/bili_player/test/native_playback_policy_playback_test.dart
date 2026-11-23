@@ -49,7 +49,10 @@ void main() {
           );
           handle ??= player.nativeHandle;
           expect(player.nativeHandle, handle);
-          expect(await player.getPropertyAsync('curl-enabled'), 'no');
+          expect(
+            await player.getPropertyAsync('curl-enabled'),
+            anyOf('', 'no'),
+          );
           expect(
             await player.getPropertyAsync('stream-lavf-o'),
             'rw_timeout=5000000',

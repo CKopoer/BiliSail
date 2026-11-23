@@ -107,9 +107,7 @@ class IOSVideoOutputExecutionTest(unittest.TestCase):
         self.run_case("software-render")
 
     def test_mpv_parameters_typecheck_with_real_c_headers(self):
-        headers = os.environ.get("BILISAIL_MPV_HEADERS")
-        if not headers:
-            self.skipTest("Set BILISAIL_MPV_HEADERS to the verified mpv header directory")
+        headers = package_root("media_kit_video") / "common/mpv/include"
         # Keep only graphics substitutes, then import mpv's real C declarations.
         # This catches mistakes hidden by the executable mock's Swift signatures.
         graphics = self.harness[:self.harness.index('let MPV_RENDER_API_TYPE_OPENGL =')]
@@ -120,7 +118,7 @@ class IOSVideoOutputExecutionTest(unittest.TestCase):
         )
         result = subprocess.run(
             [self.compiler, "-swift-version", "5", "-typecheck", "-I", headers,
-             "-import-objc-header", str(Path(headers) / "mpv/render_gl.h"), str(source)],
+             "-import-objc-header", str(Path(headers) / "media_kit_mpv.h"), str(source)],
             capture_output=True, text=True, timeout=120,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

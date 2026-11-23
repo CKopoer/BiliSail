@@ -26,9 +26,7 @@ void main() {
       sleepTimerNow: () => now,
       createSession: (sleepTimer) => PlaybackSession(
         sleepTimer: sleepTimer,
-        engine: ConfigurablePlayerEngine(
-          createEngine: () async => MediaKitEngine(),
-        ),
+        engine: MediaKitEngine(),
         repository: _Repository(Directory(fixtures).uri),
         progress: _Progress(),
         accountScope: () => 'guest',
@@ -79,9 +77,7 @@ void main() {
       initializePlayerBackend();
       final fixtures = Platform.environment['BILI_TEST_MEDIA_DIR']!;
       final listeningMode = PlaybackListeningMode();
-      final engine = ConfigurablePlayerEngine(
-        createEngine: () async => MediaKitEngine(),
-      );
+      final engine = MediaKitEngine();
       final session = PlaybackSession(
         engine: engine,
         listeningMode: listeningMode,
@@ -143,9 +139,7 @@ void main() {
             expect(engine.currentSnapshot.position, greaterThan(before));
           }
         }
-        final nextEngine = ConfigurablePlayerEngine(
-          createEngine: () async => MediaKitEngine(),
-        );
+        final nextEngine = MediaKitEngine();
         final next = PlaybackSession(
           engine: nextEngine,
           listeningMode: listeningMode,

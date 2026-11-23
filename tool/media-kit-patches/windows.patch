@@ -1,0 +1,915 @@
+--- a/windows/d3d11_renderer.cc
++++ b/windows/d3d11_renderer.cc
+@@ -36,20 +36,18 @@ D3D11Renderer::~D3D11Renderer() {
+ 
+ void D3D11Renderer::SetSize(int32_t width, int32_t height) {
+   if (width == width_ && height == height_) return;
++  std::unique_ptr<MailboxSwapChain> replacement;
++  if (FAILED(MailboxSwapChain::Create(device(), width, height, &replacement))) {
++    return;
++  }
++  mailbox_swap_chain_ = std::move(replacement);
+   width_ = width;
+   height_ = height;
+-  if (mailbox_swap_chain_) {
+-    const HRESULT hr = mailbox_swap_chain_->Resize(width_, height_);
+-    if (FAILED(hr)) {
+-      std::cout << "media_kit: D3D11Renderer: Mailbox resize failed (hr=0x"
+-                << std::hex << hr << std::dec << ")" << std::endl;
+-    }
+-  }
+ }
+ 
+-void D3D11Renderer::ProducerCommit() {
++void D3D11Renderer::ProducerCommit(bool paused) {
+   if (mailbox_swap_chain_) {
+-    mailbox_swap_chain_->ProducerCommit();
++    mailbox_swap_chain_->ProducerCommit(paused);
+   }
+ }
+ 
+@@ -125,13 +123,15 @@ bool D3D11Renderer::CreateD3D11Device(IDXGIAdapter* flutter_adapter) {
+ }
+ 
+ bool D3D11Renderer::CreateMailbox() {
++  std::unique_ptr<MailboxSwapChain> chain;
+   const HRESULT hr = MailboxSwapChain::Create(d3d_11_device_.Get(), width_,
+-                                              height_, &mailbox_swap_chain_);
++                                              height_, &chain);
+   if (FAILED(hr)) {
+     std::cout << "media_kit: D3D11Renderer: MailboxSwapChain::Create failed "
+                  "(hr=0x"
+               << std::hex << hr << std::dec << ")" << std::endl;
+     return false;
+   }
++  mailbox_swap_chain_ = std::move(chain);
+   return true;
+ }
+\ No newline at end of file
+--- a/windows/d3d11_renderer.h
++++ b/windows/d3d11_renderer.h
+@@ -69,11 +69,12 @@ class D3D11Renderer {
+   // mpv_render_context_render returns.  Signals the frame fence, then
+   // non-blockingly attempts to promote the previous pending frame to
+   // latest_completed_slot_, and finally publishes the new pending frame.
+-  void ProducerCommit();
++  void ProducerCommit(bool paused);
+ 
+   // Called from the consumer thread (Flutter GpuSurfaceTexture callback).
+   // Returns the DXGI shared HANDLE of the most recent fence-confirmed frame
+   // via a single atomic load — no fence poll, no flush, no stall.
++  const std::shared_ptr<MailboxSwapChain>& mailbox() const { return mailbox_swap_chain_; }
+   HANDLE ConsumerAcquire();
+ 
+   // Returns the DXGI shared HANDLE for the current read slot without
+@@ -91,7 +92,7 @@ class D3D11Renderer {
+   Microsoft::WRL::ComPtr<ID3D11Device> d3d_11_device_;
+   Microsoft::WRL::ComPtr<ID3D11DeviceContext> d3d_11_device_context_;
+ 
+-  std::unique_ptr<MailboxSwapChain> mailbox_swap_chain_;
++  std::shared_ptr<MailboxSwapChain> mailbox_swap_chain_;
+ 
+   static int instance_count_;
+ };
+--- a/windows/mailbox_swap_chain.cc
++++ b/windows/mailbox_swap_chain.cc
+@@ -48,9 +48,40 @@ HRESULT MailboxSwapChain::Create(ID3D11Device* device,
+   return S_OK;
+ }
+ 
+-void MailboxSwapChain::ProducerCommit() {
++void MailboxSwapChain::ProducerCommit(bool paused) {
+   auto& ws = slots_[write_slot_];
+   context4_->Signal(ws.fence.Get(), ++ws.fence_value);
++  if (paused || !has_completed_frame_) {
++    bool completed = ws.fence->GetCompletedValue() >= ws.fence_value;
++    if (!completed) {
++      const auto close_event = [](HANDLE event) { CloseHandle(event); };
++      const std::unique_ptr<void, decltype(close_event)> event(
++          CreateEventW(nullptr, FALSE, FALSE, nullptr), close_event);
++      if (event && SUCCEEDED(ws.fence->SetEventOnCompletion(ws.fence_value,
++                                                            event.get()))) {
++        context4_->Flush();
++        completed = WaitForSingleObject(event.get(), 100) == WAIT_OBJECT_0;
++      }
++    }
++    if (completed) {
++      const auto state = mailbox_state_.load(std::memory_order_relaxed);
++      const auto free = state & 0x3u;
++      const auto previous_completed = (state >> 2) & 0x3u;
++      const auto extra = (state >> 4) & 0x3u;
++      // Publish this painted slot directly, retaining distinct completed/free/
++      // extra/write roles. No second video frame is needed while paused.
++      mailbox_state_.store((previous_completed << 4) |
++                               (static_cast<uint32_t>(write_slot_) << 2) | extra,
++                           std::memory_order_release);
++      latest_completed_slot_.store(write_slot_, std::memory_order_release);
++      write_slot_ = static_cast<int>(free);
++      has_completed_frame_ = true;
++      return;
++    }
++    // A stalled GPU must not block the rendering thread indefinitely. The
++    // output keeps its previous completed texture until a later commit succeeds.
++  }
++
+ 
+   // This runs one full render-cycle after the *previous* Signal was enqueued.
+   // By then the D3D11 runtime has had ample opportunity to submit the prior
+--- a/windows/mailbox_swap_chain.h
++++ b/windows/mailbox_swap_chain.h
+@@ -62,13 +62,14 @@ class MailboxSwapChain final {
+   // has already completed it, promotes it to completed and updates
+   // latest_completed_slot_ (release store).  This is the sole site that
+   // advances latest_completed_slot_; ConsumerAcquire never touches the fence.
+-  void ProducerCommit();
++  void ProducerCommit(bool paused);
+ 
+   // Called from the consumer thread (Flutter GpuSurfaceTexture callback).
+   // Returns the DXGI shared HANDLE of the most recent fence-confirmed frame.
+   // Implementation is a single acquire load of latest_completed_slot_ —
+   // no CAS, no fence poll, no flush, no stall, no KeyedMutex.
+   HANDLE ConsumerAcquire();
++  bool HasCompletedFrame() const { return has_completed_frame_; }
+ 
+   // Recreates all texture slots at the new dimensions.
+   // Must only be called from the producer thread with no active consumer.
+@@ -119,6 +120,7 @@ class MailboxSwapChain final {
+   // 'completed' field in mailbox_state_'s initial value 57u.
+   std::atomic<int> latest_completed_slot_{2};
+ 
++  bool has_completed_frame_ = false;
+   int write_slot_ = 0;  // producer-private
+ };
+ 
+--- a/windows/media_kit_video_plugin.cc
++++ b/windows/media_kit_video_plugin.cc
+@@ -12,8 +12,6 @@
+ 
+ namespace media_kit_video {
+ 
+-MediaKitVideoPlugin* MediaKitVideoPlugin::instance_ = nullptr;
+-
+ void MediaKitVideoPlugin::RegisterWithRegistrar(
+     flutter::PluginRegistrarWindows* registrar) {
+   auto plugin = std::make_unique<MediaKitVideoPlugin>(registrar);
+@@ -24,13 +22,7 @@ MediaKitVideoPlugin::MediaKitVideoPlugin(
+     flutter::PluginRegistrarWindows* registrar)
+     : registrar_(registrar),
+       video_output_manager_(std::make_unique<VideoOutputManager>(registrar)) {
+-  instance_ = this;
+-  flutter_window_ =
+-      ::GetAncestor(registrar->GetView()->GetNativeWindow(), GA_ROOT);
+-  original_window_proc_ = reinterpret_cast<WNDPROC>(
+-      ::SetWindowLongPtr(flutter_window_, GWLP_WNDPROC,
+-                         reinterpret_cast<LONG_PTR>(WindowProcDelegate)));
+-
++  InitializeMainThreadTasks();
+   channel_ = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+       registrar->messenger(), "com.alexmercerind/media_kit_video",
+       &flutter::StandardMethodCodec::GetInstance());
+@@ -40,64 +32,73 @@ MediaKitVideoPlugin::MediaKitVideoPlugin(
+ }
+ 
+ MediaKitVideoPlugin::~MediaKitVideoPlugin() {
+-  if (flutter_window_ && original_window_proc_) {
+-    ::SetWindowLongPtr(flutter_window_, GWLP_WNDPROC,
+-                       reinterpret_cast<LONG_PTR>(original_window_proc_));
+-  }
+-  if (instance_ == this) {
+-    instance_ = nullptr;
+-  }
++  // The registrar owns the handler until engine teardown. The Windows engine
++  // has already detached its messenger when it destroys registered plugins.
++  video_output_manager_.reset();
++  DrainMainThreadTasks();
++  ::DestroyWindow(task_window_);
++}
++// BiliSail platform-thread delivery for the pinned MIT media-kit video plugin.
++// A message-only HWND survives implicit-view replacement and works for every
++// engine without replacing another plugin's WndProc or keeping a global owner.
++void MediaKitVideoPlugin::InitializeMainThreadTasks() {
++  static const ATOM registered = [] {
++    WNDCLASSW window_class{};
++    window_class.lpfnWndProc = MainThreadWindowProc;
++    window_class.hInstance = ::GetModuleHandle(nullptr);
++    window_class.lpszClassName = L"BiliSail.MediaKitPlatformTasks";
++    return ::RegisterClassW(&window_class);
++  }();
++  if (!registered) throw std::runtime_error("Cannot register video task window");
++  platform_thread_ = ::GetCurrentThreadId();
++  task_window_ = ::CreateWindowExW(0, L"BiliSail.MediaKitPlatformTasks", L"", 0,
++                                  0, 0, 0, 0, HWND_MESSAGE, nullptr,
++                                  ::GetModuleHandle(nullptr), this);
++  if (!task_window_) throw std::runtime_error("Cannot create video task window");
+ }
+ 
+-void MediaKitVideoPlugin::RunOnMainThread(std::function<void()> task) {
+-  if (!flutter_window_) {
+-    return;
++LRESULT CALLBACK MediaKitVideoPlugin::MainThreadWindowProc(
++    HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
++  if (message == WM_NCCREATE) {
++    auto* creation = reinterpret_cast<CREATESTRUCTW*>(lparam);
++    ::SetWindowLongPtrW(window, GWLP_USERDATA,
++                        reinterpret_cast<LONG_PTR>(creation->lpCreateParams));
+   }
+-
+-  {
+-    std::lock_guard<std::mutex> lock(main_thread_tasks_mutex_);
+-    main_thread_tasks_.push(std::move(task));
++  auto* owner = reinterpret_cast<MediaKitVideoPlugin*>(
++      ::GetWindowLongPtrW(window, GWLP_USERDATA));
++  if (message == kMainThreadTaskMessage && owner) {
++    owner->DrainMainThreadTasks();
++    return 0;
+   }
+-
+-  ::PostMessage(flutter_window_, kMainThreadTaskMessage, 0, 0);
++  return ::DefWindowProcW(window, message, wparam, lparam);
+ }
+ 
+-LRESULT CALLBACK MediaKitVideoPlugin::WindowProcDelegate(HWND hwnd,
+-                                                         UINT message,
+-                                                         WPARAM wParam,
+-                                                         LPARAM lParam) {
+-  if (message == kMainThreadTaskMessage && instance_) {
+-    instance_->ProcessMainThreadTasks();
+-    return 0;
++void MediaKitVideoPlugin::DrainMainThreadTasks() {
++  std::queue<std::function<void()>> pending;
++  {
++    std::lock_guard<std::mutex> lock(main_thread_tasks_mutex_);
++    pending.swap(main_thread_tasks_);
+   }
+-
+-  if (instance_ && instance_->original_window_proc_) {
+-    return ::CallWindowProc(instance_->original_window_proc_, hwnd, message,
+-                            wParam, lParam);
++  while (!pending.empty()) {
++    auto task = std::move(pending.front());
++    pending.pop();
++    task();
+   }
+-
+-  return ::DefWindowProc(hwnd, message, wParam, lParam);
+ }
+ 
+-void MediaKitVideoPlugin::ProcessMainThreadTasks() {
+-  std::queue<std::function<void()>> tasks_to_execute;
+-
++void MediaKitVideoPlugin::RunOnMainThread(std::function<void()> task) {
++  if (::GetCurrentThreadId() == platform_thread_) {
++    task();
++    return;
++  }
+   {
+     std::lock_guard<std::mutex> lock(main_thread_tasks_mutex_);
+-    tasks_to_execute.swap(main_thread_tasks_);
+-  }
+-
+-  while (!tasks_to_execute.empty()) {
+-    auto task = std::move(tasks_to_execute.front());
+-    tasks_to_execute.pop();
+-
+-    try {
+-      task();
+-    } catch (...) {
+-    }
++    main_thread_tasks_.push(std::move(task));
+   }
++  ::PostMessageW(task_window_, kMainThreadTaskMessage, 0, 0);
+ }
+ 
++
+ void MediaKitVideoPlugin::HandleMethodCall(
+     const flutter::MethodCall<flutter::EncodableValue>& method_call,
+     std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+@@ -135,7 +136,7 @@ void MediaKitVideoPlugin::HandleMethodCall(
+     configuration_value.enable_hardware_acceleration =
+         configuration_enable_hardware_acceleration;
+ 
+-    video_output_manager_->Create(
++    const bool created = video_output_manager_->Create(
+         handle_value, configuration_value,
+         [this, handle = handle_value](auto id, auto width, auto height) {
+           RunOnMainThread([=]() {
+@@ -175,6 +176,10 @@ void MediaKitVideoPlugin::HandleMethodCall(
+                 nullptr);
+           });
+         });
++    if (!created) {
++      result->Error("libmpv", "The player is shutting down.");
++      return;
++    }
+     result->Success(flutter::EncodableValue(std::monostate{}));
+   } else if (method_call.method_name().compare("VideoOutputManager.Dispose") ==
+              0) {
+--- a/windows/media_kit_video_plugin.h
++++ b/windows/media_kit_video_plugin.h
+@@ -9,11 +9,13 @@
+ #define MEDIA_KIT_VIDEO_PLUGIN_H_
+ 
+ #include <flutter/method_channel.h>
+-#include <flutter/plugin_registrar_windows.h>
+ #include <Windows.h>
+ #include <functional>
+-#include <queue>
+ #include <mutex>
++#include <optional>
++#include <queue>
++#include <stdexcept>
++#include <flutter/plugin_registrar_windows.h>
+ 
+ #include "video_output_manager.h"
+ 
+@@ -31,25 +33,24 @@ class MediaKitVideoPlugin : public flutter::Plugin {
+   MediaKitVideoPlugin& operator=(const MediaKitVideoPlugin&) = delete;
+ 
+  private:
+-  static constexpr UINT kMainThreadTaskMessage = WM_USER + 1001;
++  static constexpr UINT kMainThreadTaskMessage = WM_APP + 1001;
++  void InitializeMainThreadTasks();
++  void DrainMainThreadTasks();
++  void RunOnMainThread(std::function<void()> task);
++  static LRESULT CALLBACK MainThreadWindowProc(HWND, UINT, WPARAM, LPARAM);
++  DWORD platform_thread_ = 0;
++  HWND task_window_ = nullptr;
++  std::queue<std::function<void()>> main_thread_tasks_;
++  std::mutex main_thread_tasks_mutex_;
+ 
+   void HandleMethodCall(
+       const flutter::MethodCall<flutter::EncodableValue>& method_call,
+       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+ 
+-  void RunOnMainThread(std::function<void()> task);
+-  static LRESULT CALLBACK WindowProcDelegate(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+-  void ProcessMainThreadTasks();
+-  
+   flutter::PluginRegistrarWindows* registrar_ = nullptr;
+   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> channel_ =
+       nullptr;
+   std::unique_ptr<VideoOutputManager> video_output_manager_ = nullptr;
+-  HWND flutter_window_ = nullptr;
+-  WNDPROC original_window_proc_ = nullptr;
+-  std::queue<std::function<void()>> main_thread_tasks_;
+-  std::mutex main_thread_tasks_mutex_;
+-  static MediaKitVideoPlugin* instance_;
+ };
+ 
+ }  // namespace media_kit_video
+--- a/windows/video_output.cc
++++ b/windows/video_output.cc
+@@ -18,11 +18,11 @@
+ #define SW_RENDERING_PIXEL_BUFFER_SIZE \
+   (SW_RENDERING_MAX_WIDTH) * (SW_RENDERING_MAX_HEIGHT) * (4)
+ 
+-VideoOutput::VideoOutput(int64_t handle,
++VideoOutput::VideoOutput(mpv_handle* client,
+                          VideoOutputConfiguration configuration,
+                          flutter::PluginRegistrarWindows* registrar,
+                          ThreadPool* thread_pool_ref)
+-    : handle_(reinterpret_cast<mpv_handle*>(handle)),
++    : handle_(client),
+       width_(configuration.width),
+       height_(configuration.height),
+       configuration_(configuration),
+@@ -51,17 +51,22 @@ VideoOutput::VideoOutput(int64_t handle,
+         // per frame through MPV_RENDER_PARAM_D3D11_FBO in Render().
+         mpv_d3d11_init_params init_params = {d3d11_renderer_->device()};
+ 
+-        // MPV_RENDER_PARAM_RENDERER is left unset on purpose: libmpv then
+-        // renders with gpu-next (libplacebo's D3D11 backend on this device)
+-        // and falls back to the gpu renderer when gpu-next cannot initialize.
++        // Profile 5 needs the actual renderer, including on devices where
++        // gpu-next fails and the legacy GPU or software renderer takes over.
+         mpv_render_param params[] = {
+             {MPV_RENDER_PARAM_API_TYPE, MPV_RENDER_API_TYPE_D3D11},
+             {MPV_RENDER_PARAM_D3D11_INIT_PARAMS, &init_params},
++            {MPV_RENDER_PARAM_RENDERER, MPV_RENDER_RENDERER_GPU_NEXT},
+             {MPV_RENDER_PARAM_INVALID, nullptr},
+         };
+-        
+-        // Create render context.
+-        if (mpv_render_context_create(&render_context_, handle_, params) == 0) {
++        int result = mpv_render_context_create(&render_context_, handle_, params);
++        if (result == 0) {
++          mpv_set_property_string(handle_, "user-data/bilisail-renderer", "gpu-next");
++        } else {
++          params[2].data = const_cast<char*>(MPV_RENDER_RENDERER_GPU);
++          result = mpv_render_context_create(&render_context_, handle_, params);
++        }
++        if (result == 0) {
+           mpv_render_context_set_update_callback(
+               render_context_,
+               [](void* context) {
+@@ -100,7 +105,7 @@ VideoOutput::VideoOutput(int64_t handle,
+       std::cout << "media_kit: VideoOutput: Using S/W rendering." << std::endl;
+       // Allocate a "large enough" buffer ahead of time.
+       pixel_buffer_ =
+-          std::make_unique<uint8_t[]>(SW_RENDERING_PIXEL_BUFFER_SIZE);
++          std::make_shared<SoftwareOutput>();
+       Resize(width_.value_or(1), height_.value_or(1));
+       mpv_render_param params[] = {
+           {MPV_RENDER_PARAM_API_TYPE, MPV_RENDER_API_TYPE_SW},
+@@ -120,39 +125,33 @@ VideoOutput::VideoOutput(int64_t handle,
+   future.wait();
+ }
+ 
++void VideoOutput::WatchShutdown(std::function<void()> on_shutdown) {
++  shutdown_watcher_ = std::thread([this, on_shutdown = std::move(on_shutdown)] {
++    while (!destroyed_) {
++      if (mpv_wait_event(handle_, -1)->event_id == MPV_EVENT_SHUTDOWN) {
++        on_shutdown();
++        return;
++      }
++    }
++  });
++}
++
+ VideoOutput::~VideoOutput() {
+   destroyed_ = true;
++  if (shutdown_watcher_.joinable()) {
++    mpv_wakeup(handle_);
++    shutdown_watcher_.join();
++  }
+   if (render_context_) {
+     // Stop the producer before draining queued tasks that borrow this object.
+     mpv_render_context_set_update_callback(render_context_, nullptr, nullptr);
+   }
+-  auto promise = std::promise<void>();
+-  if (texture_id_) {
+-    registrar_->texture_registrar()->UnregisterTexture(
+-        texture_id_, [&, texture_id = texture_id_]() {
+-          auto future = thread_pool_ref_->Post([&, id = texture_id]() {
+-            std::cout << "media_kit: VideoOutput: Free Texture: " << id
+-                      << std::endl;
+-            std::cout << "VideoOutput::~VideoOutput: "
+-                      << reinterpret_cast<int64_t>(handle_) << std::endl;
+-            std::lock_guard<std::mutex> lock(textures_mutex_);
+-            texture_variants_.clear();
+-            // H/W
+-            textures_.clear();
+-            // S/W
+-            pixel_buffer_textures_.clear();
+-            // Free D3D11Renderer through the thread pool
+-            d3d11_renderer_.reset(nullptr);
+-            promise.set_value();
+-          });
+-        });
+-    promise.get_future().wait();
+-  }
+-  texture_id_ = 0;
+-
+-  thread_pool_ref_->Post([render_context = render_context_]() {
+-    if (render_context) mpv_render_context_free(render_context);
+-  }).wait();
++  thread_pool_ref_->Post([this] {
++    UnregisterTexture();
++    if (render_context_) mpv_render_context_free(render_context_);
++    d3d11_renderer_.reset();
++  }).get();
++  mpv_destroy(handle_);
+ }
+ 
+ void VideoOutput::NotifyRender() {
+@@ -177,24 +176,33 @@ void VideoOutput::Render() {
+       // Publish the slot only if mpv actually rendered into it.
+       if (mpv_render_context_render(render_context_, params) >= 0) {
+         mpv_render_context_report_swap(render_context_);
+-        d3d11_renderer_->ProducerCommit();
++        // A paused seek may render only once. Publish that frame without
++        // requiring another mpv redraw to advance the mailbox.
++        int paused = 0;
++        mpv_get_property(handle_, "pause", MPV_FORMAT_FLAG, &paused);
++        d3d11_renderer_->ProducerCommit(paused != 0);
++        if (pending_frame_ && pending_frame_->mailbox->HasCompletedFrame()) {
++          std::atomic_store(&hardware_output_->visible, std::move(pending_frame_));
++        }
+       }
+     }
+     // S/W
+     if (pixel_buffer_ != nullptr) {
+       int32_t size[]{
+-          static_cast<int32_t>(pixel_buffer_textures_.at(texture_id_)->width),
+-          static_cast<int32_t>(pixel_buffer_textures_.at(texture_id_)->height),
++          static_cast<int32_t>(software_width_),
++          static_cast<int32_t>(software_height_),
+       };
+-      auto pitch = 4 * size[0];
++      auto next = std::make_shared<SoftwareFrame>(size[0], size[1]);
++      size_t pitch = 4 * static_cast<size_t>(size[0]);
+       mpv_render_param params[]{
+           {MPV_RENDER_PARAM_SW_SIZE, size},
+           {MPV_RENDER_PARAM_SW_FORMAT, "rgb0"},
+           {MPV_RENDER_PARAM_SW_STRIDE, &pitch},
+-          {MPV_RENDER_PARAM_SW_POINTER, pixel_buffer_.get()},
++          {MPV_RENDER_PARAM_SW_POINTER, next->pixels.data()},
+           {MPV_RENDER_PARAM_INVALID, nullptr},
+       };
+-      mpv_render_context_render(render_context_, params);
++      if (mpv_render_context_render(render_context_, params) < 0) return;
++      std::atomic_store(&pixel_buffer_->frame, std::move(next));
+     }
+     try {
+       // Notify Flutter that a new frame is available.
+@@ -207,8 +215,10 @@ void VideoOutput::Render() {
+ 
+ void VideoOutput::SetTextureUpdateCallback(
+     std::function<void(int64_t, int64_t, int64_t)> callback) {
+-  texture_update_callback_ = callback;
+-  texture_update_callback_(texture_id_, GetVideoWidth(), GetVideoHeight());
++  thread_pool_ref_->Post([this, callback = std::move(callback)] {
++    texture_update_callback_ = callback;
++    texture_update_callback_(texture_id_, width(), height());
++  }).get();
+ }
+ 
+ void VideoOutput::SetSize(std::optional<int64_t> width,
+@@ -242,6 +252,10 @@ void VideoOutput::SetSize(std::optional<int64_t> width,
+     } else {
+       height_ = std::nullopt;
+     }
++    if (!destroyed_ && render_context_) {
++      CheckAndResize();
++      Render();
++    }
+   });
+ }
+ 
+@@ -258,8 +272,8 @@ void VideoOutput::CheckAndResize() {
+     current_height = d3d11_renderer_->height();
+   }
+   if (pixel_buffer_ != nullptr) {
+-    current_width = pixel_buffer_textures_.at(texture_id_)->width;
+-    current_height = pixel_buffer_textures_.at(texture_id_)->height;
++    current_width = software_width_;
++    current_height = software_height_;
+   }
+   // Currently rendered video output dimensions.
+   // Either H/W or S/W rendered.
+@@ -273,108 +287,53 @@ void VideoOutput::CheckAndResize() {
+ }
+ 
+ void VideoOutput::Resize(int64_t required_width, int64_t required_height) {
+-  std::cout << required_width << " " << required_height << std::endl;
+-  // Unregister previously registered texture & delete underlying objects.
+-  if (texture_id_) {
+-    registrar_->texture_registrar()->UnregisterTexture(
+-        texture_id_, [&, id = texture_id_]() {
+-          if (id) {
+-            std::cout << "media_kit: VideoOutput: Free Texture: " << id
+-                      << std::endl;
+-            std::lock_guard<std::mutex> lock(textures_mutex_);
+-            if (destroyed_) {
+-              return;
+-            }
+-            if (texture_variants_.find(id) != texture_variants_.end()) {
+-              texture_variants_.erase(id);
+-            }
+-            // H/W
+-            if (textures_.find(id) != textures_.end()) {
+-              textures_.erase(id);
+-            }
+-            // S/W
+-            if (pixel_buffer_textures_.find(id) !=
+-                pixel_buffer_textures_.end()) {
+-              pixel_buffer_textures_.erase(id);
+-            }
+-          }
+-        });
+-    texture_id_ = 0;
+-  }
+-  // H/W
+-  if (d3d11_renderer_ != nullptr) {
+-    // Resize the D3D11 texture.
++  if (d3d11_renderer_) {
+     d3d11_renderer_->SetSize(static_cast<int32_t>(required_width),
+                             static_cast<int32_t>(required_height));
+-    
+-    auto texture = std::make_unique<FlutterDesktopGpuSurfaceDescriptor>();
+-    texture->struct_size = sizeof(FlutterDesktopGpuSurfaceDescriptor);
+-    // Seed with the latest-completed-slot handle so Flutter has a valid
+-    // surface even before the first mpv frame is committed.
+-    texture->handle = d3d11_renderer_->ReadHandleSnapshot();
+-    texture->width = texture->visible_width = d3d11_renderer_->width();
+-    texture->height = texture->visible_height = d3d11_renderer_->height();
+-    texture->release_context = nullptr;
+-    texture->release_callback = [](void*) {};
+-    texture->format = kFlutterDesktopPixelFormatBGRA8888;
+-
+-    auto texture_variant =
+-        std::make_unique<flutter::TextureVariant>(flutter::GpuSurfaceTexture(
+-            kFlutterDesktopGpuSurfaceTypeDxgiSharedHandle, [&](auto, auto) {
+-              std::lock_guard<std::mutex> lock(textures_mutex_);
+-              if (texture_id_) {
+-                auto* desc = textures_.at(texture_id_).get();
+-                // ConsumerAcquire() is lock-free.  texture_id_ != 0 implies
+-                // d3d11_renderer_ is valid: UnregisterTexture guarantees that
+-                // Flutter stops invoking this callback before the destructor
+-                // resets d3d11_renderer_.
+-                desc->handle = d3d11_renderer_->ConsumerAcquire();
+-                return desc;
+-              }
+-              return (FlutterDesktopGpuSurfaceDescriptor*)nullptr;
+-            }));
+-    // Register new texture.
+-    texture_id_ =
+-        registrar_->texture_registrar()->RegisterTexture(texture_variant.get());
+-    std::cout << "media_kit: VideoOutput: Create Texture: " << texture_id_
+-              << std::endl;
+-    std::lock_guard<std::mutex> lock(textures_mutex_);
+-    textures_.emplace(std::make_pair(texture_id_, std::move(texture)));
+-    texture_variants_.emplace(
+-        std::make_pair(texture_id_, std::move(texture_variant)));
+-    // Notify public texture update callback.
+-    texture_update_callback_(texture_id_, required_width, required_height);
++    if (d3d11_renderer_->width() != required_width ||
++        d3d11_renderer_->height() != required_height) return;
+   }
+-  // S/W
+-  if (pixel_buffer_ != nullptr) {
+-    auto pixel_buffer_texture = std::make_unique<FlutterDesktopPixelBuffer>();
+-    pixel_buffer_texture->buffer = pixel_buffer_.get();
+-    pixel_buffer_texture->width = required_width;
+-    pixel_buffer_texture->height = required_height;
+-    pixel_buffer_texture->release_context = nullptr;
+-    pixel_buffer_texture->release_callback = [](void*) {};
+-    auto texture_variant = std::make_unique<flutter::TextureVariant>(
+-        flutter::PixelBufferTexture([&](auto, auto) {
+-          std::lock_guard<std::mutex> lock(textures_mutex_);
+-          if (texture_id_) {
+-            return pixel_buffer_textures_.at(texture_id_).get();
+-          } else {
+-            return (FlutterDesktopPixelBuffer*)nullptr;
+-          }
++  if (d3d11_renderer_) {
++    pending_frame_ = std::make_shared<HardwareFrame>(
++        HardwareFrame{d3d11_renderer_->mailbox(), required_width, required_height});
++    if (!texture_) {
++      texture_ = std::make_shared<flutter::TextureVariant>(flutter::GpuSurfaceTexture(
++          kFlutterDesktopGpuSurfaceTypeDxgiSharedHandle,
++          [output = hardware_output_](auto, auto) -> const FlutterDesktopGpuSurfaceDescriptor* {
++            output->raster_frame = std::atomic_load(&output->visible);
++            const auto& frame = output->raster_frame;
++            if (!frame) return nullptr;
++            auto& descriptor = output->descriptor;
++            descriptor.struct_size = sizeof(descriptor);
++            descriptor.width = descriptor.visible_width = frame->width;
++            descriptor.height = descriptor.visible_height = frame->height;
++            descriptor.format = kFlutterDesktopPixelFormatBGRA8888;
++            descriptor.handle = frame->mailbox->ConsumerAcquire();
++            return &descriptor;
++          }));
++    }
++  } else {
++    software_width_ = required_width;
++    software_height_ = required_height;
++    if (!texture_) {
++    texture_ = std::make_shared<flutter::TextureVariant>(flutter::PixelBufferTexture(
++        [output = pixel_buffer_](auto, auto) -> const FlutterDesktopPixelBuffer* {
++          output->raster_frame = std::atomic_load(&output->frame);
++          return output->raster_frame ? &output->raster_frame->descriptor : nullptr;
+         }));
+-    // Register new texture.
+-    texture_id_ =
+-        registrar_->texture_registrar()->RegisterTexture(texture_variant.get());
+-    std::cout << "media_kit: VideoOutput: Create Texture: " << texture_id_
+-              << std::endl;
+-    std::lock_guard<std::mutex> lock(textures_mutex_);
+-    pixel_buffer_textures_.emplace(
+-        std::make_pair(texture_id_, std::move(pixel_buffer_texture)));
+-    texture_variants_.emplace(
+-        std::make_pair(texture_id_, std::move(texture_variant)));
+-    // Notify public texture update callback.
+-    texture_update_callback_(texture_id_, required_width, required_height);
+   }
++  }
++  if (!texture_id_) {
++    texture_id_ = registrar_->texture_registrar()->RegisterTexture(texture_.get());
++  }
++  texture_update_callback_(texture_id_, required_width, required_height);
++}
++
++void VideoOutput::UnregisterTexture() {
++  if (!texture_) return;
++  registrar_->texture_registrar()->UnregisterTexture(
++      texture_id_, [texture = std::move(texture_)] {});
++  texture_id_ = 0;
+ }
+ 
+ int64_t VideoOutput::GetVideoWidth() {
+@@ -392,7 +351,7 @@ int64_t VideoOutput::GetVideoWidth() {
+       return SW_RENDERING_MAX_WIDTH;
+     }
+     if (height >= SW_RENDERING_MAX_HEIGHT) {
+-      return width / height * SW_RENDERING_MAX_HEIGHT;
++      return width * SW_RENDERING_MAX_HEIGHT / height;
+     }
+   }
+ 
+@@ -414,7 +373,7 @@ int64_t VideoOutput::GetVideoHeight() {
+       return SW_RENDERING_MAX_HEIGHT;
+     }
+     if (width >= SW_RENDERING_MAX_WIDTH) {
+-      return height / width * SW_RENDERING_MAX_WIDTH;
++      return height * SW_RENDERING_MAX_WIDTH / width;
+     }
+   }
+ 
+--- a/windows/video_output.h
++++ b/windows/video_output.h
+@@ -48,7 +48,7 @@ class VideoOutput {
+     }
+     // S/W
+     if (pixel_buffer_ != nullptr && texture_id_) {
+-      return pixel_buffer_textures_.at(texture_id_)->width;
++      return software_width_;
+     }
+     return width_.value_or(1);
+   }
+@@ -59,18 +59,21 @@ class VideoOutput {
+     }
+     // S/W
+     if (pixel_buffer_ != nullptr && texture_id_) {
+-      return pixel_buffer_textures_.at(texture_id_)->height;
++      return software_height_;
+     }
+     return height_.value_or(1);
+   }
+ 
+-  VideoOutput(int64_t handle,
++  VideoOutput(mpv_handle* client,
+               VideoOutputConfiguration configuration,
+               flutter::PluginRegistrarWindows* registrar,
+               ThreadPool* thread_pool_ref);
+ 
+   ~VideoOutput();
+ 
++  void WatchShutdown(std::function<void()> on_shutdown);
++  bool Owns(mpv_handle* client) const { return handle_ == client; }
++
+   void SetTextureUpdateCallback(
+       std::function<void(int64_t, int64_t, int64_t)> callback);
+ 
+@@ -93,6 +96,9 @@ class VideoOutput {
+   std::optional<int64_t> width_ = std::nullopt;
+   VideoOutputConfiguration configuration_ = VideoOutputConfiguration{};
+ 
++  // A dedicated weak client keeps libmpv alive until its renderer is free,
++  // even when a Dart isolate is terminated without calling Dispose.
++  std::thread shutdown_watcher_;
+   mpv_handle* handle_ = nullptr;
+   mpv_render_context* render_context_ = nullptr;
+   int64_t texture_id_ = 0;
+@@ -101,23 +107,41 @@ class VideoOutput {
+   // Stop queued callbacks before draining and freeing their borrowed resources.
+   std::atomic<bool> destroyed_{false};
+ 
+-  std::mutex textures_mutex_ = std::mutex();
+-
+-  std::unordered_map<int64_t, std::unique_ptr<flutter::TextureVariant>>
+-      texture_variants_ = {};
+-
+-  // H/W rendering.
+-
+-  std::unique_ptr<D3D11Renderer> d3d11_renderer_ = nullptr;
+-  std::unordered_map<int64_t,
+-                     std::unique_ptr<FlutterDesktopGpuSurfaceDescriptor>>
+-      textures_ = {};
+-
+-  // S/W rendering.
+-
+-  std::unique_ptr<uint8_t[]> pixel_buffer_ = nullptr;
+-  std::unordered_map<int64_t, std::unique_ptr<FlutterDesktopPixelBuffer>>
+-      pixel_buffer_textures_ = {};
++  // The registrar may retain an old texture across resize or player disposal.
++  std::shared_ptr<flutter::TextureVariant> texture_;
++  std::unique_ptr<D3D11Renderer> d3d11_renderer_;
++  struct HardwareFrame {
++    std::shared_ptr<MailboxSwapChain> mailbox;
++    int64_t width;
++    int64_t height;
++  };
++  struct HardwareOutput {
++    std::shared_ptr<HardwareFrame> visible;
++    // Only the raster callback accesses these. Flutter reads visible size
++    // after returning the borrowed DXGI handle to the producer.
++    std::shared_ptr<HardwareFrame> raster_frame;
++    FlutterDesktopGpuSurfaceDescriptor descriptor{};
++  };
++  std::shared_ptr<HardwareFrame> pending_frame_;
++  std::shared_ptr<HardwareOutput> hardware_output_ = std::make_shared<HardwareOutput>();
++  struct SoftwareFrame {
++    explicit SoftwareFrame(int64_t width, int64_t height)
++        : pixels(static_cast<size_t>(width * height * 4)) {
++      descriptor.buffer = pixels.data();
++      descriptor.width = width;
++      descriptor.height = height;
++    }
++    std::vector<uint8_t> pixels;
++    FlutterDesktopPixelBuffer descriptor{};
++  };
++  struct SoftwareOutput {
++    std::shared_ptr<SoftwareFrame> frame;
++    std::shared_ptr<SoftwareFrame> raster_frame;
++  };
++  std::shared_ptr<SoftwareOutput> pixel_buffer_;
++  int64_t software_width_ = 0;
++  int64_t software_height_ = 0;
++  void UnregisterTexture();
+ 
+   // Public notifier. This is called when a new texture is registered & texture
+   // ID is changed. Only happens when video output resolution changes.
+--- a/windows/video_output_manager.cc
++++ b/windows/video_output_manager.cc
+@@ -12,42 +12,53 @@ VideoOutputManager::VideoOutputManager(
+     flutter::PluginRegistrarWindows* registrar)
+     : registrar_(registrar) {}
+ 
+-void VideoOutputManager::Create(
++bool VideoOutputManager::Create(
+     int64_t handle,
+     VideoOutputConfiguration configuration,
+     std::function<void(int64_t, int64_t, int64_t)> texture_update_callback) {
+-  std::thread([=]() {
+-    std::lock_guard<std::mutex> lock(mutex_);
+-    if (video_outputs_.find(handle) == video_outputs_.end()) {
+-      auto instance = std::make_unique<VideoOutput>(
+-          handle, configuration, registrar_, thread_pool_.get());
+-      instance->SetTextureUpdateCallback(texture_update_callback);
+-      video_outputs_.insert(std::make_pair(handle, std::move(instance)));
++  auto* client = mpv_create_weak_client(reinterpret_cast<mpv_handle*>(handle), nullptr);
++  if (!client) return false;
++  management_tasks_.Post([=]() {
++    if (video_outputs_.count(handle)) {
++      mpv_destroy(client);
++      return;
+     }
+-  }).detach();
++    auto instance = std::make_unique<VideoOutput>(
++        client, configuration, registrar_, thread_pool_.get());
++    instance->SetTextureUpdateCallback(texture_update_callback);
++    instance->WatchShutdown([this, handle, client] {
++      management_tasks_.Post([this, handle, client] {
++        auto output = video_outputs_.find(handle);
++        if (output != video_outputs_.end() && output->second->Owns(client)) {
++          video_outputs_.erase(output);
++        }
++      });
++    });
++    video_outputs_.emplace(handle, std::move(instance));
++  });
++  return true;
+ }
+ 
+ void VideoOutputManager::SetSize(int64_t handle,
+                                 std::optional<int64_t> width,
+                                 std::optional<int64_t> height) {
+-  std::thread([=]() {
+-    std::lock_guard<std::mutex> lock(mutex_);
++  management_tasks_.Post([=]() {
+     if (video_outputs_.find(handle) != video_outputs_.end()) {
+       video_outputs_[handle]->SetSize(width, height);
+     }
+-  }).detach();
++  });
+ }
+ 
+ void VideoOutputManager::Dispose(int64_t handle,
+                                 std::function<void()> on_disposed) {
+-  std::thread([=]() {
+-    std::lock_guard<std::mutex> lock(mutex_);
++  management_tasks_.Post([=]() {
+     video_outputs_.erase(handle);
+     on_disposed();
+-  }).detach();
++  });
+ }
+ 
+ VideoOutputManager::~VideoOutputManager() {
+-  std::lock_guard<std::mutex> lock(mutex_);
+-  video_outputs_.clear();
++  management_tasks_.Post([this] { video_outputs_.clear(); }).get();
++  // Clearing joins the watchers. Drain any shutdown they queued before joining.
++  management_tasks_.Post([] {}).get();
+ }
+--- a/windows/video_output_manager.h
++++ b/windows/video_output_manager.h
+@@ -20,7 +20,7 @@ class VideoOutputManager {
+  public:
+   VideoOutputManager(flutter::PluginRegistrarWindows* registrar);
+ 
+-  void Create(
++  bool Create(
+       int64_t handle,
+       VideoOutputConfiguration configuration,
+       std::function<void(int64_t, int64_t, int64_t)> texture_update_callback);
+@@ -35,7 +35,7 @@ class VideoOutputManager {
+   ~VideoOutputManager();
+ 
+  private:
+-  std::mutex mutex_ = std::mutex();
++  ThreadPool management_tasks_{1};
+   // D3D11 and mpv rendering share one worker; destruction drains its queue.
+   std::unique_ptr<ThreadPool> thread_pool_ = std::make_unique<ThreadPool>(1);
+   flutter::PluginRegistrarWindows* registrar_ = nullptr;

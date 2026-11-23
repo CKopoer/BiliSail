@@ -73,19 +73,23 @@ void registerMediaKitSeekSynchronizationTests({
           // Cancelled seeks and teardown close the old range request.
         }
       });
-      final backend = MediaKitEngine();
-      final engine = ConfigurablePlayerEngine(
-        createEngine: () async => backend,
-      );
+      final engine = MediaKitEngine();
       final failures = <PlayerFailure>[];
       final subscription = engine.failures.listen(failures.add);
       final boundaryKey = GlobalKey();
       try {
         await tester.pumpWidget(
           MaterialApp(
-            home: RepaintBoundary(
-              key: boundaryKey,
-              child: VideoSurface(engine: engine),
+            // Compare the fixture itself on both desktop and portrait phones.
+            // Window letterboxing must not count as decoded black pixels.
+            home: Center(
+              child: AspectRatio(
+                aspectRatio: 16 / 9,
+                child: RepaintBoundary(
+                  key: boundaryKey,
+                  child: VideoSurface(engine: engine),
+                ),
+              ),
             ),
           ),
         );
@@ -241,7 +245,7 @@ void registerMediaKitSeekSynchronizationTests({
           reason:
               'The target video must replace the old frame when audio resumes',
         );
-        final timing = await backend.inspectNativePlaybackTiming();
+        final timing = await engine.inspectNativePlaybackTiming();
         if (shouldPlay) {
           expect(timing.avsyncSeconds, isNotNull);
           expect(timing.avsyncSeconds?.abs(), lessThan(.15));

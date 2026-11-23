@@ -21,6 +21,7 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
+apply(from = "patches/media_kit/first-frame.gradle")
 apply(from = "patches/audio_service/apply.gradle")
 
 tasks.register<Delete>("clean") {

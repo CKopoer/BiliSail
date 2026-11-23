@@ -90,7 +90,7 @@ class DistroNoticeTests(unittest.TestCase):
 
 class PackageValidationTests(unittest.TestCase):
     def validate(self, root: Path, dependencies: str = "", version: str = "1.2.1",
-                 repository: str = "https://github.com/CKopoer/mpv"):
+                 repository: str = "https://github.com/Predidit/libmpv-linux-build/releases/download/20261122/libmpv_x86_64.zip"):
         binary = root / "usr/bin/bilisail"
         binary.parent.mkdir(parents=True)
         binary.write_bytes(b"\x7fELFtest")
@@ -107,9 +107,9 @@ class PackageValidationTests(unittest.TestCase):
         metadata.write_text(
             json.dumps({"version": version, "build_number": "3"}), encoding="utf-8"
         )
-        source = root / "usr/bin/data/licenses/mpv/SOURCE.json"
+        source = root / "usr/bin/data/licenses/mpv/native_bundles.json"
         source.parent.mkdir(parents=True)
-        source.write_text(json.dumps({"repository": repository}), encoding="utf-8")
+        source.write_text(json.dumps({"bundles": {"linux_x64": {"url": repository, "sha256": "717d510a480baec2e939b6fc619d348a419e51e9b13b55643cff2e833bf367f3"}}}), encoding="utf-8")
         with (
             patch.object(validation.sys, "argv", ["validate", str(root), "1.2.1+3"]),
             patch.object(validation, "run", return_value=dependencies),
@@ -123,12 +123,12 @@ class PackageValidationTests(unittest.TestCase):
             root = Path(directory)
             self.validate(root)
             notice = json.loads((root / "usr/share/doc/bilisail/native-mpv.json").read_text(encoding="utf-8"))
-            self.assertEqual(notice["source"]["repository"], "https://github.com/CKopoer/mpv")
+            self.assertEqual(notice["source"]["url"], "https://github.com/Predidit/libmpv-linux-build/releases/download/20261122/libmpv_x86_64.zip")
             self.assertEqual(len(notice["libraries"]), 1)
 
     def test_unmaintained_mpv_source_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
-            with self.assertRaisesRegex(RuntimeError, "maintained personal fork"):
+            with self.assertRaisesRegex(RuntimeError, "Unexpected Linux libmpv bundle"):
                 self.validate(Path(directory), repository="https://example.test/mpv")
 
     def test_missing_runtime_dependency_still_fails(self):

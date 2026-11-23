@@ -37,6 +37,28 @@ extension NativePlayerProperties on mk.Player {
     }
   }
 
+  /// mpv restores file-local options when the playlist entry ends.
+  Future<void> Function() registerFileOptions(
+    Map<String, String> options, {
+    bool Function()? isCurrent,
+    void Function(Object error)? onFailure,
+  }) {
+    Future<void> onLoad() async {
+      if (isCurrent?.call() == false) return;
+      try {
+        for (final entry in options.entries) {
+          setProperty('file-local-options/${entry.key}', entry.value);
+        }
+      } on Object catch (error) {
+        if (onFailure == null) rethrow;
+        onFailure(error);
+      }
+    }
+
+    native.onLoadHooks.add(onLoad);
+    return onLoad;
+  }
+
   String getProperty(String name) {
     final player = native;
     if (player.disposed) throw StateError('Native player is disposed.');

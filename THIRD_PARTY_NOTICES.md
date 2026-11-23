@@ -1,5 +1,9 @@
 # 第三方来源与分发检查
 
+## 2026-11-23 播放组件
+
+当前使用 MIT 许可的 Predidit/media-kit，并移植原维护分支中的设备生命周期修复。各平台由同一提交的 Native Assets 清单选择 libmpv。下文的旧 SDK 构建选项和许可描述对应各自日期的历史二进制。[迁移记录](docs/validation/predidit-playback-2026-11-23.md) · [Windows 归档与构建来源](windows/native/PREDIDIT_SOURCE.md)
+
 ## 2026-11-20 专栏正文解析
 
 [html 0.15.7](https://pub.dev/packages/html/versions/0.15.7) 用于在 Dart 中解析旧版专栏的 HTML 正文。该包按 MIT 许可分发，传递依赖 [csslib 1.0.2](https://pub.dev/packages/csslib/versions/1.0.2) 使用 BSD-3-Clause。两者均为纯 Dart，包内原始 LICENSE 由 Flutter notices 收集。

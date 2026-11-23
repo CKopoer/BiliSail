@@ -1,8 +1,7 @@
 import 'dart:convert';
 
-/// The OpenGL libmpv render API cannot reshape Dolby Vision Profile 5's
-/// IPTPQc2 base layer. Convert its RPU-tagged frames before that renderer.
-/// Flutter's embedded texture is SDR; this is not Dolby Vision passthrough.
+/// Legacy renderers need the FFmpeg libplacebo filter to convert Dolby Vision
+/// Profile 5's RPU-tagged IPTPQc2 frames to SDR before texture presentation.
 const dolbyVisionSdrFilter =
     '@bilisail_dovi:lavfi=['
     'libplacebo=apply_dolbyvision=1:colorspace=bt709:'
@@ -14,6 +13,7 @@ bool configureNativeVideoColor({
   required String Function(String) read,
   required void Function(String, String) write,
   bool isAndroid = false,
+  bool embeddedGpuNext = false,
   void Function()? onAndroidDolbyVision,
   String? codecHint,
 }) {
@@ -40,6 +40,14 @@ bool configureNativeVideoColor({
   // must still go through a Dolby-aware path rather than ordinary YUV output.
   needsReshaping |= !hasProfile && isDolbyVisionCodec(codecHint);
   if (!needsReshaping) return false;
+
+  if (embeddedGpuNext) {
+    // The verified gpu-next render context reshapes RPU-tagged frames
+    // for the SDR Flutter texture and retains the selected decoder.
+    write('target-prim', 'bt.709');
+    write('target-trc', 'srgb');
+    return true;
+  }
 
   final requiredChoice = isAndroid ? 'gpu-next' : 'libplacebo';
   final option = isAndroid ? 'vo' : 'vf';

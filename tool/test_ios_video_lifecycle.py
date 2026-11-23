@@ -73,6 +73,9 @@ class AppleVideoLifecycleExecutionTest(unittest.TestCase):
     def test_close_during_texture_initialization_waits_and_prevents_registration(self):
         self.run_case("initialize")
 
+    def test_isolate_shutdown_retires_the_renderer_before_the_client(self):
+        self.run_case("hot-restart")
+
     def test_the_caller_can_free_mpv_immediately_after_the_disposal_reply(self):
         self.run_case("native-free")
 

@@ -22,6 +22,7 @@ mkv.VideoControllerConfiguration videoDecoderConfiguration({
     : mkv.VideoControllerConfiguration(
         // Software decoding still uses the GPU video output. Desktop defaults remain
         // owned by the SDK; Android follows PiliPlus's MediaCodec preference order.
+        enableAndroidSurfaceProducer: false,
         hwdec: decoding == VideoDecodingMode.software
             ? 'no'
             : isAndroid
@@ -52,6 +53,7 @@ final class _AndroidSourceVideoConfiguration
           decoding == VideoDecodingMode.automatic &&
           androidOutput == AndroidVideoOutputMode.directTexture,
       super(
+        enableAndroidSurfaceProducer: false,
         hwdec: decoding == VideoDecodingMode.software
             ? 'no'
             : debugMode
@@ -72,4 +74,52 @@ final class _AndroidSourceVideoConfiguration
       : direct
       ? 'mediacodec_embed'
       : null;
+
+  @override
+  mkv.VideoControllerConfiguration copyWith({
+    String? vo,
+    String? hwdec,
+    double? scale,
+    int? width,
+    int? height,
+    bool? enableHardwareAcceleration,
+    bool? enableAndroidSurfaceProducer,
+    bool? androidAttachSurfaceAfterVideoParameters,
+  }) => _ResolvedAndroidConfiguration(
+    usesDolbyVisionRenderer,
+    super.copyWith(
+      vo: vo,
+      hwdec: hwdec,
+      scale: scale,
+      width: width,
+      height: height,
+      enableHardwareAcceleration: enableHardwareAcceleration,
+      enableAndroidSurfaceProducer: enableAndroidSurfaceProducer,
+      androidAttachSurfaceAfterVideoParameters:
+          androidAttachSurfaceAfterVideoParameters,
+    ),
+  );
+}
+
+/// The SDK resolves its GPU default during controller creation. Keep the
+/// demuxed Dolby Vision choice available when the surface is later rebound.
+final class _ResolvedAndroidConfiguration
+    extends mkv.VideoControllerConfiguration {
+  _ResolvedAndroidConfiguration(
+    this.useDolby,
+    mkv.VideoControllerConfiguration base,
+  ) : super(
+        vo: base.vo,
+        hwdec: base.hwdec,
+        width: base.width,
+        height: base.height,
+        scale: base.scale,
+        enableHardwareAcceleration: base.enableHardwareAcceleration,
+        enableAndroidSurfaceProducer: base.enableAndroidSurfaceProducer,
+        androidAttachSurfaceAfterVideoParameters:
+            base.androidAttachSurfaceAfterVideoParameters,
+      );
+  final bool Function() useDolby;
+  @override
+  String? get vo => useDolby() ? 'gpu-next' : super.vo;
 }

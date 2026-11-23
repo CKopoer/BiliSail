@@ -28,6 +28,22 @@ void main() {
     expect(values['vf'], dolbyVisionSdrFilter);
   });
 
+  test('embedded gpu-next maps Profile 5 without a lavfi filter', () {
+    final values = properties([5])..['option-info/vf'] = '{"choices":[]}';
+    expect(
+      configureNativeVideoColor(
+        read: (key) => values[key] ?? '',
+        write: (key, value) => values[key] = value,
+        embeddedGpuNext: true,
+      ),
+      isTrue,
+    );
+    expect(values['hwdec'], 'auto');
+    expect(values['target-prim'], 'bt.709');
+    expect(values['target-trc'], 'srgb');
+    expect(values['vf'], isEmpty);
+  });
+
   test('explicit software decoding remains software for Profile 5', () {
     final values = properties([5], hwdec: 'no');
     configureNativeVideoColor(

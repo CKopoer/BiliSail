@@ -103,6 +103,22 @@ final class Registry: FlutterTextureRegistry {
   }
 }
 
+var pendingShutdown = false
+var shutdownCallback: ((UnsafeMutableRawPointer?) -> Void)?
+var shutdownContext: UnsafeMutableRawPointer?
+func media_kit_mpv_create_weak_client(_ player: OpaquePointer, _ name: UnsafePointer<CChar>?) -> OpaquePointer? { player }
+func media_kit_mpv_set_wakeup_callback(_ handle: OpaquePointer,
+    _ callback: ((UnsafeMutableRawPointer?) -> Void)?, _ context: UnsafeMutableRawPointer?) {
+  shutdownCallback = callback
+  shutdownContext = context
+}
+func media_kit_mpv_shutdown_pending(_ handle: OpaquePointer) -> Int32 { pendingShutdown ? 1 : 0 }
+func media_kit_mpv_destroy(_ handle: OpaquePointer) {
+  precondition(evidence.withLock { $0.disposed == 1 }, "Renderer client freed before the texture")
+}
+func media_kit_mpv_initialize(_ path: UnsafePointer<CChar>) -> Int32 { 0 }
+struct FlutterError { let code: String; let message: String; let details: Any? }
+
 // PRODUCTION_CLASSES
 
 let scenario = CommandLine.arguments[1]
@@ -163,6 +179,18 @@ func begin(_ textureId: Int64) {
             precondition(registry.frames <= 3, "Unbounded platform notifications")
             closeOutput()
           }
+        } else if scenario == "hot-restart" {
+          pendingShutdown = true
+          shutdownCallback?(shutdownContext)
+          DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            precondition(!registry.textures.isEmpty)
+            evidence.resume.signal()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+              precondition(shutdownCallback == nil)
+              completed += 1
+              finish()
+            }
+          }
         } else if scenario == "native-free" {
           disposeOutput(completion: {
             completed += 1
@@ -189,7 +217,7 @@ DispatchQueue.main.async {
     }
   }
   plugin.handle(FlutterMethodCall(method: "VideoOutputManager.Create", arguments: [
-    "handle": "1", "configuration": ["width": "null", "height": "null", "enableHardwareAcceleration": true]
+    "handle": "1", "libmpv": "fixture", "configuration": ["width": "null", "height": "null", "enableHardwareAcceleration": true]
   ]), result: { _ in })
   if scenario == "initialize" {
     DispatchQueue.global().async {

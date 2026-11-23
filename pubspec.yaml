@@ -46,50 +46,20 @@ dependencies:
   webview_all: 1.5.0
   image_picker: 1.2.4
 
-# Keep core, video output and native library manifests on one reviewed fork commit.
+# Resolve the player and texture plugin from the same Native Assets revision.
 dependency_overrides:
   # Retain the existing wakelock API and package_info_plus compatibility.
   wakelock_plus: 1.8.1
   media_kit:
     git:
-      url: https://github.com/CKopoer/media-kit.git
+      url: https://github.com/Predidit/media-kit.git
       path: media_kit
-      ref: 8e16eba1b01be05927b4fa098323ed496fea380d
+      ref: 484639aca5ffc754a65876c22f01dbb070225732
   media_kit_video:
     git:
-      url: https://github.com/CKopoer/media-kit.git
+      url: https://github.com/Predidit/media-kit.git
       path: media_kit_video
-      ref: 8e16eba1b01be05927b4fa098323ed496fea380d
-  media_kit_libs_video:
-    git:
-      url: https://github.com/CKopoer/media-kit.git
-      path: libs/universal/media_kit_libs_video
-      ref: 8e16eba1b01be05927b4fa098323ed496fea380d
-  media_kit_libs_android_video:
-    git:
-      url: https://github.com/CKopoer/media-kit.git
-      path: libs/android/media_kit_libs_android_video
-      ref: 8e16eba1b01be05927b4fa098323ed496fea380d
-  media_kit_libs_windows_video:
-    git:
-      url: https://github.com/CKopoer/media-kit.git
-      path: libs/windows/media_kit_libs_windows_video
-      ref: 8e16eba1b01be05927b4fa098323ed496fea380d
-  media_kit_libs_macos_video:
-    git:
-      url: https://github.com/CKopoer/media-kit.git
-      path: libs/macos/media_kit_libs_macos_video
-      ref: 8e16eba1b01be05927b4fa098323ed496fea380d
-  media_kit_libs_ios_video:
-    git:
-      url: https://github.com/CKopoer/media-kit.git
-      path: libs/ios/media_kit_libs_ios_video
-      ref: 8e16eba1b01be05927b4fa098323ed496fea380d
-  media_kit_libs_linux:
-    git:
-      url: https://github.com/CKopoer/media-kit.git
-      path: libs/linux/media_kit_libs_linux
-      ref: 8e16eba1b01be05927b4fa098323ed496fea380d
+      ref: 484639aca5ffc754a65876c22f01dbb070225732
 
 dev_dependencies:
   flutter_driver:
@@ -102,7 +72,7 @@ dev_dependencies:
   webview_platform_interface: 1.5.0
 
 flutter:
-  # The pinned video and native-library plugins share CocoaPods integration.
+  # Use CocoaPods for Flutter plugins on Apple platforms.
   config:
     enable-swift-package-manager: false
   uses-material-design: true

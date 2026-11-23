@@ -5,6 +5,8 @@ import hashlib
 from pathlib import Path
 import shutil
 
+from media_kit_sources import apply_patches
+
 
 PODSPEC_HASHES = {
     "ios": "93cdfd347e6b85a2af3e115969629b940b64819462307407af6c2b73ac97a62f",
@@ -41,7 +43,8 @@ def prepare(repo: Path, platform: str) -> Path:
     for directory in (platform, "common"):
         shutil.copytree(source / directory, destination / directory, symlinks=True)
     shutil.copyfile(source / "LICENSE", destination / "LICENSE")
-    shutil.copytree(bindings, destination / platform / "media_kit_mpv")
+    apply_patches(destination, ["mpv-client", "darwin", platform])
+    shutil.copytree(destination / "common/mpv", destination / platform / "media_kit_mpv")
     # Xcode's framework Headers phase flattens public headers. Keep both the
     # generated umbrella imports and the wrapper's includes valid after copying.
     includes = destination / platform / "media_kit_mpv/include"

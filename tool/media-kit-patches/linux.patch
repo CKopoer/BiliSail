@@ -1,0 +1,436 @@
+--- a/linux/include/media_kit_video/texture_sw.h
++++ b/linux/include/media_kit_video/texture_sw.h
+@@ -26,6 +26,9 @@ G_DECLARE_FINAL_TYPE(TextureSW,
+ 
+ TextureSW* texture_sw_new(VideoOutput* video_output);
+ 
++// Stop raster callbacks from accessing the closing output.
++void texture_sw_detach(TextureSW* self);
++
+ gboolean texture_sw_copy_pixels(FlPixelBufferTexture* texture,
+                                 const guint8** buffer,
+                                 guint32* width,
+--- a/linux/include/media_kit_video/video_output.h
++++ b/linux/include/media_kit_video/video_output.h
+@@ -71,7 +71,8 @@ EGLContext video_output_get_egl_context(VideoOutput* self);
+ 
+ GLRenderThread* video_output_get_gl_render_thread(VideoOutput* self);
+ 
+-guint8* video_output_get_pixel_buffer(VideoOutput* self);
++gboolean video_output_copy_pixel_buffer(VideoOutput* self, guint8** buffer,
++                                        guint32* width, guint32* height);
+ 
+ gint64 video_output_get_width(VideoOutput* self);
+ 
+--- a/linux/texture_sw.cc
++++ b/linux/texture_sw.cc
+@@ -12,7 +12,9 @@ struct _TextureSW {
+   FlPixelBufferTexture parent_instance;
+   guint32 current_width;
+   guint32 current_height;
++  GMutex output_mutex;
+   VideoOutput* video_output;
++  guint8* snapshot;
+ };
+ 
+ G_DEFINE_TYPE(TextureSW, texture_sw, fl_pixel_buffer_texture_get_type())
+@@ -20,16 +22,26 @@ G_DEFINE_TYPE(TextureSW, texture_sw, fl_pixel_buffer_texture_get_type())
+ static void texture_sw_init(TextureSW* self) {
+   self->current_width = 1;
+   self->current_height = 1;
++  g_mutex_init(&self->output_mutex);
+   self->video_output = NULL;
++  self->snapshot = NULL;
+ }
+ 
+ static void texture_sw_dispose(GObject* object) {
++  auto* self = TEXTURE_SW(object);
++  g_clear_pointer(&self->snapshot, g_free);
+   G_OBJECT_CLASS(texture_sw_parent_class)->dispose(object);
+ }
+ 
++static void texture_sw_finalize(GObject* object) {
++  g_mutex_clear(&TEXTURE_SW(object)->output_mutex);
++  G_OBJECT_CLASS(texture_sw_parent_class)->finalize(object);
++}
++
+ static void texture_sw_class_init(TextureSWClass* klass) {
+   FL_PIXEL_BUFFER_TEXTURE_CLASS(klass)->copy_pixels = texture_sw_copy_pixels;
+   G_OBJECT_CLASS(klass)->dispose = texture_sw_dispose;
++  G_OBJECT_CLASS(klass)->finalize = texture_sw_finalize;
+ }
+ 
+ TextureSW* texture_sw_new(VideoOutput* video_output) {
+@@ -38,27 +50,43 @@ TextureSW* texture_sw_new(VideoOutput* video_output) {
+   return self;
+ }
+ 
++void texture_sw_detach(TextureSW* self) {
++  g_mutex_lock(&self->output_mutex);
++  self->video_output = nullptr;
++  g_mutex_unlock(&self->output_mutex);
++}
++
+ gboolean texture_sw_copy_pixels(FlPixelBufferTexture* texture,
+                                 const guint8** buffer,
+                                 guint32* width,
+                                 guint32* height,
+                                 GError** error) {
+   TextureSW* self = TEXTURE_SW(texture);
++  g_mutex_lock(&self->output_mutex);
+   VideoOutput* video_output = self->video_output;
+-  gint32 required_width = (guint32)video_output_get_width(video_output);
+-  gint32 required_height = (guint32)video_output_get_height(video_output);
+-  if (required_width > 0 && required_height > 0) {
+-    guint8* pixel_buffer = video_output_get_pixel_buffer(video_output);
+-    if (self->current_width != required_width ||
+-        self->current_height != required_height) {
+-      self->current_width = required_width;
+-      self->current_height = required_height;
+-      // Notify Flutter about the change in texture's dimensions.
++  guint8* copy = NULL;
++  guint32 frame_width = 0, frame_height = 0;
++  if (video_output != nullptr &&
++      video_output_copy_pixel_buffer(video_output, &copy, &frame_width, &frame_height)) {
++    g_free(self->snapshot);
++    self->snapshot = copy;
++    if (self->current_width != frame_width || self->current_height != frame_height) {
++      self->current_width = frame_width;
++      self->current_height = frame_height;
+       video_output_notify_texture_update(video_output);
+     }
+-    *buffer = pixel_buffer;
+-    *width = required_width;
+-    *height = required_height;
+   }
++  g_mutex_unlock(&self->output_mutex);
++  // Flutter uploads after this callback unlocks the producer. Only the raster
++  // callback owns this snapshot; the native renderer never writes these bytes.
++  if (self->snapshot == NULL) {
++    // The Linux embedder reads the GError when populate returns FALSE.
++    g_set_error_literal(error, G_IO_ERROR, G_IO_ERROR_WOULD_BLOCK,
++                        "No software video frame is available");
++    return FALSE;
++  }
++  *buffer = self->snapshot;
++  *width = self->current_width;
++  *height = self->current_height;
+   return TRUE;
+ }
+--- a/linux/video_output.cc
++++ b/linux/video_output.cc
+@@ -12,6 +12,7 @@
+ #include "include/media_kit_video/gl_render_thread.h"
+ #include "../common/video_dimensions.h"
+ 
++#include <cstring>
+ #include <epoxy/egl.h>
+ #include <gdk/gdkwayland.h>
+ #include <gdk/gdkx.h>
+@@ -25,6 +26,9 @@ struct _VideoOutput {
+   EGLContext egl_context; /* Isolated (non-shared) context for mpv. */
+   guint8* pixel_buffer;
+   TextureSW* texture_sw;
++  guint32 sw_frame_width;
++  guint32 sw_frame_height;
++  guint pending_sw_frame;
+   GMutex mutex; /* Only used in S/W rendering. */
+   mpv_handle* handle;
+   mpv_render_context* render_context;
+@@ -42,6 +46,7 @@ G_DEFINE_TYPE(VideoOutput, video_output, G_TYPE_OBJECT)
+ 
+ static void video_output_dispose(GObject* object) {
+   VideoOutput* self = VIDEO_OUTPUT(object);
++  if (self->texture_sw) texture_sw_detach(self->texture_sw);
+   self->destroyed = TRUE;
+ 
+   // Make sure that no more callbacks are invoked from mpv.
+@@ -49,6 +54,11 @@ static void video_output_dispose(GObject* object) {
+     mpv_render_context_set_update_callback(self->render_context, NULL, NULL);
+   }
+ 
++  if (self->pending_sw_frame) {
++    g_source_remove(self->pending_sw_frame);
++    self->pending_sw_frame = 0;
++  }
++
+   // H/W
+   if (self->texture_gl) {
+     fl_texture_registrar_unregister_texture(self->texture_registrar,
+@@ -181,6 +191,7 @@ VideoOutput* video_output_new(FlTextureRegistrar* texture_registrar,
+ #endif
+   
+   gboolean hardware_acceleration_supported = FALSE;
++  mpv_render_param native_display = {MPV_RENDER_PARAM_INVALID, nullptr};
+ 
+   if (self->configuration.enable_hardware_acceleration) {
+     // The GTK embedder (FlOpenGLManager) renders with EGL + GLES2 on both
+@@ -189,6 +200,19 @@ VideoOutput* video_output_new(FlTextureRegistrar* texture_registrar,
+     // so derive the engine's display from the GDK display — same-display is
+     // all EGLImage/EGLSync sharing requires (mpv's context is non-shared).
+     GdkDisplay* display = gdk_display_get_default();
++    // libva-wayland needs a DRM device from the compositor. Some virtual
++    // compositors only advertise wl_shm; probing VA there can dereference
++    // missing DRM state. The EGL render surface itself still works.
++    if (GDK_IS_WAYLAND_DISPLAY(display)) {
++      if (gdk_wayland_display_query_registry(display, "wl_drm") ||
++          gdk_wayland_display_query_registry(display, "zwp_linux_dmabuf_v1")) {
++        native_display = {MPV_RENDER_PARAM_WL_DISPLAY,
++                          gdk_wayland_display_get_wl_display(display)};
++      }
++    } else if (GDK_IS_X11_DISPLAY(display)) {
++      native_display = {MPV_RENDER_PARAM_X11_DISPLAY,
++                        gdk_x11_display_get_xdisplay(display)};
++    }
+     EGLDisplay egl_display = EGL_NO_DISPLAY;
+     if (epoxy_has_egl_extension(EGL_NO_DISPLAY, "EGL_EXT_platform_base")) {
+       if (GDK_IS_WAYLAND_DISPLAY(display)) {
+@@ -233,7 +257,7 @@ VideoOutput* video_output_new(FlTextureRegistrar* texture_registrar,
+   }
+   
+   // Initialize mpv in dedicated GL render thread
+-  gl_render_thread->PostAndWait([self, &hardware_acceleration_supported]() {
++  gl_render_thread->PostAndWait([self, native_display, &hardware_acceleration_supported]() {
+     mpv_set_option_string(self->handle, "video-sync", "audio");
+     // Causes frame drops with `pulse` audio output. (SlotSun/dart_simple_live#42)
+     // mpv_set_option_string(self->handle, "video-timing-offset", "0");
+@@ -274,26 +298,23 @@ VideoOutput* video_output_new(FlTextureRegistrar* texture_registrar,
+               NULL,
+           };
+ 
+-          // MPV_RENDER_PARAM_RENDERER is left unset on purpose: libmpv then
+-          // uses gpu-next when it initializes on this context and gpu otherwise.
++          // Record which renderer initialized, so the application can safely
++          // enable RPU-based Dolby Vision reshaping for compatible surfaces.
+           mpv_render_param params[] = {
+               {MPV_RENDER_PARAM_API_TYPE, (void*)MPV_RENDER_API_TYPE_OPENGL},
+-              {MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, (void*)&gl_init_params},
+-              {MPV_RENDER_PARAM_INVALID, (void*)0},
+-              {MPV_RENDER_PARAM_INVALID, (void*)0},
++              {MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, &gl_init_params},
++              {MPV_RENDER_PARAM_RENDERER, const_cast<char*>(MPV_RENDER_RENDERER_GPU_NEXT)},
++              native_display,
++              {MPV_RENDER_PARAM_INVALID, nullptr},
+           };
+-
+-          // VAAPI acceleration requires passing X11/Wayland display.
+-          GdkDisplay* display = gdk_display_get_default();
+-          if (GDK_IS_WAYLAND_DISPLAY(display)) {
+-            params[2].type = MPV_RENDER_PARAM_WL_DISPLAY;
+-            params[2].data = gdk_wayland_display_get_wl_display(display);
+-          } else if (GDK_IS_X11_DISPLAY(display)) {
+-            params[2].type = MPV_RENDER_PARAM_X11_DISPLAY;
+-            params[2].data = gdk_x11_display_get_xdisplay(display);
++          int result = mpv_render_context_create(&self->render_context, self->handle, params);
++          if (result == 0) {
++            mpv_set_property_string(self->handle, "user-data/bilisail-renderer", "gpu-next");
++          } else {
++            params[2].data = const_cast<char*>(MPV_RENDER_RENDERER_GPU);
++            result = mpv_render_context_create(&self->render_context, self->handle, params);
+           }
+-
+-          if (mpv_render_context_create(&self->render_context, self->handle, params) == 0) {
++          if (result == 0) {
+             mpv_render_context_set_update_callback(
+                 self->render_context,
+                 [](void* data) {
+@@ -347,9 +368,18 @@ VideoOutput* video_output_new(FlTextureRegistrar* texture_registrar,
+         mpv_render_context_set_update_callback(
+             self->render_context,
+             [](void* data) {
+-              gdk_threads_add_idle(
++              auto* output = static_cast<VideoOutput*>(data);
++              g_mutex_lock(&output->mutex);
++              if (output->pending_sw_frame != 0) {
++                g_mutex_unlock(&output->mutex);
++                return;
++              }
++              output->pending_sw_frame = gdk_threads_add_idle(
+                   [](gpointer data) -> gboolean {
+                     VideoOutput* self = (VideoOutput*)data;
++                    g_mutex_lock(&self->mutex);
++                    self->pending_sw_frame = 0;
++                    g_mutex_unlock(&self->mutex);
+                     if (self->destroyed) {
+                       return FALSE;
+                     }
+@@ -358,7 +388,7 @@ VideoOutput* video_output_new(FlTextureRegistrar* texture_registrar,
+                     gint64 height = video_output_get_height(self);
+                     if (width > 0 && height > 0) {
+                       gint32 size[]{(gint32)width, (gint32)height};
+-                      gint32 pitch = 4 * (gint32)width;
++                      size_t pitch = 4 * static_cast<size_t>(width);
+                       mpv_render_param params[]{
+                           {MPV_RENDER_PARAM_SW_SIZE, size},
+                           {MPV_RENDER_PARAM_SW_FORMAT, (void*)"rgb0"},
+@@ -366,7 +396,12 @@ VideoOutput* video_output_new(FlTextureRegistrar* texture_registrar,
+                           {MPV_RENDER_PARAM_SW_POINTER, self->pixel_buffer},
+                           {MPV_RENDER_PARAM_INVALID, (void*)0},
+                       };
+-                      mpv_render_context_render(self->render_context, params);
++                      if (mpv_render_context_render(self->render_context, params) < 0) {
++                        g_mutex_unlock(&self->mutex);
++                        return FALSE;
++                      }
++                      self->sw_frame_width = static_cast<guint32>(width);
++                      self->sw_frame_height = static_cast<guint32>(height);
+                       fl_texture_registrar_mark_texture_frame_available(
+                           self->texture_registrar,
+                           FL_TEXTURE(self->texture_sw));
+@@ -375,6 +410,7 @@ VideoOutput* video_output_new(FlTextureRegistrar* texture_registrar,
+                     return FALSE;
+                   },
+                   data);
++              g_mutex_unlock(&output->mutex);
+             },
+             self);
+       }
+@@ -440,8 +476,26 @@ GLRenderThread* video_output_get_gl_render_thread(VideoOutput* self) {
+   return self->gl_render_thread;
+ }
+ 
+-guint8* video_output_get_pixel_buffer(VideoOutput* self) {
+-  return self->pixel_buffer;
++gboolean video_output_copy_pixel_buffer(VideoOutput* self, guint8** buffer,
++                                        guint32* width, guint32* height) {
++  g_mutex_lock(&self->mutex);
++  if (self->destroyed || self->pixel_buffer == NULL ||
++      self->sw_frame_width == 0 || self->sw_frame_height == 0) {
++    g_mutex_unlock(&self->mutex);
++    return FALSE;
++  }
++  const gsize size = static_cast<gsize>(self->sw_frame_width) * self->sw_frame_height * 4;
++  auto* copy = static_cast<guint8*>(g_try_malloc(size));
++  if (copy == NULL) {
++    g_mutex_unlock(&self->mutex);
++    return FALSE;
++  }
++  memcpy(copy, self->pixel_buffer, size);
++  *buffer = copy;
++  *width = self->sw_frame_width;
++  *height = self->sw_frame_height;
++  g_mutex_unlock(&self->mutex);
++  return TRUE;
+ }
+ 
+ gint64 video_output_get_width(VideoOutput* self) {
+@@ -458,7 +512,7 @@ gint64 video_output_get_width(VideoOutput* self) {
+       return SW_RENDERING_MAX_WIDTH;
+     }
+     if (height >= SW_RENDERING_MAX_HEIGHT) {
+-      return width / height * SW_RENDERING_MAX_HEIGHT;
++      return width * SW_RENDERING_MAX_HEIGHT / height;
+     }
+   }
+ 
+@@ -467,7 +521,7 @@ gint64 video_output_get_width(VideoOutput* self) {
+ 
+ gint64 video_output_get_height(VideoOutput* self) {
+   // Fixed height.
+-  if (self->width) {
++  if (self->height) {
+     return self->height;
+   }
+ 
+@@ -479,7 +533,7 @@ gint64 video_output_get_height(VideoOutput* self) {
+       return SW_RENDERING_MAX_HEIGHT;
+     }
+     if (width >= SW_RENDERING_MAX_WIDTH) {
+-      return height / width * SW_RENDERING_MAX_WIDTH;
++      return height * SW_RENDERING_MAX_WIDTH / width;
+     }
+   }
+ 
+--- a/linux/video_output_manager.cc
++++ b/linux/video_output_manager.cc
+@@ -7,6 +7,7 @@
+ // LICENSE file.
+ 
+ #include "include/media_kit_video/video_output_manager.h"
++#include "media_kit_mpv.h"
+ 
+ struct _VideoOutputManager {
+   GObject parent_instance;
+@@ -17,9 +18,44 @@ struct _VideoOutputManager {
+ 
+ G_DEFINE_TYPE(VideoOutputManager, video_output_manager, G_TYPE_OBJECT)
+ 
++// GTK owns the map and output. libmpv only wakes the attached GSource.
++struct RenderClient {
++  VideoOutputManager* manager;
++  gint64 key;
++  mpv_handle* client;
++  VideoOutput* output;
++  GSource* events;
++};
++
++static gboolean dispatch_events(GSource*, GSourceFunc dispatch, gpointer data) {
++  return dispatch(data);
++}
++
++static GSourceFuncs event_functions = {nullptr, nullptr, dispatch_events, nullptr, nullptr, nullptr};
++
++static gboolean check_shutdown(gpointer data) {
++  auto* lease = static_cast<RenderClient*>(data);
++  g_source_set_ready_time(lease->events, -1);
++  if (media_kit_mpv_shutdown_pending(lease->client)) {
++    g_hash_table_remove(lease->manager->video_outputs, GINT_TO_POINTER(lease->key));
++    return G_SOURCE_REMOVE;
++  }
++  return G_SOURCE_CONTINUE;
++}
++
++static void release_client(gpointer data) {
++  auto* lease = static_cast<RenderClient*>(data);
++  media_kit_mpv_set_wakeup_callback(lease->client, nullptr, nullptr);
++  g_source_destroy(lease->events);
++  g_source_unref(lease->events);
++  g_object_unref(lease->output);
++  mpv_destroy(lease->client);
++  delete lease;
++}
++
+ static void video_output_manager_init(VideoOutputManager* self) {
+   self->video_outputs = g_hash_table_new_full(g_direct_hash, g_direct_equal,
+-                                              nullptr, g_object_unref);
++                                              nullptr, release_client);
+   self->gl_render_thread = new GLRenderThread();
+ }
+ 
+@@ -48,12 +84,20 @@ void video_output_manager_create(VideoOutputManager* self,
+                                  TextureUpdateCallback texture_update_callback,
+                                  gpointer texture_update_callback_context) {
+   if (!g_hash_table_contains(self->video_outputs, GINT_TO_POINTER(handle))) {
+-    g_autoptr(VideoOutput) video_output = video_output_new(
+-        self->texture_registrar, handle, configuration, self->gl_render_thread);
++    auto* client = mpv_create_weak_client(reinterpret_cast<mpv_handle*>(handle), nullptr);
++    if (!client) return;
++    VideoOutput* video_output = video_output_new(self->texture_registrar,
++        reinterpret_cast<gint64>(client), configuration, self->gl_render_thread);
+     video_output_set_texture_update_callback(
+         video_output, texture_update_callback, texture_update_callback_context);
+-    g_hash_table_insert(self->video_outputs, GINT_TO_POINTER(handle),
+-                        g_object_ref(video_output));
++    auto* events = g_source_new(&event_functions, sizeof(GSource));
++    auto* lease = new RenderClient{self, handle, client, video_output, events};
++    g_hash_table_insert(self->video_outputs, GINT_TO_POINTER(handle), lease);
++    g_source_set_callback(events, check_shutdown, lease, nullptr);
++    g_source_attach(events, nullptr);
++    media_kit_mpv_set_wakeup_callback(client, [](void* source) {
++      g_source_set_ready_time(static_cast<GSource*>(source), 0);
++    }, events);
+   }
+ }
+ 
+@@ -62,9 +106,9 @@ void video_output_manager_set_size(VideoOutputManager* self,
+                                    gint64 width,
+                                    gint64 height) {
+   if (g_hash_table_contains(self->video_outputs, GINT_TO_POINTER(handle))) {
+-    VideoOutput* video_output = VIDEO_OUTPUT(
++    auto* lease = static_cast<RenderClient*>(
+         g_hash_table_lookup(self->video_outputs, GINT_TO_POINTER(handle)));
+-    video_output_set_size(video_output, width, height);
++    video_output_set_size(lease->output, width, height);
+   }
+ }
+ 

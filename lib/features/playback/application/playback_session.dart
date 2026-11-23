@@ -26,6 +26,7 @@ import 'playback_rate_memory.dart';
 import 'playback_volume_memory.dart';
 import 'playback_listening_mode.dart';
 import 'playback_startup_diagnostics.dart';
+import 'playback_source_selection.dart';
 import '../../settings/domain/app_settings.dart';
 
 final playbackSessionProvider = Provider<PlaybackSession>(
@@ -1222,78 +1223,13 @@ class PlaybackSession extends ChangeNotifier {
                       )
                     : Duration.zero);
       if (!isCurrent()) return;
-      final policy = MediaRequestPolicy(headers: resolved.headers);
       _openingPosition = resume;
-      final audio = resolved.audio;
-      if (resolved.kind == PlaybackMediaKind.dash &&
-          audio == null &&
-          !resolved.isIntentionallySilent) {
-        throw const AppFailure(AppFailureKind.playback, '未取得点播音频轨道');
-      }
-      if (requestedAudioOnly &&
-          (isLive ||
-              resolved.kind != PlaybackMediaKind.dash ||
-              audio == null ||
-              audio.urls.isEmpty)) {
-        throw const AppFailure(AppFailureKind.playback, '当前内容没有独立音轨，请返回视频播放');
-      }
-      // Live lines follow url_info order, independently of VOD CDN preferences.
-      final liveLineIndex =
-          isLive &&
-              requestedLiveLine >= 0 &&
-              requestedLiveLine < resolved.video.urls.length
-          ? requestedLiveLine
-          : 0;
-      final videoUri = resolved.video.urls[liveLineIndex];
-      final audioUri = audio?.urls.first;
-      final source = requestedAudioOnly && audio != null && audioUri != null
-          ? ProgressiveSource(
-              MediaTrack(
-                uri: audioUri,
-                requestPolicy: policy,
-                codec: audio.codec,
-                bandwidth: audio.bandwidth,
-              ),
-              isAudioOnly: true,
-            )
-          : resolved.kind == PlaybackMediaKind.liveHls
-          ? ManifestSource(
-              MediaTrack(
-                uri: videoUri,
-                requestPolicy: policy,
-                isHdr: resolved.isHdr,
-              ),
-              isLive: true,
-            )
-          : resolved.kind == PlaybackMediaKind.liveFlv ||
-                resolved.kind == PlaybackMediaKind.progressive
-          ? ProgressiveSource(
-              MediaTrack(
-                uri: videoUri,
-                requestPolicy: policy,
-                isHdr: resolved.isHdr,
-              ),
-              isLive: isLive,
-            )
-          : DashPairSource(
-              isIntentionallySilent: resolved.isIntentionallySilent,
-              duration: resolved.duration,
-              video: MediaTrack(
-                uri: videoUri,
-                requestPolicy: policy,
-                codec: resolved.video.codec,
-                bandwidth: resolved.video.bandwidth,
-                isHdr: resolved.isHdr,
-              ),
-              audio: audio == null || audioUri == null
-                  ? null
-                  : MediaTrack(
-                      uri: audioUri,
-                      requestPolicy: policy,
-                      codec: audio.codec,
-                      bandwidth: audio.bandwidth,
-                    ),
-            );
+      final (:source, :liveLineIndex) = selectPlaybackSource(
+        resolved,
+        requestedAudioOnly: requestedAudioOnly,
+        isLive: isLive,
+        requestedLiveLine: requestedLiveLine,
+      );
       Future<void> openSource() async {
         if (!isCurrent()) return;
         if (isLive) _openingLiveGeneration = generation;

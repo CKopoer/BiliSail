@@ -1,0 +1,96 @@
+--- a/android/src/main/java/com/alexmercerind/media_kit_video/VideoOutput.java
++++ b/android/src/main/java/com/alexmercerind/media_kit_video/VideoOutput.java
+@@ -35,6 +35,11 @@
+     private Surface surfaceTextureSurface;
+     private int surfaceTextureWidth = 1;
+     private int surfaceTextureHeight = 1;
++    private long generation = -1;
++    private boolean consumed;
++    private final java.util.ArrayList<io.flutter.plugin.common.MethodChannel.Result> waiters =
++            new java.util.ArrayList<>();
++
+     private boolean surfaceTextureNotified = false;
+ 
+     private final Object lock = new Object();
+@@ -57,8 +62,45 @@
+         }
+     }
+ 
++    // Flutter owns SurfaceTexture's available listener. Its public consumed
++    // callback runs after the raster thread has actually acquired the buffer.
++    void beginFrames(long source) {
++        synchronized (lock) {
++            finishWaiters(false);
++            generation = source;
++            consumed = false;
++            surfaceTextureEntry.setOnFrameConsumedListener(() -> handler.post(() -> {
++                synchronized (lock) {
++                    if (source != generation || surfaceTextureWidth < 2 || surfaceTextureHeight < 2) return;
++                    consumed = true;
++                    surfaceTextureEntry.setOnFrameConsumedListener(null);
++                    finishWaiters(true);
++                }
++            }));
++        }
++    }
++
++    void awaitFrame(long source, io.flutter.plugin.common.MethodChannel.Result reply) {
++        synchronized (lock) {
++            if (source != generation) reply.error("superseded", "Video source replaced", null);
++            else if (consumed) reply.success(null);
++            else waiters.add(reply);
++        }
++    }
++
++    private void finishWaiters(boolean ready) {
++        for (io.flutter.plugin.common.MethodChannel.Result reply : waiters) {
++            if (ready) reply.success(null);
++            else reply.error("superseded", "Video source replaced", null);
++        }
++        waiters.clear();
++    }
++
+     public void dispose() {
+         synchronized (lock) {
++            generation = -1;
++            finishWaiters(false);
++            if (surfaceTextureEntry != null) surfaceTextureEntry.setOnFrameConsumedListener(null);
+             if (enableSurfaceProducer) {
+                 try {
+                     surfaceProducer.getSurface().release();
+--- a/android/src/main/java/com/alexmercerind/media_kit_video/VideoOutputManager.java
++++ b/android/src/main/java/com/alexmercerind/media_kit_video/VideoOutputManager.java
+@@ -46,6 +46,17 @@
+         }
+     }
+ 
++    public void frame(long handle, long generation, boolean begin, io.flutter.plugin.common.MethodChannel.Result reply) {
++        synchronized (lock) {
++            VideoOutput output = videoOutputs.get(handle);
++            if (output == null) reply.error("disposed", "Video output released", null);
++            else if (begin) {
++                output.beginFrames(generation);
++                reply.success(null);
++            } else output.awaitFrame(generation, reply);
++        }
++    }
++
+     public void setSurfaceSize(long handle, int width, int height) {
+         synchronized (lock) {
+             Log.i(TAG, String.format(Locale.ENGLISH, "com.alexmercerind.media_kit_video.VideoOutputManager.setSurfaceSize: %d %d %d", handle, width, height));
+--- a/android/src/main/java/com/alexmercerind/media_kit_video/MediaKitVideoPlugin.java
++++ b/android/src/main/java/com/alexmercerind/media_kit_video/MediaKitVideoPlugin.java
+@@ -65,6 +65,13 @@
+                 result.success(null);
+                 break;
+             }
++            case "BiliSail.BeginFrames":
++            case "BiliSail.WaitForFrame": {
++                final long handle = Long.parseLong(call.argument("handle"));
++                final long generation = Long.parseLong(call.argument("generation"));
++                videoOutputManager.frame(handle, generation, call.method.equals("BiliSail.BeginFrames"), result);
++                break;
++            }
+             case "VideoOutputManager.Dispose": {
+                 final long handle = Long.parseLong(call.argument("handle"));
+                 videoOutputManager.dispose(handle);

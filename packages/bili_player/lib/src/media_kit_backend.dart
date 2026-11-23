@@ -68,11 +68,13 @@ final class MediaKitBackend
   PlaybackOperation? _seek;
   bool _disposed = false;
   bool _requiresVideoColorMapping = false;
+  bool _embeddedGpuNext = false;
   OpenOptions? _lastOptions;
   int _generation = 0;
   int _seekRevision = 0;
   NativeReadinessStage? _readinessStage;
   Timer? _colorDeadline;
+  Future<void> Function()? _sourceOptionsHook;
   bool _networkOpenError = false;
   bool _fatalLiveHlsRead = false;
   NativeBufferingDiagnostics? _bufferDiagnostics;
@@ -559,6 +561,13 @@ final class MediaKitBackend
           rate: options.requestedBufferAhead == null ? options.rate : 1,
         ),
     };
+    final previousHook = _sourceOptionsHook;
+    if (previousHook != null) player.native.onLoadHooks.remove(previousHook);
+    _sourceOptionsHook = player.registerFileOptions(
+      fileOptions,
+      isCurrent: () => generation == _generation && !_disposed,
+      onFailure: (error) => _nativeLoad?.state.failPreparation(error: error),
+    );
     // Restore selection on a reused player after a silent preview/audio-only
     // source. DASH streams are demuxed as one EDL timeline by mpv.
     await operation.wait(
@@ -573,7 +582,6 @@ final class MediaKitBackend
             mediaUri,
             httpHeaders:
                 liveHeaders?.fields ?? mediaTrack.requestPolicy.headers,
-            nativeOptions: fileOptions,
             // Resume as part of loading, before decoding the first frame.
             // Opening at zero and seeking afterward buffers twice when
             // returning from audio-only playback.
@@ -650,7 +658,12 @@ final class MediaKitBackend
       // Track metadata is available through the SDK before presentation is
       // admitted. Configure the output, then verify its converted frame.
       try {
+        // mpv exposes a user-data node as JSON, including string quotes.
+        _embeddedGpuNext =
+            (Platform.isWindows || Platform.isLinux) &&
+            player.getProperty('user-data/bilisail-renderer') == '"gpu-next"';
         _requiresVideoColorMapping = configureNativeVideoColor(
+          embeddedGpuNext: _embeddedGpuNext,
           read: player.getProperty,
           write: player.setProperty,
           isAndroid: Platform.isAndroid,
@@ -744,17 +757,24 @@ final class MediaKitBackend
     _enterStage(NativeReadinessStage.videoOutput);
     // Decoder metadata alone does not establish a native video output.
     // mpv renders a video frame while paused; no audio probe is needed.
-    await operation.wait(_videoOutput.firstFrameRendered);
+    await operation.wait(_videoOutput.waitForDecodedOutput());
+    bool colorReady(String? driver, String? matrix) {
+      if (Platform.isAndroid) return driver == 'gpu-next';
+      // The embedded GPU renderer applies the RPU after mpv's VO input.
+      if (_embeddedGpuNext) {
+        return driver == 'libmpv' && matrix == 'dolbyvision';
+      }
+      return matrix == 'bt.709';
+    }
+
     if (_requiresVideoColorMapping) {
-      // The official controller may publish dimensions before the
-      // filtered frame's output parameters. Confirm conversion through
-      // this source's native events before inspecting its final matrix.
       await _waitReady(
         player,
         generation,
-        () => Platform.isAndroid
-            ? load.state.videoOutputDriver == 'gpu-next'
-            : load.state.videoOutputMatrix == 'bt.709',
+        () => colorReady(
+          load.state.videoOutputDriver,
+          load.state.videoOutputMatrix,
+        ),
         const [],
         _remaining(watch, openBudget),
         'Video color conversion did not become ready.',
@@ -770,9 +790,7 @@ final class MediaKitBackend
         (profile.isEmpty || profile == '5');
     final mappingFailed =
         _requiresVideoColorMapping &&
-        (Platform.isAndroid
-            ? player.getProperty('current-vo') != 'gpu-next'
-            : outputMatrix != 'bt.709');
+        !colorReady(player.getProperty('current-vo'), outputMatrix);
     if (unmappedDolby || mappingFailed) {
       throw PlayerFailure(
         PlayerFailureKind.unsupportedVideoColor,

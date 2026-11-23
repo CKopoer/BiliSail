@@ -37,6 +37,22 @@ final class _Player extends mk.PlatformPlayer {
   }
 }
 
+final class _SdkPlayer extends Fake implements mk.Player {
+  _SdkPlayer(this.platform);
+  @override
+  final _Player platform;
+  @override
+  mk.PlayerState get state => platform.state;
+  @override
+  mk.PlayerStream get stream => platform.stream;
+  @override
+  Future<int> get handle => platform.handle;
+  @override
+  Future<void> play() => platform.play();
+  @override
+  Future<void> pause() => platform.pause();
+}
+
 final class _UnopenedPlayer extends _Player {
   final requestedHandle = Completer<void>();
   final openFailure = StateError('Test stops before accessing libmpv');
@@ -63,7 +79,7 @@ final class _PlatformOutput extends mkv.PlatformVideoController {
 
 final class _Controller extends Fake implements mkv.VideoController {
   _Controller(_Player backend, int textureId, {bool rendered = true})
-    : output = _PlatformOutput(mk.Player(platformPlayer: backend), textureId) {
+    : output = _PlatformOutput(_SdkPlayer(backend), textureId) {
     notifier = ValueNotifier(output);
     platform = Completer<mkv.PlatformVideoController>()..complete(output);
     if (rendered) renderFrame();
@@ -129,7 +145,7 @@ void main() {
 
       final failedOpen = expectLater(
         output.bindPlayer(
-          mk.Player(platformPlayer: player),
+          _SdkPlayer(player),
           generation: 1,
           decoding: VideoDecodingMode.automatic,
         ),

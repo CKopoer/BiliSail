@@ -43,7 +43,10 @@ void main() {
       usesDolbyVisionRenderer: () => dolby,
     );
     expect(configuration.vo, 'mediacodec_embed');
+    final resolved = configuration.copyWith(vo: configuration.vo);
+    expect(resolved.enableAndroidSurfaceProducer, isFalse);
     dolby = true;
+    expect(resolved.vo, 'gpu-next');
     expect(configuration.vo, 'gpu-next');
     dolby = false;
     expect(configuration.vo, 'mediacodec_embed');

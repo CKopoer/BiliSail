@@ -138,8 +138,6 @@ import '../features/settings/data/installed_app_version.dart';
 import '../features/settings/data/sqlite_update_check_store.dart';
 import '../features/settings/application/system_fonts_controller.dart';
 import '../features/settings/data/sqlite_settings_repository.dart';
-import '../features/settings/domain/app_settings.dart'
-    show PlaybackBackendPreference;
 import 'platform_defaults.dart';
 import '../features/playback/application/playback_viewers_controller.dart';
 import '../features/playback/application/casting_controller.dart';
@@ -345,12 +343,8 @@ class AppDependencies {
             const FileAccessService().trustedDownloadDocumentsDirectory,
       ),
     );
-    PlayerEngine createPlayerEngine() => ConfigurablePlayerEngine.select(
-      selectEngine: () async => PlayerEngineSelection(
-        PlaybackBackendPreference.mediaKit,
-        () async => MediaKitEngine(onDiagnostic: playbackLog?.record),
-      ),
-    );
+    PlayerEngine createPlayerEngine() =>
+        MediaKitEngine(onDiagnostic: playbackLog?.record);
     final cardPreviews = VideoCardPreviewPlayback(
       createEngine: createPlayerEngine,
     );

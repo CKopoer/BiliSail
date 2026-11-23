@@ -96,12 +96,14 @@ def main() -> None:
         if "not found" in dependencies:
             raise RuntimeError(f"Unresolved dependencies: {binary}\n{dependencies}")
 
-    mpv_source = appdir / "usr/bin/data/licenses/mpv/SOURCE.json"
+    mpv_source = appdir / "usr/bin/data/licenses/mpv/native_bundles.json"
     if not mpv_source.is_file():
-        raise RuntimeError("Missing personal libmpv source provenance")
-    source = json.loads(mpv_source.read_text(encoding="utf-8"))
-    if source.get("repository") != "https://github.com/CKopoer/mpv":
-        raise RuntimeError("Linux libmpv must come from the maintained personal fork")
+        raise RuntimeError("Missing media-kit native bundle catalog")
+    catalog = json.loads(mpv_source.read_text(encoding="utf-8"))
+    source = catalog["bundles"]["linux_x64"]
+    if (source.get("sha256") != "717d510a480baec2e939b6fc619d348a419e51e9b13b55643cff2e833bf367f3" or
+        source.get("url") != "https://github.com/Predidit/libmpv-linux-build/releases/download/20261122/libmpv_x86_64.zip"):
+        raise RuntimeError("Unexpected Linux libmpv bundle")
     native_libraries = [
         path for path in libraries if path.name.startswith("libmpv.so")
     ]

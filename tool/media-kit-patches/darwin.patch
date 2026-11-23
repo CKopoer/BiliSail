@@ -1,0 +1,838 @@
+--- a/common/darwin/Classes/plugin/ResizableTextureProtocol.swift
++++ b/common/darwin/Classes/plugin/ResizableTextureProtocol.swift
+@@ -7,8 +7,9 @@ import CoreGraphics
+ #endif
+ 
+ public protocol ResizableTextureProtocol: NSObject, FlutterTexture {
+-  // Release the mpv render context before the player core is destroyed.
+-  func dispose()
+   func resize(_ size: CGSize)
+   func render(_ size: CGSize)
++  // Release mpv while the owning worker is still alive, even when Flutter
++  // retains the texture wrapper or a completed pixel buffer beyond close.
++  func dispose()
+ }
+--- a/common/darwin/Classes/plugin/SafeResizableTexture.swift
++++ b/common/darwin/Classes/plugin/SafeResizableTexture.swift
+@@ -21,12 +21,6 @@ public class SafeResizableTexture:
+     self.child = child
+   }
+ 
+-  public func dispose() {
+-    locked {
+-      child.dispose()
+-    }
+-  }
+-
+   public func resize(_ size: CGSize) {
+     return locked {
+       return child.resize(size)
+@@ -43,6 +37,10 @@ public class SafeResizableTexture:
+     return child.copyPixelBuffer()
+   }
+ 
++  public func dispose() {
++    locked { child.dispose() }
++  }
++
+   private func locked<T>(do block: () -> T) -> T {
+     lock.lock()
+     defer {
+--- a/common/darwin/Classes/plugin/SwappableObjectManager.swift
++++ b/common/darwin/Classes/plugin/SwappableObjectManager.swift
+@@ -1,108 +1,27 @@
+ import Foundation
+ 
+-// This class was created to prevent a frameBuffer read by Flutter from being
+-// concurrently modified by a write method (mpv's renderer).
+-//
+-// To do this, two pools are set up, one for frameBuffers available for writing,
+-// the other for frameBuffers ready to be read by Flutter.
+-//
+-// When a frameBuffer has finished being modified and is "pushed", the oldest
+-// ready frameBuffer is marked as the current frameBuffer, and the oldest
+-// current frameBuffer is placed in the pool of frameBuffers available for
+-// writing.
+-//
+-// The use of at least three frameBuffers ensures that the read and write phases
+-// do not overlap, thus eliminating flicker.
+-public class SwappableObjectManager<T> {
+-  private let lock: NSRecursiveLock = NSRecursiveLock()
+-  private var available: [T]
+-  private var ready: [T] = []
+-  private var _current: T?
+-
+-  init(objects: [T], skipCheckArgs: Bool = false) {
+-    if !skipCheckArgs {
+-      SwappableObjectManager.checkArgs(objects)
+-    }
+-
+-    available = objects
+-  }
+-
+-  public func reinit(objects: [T], skipCheckArgs: Bool = false) {
+-    if !skipCheckArgs {
+-      SwappableObjectManager.checkArgs(objects)
+-    }
+-
+-    lock.lock()
+-    defer {
+-      lock.unlock()
+-    }
+-
+-    available = objects
+-    ready = []
+-    _current = nil
+-  }
+-
+-  public func nextAvailable() -> T? {
++// Only completed, write-once frames enter this store. Retain under the lock so
++// resize/disposal cannot release a frame while the raster thread acquires it.
++// No old frame is returned to a producer-owned reuse pool.
++public final class CompletedFrameStore<T> {
++  private let lock = NSLock()
++  private var current: T?
++
++  public func publish(_ frame: T) {
+     lock.lock()
+-    defer {
+-      lock.unlock()
+-    }
+-
+-    let object: T? =
+-      available.count > 0
+-      ? available.removeFirst()
+-      : nil
+-
+-    return object
++    defer { lock.unlock() }
++    current = frame
+   }
+ 
+-  public func pushAsReady(_ object: T) {
++  public func withCurrent<R>(_ read: (T?) -> R) -> R {
+     lock.lock()
+-    defer {
+-      lock.unlock()
+-    }
+-
+-    ready.append(object)
+-    updateCurrent()
++    defer { lock.unlock() }
++    return read(current)
+   }
+ 
+-  public var current: T? {
++  public func clear() {
+     lock.lock()
+-    defer {
+-      lock.unlock()
+-    }
+-
+-    return _current
+-  }
+-
+-  private func updateCurrent() {
+-    lock.lock()
+-    defer {
+-      lock.unlock()
+-    }
+-
+-    let next: T? =
+-      ready.count > 0
+-      ? ready.removeFirst()
+-      : nil
+-
+-    if next == nil {
+-      return
+-    }
+-
+-    let old: T? = _current
+-    _current = next
+-
+-    if old == nil {
+-      return
+-    }
+-
+-    available.append(old!)
+-  }
+-
+-  static private func checkArgs(_ objects: [T]) {
+-    if objects.count < 2 {
+-      NSLog("SwappableObjectManager: require at least two objects to work")
+-    }
++    defer { lock.unlock() }
++    current = nil
+   }
+ }
+--- a/common/darwin/Classes/plugin/TextureSW.swift
++++ b/common/darwin/Classes/plugin/TextureSW.swift
+@@ -18,10 +18,8 @@ public class TextureSW: NSObject, FlutterTexture, ResizableTextureProtocol {
+   private let handle: OpaquePointer
+   private let updateCallback: UpdateCallback
+   private var renderContext: OpaquePointer?
+-  private var textureContexts = SwappableObjectManager<TextureSWContext>(
+-    objects: [],
+-    skipCheckArgs: true
+-  )
++  private let frames = CompletedFrameStore<CVPixelBuffer>()
++  private var disposed = false
+ 
+   init(
+     handle: OpaquePointer,
+@@ -32,49 +30,44 @@ public class TextureSW: NSObject, FlutterTexture, ResizableTextureProtocol {
+ 
+     super.init()
+ 
+-    DispatchQueue.main.async {
+-      self.initMPV()
+-    }
++    self.initMPV()
+   }
+ 
+   deinit {
+-    disposePixelBuffer()
+-    disposeMPV()
++    dispose()
+   }
+ 
+   public func dispose() {
++    guard !disposed else { return }
++    disposed = true
++    disposePixelBuffer()
+     disposeMPV()
+   }
+ 
+   public func copyPixelBuffer() -> Unmanaged<CVPixelBuffer>? {
+-    let textureContext = textureContexts.current
+-    if textureContext == nil {
+-      return nil
++    return frames.withCurrent { buffer in
++      guard let buffer = buffer else { return nil }
++      return Unmanaged.passRetained(buffer)
+     }
+-
+-    return Unmanaged.passRetained(textureContext!.pixelBuffer)
+   }
+ 
+   private func initMPV() {
+-    let api = UnsafeMutableRawPointer(
+-      mutating: (MPV_RENDER_API_TYPE_SW as NSString).utf8String
+-    )
+-    var params: [mpv_render_param] = [
+-      mpv_render_param(type: MPV_RENDER_PARAM_API_TYPE, data: api),
+-      mpv_render_param(type: MPV_RENDER_PARAM_INVALID, data: nil),
+-    ]
+-
+-    MPVHelpers.checkError(
+-      media_kit_mpv_render_context_create(&renderContext, handle, &params)
+-    )
++    MPV_RENDER_API_TYPE_SW.withCString { api in
++      var params: [mpv_render_param] = [
++        mpv_render_param(type: MPV_RENDER_PARAM_API_TYPE,
++                         data: UnsafeMutableRawPointer(mutating: api)),
++        mpv_render_param(type: MPV_RENDER_PARAM_INVALID, data: nil),
++      ]
++      MPVHelpers.checkError(
++        media_kit_mpv_render_context_create(&renderContext, handle, &params)
++      )
++    }
+ 
+     media_kit_mpv_render_context_set_update_callback(
+       renderContext,
+       { (ctx) in
+         let that = unsafeBitCast(ctx, to: TextureSW.self)
+-        DispatchQueue.main.async {
+-          that.updateCallback()
+-        }
++        that.updateCallback()
+       },
+       UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
+     )
+@@ -88,74 +81,51 @@ public class TextureSW: NSObject, FlutterTexture, ResizableTextureProtocol {
+   }
+ 
+   public func resize(_ size: CGSize) {
+-    if size.width == 0 || size.height == 0 {
+-      return
+-    }
+-
+-    NSLog("TextureSW: resize: \(size.width)x\(size.height)")
+-    createPixelBuffer(size)
+-  }
+-
+-  private func createPixelBuffer(_ size: CGSize) {
+-    disposePixelBuffer()
+-
+-    textureContexts.reinit(
+-      objects: [
+-        TextureSWContext(size: size),
+-        TextureSWContext(size: size),
+-        TextureSWContext(size: size),
+-      ],
+-      skipCheckArgs: true
+-    )
++    // Keep the previous complete image until the new size has been rendered.
+   }
+ 
+   private func disposePixelBuffer() {
+-    textureContexts.reinit(objects: [], skipCheckArgs: true)
++    frames.clear()
+   }
+ 
+   public func render(_ size: CGSize) {
+-    guard renderContext != nil else { return }
+-    let textureContext = textureContexts.nextAvailable()
+-    if textureContext == nil {
+-      return
+-    }
+-
+-    CVPixelBufferLockBaseAddress(
+-      textureContext!.pixelBuffer,
++    guard !disposed, size.width.isFinite && size.height.isFinite,
++      size.width > 0 && size.height > 0,
++      size.width <= CGFloat(Int32.max) && size.height <= CGFloat(Int32.max),
++      let textureContext = TextureSWContext(size: size)
++    else { return }
++    guard CVPixelBufferLockBaseAddress(
++      textureContext.pixelBuffer,
+       CVPixelBufferLockFlags(rawValue: 0)
+-    )
+-    defer {
+-      CVPixelBufferUnlockBaseAddress(
+-        textureContext!.pixelBuffer,
+-        CVPixelBufferLockFlags(rawValue: 0)
+-      )
+-    }
++    ) == kCVReturnSuccess else { return }
+ 
+     var ssize: [Int32] = [Int32(size.width), Int32(size.height)]
+     let format: String = "bgr0"
+-    var pitch: Int = CVPixelBufferGetBytesPerRow(textureContext!.pixelBuffer)
+-    let buffer = CVPixelBufferGetBaseAddress(textureContext!.pixelBuffer)
+-
+-    // pointers
+-    let ssizePtr = ssize.withUnsafeMutableBytes {
+-      $0.baseAddress?.assumingMemoryBound(to: Int32.self)
++    var pitch: Int = CVPixelBufferGetBytesPerRow(textureContext.pixelBuffer)
++    guard let buffer = CVPixelBufferGetBaseAddress(textureContext.pixelBuffer) else {
++      CVPixelBufferUnlockBaseAddress(textureContext.pixelBuffer, CVPixelBufferLockFlags(rawValue: 0))
++      return
++    }
++    let status = ssize.withUnsafeMutableBytes { dimensions in
++      format.withCString { format in
++        withUnsafeMutablePointer(to: &pitch) { pitch in
++          var params: [mpv_render_param] = [
++            mpv_render_param(type: MPV_RENDER_PARAM_SW_SIZE, data: dimensions.baseAddress),
++            mpv_render_param(type: MPV_RENDER_PARAM_SW_FORMAT,
++                             data: UnsafeMutableRawPointer(mutating: format)),
++            mpv_render_param(type: MPV_RENDER_PARAM_SW_STRIDE, data: pitch),
++            mpv_render_param(type: MPV_RENDER_PARAM_SW_POINTER, data: buffer),
++            mpv_render_param(type: MPV_RENDER_PARAM_INVALID, data: nil),
++          ]
++          return media_kit_mpv_render_context_render(renderContext, &params)
++        }
++      }
+     }
+-    let formatPtr = UnsafeMutablePointer(
+-      mutating: (format as NSString).utf8String
+-    )
+-    let pitchPtr = withUnsafeMutablePointer(to: &pitch) { $0 }
+-    let bufferPtr = buffer!.assumingMemoryBound(to: UInt8.self)
+-
+-    var params: [mpv_render_param] = [
+-      mpv_render_param(type: MPV_RENDER_PARAM_SW_SIZE, data: ssizePtr),
+-      mpv_render_param(type: MPV_RENDER_PARAM_SW_FORMAT, data: formatPtr),
+-      mpv_render_param(type: MPV_RENDER_PARAM_SW_STRIDE, data: pitchPtr),
+-      mpv_render_param(type: MPV_RENDER_PARAM_SW_POINTER, data: bufferPtr),
+-      mpv_render_param(type: MPV_RENDER_PARAM_INVALID, data: nil),
+-    ]
+-
+-    media_kit_mpv_render_context_render(renderContext, &params)
+ 
+-    textureContexts.pushAsReady(textureContext!)
++    CVPixelBufferUnlockBaseAddress(
++      textureContext.pixelBuffer,
++      CVPixelBufferLockFlags(rawValue: 0)
++    )
++    if status >= 0 { frames.publish(textureContext.pixelBuffer) }
+   }
+ }
+--- a/common/darwin/Classes/plugin/TextureSWContext.swift
++++ b/common/darwin/Classes/plugin/TextureSWContext.swift
+@@ -5,18 +5,20 @@ import Foundation
+ public class TextureSWContext {
+   public let pixelBuffer: CVPixelBuffer
+ 
+-  init(size: CGSize) {
+-    self.pixelBuffer = TextureSWContext.createPixelBuffer(size)
++  init?(size: CGSize) {
++    guard let buffer = TextureSWContext.createPixelBuffer(size) else { return nil }
++    self.pixelBuffer = buffer
+   }
+ 
+   deinit {
+     TextureSWContext.disposePixelBuffer(pixelBuffer)
+   }
+ 
+-  private static func createPixelBuffer(_ size: CGSize) -> CVPixelBuffer {
++  private static func createPixelBuffer(_ size: CGSize) -> CVPixelBuffer? {
+     let attrs =
+       [
+-        kCVPixelBufferMetalCompatibilityKey: true
++        kCVPixelBufferMetalCompatibilityKey: true,
++        kCVPixelBufferIOSurfacePropertiesKey: [:],
+       ] as CFDictionary
+ 
+     var pixelBuffer: CVPixelBuffer?
+@@ -28,9 +30,8 @@ public class TextureSWContext {
+       attrs,
+       &pixelBuffer
+     )
+-    assert(cvret == kCVReturnSuccess, "CVPixelBufferCreate")
+-
+-    return pixelBuffer!
++    guard cvret == kCVReturnSuccess else { return nil }
++    return pixelBuffer
+   }
+ 
+   private static func disposePixelBuffer(_ pixelBuffer: CVPixelBuffer) {
+--- a/common/darwin/Classes/plugin/VideoOutput.swift
++++ b/common/darwin/Classes/plugin/VideoOutput.swift
+@@ -7,6 +7,37 @@ import Foundation
+   import FlutterMacOS
+ #endif
+ 
++// Keep the native renderer alive when the Dart owner exits without Dispose.
++private final class RenderClient {
++  private final class Signal {
++    let source = DispatchSource.makeUserDataAddSource(queue: .main)
++  }
++
++  let handle: OpaquePointer
++  private let signal = Signal()
++
++  init?(_ owner: Int64, onShutdown: @escaping () -> Void) {
++    guard let player = OpaquePointer(bitPattern: Int(owner)),
++          let client = media_kit_mpv_create_weak_client(player, nil) else { return nil }
++    handle = client
++    signal.source.setEventHandler { [weak self] in
++      guard let self = self else { return }
++      if media_kit_mpv_shutdown_pending(self.handle) != 0 { onShutdown() }
++    }
++    signal.source.resume()
++    media_kit_mpv_set_wakeup_callback(client, { argument in
++      guard let argument = argument else { return }
++      Unmanaged<Signal>.fromOpaque(argument).takeUnretainedValue().source.add(data: 1)
++    }, Unmanaged.passUnretained(signal).toOpaque())
++  }
++
++  deinit {
++    media_kit_mpv_set_wakeup_callback(handle, nil, nil)
++    signal.source.cancel()
++    media_kit_mpv_destroy(handle)
++  }
++}
++
+ // This class creates and manipulates the different types of FlutterTexture,
+ // handles resizing, rendering calls, and notify Flutter when a new frame is
+ // available to render.
+@@ -27,7 +58,8 @@ public class VideoOutput: NSObject {
+     return isSim
+   }()
+ 
+-  private let handle: OpaquePointer
++  private let client: RenderClient
++  private var handle: OpaquePointer { client.handle }
+   private let enableHardwareAcceleration: Bool
+   private let registry: FlutterTextureRegistry
+   private let textureUpdateCallback: TextureUpdateCallback
+@@ -37,18 +69,24 @@ public class VideoOutput: NSObject {
+   private var texture: ResizableTextureProtocol!
+   private var textureId: Int64 = -1
+   private var currentSize: CGSize = CGSize.zero
+-  private var disposed: Bool = false
++  private let stateLock = NSLock()
++  private var closing = false
++  private var closed = false
++  private var closeCallbacks = [() -> Void]()
++  private var notificationPending = false
++  private var latestSize = CGSize.zero
++  // Platform-thread only. All rendering dimensions above remain worker-owned.
++  private var platformSize = CGSize.zero
+ 
+-  init(
++  init?(
+     handle: Int64,
++    onShutdown: @escaping () -> Void,
+     configuration: VideoOutputConfiguration,
+     registry: FlutterTextureRegistry,
+     textureUpdateCallback: @escaping TextureUpdateCallback
+   ) {
+-    let handle = OpaquePointer(bitPattern: Int(handle))
+-    assert(handle != nil, "handle casting")
+-
+-    self.handle = handle!
++    guard let client = RenderClient(handle, onShutdown: onShutdown) else { return nil }
++    self.client = client
+     width = configuration.width
+     height = configuration.height
+     enableHardwareAcceleration = configuration.enableHardwareAcceleration
+@@ -57,40 +95,32 @@ public class VideoOutput: NSObject {
+ 
+     super.init()
+ 
+-    worker.enqueue {
+-      self._init()
++    worker.enqueue(key: "initialize") { [weak self] in
++      self?._init()
+     }
+   }
+ 
+   deinit {
+-    worker.cancel()
+-
+-    disposed = true
+-    disposeTextureId()
+-  }
+-
+-  public func setSize(width: Int64?, height: Int64?) {
+-    worker.enqueue {
+-      guard !self.disposed else { return }
+-      self.width = width
+-      self.height = height
++    // Fallback for a manager/engine being torn down without an explicit close.
++    let texture = self.texture
++    let client = self.client
++    worker.finish {
++      withExtendedLifetime(client) { texture?.dispose() }
+     }
++    let registry = self.registry
++    let id = textureId
++    if id >= 0 { DispatchQueue.main.async { registry.unregisterTexture(id) } }
+   }
+ 
+-  public func dispose(completion: @escaping () -> Void) {
+-    // Drain rendering on its worker without blocking the platform thread,
+-    // which pending render jobs may still need for texture notifications.
+-    worker.enqueue {
+-      self.disposed = true
+-      self.texture?.dispose()
+-      self.disposeTextureId {
+-        self.worker.cancel()
+-        completion()
+-      }
++  public func setSize(width: Int64?, height: Int64?) {
++    worker.enqueue(key: "size") { [weak self] in
++      self?.width = width
++      self?.height = height
+     }
+   }
+ 
+   private func _init() {
++    guard !isClosing else { return }
+     let enableHardwareAcceleration =
+       VideoOutput.isSimulator ? false : enableHardwareAcceleration
+ 
+@@ -104,31 +134,35 @@ public class VideoOutput: NSObject {
+       )
+     }
+ 
+-    let update: () -> Void = { [weak self] in
+-      self?.updateCallback()
+-    }
+-    var hardwareTexture: ResizableTextureProtocol?
+     if enableHardwareAcceleration {
+-      hardwareTexture = TextureHW(
+-        handle: handle,
+-        updateCallback: update
++      texture = SafeResizableTexture(
++        TextureHW(
++          handle: handle,
++          // Use `weak self` to prevent memory leaks
++          updateCallback: { [weak self]() in
++            guard let that = self else {
++              return
++            }
++            that.updateCallback()
++          }
++        )
+       )
+-    }
+-    if let hardwareTexture = hardwareTexture {
+-      texture = SafeResizableTexture(hardwareTexture)
+     } else {
+-      if enableHardwareAcceleration {
+-        NSLog("VideoOutput: hardware rendering unavailable; using software rendering")
+-      }
+       texture = SafeResizableTexture(
+         TextureSW(
+           handle: handle,
+-          updateCallback: update
++          // Use `weak self` to prevent memory leaks
++          updateCallback: { [weak self]() in
++            guard let that = self else {
++              return
++            }
++            that.updateCallback()
++          }
+         )
+       )
+     }
+ 
+-    DispatchQueue.main.sync { [weak self]() in
++    DispatchQueue.main.async { [weak self]() in
+       guard let that = self else {
+         return
+       }
+@@ -138,33 +172,53 @@ public class VideoOutput: NSObject {
+ 
+   // Must be run on the main thread
+   private func registerTextureId() {
++    guard !isClosing else { return }
+     // Textures must be registered on the platform thread.
+     textureId = registry.register(texture)
+     // textureUpdateCallback must run on the main thread
+     textureUpdateCallback(textureId, CGSize(width: 0, height: 0))
+   }
+ 
+-  private func disposeTextureId(completion: @escaping () -> Void = {}) {
+-    let registry_ = self.registry
+-    let textureId_ = self.textureId
+-    textureId = -1
+-    DispatchQueue.main.async {
+-      // Textures must be unregistered on the platform thread
+-      if textureId_ >= 0 {
+-        registry_.unregisterTexture(textureId_)
++  public func dispose(completion: @escaping () -> Void) {
++    let state = locked { () -> (closed: Bool, start: Bool) in
++      if closed { return (true, false) }
++      closeCallbacks.append(completion)
++      if closing { return (false, false) }
++      closing = true
++      return (false, true)
++    }
++    if state.closed {
++      DispatchQueue.main.async(execute: completion)
++    } else if state.start {
++      worker.finish {
++        self.texture?.dispose()
++        self.texture = nil
++        DispatchQueue.main.async {
++          if self.textureId >= 0 {
++            self.registry.unregisterTexture(self.textureId)
++            self.textureId = -1
++          }
++          let callbacks = self.locked { () -> [() -> Void] in
++            self.closed = true
++            let callbacks = self.closeCallbacks
++            self.closeCallbacks.removeAll()
++            return callbacks
++          }
++          callbacks.forEach { $0() }
++        }
+       }
+-      completion()
+     }
+   }
+ 
+   public func updateCallback() {
+-    worker.enqueue {
+-      self._updateCallback()
++    guard !isClosing else { return }
++    worker.enqueue(key: "render") { [weak self] in
++      self?._updateCallback()
+     }
+   }
+ 
+   private func _updateCallback() {
+-    guard !disposed else { return }
++    guard !isClosing else { return }
+     let size = videoSize
+ 
+     if size.width == 0 || size.height == 0 {
+@@ -175,25 +229,40 @@ public class VideoOutput: NSObject {
+       currentSize = size
+ 
+       texture.resize(size)
+-      DispatchQueue.main.sync { [weak self] in
+-        guard let that = self else { return }
+-        // textureUpdateCallback must run on the main thread
+-        that.textureUpdateCallback(that.textureId, size)
+-      }
+-    }
+-
+-    if disposed {
+-      return
+     }
+ 
+     texture.render(size)
+-    DispatchQueue.main.sync { [weak self] in
++    let notify = locked { () -> Bool in
++      guard !closing else { return false }
++      latestSize = size
++      guard !notificationPending else { return false }
++      notificationPending = true
++      return true
++    }
++    guard notify else { return }
++    DispatchQueue.main.async { [weak self] in
+       guard let that = self else { return }
+-      // Textures must be marked as available from the main thread
++      let size = that.locked { () -> CGSize? in
++        that.notificationPending = false
++        return that.closing ? nil : that.latestSize
++      }
++      guard let size = size, that.textureId >= 0 else { return }
++      if that.platformSize != size {
++        that.platformSize = size
++        that.textureUpdateCallback(that.textureId, size)
++      }
+       that.registry.textureFrameAvailable(that.textureId)
+     }
+   }
+ 
++  private var isClosing: Bool { locked { closing } }
++
++  private func locked<T>(_ body: () -> T) -> T {
++    stateLock.lock()
++    defer { stateLock.unlock() }
++    return body()
++  }
++
+     private var videoSize: CGSize {
+         // fixed size
+         if width != nil && height != nil {
+--- a/common/darwin/Classes/plugin/VideoOutputManager.swift
++++ b/common/darwin/Classes/plugin/VideoOutputManager.swift
+@@ -7,6 +7,7 @@
+ public class VideoOutputManager: NSObject {
+   private let registry: FlutterTextureRegistry
+   private var videoOutputs = [Int64: VideoOutput]()
++  private var closingOutputs = [Int64: VideoOutput]()
+ 
+   init(registry: FlutterTextureRegistry) {
+     self.registry = registry
+@@ -19,6 +20,7 @@ public class VideoOutputManager: NSObject {
+   ) {
+     let videoOutput = VideoOutput(
+       handle: handle,
++      onShutdown: { [weak self] in self?.destroy(handle: handle, completion: {}) },
+       configuration: configuration,
+       registry: self.registry,
+       textureUpdateCallback: textureUpdateCallback
+@@ -47,10 +49,18 @@ public class VideoOutputManager: NSObject {
+     handle: Int64,
+     completion: @escaping () -> Void
+   ) {
+-    guard let videoOutput = videoOutputs.removeValue(forKey: handle) else {
++    if let closing = closingOutputs[handle] {
++      closing.dispose(completion: completion)
++      return
++    }
++    guard let output = videoOutputs.removeValue(forKey: handle) else {
+       completion()
+       return
+     }
+-    videoOutput.dispose(completion: completion)
++    closingOutputs[handle] = output
++    output.dispose { [weak self] in
++      self?.closingOutputs.removeValue(forKey: handle)
++      completion()
++    }
+   }
+ }
+--- a/common/darwin/Classes/plugin/Worker.swift
++++ b/common/darwin/Classes/plugin/Worker.swift
+@@ -1,59 +1,60 @@
+ import Foundation
+ 
+-// https://stackoverflow.com/questions/49043257/how-to-ensure-to-run-some-code-on-same-background-thread/49075382#49075382
++// One thread owns the renderer. Repeated render/resize notifications replace
++// pending work; shutdown rejects new work and runs cleanup after the active job.
+ class Worker {
+   public typealias Job = () -> Void
+ 
+   private let semaphore = DispatchSemaphore(value: 0)
+   private let lock = NSRecursiveLock()
+   private var thread: Thread!
+-  private var queue = [Job]()
+-  private var canceled: Bool = false
++  private var queue = [(key: String?, job: Job)]()
++  private var stopping = false
+ 
+   init() {
+-    thread = Thread(block: loop)
++    thread = Thread { [weak self] in self?.loop() }
+     thread.start()
+   }
+ 
+   public func cancel() {
+-    signalCancel()
+-    thread.cancel()
++    finish {}
+   }
+ 
+-  public func enqueue(_ job: @escaping Job) {
+-    let accepted = locked {
+-      if canceled { return false }
+-      queue.append(job)
++  public func enqueue(key: String? = nil, _ job: @escaping Job) {
++    let added = locked { () -> Bool in
++      guard !stopping else { return false }
++      if let key = key, let index = queue.firstIndex(where: { $0.key == key }) {
++        queue[index].job = job
++        return false
++      }
++      queue.append((key, job))
+       return true
+     }
+-    if accepted { semaphore.signal() }
++    if added { semaphore.signal() }
+   }
+ 
+-  private func loop() {
+-    while true {
+-      semaphore.wait()
+-
+-      guard let job = getFirstJob() else { return }
+-      job()
+-    }
+-  }
+-
+-  private func signalCancel() {
+-    locked {
+-      canceled = true
++  public func finish(_ cleanup: @escaping Job) {
++    let added = locked { () -> Bool in
++      guard !stopping else { return false }
++      stopping = true
+       queue.removeAll()
++      queue.append((nil, cleanup))
++      return true
+     }
+-
+-    semaphore.signal()
++    if added { semaphore.signal() }
+   }
+ 
+-  private func getFirstJob() -> Job? {
+-    let job = locked {
+-      if canceled || queue.isEmpty { return nil as Job? }
+-      return queue.removeFirst()
++  private func loop() {
++    while true {
++      semaphore.wait()
++      // Release the job and its captures before waiting again. Long-lived
++      // threads also need to drain bridged Cocoa temporaries for every job.
++      autoreleasepool {
++        let job = locked { queue.isEmpty ? nil : queue.removeFirst().job }
++        job?()
++      }
++      if locked(do: { stopping && queue.isEmpty }) { return }
+     }
+-
+-    return job
+   }
+ 
+   private func locked<T>(do block: () -> T) -> T {

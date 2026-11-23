@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'dart:ffi';
+import 'dart:isolate';
 
+import 'package:ffi/ffi.dart';
+import 'package:media_kit/generated/libmpv/bindings.dart' as mpv;
 import 'package:media_kit/media_kit.dart' as mk;
-
-import 'package:media_kit/generated/libmpv/bindings.dart' show mpv_event_id;
 
 import 'native_readiness.dart';
 
@@ -97,81 +98,90 @@ final class NativeLoadState {
   }
 }
 
-/// Adds listeners to media_kit's existing event route. No second mpv client,
-/// wakeup callback, hook or polling loop is owned by the application.
+/// Reads the BiliSail track/seek events on an independent weak mpv client.
+/// The SDK keeps exclusive ownership of its player and native wakeup callback.
 final class NativeLoadObserver {
-  NativeLoadObserver._(this._platform, this._onFailure);
-  final mk.NativePlayer _platform;
+  NativeLoadObserver._(this._onFailure);
   final void Function(int) _onFailure;
   NativeLoadState state = NativeLoadState();
-  final _events = <int>[];
-  final _properties = <String>[];
-  bool _disposed = false;
-  bool _idle = false;
+  final _messages = ReceivePort();
   final _idleChanges = StreamController<void>.broadcast(sync: true);
+  final _ready = Completer<SendPort>();
+  late final Future<void> _worker;
+  bool _idle = false;
+  bool _disposed = false;
 
   static Future<NativeLoadObserver> attach(
-    mk.NativePlayer platform, {
+    mk.NativePlayer player, {
     required void Function(int errorCode) onFailure,
   }) async {
-    final observer = NativeLoadObserver._(platform, onFailure);
+    final observer = NativeLoadObserver._(onFailure);
+    observer._messages.listen(observer._receive);
+    final args = (
+      await player.handle,
+      player.nativeLibraryPath,
+      observer._messages.sendPort,
+    );
+    observer._worker = _runEventReader(args);
+    unawaited(
+      observer._worker.then(
+        (_) {
+          if (!observer._ready.isCompleted) {
+            observer._ready.completeError(
+              StateError('Native event reader closed during startup.'),
+            );
+          } else if (!observer._disposed) {
+            observer.state.failPreparation(
+              error: StateError('Native event reader stopped.'),
+            );
+          }
+        },
+        onError: (Object error, StackTrace stack) {
+          if (!observer._ready.isCompleted) {
+            observer._ready.completeError(error, stack);
+          } else if (!observer._disposed) {
+            observer.state.failPreparation(error: error);
+          }
+        },
+      ),
+    );
     try {
-      for (final id in const [
-        mpv_event_id.MPV_EVENT_START_FILE,
-        mpv_event_id.MPV_EVENT_END_FILE,
-        mpv_event_id.MPV_EVENT_SEEK,
-        mpv_event_id.MPV_EVENT_PLAYBACK_RESTART,
-      ]) {
-        await platform.observeEvent(id, (event) async {
-          if (observer._disposed) return;
-          final state = observer.state;
-          // Copy scalar payloads before returning to the SDK event loop.
-          switch (id) {
-            case mpv_event_id.MPV_EVENT_START_FILE:
-              if (event.ref.data != nullptr) {
-                observer._idle = false;
-                state.started(event.ref.data.cast<Int64>().value);
-              }
-            case mpv_event_id.MPV_EVENT_END_FILE:
-              if (event.ref.data != nullptr) {
-                final end = event.ref.data.cast<_MpvEndFile>().ref;
-                if (state.ended(
-                  entryId: end.entryId,
-                  reason: end.reason,
-                  error: end.error,
-                )) {
-                  observer._onFailure(end.error);
-                }
-              }
-            case mpv_event_id.MPV_EVENT_SEEK:
-              state.seekStarted();
-            case mpv_event_id.MPV_EVENT_PLAYBACK_RESTART:
-              state.playbackRestarted();
-          }
-        });
-        observer._events.add(id);
-      }
-      for (final (name, property) in const [
-        ('video-out-params/colormatrix', NativeOutputProperty.colorMatrix),
-        ('current-vo', NativeOutputProperty.driver),
-      ]) {
-        await platform.observeProperty(name, (value) async {
-          if (!observer._disposed) {
-            observer.state.outputChanged(property, value);
-          }
-        });
-        observer._properties.add(name);
-      }
-      await platform.observeProperty('idle-active', (value) async {
-        if (observer._disposed) return;
-        observer._idle = value == 'yes';
-        observer._idleChanges.add(null);
-      });
-      observer._properties.add('idle-active');
+      await observer._ready.future;
       return observer;
     } on Object {
-      await observer.dispose();
+      observer._messages.close();
+      await observer.state.dispose();
+      await observer._idleChanges.close();
       rethrow;
+    }
+  }
+
+  void _receive(Object? message) {
+    if (_disposed) return;
+    switch (message) {
+      case SendPort stop:
+        _ready.complete(stop);
+      case (mpv.mpv_event_id.MPV_EVENT_START_FILE, int entry):
+        _idle = false;
+        state.started(entry);
+      case (
+        mpv.mpv_event_id.MPV_EVENT_END_FILE,
+        int entry,
+        int reason,
+        int code,
+      ):
+        if (state.ended(entryId: entry, reason: reason, error: code)) {
+          _onFailure(code);
+        }
+      case mpv.mpv_event_id.MPV_EVENT_SEEK:
+        state.seekStarted();
+      case mpv.mpv_event_id.MPV_EVENT_PLAYBACK_RESTART:
+        state.playbackRestarted();
+      case (NativeOutputProperty property, String? value):
+        state.outputChanged(property, value);
+      case bool idle:
+        _idle = idle;
+        _idleChanges.add(null);
     }
   }
 
@@ -182,7 +192,6 @@ final class NativeLoadObserver {
     timeout: const Duration(seconds: 5),
   );
 
-  /// Called only after Player.stop and its event queue have settled.
   Future<void> reset() async {
     if (_disposed) throw const SourceSuperseded();
     final previous = state;
@@ -193,25 +202,125 @@ final class NativeLoadObserver {
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
-    for (final name in _properties) {
-      await _platform.unobserveProperty(name);
+    (await _ready.future).send(null);
+    try {
+      await _worker;
+    } finally {
+      _messages.close();
+      await state.dispose();
+      await _idleChanges.close();
     }
-    for (final id in _events) {
-      await _platform.unobserveEvent(id);
-    }
-    await state.dispose();
-    await _idleChanges.close();
   }
 }
 
-// Leading ABI fields of mpv_event_end_file, mpv 0.36.0 libmpv/client.h (ISC).
-// Source and license: docs/validation/playback-startup.md and
-// packages/bili_player/third_party/mpv-client.LICENSE. No generated SDK edits.
-final class _MpvEndFile extends Struct {
-  @Int32()
-  external int reason;
-  @Int32()
-  external int error;
-  @Int64()
-  external int entryId;
+typedef _ReaderArgs = (int, String, SendPort);
+
+Future<void> _runEventReader(_ReaderArgs args) => Isolate.run(
+  () => _readNativeEvents(args),
+  debugName: 'BiliSail mpv events',
+);
+
+final class _WeakClient implements Finalizable {
+  _WeakClient(this.library, this.api, this.handle)
+    : finalizer = NativeFinalizer(library.lookup('mpv_destroy')) {
+    finalizer.attach(this, handle.cast(), detach: this);
+  }
+  final DynamicLibrary library;
+  final mpv.MPV api;
+  final Pointer<mpv.mpv_handle> handle;
+  final NativeFinalizer finalizer;
+
+  void close() {
+    finalizer.detach(this);
+    api.mpv_destroy(handle);
+  }
+}
+
+Future<void> _readNativeEvents(_ReaderArgs args) async {
+  final (address, path, target) = args;
+  final library = DynamicLibrary.open(path);
+  final api = mpv.MPV(library);
+  final handle = api.mpv_create_weak_client(
+    Pointer.fromAddress(address),
+    nullptr,
+  );
+  if (handle == nullptr) {
+    throw StateError('Could not attach to the mpv event queue.');
+  }
+  final client = _WeakClient(library, api, handle);
+  final control = ReceivePort();
+  var active = true;
+  control.listen((_) => active = false);
+  try {
+    const properties = [
+      'video-out-params/colormatrix',
+      'current-vo',
+      'idle-active',
+    ];
+    for (var i = 0; i < properties.length; i++) {
+      final key = properties[i].toNativeUtf8();
+      try {
+        if (api.mpv_observe_property(
+              handle,
+              i + 1,
+              key.cast(),
+              mpv.mpv_format.MPV_FORMAT_STRING,
+            ) <
+            0) {
+          throw StateError('Could not observe ${properties[i]}.');
+        }
+      } finally {
+        calloc.free(key);
+      }
+    }
+    target.send(control.sendPort);
+    // Events wake the native wait immediately. Its upper bound only lets the
+    // worker service cancellation when the player is completely idle.
+    while (active) {
+      final event = api.mpv_wait_event(handle, 0.1).ref;
+      switch (event.event_id) {
+        case mpv.mpv_event_id.MPV_EVENT_SHUTDOWN:
+          return;
+        case mpv.mpv_event_id.MPV_EVENT_START_FILE:
+          if (event.data != nullptr) {
+            target.send((
+              event.event_id,
+              event.data.cast<mpv.mpv_event_start_file>().ref.playlist_entry_id,
+            ));
+          }
+        case mpv.mpv_event_id.MPV_EVENT_END_FILE:
+          if (event.data != nullptr) {
+            final end = event.data.cast<mpv.mpv_event_end_file>().ref;
+            target.send((
+              event.event_id,
+              end.playlist_entry_id,
+              end.reason,
+              end.error,
+            ));
+          }
+        case mpv.mpv_event_id.MPV_EVENT_SEEK:
+        case mpv.mpv_event_id.MPV_EVENT_PLAYBACK_RESTART:
+          target.send(event.event_id);
+        case mpv.mpv_event_id.MPV_EVENT_PROPERTY_CHANGE:
+          final property = event.data.cast<mpv.mpv_event_property>().ref;
+          final value =
+              property.format == mpv.mpv_format.MPV_FORMAT_STRING &&
+                  property.data != nullptr
+              ? property.data.cast<Pointer<Utf8>>().value.toDartString()
+              : null;
+          switch (event.reply_userdata) {
+            case 1:
+              target.send((NativeOutputProperty.colorMatrix, value));
+            case 2:
+              target.send((NativeOutputProperty.driver, value));
+            case 3:
+              target.send(value == 'yes');
+          }
+      }
+      await Future<void>.delayed(Duration.zero);
+    }
+  } finally {
+    control.close();
+    client.close();
+  }
 }

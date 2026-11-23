@@ -229,9 +229,6 @@ try {
     $windowsRuntimeFiles = @(Get-WindowsRuntimeFiles $runtime.FullName $windowsArch)
   }
   Invoke-BuildStage 'SQLite assets' { Invoke-BuildCommand python @((Join-Path $PSScriptRoot 'prepare-sqlite-assets.py'), '--target', $Target) }
-  if ($isWindowsTarget) {
-    Invoke-BuildStage 'Windows media assets' { & (Join-Path $PSScriptRoot 'prepare-windows-media-assets.ps1') -Architecture $windowsArch }
-  }
   Invoke-BuildStage 'Mux component preparation' { & (Join-Path $PSScriptRoot 'build-download-mux.ps1') -Target $Target }
   # Release builds must regenerate native registrants without dev-only plugins.
   # Flutter's --no-pub also skips that regeneration.

@@ -14,7 +14,7 @@ void main() {
   final library = Platform.environment['BILI_TEST_NATIVE_MPV'];
   final directory = Platform.environment['BILI_TEST_MEDIA_DIR'];
   test(
-    'EDL loads both tracks with headers and reuses the SDK event route',
+    'EDL loads both tracks with headers and observes each reused playlist entry',
     () async {
       mk.MediaKit.ensureInitialized(libmpv: library);
       final files = {
@@ -71,6 +71,9 @@ void main() {
         final handle = player.nativeHandle;
         Uri uri(String path) =>
             Uri.parse('http://127.0.0.1:${server.port}$path?signature=a;b,c');
+        player.registerFileOptions(const {
+          'force-media-title': 'EDL contract test',
+        });
         for (final (video, audio, start, headers) in [
           (
             uri('/video.mp4'),
@@ -95,7 +98,6 @@ void main() {
             mk.Media(
               nativeMediaUri(video, audio),
               httpHeaders: headers,
-              nativeOptions: const {'force-media-title': 'EDL contract test'},
               start: start,
             ),
             play: false,

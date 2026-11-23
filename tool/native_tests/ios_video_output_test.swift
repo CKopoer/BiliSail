@@ -133,19 +133,19 @@ struct mpv_opengl_init_params {
 struct mpv_opengl_fbo { var fbo: Int32; var w: Int32; var h: Int32; var internal_format: Int32 }
 struct mpv_render_param { var type: Int = 0; var data: UnsafeMutableRawPointer? = nil }
 enum MPVHelpers { static func checkError(_ status: Int32) { precondition(status == 0) } }
-func mpv_render_context_create(_ out: inout OpaquePointer?, _ handle: OpaquePointer,
+func media_kit_mpv_render_context_create(_ out: inout OpaquePointer?, _ handle: OpaquePointer,
                                _ params: inout [mpv_render_param]) -> Int32 {
   nativeContexts += 1; out = handle; return 0
 }
-func mpv_render_context_set_update_callback(_ context: OpaquePointer?,
+func media_kit_mpv_render_context_set_update_callback(_ context: OpaquePointer?,
   _ callback: ((UnsafeMutableRawPointer?) -> Void)?, _ data: UnsafeMutableRawPointer?) {
   update = callback; updateData = data
 }
-func mpv_render_context_free(_ context: OpaquePointer?) {
+func media_kit_mpv_render_context_free(_ context: OpaquePointer?) {
   precondition(context != nil && nativeContexts > 0)
   nativeContexts -= 1; releasedContexts += 1
 }
-func mpv_render_context_render(_ context: OpaquePointer?, _ params: inout [mpv_render_param]) -> Int32 {
+func media_kit_mpv_render_context_render(_ context: OpaquePointer?, _ params: inout [mpv_render_param]) -> Int32 {
   precondition(context != nil && nativeContexts > 0)
   if params[0].type == MPV_RENDER_PARAM_OPENGL_FBO {
     precondition(EAGLContext.current() != nil)
