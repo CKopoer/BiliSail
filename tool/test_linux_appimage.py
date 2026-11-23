@@ -54,6 +54,34 @@ class DisplayBackendTests(unittest.TestCase):
                     self.assertEqual((theme, size, arg), ("Breeze", "48", "one argument"))
 
     @unittest.skipUnless(sys.platform.startswith("linux"), "Linux GTK launcher")
+    def test_apprun_finds_host_cursor_themes_before_gtk_hook(self):
+        with tempfile.TemporaryDirectory(prefix="bilisail cursors ") as temp:
+            root = Path(temp)
+            launcher = root / "AppRun"
+            shutil.copyfile(PACKAGING / "AppRun", launcher)
+            hooks = root / "apprun-hooks"
+            hooks.mkdir()
+            (hooks / "gtk.sh").write_text('export XDG_DATA_DIRS="$APPDIR/usr/share:/usr/share"\n')
+            program = root / "usr/bin/bilisail"
+            program.parent.mkdir(parents=True)
+            program.write_text('#!/bin/sh\nprintf "%s\\n" "$XCURSOR_PATH" "$XCURSOR_THEME" "$XCURSOR_SIZE"\n')
+            program.chmod(0o755)
+            defaults = "/home/test/.local/share/icons:/home/test/.icons:/usr/local/share/icons:/usr/share/icons"
+            legacy = ":/usr/share/pixmaps:/home/test/.cursors:/usr/share/cursors/xorg-x11"
+            for home, dirs, override, expected in [
+                ("", "", "", defaults + legacy),
+                ("relative", "", "", defaults + legacy),
+                ("/user data/", "/nix/profile/share::relative:/usr/share/:/nix/profile/share", "",
+                 "/user data/icons:/home/test/.icons:/nix/profile/share/icons:/usr/share/icons" + legacy),
+                ("", "/extra", "/custom icons:/run/host/share/icons", "/custom icons:/run/host/share/icons"),
+            ]:
+                with self.subTest(home=home, dirs=dirs, override=override):
+                    env = dict(os.environ, HOME="/home/test", XDG_DATA_HOME=home,
+                               XDG_DATA_DIRS=dirs, XCURSOR_PATH=override, XCURSOR_THEME="Breeze", XCURSOR_SIZE="48")
+                    result = subprocess.check_output(["bash", launcher], env=env, text=True)
+                    self.assertEqual(result.splitlines(), [expected, "Breeze", "48"])
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "Linux GTK launcher")
     def test_gtk_hook_preserves_backend_selection(self):
         with tempfile.TemporaryDirectory(prefix="bilisail display ") as temp:
             root = Path(temp)

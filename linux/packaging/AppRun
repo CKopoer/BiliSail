@@ -4,6 +4,20 @@ set -e
 export APPDIR="$(cd -- "$(dirname -- "$(readlink -f -- "$0")")" && pwd)"
 export LD_LIBRARY_PATH="$APPDIR/usr/bin/lib:$APPDIR/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export WEBKIT_INJECTED_BUNDLE_PATH="$APPDIR/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/injected-bundle"
+# Use the host's XDG theme directories before the GTK hook changes XDG_DATA_DIRS.
+# The bundled X11 and Wayland libraries use different, incomplete defaults.
+if [[ -z ${XCURSOR_PATH:-} ]]; then
+  cursor_home=${XDG_DATA_HOME:-}
+  [[ $cursor_home == /* ]] || cursor_home="$HOME/.local/share"
+  XCURSOR_PATH="${cursor_home%/}/icons:$HOME/.icons"
+  IFS=: read -r -a data_dirs <<< "${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+  for dir in "${data_dirs[@]}" /usr/share; do
+    [[ $dir == /* ]] || continue
+    icons="${dir%/}/icons"
+    [[ ":$XCURSOR_PATH:" == *":$icons:"* ]] || XCURSOR_PATH+=":$icons"
+  done
+  export XCURSOR_PATH="$XCURSOR_PATH:/usr/share/pixmaps:$HOME/.cursors:/usr/share/cursors/xorg-x11"
+fi
 # The bundled linuxdeploy GTK hook forces X11. Keep the caller's selection
 # while loading its GTK resources, then let GDK try the requested backends.
 display_backends="${GDK_BACKEND:-wayland,x11}"
