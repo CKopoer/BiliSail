@@ -78,7 +78,7 @@ void main() {
             'mid': '7',
             'name': '用户',
             'pendant': {
-              if (image != null) 'image': image,
+              'image': ?image,
               'image_enhance': '//i0.hdslb.com/enhanced.webp',
             },
           },
