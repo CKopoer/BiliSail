@@ -2,7 +2,6 @@
 
 import os
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -23,7 +22,8 @@ class LinuxCmakeInstallTests(unittest.TestCase):
         self.env = dict(os.environ)
         self.env.pop("CMAKE_INSTALL_PREFIX", None)
         self.env.pop("DESTDIR", None)
-        self.write("linux/CMakeLists.txt", (ROOT / "linux/CMakeLists.txt").read_text())
+        for relative in ("linux/CMakeLists.txt", "tool/media-kit-desktop.cmake"):
+            self.write(relative, (ROOT / relative).read_text(encoding="utf-8"))
         # Replace external dependencies, retaining the complete application
         # CMakeLists and its real configure/build/install behavior.
         self.write("linux/cmake/FindPkgConfig.cmake", """
@@ -41,6 +41,19 @@ set(PROJECT_BUILD_DIR "${CMAKE_SOURCE_DIR}/assets/" PARENT_SCOPE)
 if(NOT FIXTURE_DEPS_READY)
   message(FATAL_ERROR "Failed to download fixture dependency")
 endif()
+add_library(media_kit_video_plugin SHARED plugin.cc)
+""")
+        # Stage a local plugin and catalog without a Pub checkout or downloads.
+        self.write("tool/media_kit_sources.py", """
+from pathlib import Path
+import sys
+
+platform, destination = sys.argv[1:]
+stage = Path(destination)
+sources = stage / platform
+sources.mkdir(parents=True, exist_ok=True)
+(sources / "plugin.cc").write_text("int fixture_plugin() { return 0; }\\n", encoding="utf-8")
+(stage / "native_bundles.json").write_text("{}\\n", encoding="utf-8")
 """)
         self.write("linux/runner/CMakeLists.txt", "add_executable(${BINARY_NAME} main.cc)\n")
         self.write("linux/runner/main.cc", "int main() { return 0; }\n")
@@ -76,7 +89,8 @@ endif()
         result = self.command("--build", self.build, "--target", "install")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         for relative in ("bilisail", "lib/libflutter_linux_gtk.so", "data/icudtl.dat",
-                         "lib/libfixture.so", "data/flutter_assets/AssetManifest.bin"):
+                         "lib/libfixture.so", "data/flutter_assets/AssetManifest.bin",
+                         "data/licenses/mpv/native_bundles.json"):
             self.assertTrue((prefix / relative).is_file(), relative)
 
     def test_clean_configure_installs_in_build_bundle(self):

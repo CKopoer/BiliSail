@@ -55,6 +55,12 @@ macOS 原生插件按根 `pubspec.yaml` 的项目级开关统一使用 CocoaPods
 
 Dart 3.13.5 内置的 [Pub 源码](https://github.com/dart-lang/pub/blob/ec276d10a7fa0f6c6ec005340fb9ad29f3b012d0/lib/src/source/hosted.dart#L40) 会将官方旧域名 `https://pub.dartlang.org` 规范化为 `https://pub.dev`，再用于 hosted 来源身份比较；两者的文本差异不等于来源冲突。`pub.flutter-io.cn` 是另一来源，不能依赖这种官方别名规范化消除镜像冲突。验证以固定 Flutter 3.47.6 的实际解析、内容哈希与 `--enforce-lockfile` 为准。
 
+## 2026-11-23：Linux 安装回归夹具补齐播放器构建输入
+
+[CI #491 的检查任务](https://github.com/CKopoer/BiliSail/actions/runs/45207324926/job/137806651842) 在格式和静态分析通过后，因三个 Linux 安装回归用例配置失败而跳过平台构建矩阵。播放器迁移后，生产 CMake 会加载 `tool/media-kit-desktop.cmake` 并准备插件源码和 Native Assets 清单，原夹具只复制了 `linux/CMakeLists.txt`。
+
+[安装回归夹具](../../tool/test_linux_cmake_install.py) 现在同时加载真实的 CMake 模块，通过本地替身提供插件源码和清单。WSL 下 44 项 Linux 脚本回归通过，覆盖默认安装目录、依赖配置失败重试、自定义安装前缀及清单落盘。真实播放器依赖和安装包由平台构建矩阵验证。
+
 ## Flutter 3.50.1 验证（2026-11-21）
 
 ### SDK 升级验证（原锁文件）
