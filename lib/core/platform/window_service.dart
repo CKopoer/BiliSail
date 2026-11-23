@@ -66,6 +66,23 @@ class WindowService {
 
   static const _textInputChannel = MethodChannel('bilisail/text_input');
   static const _desktopChannel = MethodChannel('bilisail/desktop_window');
+
+  Future<double> readAutomaticInterfaceScale() async {
+    if (!Platform.isLinux) return 1;
+    try {
+      final scale = await _desktopChannel
+          .invokeMethod<double>('getInterfaceScale')
+          .timeout(const Duration(seconds: 1));
+      return scale != null && scale.isFinite && scale > 0 ? scale : 1;
+    } on MissingPluginException {
+      return 1;
+    } on PlatformException {
+      return 1;
+    } on TimeoutException {
+      return 1;
+    }
+  }
+
   static const _applicationExitChannel = MethodChannel(
     'bilisail/application_exit',
   );

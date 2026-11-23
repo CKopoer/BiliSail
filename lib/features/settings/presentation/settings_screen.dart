@@ -472,6 +472,16 @@ final class _SettingsCategoryPageState
                             AppThemePreference.light: '浅色',
                             AppThemePreference.dark: '深色',
                           }, controller.setTheme),
+                          _choices('界面缩放', s.interfaceScale, {
+                            for (final scale in InterfaceScalePreference.values)
+                              scale: scale.percent == null
+                                  ? '自动'
+                                  : '${scale.percent}%',
+                          }, controller.setInterfaceScale),
+                          const Text(
+                            '自动跟随桌面或系统缩放。手动倍率基于平台原有的界面大小。',
+                            style: TextStyle(fontSize: 12),
+                          ),
                           _choices('界面字体', s.font, const {
                             AppFontPreference.harmonyOsSans: 'HarmonyOS Sans',
                             AppFontPreference.system: '系统默认',

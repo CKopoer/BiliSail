@@ -232,7 +232,7 @@ jobs:
           - Android 复用仓库配置的固定 release keystore；macOS 仅 ad-hoc 签名，未 notarize。
           - macOS 分别提供 Apple Silicon arm64 与 Intel x64 DMG，按芯片选择；打开后将 BiliSail.app 拖到 Applications 安装。
           - iOS 提供 arm64 未签名 IPA，安装前须使用自己的 Apple 证书及 provisioning profile 签名；GitHub Actions token 只用于上传产物和 Release。
-          - Linux x64 提供 AppImage 与 Flatpak。AppImage 基线为 Ubuntu 24.04，Flatpak 使用 Freedesktop 25.08 runtime；图形使用 X11／XWayland，登录需可用的系统 Secret Service。
+          - Linux x64 提供 AppImage 与 Flatpak。AppImage 基线为 Ubuntu 24.04，Flatpak 使用 Freedesktop 25.08 runtime。优先使用原生 Wayland，兼容 X11 桌面。登录需可用的系统 Secret Service。
           - 构建成功不等于各平台播放验收；正式分发前仍需完成签名、资源许可和设备验证。
           "@
           $notes | Set-Content release-notes.md -Encoding utf8

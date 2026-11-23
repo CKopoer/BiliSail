@@ -7,12 +7,12 @@
   "finish-args": [
     "--share=network",
     "--share=ipc",
-    "--socket=x11",
+    "--socket=wayland",
+    "--socket=fallback-x11",
     "--socket=pulseaudio",
     "--device=dri",
     "--talk-name=org.freedesktop.secrets",
-    "--own-name=org.mpris.MediaPlayer2.bilisail.*",
-    "--env=GDK_BACKEND=x11"
+    "--own-name=org.mpris.MediaPlayer2.bilisail.*"
   ],
   "modules": [
     {

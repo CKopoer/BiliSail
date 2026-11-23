@@ -4,6 +4,7 @@
 
 #include "flutter/generated_plugin_registrant.h"
 #include "window_geometry.h"
+#include "x11_interface_scale.h"
 
 struct _MyApplication {
   GtkApplication parent_instance;
@@ -71,6 +72,11 @@ static void first_frame_cb(MyApplication* self, FlView* view) {
 static void desktop_window_method_call(FlMethodChannel*, FlMethodCall* call, gpointer data) {
   auto* window = GTK_WINDOW(data);
   const auto* name = fl_method_call_get_name(call);
+  if (g_strcmp0(name, "getInterfaceScale") == 0) {
+    g_autoptr(FlValue) scale = fl_value_new_float(X11InterfaceScale(GTK_WIDGET(window)));
+    fl_method_call_respond_success(call, scale, nullptr);
+    return;
+  }
   auto* args = fl_method_call_get_args(call);
   auto* enabled = args && fl_value_get_type(args) == FL_VALUE_TYPE_MAP
       ? fl_value_lookup_string(args, "enabled") : nullptr;

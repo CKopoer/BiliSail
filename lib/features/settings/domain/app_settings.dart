@@ -39,6 +39,26 @@ enum PlayerControlsMode { click, dynamic }
 
 enum AppFontPreference { harmonyOsSans, system, installed }
 
+enum InterfaceScalePreference {
+  automatic(null),
+  percent75(75),
+  percent90(90),
+  percent100(100),
+  percent110(110),
+  percent125(125),
+  percent150(150),
+  percent175(175),
+  percent200(200),
+  percent250(250),
+  percent300(300);
+
+  const InterfaceScalePreference(this.percent);
+  final int? percent;
+
+  static InterfaceScalePreference fromPercent(Object? value) =>
+      values.where((item) => item.percent == value).firstOrNull ?? automatic;
+}
+
 enum DanmakuFontPreference { system, harmonyOsSans, installed }
 
 extension AppFontFamily on AppFontPreference {
@@ -86,6 +106,7 @@ final class AppSettings {
     this.defaultDynamicTab = DynamicPageTab.dynamic,
     this.allowConcurrentPlayback = false,
     this.font = AppFontPreference.harmonyOsSans,
+    this.interfaceScale = InterfaceScalePreference.automatic,
     this.systemFontFamily = '',
     this.cacheImages = true,
     this.recordSearchHistory = true,
@@ -196,6 +217,7 @@ final class AppSettings {
   }) : theme = AppThemePreference.system,
        appIcon = AppIconPreference.bilisail,
        font = AppFontPreference.harmonyOsSans,
+       interfaceScale = InterfaceScalePreference.automatic,
        systemFontFamily = '',
        cacheImages = true,
        recordSearchHistory = true,
@@ -279,6 +301,7 @@ final class AppSettings {
       navigationMode == WorkspaceNavigationMode.multipleTabs &&
       allowConcurrentPlayback;
   final AppFontPreference font;
+  final InterfaceScalePreference interfaceScale;
   final String systemFontFamily;
   String? get fontFamily => font.resolveFamily(systemFontFamily);
   final bool cacheImages;
@@ -387,6 +410,7 @@ final class AppSettings {
     DynamicPageTab? defaultDynamicTab,
     bool? allowConcurrentPlayback,
     AppFontPreference? font,
+    InterfaceScalePreference? interfaceScale,
     String? systemFontFamily,
     bool? cacheImages,
     bool? recordSearchHistory,
@@ -477,6 +501,7 @@ final class AppSettings {
     allowConcurrentPlayback:
         allowConcurrentPlayback ?? this.allowConcurrentPlayback,
     font: font ?? this.font,
+    interfaceScale: interfaceScale ?? this.interfaceScale,
     systemFontFamily: systemFontFamily ?? this.systemFontFamily,
     cacheImages: cacheImages ?? this.cacheImages,
     recordSearchHistory: recordSearchHistory ?? this.recordSearchHistory,

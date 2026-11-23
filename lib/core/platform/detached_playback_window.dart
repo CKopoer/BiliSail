@@ -125,6 +125,7 @@ class DesktopPlaybackWindow extends StatefulWidget {
     super.key,
     required this.child,
     required this.playback,
+    this.wrapPlaybackView,
     required this.onCloseRequested,
     required this.onError,
     this.activationToken,
@@ -137,6 +138,7 @@ class DesktopPlaybackWindow extends StatefulWidget {
 
   final Widget child;
   final Widget? playback;
+  final Widget Function(Widget child)? wrapPlaybackView;
   final VoidCallback onCloseRequested;
   final void Function(Object error) onError;
   final Object? activationToken;
@@ -519,7 +521,10 @@ class _DesktopPlaybackWindowState extends State<DesktopPlaybackWindow> {
     return ViewAnchor(
       view: windowReady && content != null
           ? window.buildView(
-              WindowServiceScope(service: window.windowService, child: content),
+              WindowServiceScope(
+                service: window.windowService,
+                child: widget.wrapPlaybackView?.call(content) ?? content,
+              ),
             )
           : null,
       child: Stack(

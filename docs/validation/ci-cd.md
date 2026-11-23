@@ -20,7 +20,7 @@
 | macOS | `macos-15`，Apple Silicon / Xcode 26.2 | arm64 DMG；先验证签名／最终权限、同一 Release 应用首帧和跨进程 Keychain 读写删除，再由 `hdiutil` 打包校验；仅 ad-hoc 签名，未 notarize |
 | macOS Intel | `macos-15`，Apple Silicon / Xcode 26.2，交叉构建 | x64 DMG；校验架构、版本、签名、权限和镜像；不运行启动／窗口／Keychain smoke，metadata 明确记录跳过；新宿主配置待远端验证 |
 | iOS | `xcode-27`，Apple Silicon / Xcode 27.1 / CocoaPods | arm64 未签名 IPA；校验 iOS 27.1 SDK、最低 iOS 15.0、应用版本、bundle ID、arm64 framework 及 Payload 布局；安装前需自行 Apple 签名 |
-| Linux | `ubuntu-24.04`，GTK / libsecret / libmpv / Flatpak SDK | x64 AppImage 与 Flatpak；携带媒体依赖，核对版本及主机／实际 Flatpak Runtime 内动态依赖；X11／XWayland |
+| Linux | `ubuntu-24.04`，GTK / libsecret / libmpv / Flatpak SDK | x64 AppImage 与 Flatpak，优先 Wayland，兼容 X11。携带媒体依赖，核对版本及主机和实际 Flatpak Runtime 内动态依赖。 |
 | Release 上传 | `ubuntu-24.04` | 合并并校验本次所选平台的 Actions artifacts，上传汇总 ZIP artifact 后创建草稿 |
 
 PowerShell 7 是跨平台 shell；Ubuntu 上复用 `.ps1` 不要求 Windows。Windows 原生构建需要对应架构的 Windows 主机与 Visual Studio 工具链，macOS 构建需要 macOS/Xcode 主机。`enable_macos` 同时控制 arm64 和 x64；两项现在均使用 Apple Silicon runner 及 ARM64 Flutter SDK，产物和 mux 按目标架构隔离，SDK／Pub 按宿主 ABI 共享。arm64 启用 `--enable-macos-arm64-only`，x64 显式关闭；两者通过固定 SDK 的 `FLUTTER_XCODE_ARCHS` 指定 `arm64`／`x86_64`，mux 同步交叉编译对应切片。Intel Mac 上的本地 x64 打包入口仍保留。参见 [Flutter Windows 构建](https://docs.flutter.dev/platform-integration/windows/building)、[GitHub runner 范围](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)。

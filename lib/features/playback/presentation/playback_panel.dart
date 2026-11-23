@@ -1636,8 +1636,13 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                 playerBounds: () {
                   final box = _playerBoundsKey.currentContext
                       ?.findRenderObject();
-                  return box is RenderBox && box.hasSize
-                      ? box.localToGlobal(Offset.zero) & box.size
+                  final overlay = Navigator.of(context).overlay?.context
+                      .findRenderObject();
+                  return box is RenderBox && box.hasSize && overlay != null
+                      ? MatrixUtils.transformRect(
+                          box.getTransformTo(overlay),
+                          Offset.zero & box.size,
+                        )
                       : null;
                 },
                 onSettings: _openSettings,

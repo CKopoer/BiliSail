@@ -454,9 +454,8 @@ class _PlaybackTimelineBarState extends State<PlaybackTimelineBar> {
         bounds.size.width < 80) {
       return const SizedBox.shrink();
     }
-    final origin = target.localToGlobal(Offset.zero);
-    final player = bounds.localToGlobal(Offset.zero);
-    final availableHeight = origin.dy - player.dy - 8;
+    final origin = target.localToGlobal(Offset.zero, ancestor: bounds);
+    final availableHeight = origin.dy - 8;
     final textScale = MediaQuery.textScalerOf(context).scale(12) / 12;
     if (availableHeight < 28 * textScale) return const SizedBox.shrink();
     final width = math.min(184.0, bounds.size.width - 16);
@@ -468,8 +467,8 @@ class _PlaybackTimelineBarState extends State<PlaybackTimelineBar> {
                 ? 1 - fraction
                 : fraction);
     final left = (origin.dx + x - width / 2).clamp(
-      player.dx + 8,
-      player.dx + bounds.size.width - width - 8,
+      8.0,
+      bounds.size.width - width - 8,
     );
     final chapters = normalizeChapters(widget.chapters, widget.duration);
     final chapter = chapterAt(chapters, position);

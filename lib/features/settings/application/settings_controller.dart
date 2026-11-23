@@ -156,6 +156,8 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
       update((current) => current.copyWith(allowConcurrentPlayback: value));
   Future<void> setFont(AppFontPreference value) =>
       update((current) => current.copyWith(font: value));
+  Future<void> setInterfaceScale(InterfaceScalePreference value) =>
+      update((current) => current.copyWith(interfaceScale: value));
   Future<void> setSystemFont(String family) => update(
     (current) => current.copyWith(
       font: AppFontPreference.installed,

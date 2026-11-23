@@ -16,6 +16,8 @@
 
 ## 持久化与兼容
 
+外观中的“界面缩放”对主窗口和独立播放窗口生效。自动模式采用平台缩放，Linux X11 在启动时补足桌面公布的小数倍率。手动模式以 Flutter 从平台获得的逻辑大小为 100%，提供 75% 至 300% 的预设档位。选择后立即重新布局，文字仍保留系统辅助功能字号。选择保存在 `preferences.v1` 快照版本 57 的 `interfaceScalePercent`。自动为 null，旧快照缺少该字段、值无效或恢复默认时均使用自动。[Linux 缩放验证记录](ios-linux.md)
+
 字体选择写入既有 SQLite `preferences.v1` 设置快照，JSON `schemaVersion` 从 3 升为 4，新增 `font` 字段。SQLite 表结构及数据库 schemaVersion 仍为 1，无需删库或改表。旧快照缺少字体字段时补 HarmonyOS Sans，其他设置和快捷键覆盖值保留；未知字体值安全回退到 HarmonyOS Sans。鼠标侧键和组合键沿用现有快捷键绑定字段，可随设置保存/重载。
 
 ## 验证边界

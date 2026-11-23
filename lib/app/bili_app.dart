@@ -51,6 +51,7 @@ import '../core/presentation/android_system_ui.dart';
 import '../core/presentation/window_orientation_host.dart';
 import 'shortcut_coordinator.dart';
 import 'image_cache_binding.dart';
+import 'interface_scale.dart';
 import 'dependencies.dart';
 import 'router.dart';
 import 'theme.dart';
@@ -60,9 +61,11 @@ class BiliApp extends ConsumerStatefulWidget {
   const BiliApp({
     super.key,
     required this.dependencies,
+    this.automaticInterfaceScale = 1,
     this.videoComposition = const FlutterVideoCompositionAdapter(),
   });
   final AppDependencies dependencies;
+  final double automaticInterfaceScale;
   final VideoCompositionAdapter videoComposition;
   @override
   ConsumerState<BiliApp> createState() => _BiliAppState();
@@ -113,6 +116,17 @@ class _BiliAppState extends ConsumerState<BiliApp> {
   @override
   void initState() {
     super.initState();
+    // Restore the saved scale before showing a frame at the system default.
+    final binding = WidgetsBinding.instance;
+    binding.deferFirstFrame();
+    unawaited(
+      ref
+          .read(settingsControllerProvider.future)
+          .then<void>(
+            (_) => binding.allowFirstFrame(),
+            onError: (Object _, StackTrace _) => binding.allowFirstFrame(),
+          ),
+    );
     _router = createBiliRouter(
       onExitRequested: widget.dependencies.close,
       onActivateBrowser: () => unawaited(widget.dependencies.window.activate()),
@@ -135,6 +149,7 @@ class _BiliAppState extends ConsumerState<BiliApp> {
               activationToken: activationToken,
               onCloseRequested: onClose,
               onError: onError,
+              wrapPlaybackView: (child) => InterfaceScale(child: child),
               playback: playback == null
                   ? null
                   : WorkspacePlaybackWindow(
@@ -465,7 +480,7 @@ class _BiliAppState extends ConsumerState<BiliApp> {
       enabled: settings.rememberVolumeGlobally,
       defaultVolume: settings.defaultVolume,
     );
-    return ImageCacheBinding(
+    final app = ImageCacheBinding(
       cache: widget.dependencies.images,
       child: MaterialApp.router(
         title: 'BiliSail',
@@ -531,6 +546,10 @@ class _BiliAppState extends ConsumerState<BiliApp> {
         },
         routerConfig: _router,
       ),
+    );
+    return InterfaceScale(
+      automaticFactor: widget.automaticInterfaceScale,
+      child: app,
     );
   }
 }

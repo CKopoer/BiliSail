@@ -7,7 +7,7 @@
 | 目标 | 主机 | 最低范围 | 产物 |
 | --- | --- | --- | --- |
 | `ios-arm64` | `xcode-27` / Apple Silicon / Xcode 27.1 / CocoaPods | iOS 15，iPhoneOS arm64 | `BiliSail-<version>-ios-arm64-unsigned.ipa` |
-| `linux-x64` | `ubuntu-24.04` / GTK 3 / libsecret / libmpv | AppImage 基线 Ubuntu 24.04；Flatpak Freedesktop 25.08；X11／XWayland | `BiliSail-<version>-linux-x64.AppImage` 与 `.flatpak` |
+| `linux-x64` | `ubuntu-24.04` / GTK 3 / libsecret / libmpv | AppImage 基线 Ubuntu 24.04，Flatpak Freedesktop 25.08，原生 Wayland 优先，兼容 X11 | `BiliSail-<version>-linux-x64.AppImage` 与 `.flatpak` |
 
 两个平台均复用 [CI](../../.github/workflows/ci.yml) 的并行检查、原生 mux 回归及 [build-release.ps1](../../tool/build-release.ps1)。push／PR 默认构建全部五个平台，手动 CI 和 [Release preview](../../.github/workflows/release.yml) 通过 `enable_ios`、`enable_linux` 分别选择。构建在检查成功后启动，所选目标全部成功才创建 Release 草稿；继续使用 `github.token`，无需增加 GitHub secret。原有 Android、Windows 和 macOS 签名方式沿用现有配置。
 
@@ -46,9 +46,21 @@ Windows/MSYS2 与 WSL Ubuntu 22.04 上的 [目录生成回归](../../packages/bi
 1. 保留可执行文件相邻的 `lib/` 和 `data/`，显式添加由播放器 `dlopen` 的 `libmpv.so.2`；linuxdeploy 收集动态依赖，GTK hook 收集其资源及加载器。不把宿主 GPU 驱动目录作为应用资产。
 2. linuxdeploy 固定 `1-alpha-20251107-1`，GTK 部署脚本固定提交 `7a3fbc31a9e5075073ff8790f26effbac5f84453`；两者下载后校验 SHA-256 才执行。`APPIMAGE_EXTRACT_AND_RUN=1` 使 CI 不依赖 FUSE 挂载。
 3. [校验脚本](../../tool/linux-package-validation.py) 核对应用版本、`libmpv.so.2` 和动态依赖，并保留 Ubuntu binary／source 包版本及版权文本。再从同一 AppDir 生成 AppImage 和 Flatpak，在临时 CI runner 安装导出的 Flatpak 后，使用实际 Runtime 另运行一遍动态依赖校验，缺库即失败，避免 SDK 的额外库掩盖问题。该检查不等于真实播放或启动通过。
-4. [Flatpak manifest](../../linux/packaging/dev.bilisail.bilisail.json) 使用 Freedesktop 25.08 Runtime／SDK。只开放网络、X11、IPC、PulseAudio、DRI 和 Secret Service，不授予宿主文件目录权限。Linux 默认离线目录为应用支持目录下的 `offline/`，数据库、缓存与下载均可在沙盒内持久保存；其他平台的默认下载位置沿用原值。
+4. [Flatpak manifest](../../linux/packaging/dev.bilisail.bilisail.json) 使用 Freedesktop 25.08 Runtime／SDK，图形权限随桌面选择 Wayland 或 X11，另开放网络、IPC、PulseAudio、DRI 和 Secret Service。数据库、缓存与下载均在沙盒内持久保存，默认离线目录为应用支持目录下的 `offline/`。
 
-AppImage 的宿主要求由 Ubuntu 24.04 构建基线决定，不能保证旧发行版运行。图形暂按 X11／XWayland 打包，未承诺纯 Wayland、Linux arm64 或所有 GPU 的硬件解码。[linuxdeploy 文档](https://docs.appimage.org/packaging-guide/from-source/linuxdeploy-user-guide.html)
+AppImage 的宿主要求由 Ubuntu 24.04 构建基线决定。[linuxdeploy 文档](https://docs.appimage.org/packaging-guide/from-source/linuxdeploy-user-guide.html)
+
+从本次构建变更起，[启动器](../../linux/packaging/AppRun)默认让 GTK 先连接 Wayland，再尝试 X11，也允许调用者显式选择后端。[Flatpak 清单](../../linux/packaging/dev.bilisail.bilisail.json)使用 `wayland` 和 `fallback-x11`，在提供 Wayland 的桌面仅暴露 Wayland 套接字。在 X11 桌面继续使用 X11。需要在 Wayland 桌面临时诊断 XWayland 时，AppImage 可用 `GDK_BACKEND=x11` 启动，Flatpak 可用 `flatpak run --nosocket=wayland --socket=x11 --env=GDK_BACKEND=x11 dev.bilisail.bilisail` 单次启动。[Flatpak 图形权限](https://docs.flatpak.org/en/latest/sandbox-permissions.html)
+
+已发布的 `1.3.0+6` 两种安装包均强制 X11。在 KDE 让旧式应用自行缩放时，GTK 3 窗口读到整数倍率，150% 会表现为 1 倍。原生 Wayland 下 GTK 3 仍可提交整数倍率的缓冲区，由合成器将窗口映射到输出的小数缩放，Flutter 的设备像素比可以和桌面倍率不同。[反馈 #167](https://github.com/CKopoer/BiliSail/issues/167)
+
+“设置 → 外观 → 界面缩放”默认为自动。启动时 runner 按窗口实际使用的 GDK 后端检测。X11 上，Plasma 通过 XSETTINGS 发布 GTK 整数倍率和剩余的 DPI，BiliSail 据此计算目标倍率，再扣除当前 GTK 窗口已应用的倍率。若 Plasma 的 GTK 服务没有公布 DPI，在 Plasma X11 会话中还可读取当前用户可见的 `kdeglobals` 的 `[KScreen] ScaleFactor`。旧式桌面可通过 `Xft/DPI` 或 X 资源 `Xft.dpi` 提供等效 DPI。有效的显式 `GDK_SCALE` 优先。原生 Wayland 直接采用平台窗口指标。只公布字体倍率或没有可用信息的桌面可手动指定倍率。X11 桌面设置在下次启动时重读，应用内切换立即生效。[原生读取](../../linux/runner/x11_interface_scale.h) · [Plasma 的 XSETTINGS 实现](https://github.com/KDE/kde-gtk-config/blob/v6.8.3/kded/gtkconfig.cpp)
+
+2026-11-23 用当前源码构建 Linux x64 Debug，在两个独立的 3840×2160 显示会话上测量首页。X11 通过 xsettingsd 提供 Plasma 格式的配置，原生 Wayland 使用关闭 XWayland 的 Sway。两者在 100%、150%、200% 冷启动时，同一段 56 逻辑像素高的区域均分别显示为 56、84、112 物理像素。150% X11 桌面恢复已保存的手动 100% 时，从首个可测界面开始均为 56 像素。另用 GTK 窗口验证 X11 下 250% 时 GTK 提供 2 倍，应用补足 1.25 倍。Fedora KDE 实机及混合倍率多屏仍待验证。
+
+2026-11-23 以 `1.3.0+6` 的发布二进制重打测试包，在 Ubuntu 24.04 的独立 Sway 会话关闭 XWayland。AppImage 和安装在 Freedesktop 25.08 Runtime 内的 Flatpak 分别在 100%、150%、200% 冷启动，主窗口均使用原生 `xdg_shell`。同一个 1280×720 逻辑窗口在 4K 输出截图上依次占 1280×720、1920×1080、2560×1440 物理像素。独立的 Flutter 3.50.1／media_kit 软件视频纹理样例在三档的画面和 Flutter 对照色块均按比例显示。两种测试包也在纯 X11 显示上成功打开主窗口。Fedora KDE 和实际 GPU 硬解仍待实机验证。
+
+运行中从 100% 切换到 150% 时，该视频样例的 240 逻辑像素宽色块被绘制到约 720 物理像素，重新打开后恢复约 360 像素。Flutter 3.50.1 的 Wayland 子表面在创建时设置缓冲区倍率，更换不同倍率的显示器也可能触发这一上游问题。切档后出现裁切或点击错位时，可退出并在目标显示器上重新启动。[Flutter #196476](https://github.com/flutter/flutter/issues/196476)
 
 Flatpak 单文件不携带 Runtime。本地需先安装 Flatpak，并确保存在 Flathub remote；包内指定 runtime 仓库供解析依赖：[Flatpak 单文件说明](https://docs.flatpak.org/en/latest/single-file-bundles.html)。
 

@@ -66,6 +66,11 @@ run_stage 'Populate AppDir and GTK dependencies' "$work/tools/linuxdeploy-x86_64
   --desktop-file "$repo/linux/packaging/dev.bilisail.bilisail.desktop" \
   --icon-file "$repo/linux/packaging/dev.bilisail.bilisail.png" --plugin gtk
 
+# linuxdeploy wraps our AppRun to source the GTK hook. AppRun already loads
+# those hooks and must see the original GDK_BACKEND before the first hook runs.
+cmp "$repo/linux/packaging/AppRun" "$work/AppDir/AppRun.wrapped"
+mv -T "$work/AppDir/AppRun.wrapped" "$work/AppDir/AppRun"
+
 # WebKitGTK release builds use a compiled absolute helper prefix. A build-time
 # replacement preserves ELF offsets; AppRun supplies the stable working folder.
 python3 - "$repo/tool/linux-webview.py" "$work/AppDir" <<'PY'
@@ -115,7 +120,7 @@ manifest = json.loads(Path(sys.argv[1]).read_text())
 Path(sys.argv[2]).write_text(json.dumps({
     "runtime": manifest["runtime"], "runtimeVersion": manifest["runtime-version"],
     "applicationId": manifest["app-id"], "hostBaseline": "Ubuntu 24.04 x64",
-    "displayBackend": "X11 (XWayland on Wayland)",
+    "displayBackend": "Wayland (preferred), X11 fallback",
     "dependencyValidation": "AppDir and installed Flatpak Runtime ldd",
     "linuxdeployVersion": "1-alpha-20251107-1",
 }, indent=2) + "\n")

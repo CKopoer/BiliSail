@@ -132,7 +132,13 @@ Future<void> main(List<String> arguments) async {
           : AppDatabase(NativeDatabase.memory()),
       windowOverride: applicationWindow?.service,
     );
-    final app = dependencies.scope(BiliApp(dependencies: dependencies));
+    final app = dependencies.scope(
+      BiliApp(
+        dependencies: dependencies,
+        automaticInterfaceScale: await dependencies.window
+            .readAutomaticInterfaceScale(),
+      ),
+    );
     smokeStage('dependencies-ready');
     // Leave the GTK caption available to the startup error screen until the
     // workspace can supply its own window controls.

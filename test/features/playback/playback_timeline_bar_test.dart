@@ -581,6 +581,28 @@ void main() {
     await mouse.removePointer();
   });
 
+  testWidgets('scaled preview respects the player inset at the edge', (
+    tester,
+  ) async {
+    final harness = _Harness(width: 400, trackInset: 48);
+    await tester.pumpWidget(
+      Transform.scale(scale: 1.5, child: harness.build()),
+    );
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer();
+    final track = tester.getRect(
+      find.byKey(const ValueKey('playback-timeline-slider')),
+    );
+    await mouse.moveTo(Offset(track.left + 1, track.center.dy));
+    await tester.pump();
+    final preview = tester.getTopLeft(
+      find.byKey(const ValueKey('playback-seek-preview')),
+    );
+    final player = tester.getTopLeft(find.byKey(harness.player));
+    expect(preview.dx - player.dx, closeTo(8 * 1.5, 0.01));
+    await mouse.removePointer();
+  });
+
   testWidgets(
     'drag seeks once on release and source replacement cancels drag',
     (tester) async {
@@ -693,11 +715,12 @@ final class _SpriteTransport implements ApiTransport {
 }
 
 class _Harness {
-  _Harness({this.width = 600, this.textScale = 1});
+  _Harness({this.width = 600, this.textScale = 1, this.trackInset = 0});
   final player = GlobalKey();
   final seeks = <Duration>[];
   int previews = 0, generation = 1;
   double width, textScale;
+  final double trackInset;
   Duration duration = const Duration(seconds: 60);
   Duration position = Duration.zero;
   List<VideoChapter> chapters = _chapters;
@@ -722,7 +745,7 @@ class _Harness {
                 child: Stack(
                   children: [
                     Positioned(
-                      left: 0,
+                      left: trackInset,
                       right: 0,
                       bottom: 40,
                       child: PlaybackTimelineBar(

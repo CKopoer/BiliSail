@@ -1,7 +1,9 @@
-"""Exercise the bundled AppImage output path without linuxdeploy or FUSE."""
+"""Exercise the Linux GTK launcher and the bundled AppImage output path."""
 
+import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -9,6 +11,43 @@ import unittest
 
 
 SCRIPT = Path(__file__).with_name("linux-appimage.sh")
+PACKAGING = SCRIPT.parents[1] / "linux" / "packaging"
+
+
+class DisplayBackendTests(unittest.TestCase):
+    def test_flatpak_exposes_wayland_with_x11_fallback(self):
+        manifest = json.loads((PACKAGING / "dev.bilisail.bilisail.json").read_text())
+        args = manifest["finish-args"]
+        self.assertIn("--socket=wayland", args)
+        self.assertIn("--socket=fallback-x11", args)
+        self.assertNotIn("--socket=x11", args)
+        self.assertFalse(any(arg.startswith("--env=GDK_BACKEND=") for arg in args))
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "Linux GTK launcher")
+    def test_gtk_hook_preserves_backend_selection(self):
+        with tempfile.TemporaryDirectory(prefix="bilisail display ") as temp:
+            root = Path(temp)
+            launcher = root / "AppRun"
+            shutil.copyfile(PACKAGING / "AppRun", launcher)
+            hooks = root / "apprun-hooks"
+            hooks.mkdir()
+            (hooks / "gtk.sh").write_text("export GDK_BACKEND=x11\nexport GTK_DATA_PREFIX=test\n")
+            program = root / "usr/bin/bilisail"
+            program.parent.mkdir(parents=True)
+            program.write_text('#!/bin/sh\nprintf "%s\\n" "$GDK_BACKEND" "$GTK_DATA_PREFIX" "$@"\n')
+            program.chmod(0o755)
+            for backend in (None, "x11", "wayland"):
+                with self.subTest(backend=backend):
+                    env = os.environ.copy()
+                    env.pop("GDK_BACKEND", None)
+                    if backend:
+                        env["GDK_BACKEND"] = backend
+                    result = subprocess.check_output(
+                        ["bash", launcher, "one argument"], env=env, text=True,
+                    )
+                    self.assertEqual(
+                        result.splitlines(), [backend or "wayland,x11", "test", "one argument"]
+                    )
 
 
 @unittest.skipUnless(sys.platform.startswith("linux"), "Linux AppImage tooling")
