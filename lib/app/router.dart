@@ -126,6 +126,7 @@ GoRouter createBiliRouter({
                 navigationMode: defaultWorkspaceNavigationMode,
               );
           return BiliAppShell(
+            playbackManager: ref.watch(playbackManagerProvider),
             accountIdentity: accountBuilder == null
                 ? null
                 : ref.watch(

@@ -56,7 +56,6 @@ final class PlaybackShortcutController extends ChangeNotifier {
     return _touchHoldCommitted ? '已固定倍速' : '上滑固定倍速';
   }
 
-  double _savedVolume = 100;
   Set<ShortcutAction> get capabilities => {
     ShortcutAction.playPause,
     ShortcutAction.fullscreen,
@@ -253,9 +252,7 @@ final class PlaybackShortcutController extends ChangeNotifier {
       case ShortcutAction.volumeDownTen:
         return adjustVolume(-10);
       case ShortcutAction.mute:
-        final volume = session.commandVolume;
-        if (volume > 0) _savedVolume = volume;
-        await session.setVolume(volume > 0 ? 0 : _savedVolume);
+        await session.toggleMute();
       case ShortcutAction.slower:
         await session.setRate(
           PlaybackRates.slower(session.commandRate, session.playbackRates),

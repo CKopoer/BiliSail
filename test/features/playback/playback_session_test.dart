@@ -3646,6 +3646,65 @@ void main() {
   });
 
   test(
+    'tab mute survives source changes and leaves shared volume alone',
+    () async {
+      final writes = <double>[];
+      final memory = PlaybackVolumeMemory(
+        saveVolume: (v) async => writes.add(v),
+      );
+      final manager = _manager(volumeMemory: memory);
+      addTearDown(manager.close);
+      final settings = AppSettings(
+        defaultVolume: 60,
+        rememberVolumeGlobally: true,
+      );
+      final first = manager.acquire('first')..configureSettings(settings);
+      await first.open(_detail('1'), _part('1'));
+      await first.setVolume(37);
+      await first.toggleMute(tabOnly: true);
+      final second = manager.acquire('second')..configureSettings(settings);
+      await second.open(_detail('2'), _part('2'));
+      expect(second.snapshots.value.volume, 37);
+      await second.setVolume(52);
+      await first.open(_detail('3'), _part('3'));
+      expect(first.snapshots.value.volume, 0);
+      await first.toggleMute(tabOnly: true);
+      expect(first.snapshots.value.volume, 37);
+      expect(second.snapshots.value.volume, 52);
+      expect(memory.volumeFor(60), 52);
+      await memory.flush();
+      expect(writes, isNot(contains(0)));
+      expect(writes.last, 52);
+    },
+  );
+
+  test(
+    'rapid tab mute clicks restore the volume and player controls can unmute',
+    () async {
+      final manager = _manager();
+      addTearDown(manager.close);
+      final session = manager.acquire('video');
+      await session.open(_detail('1'), _part('1'));
+      await session.setVolume(43);
+      final engine = session.engine as _FakeEngine;
+      final gate = Completer<void>();
+      engine.nextVolume = gate;
+      final mute = session.toggleMute(tabOnly: true);
+      final unmute = session.toggleMute(tabOnly: true);
+      gate.complete();
+      await Future.wait([mute, unmute]);
+      expect(engine.currentSnapshot.volume, 43);
+      await session.toggleMute(tabOnly: true);
+      await session.toggleMute();
+      expect(engine.currentSnapshot.volume, 43);
+      await session.toggleMute(tabOnly: true);
+      await session.setVolume(19);
+      await session.open(_detail('2'), _part('2'));
+      expect(engine.currentSnapshot.volume, 19);
+    },
+  );
+
+  test(
     'global volume ignores defaults and preserves each existing source',
     () async {
       final writes = <double>[];

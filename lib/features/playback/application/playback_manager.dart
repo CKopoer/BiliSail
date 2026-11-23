@@ -34,6 +34,11 @@ final class PlaybackManager extends ChangeNotifier {
   PlaybackSystemMediaController? _systemMedia;
   Iterable<PlaybackSession> get sessions => _sessions.values;
   PlaybackSession? get selectedSession => _sessions[_selectedTabId];
+  PlaybackSession? sessionFor(String tabId) => _sessions[tabId];
+  // A page can release its session while Flutter is unmounting widgets.
+  // Deliver membership changes to the tab strip after that frame.
+  final _sessionChanges = StreamController<void>.broadcast();
+  Stream<void> get sessionChanges => _sessionChanges.stream;
 
   late final ListeningSleepTimer sleepTimer;
   final PlaybackSession Function(ListeningSleepTimer sleepTimer) _createSession;
@@ -58,6 +63,7 @@ final class PlaybackManager extends ChangeNotifier {
         if (_closed || !identical(_sessions[tabId], session)) return;
         if (_activeTabId == tabId) _selectedTabId = tabId;
         notifyListeners();
+        _sessionChanges.add(null);
         unawaited(_applyPolicy());
       });
       return session;
@@ -106,6 +112,7 @@ final class PlaybackManager extends ChangeNotifier {
     if (_sessions.isEmpty) sleepTimer.cancel();
     if (_selectedTabId == tabId) _selectedTabId = null;
     notifyListeners();
+    _sessionChanges.add(null);
     final closing = session.close();
     _releases.add(closing);
     unawaited(closing.whenComplete(() => _releases.remove(closing)));
@@ -148,6 +155,7 @@ final class PlaybackManager extends ChangeNotifier {
         ]);
       } finally {
         sleepTimer.dispose();
+        await _sessionChanges.close();
         super.dispose();
       }
     }

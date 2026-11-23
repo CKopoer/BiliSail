@@ -5804,6 +5804,36 @@ void main() {
         final secondSession = sessions.last;
         expect(secondSession.detail?.summary.id, second.summary.id);
         expect(secondSession.snapshots.value.phase, PlaybackPhase.playing);
+        final muteButton = findMaterialTooltip('将标签页静音');
+        final unmuteButton = findMaterialTooltip('取消标签页静音');
+        if (mode == WorkspaceNavigationMode.multipleTabs) {
+          expect(muteButton, findsNWidgets(concurrent ? 2 : 1));
+          if (concurrent) {
+            final activeRoute = router.routeInformationProvider.value.uri;
+            final secondVolume = secondSession.commandVolume;
+            await firstSession.setVolume(37);
+            await tester.tap(muteButton.first);
+            await _pumpFrames(tester);
+            expect(firstSession.snapshots.value.volume, 0);
+            expect(firstSession.snapshots.value.phase, PlaybackPhase.playing);
+            expect(secondSession.commandVolume, secondVolume);
+            expect(muteButton, findsOneWidget);
+            expect(unmuteButton, findsOneWidget);
+            await firstSession.pause();
+            await _pumpFrames(tester);
+            expect(unmuteButton, findsNothing);
+            await firstSession.togglePlaying();
+            await _pumpFrames(tester);
+            await tester.tap(unmuteButton);
+            await _pumpFrames(tester);
+            expect(firstSession.snapshots.value.volume, 37);
+            expect(muteButton, findsNWidgets(2));
+            expect(router.routeInformationProvider.value.uri, activeRoute);
+            expect(manager.selectedSession, same(secondSession));
+          }
+        } else {
+          expect(muteButton, findsNothing);
+        }
         expect(
           firstSession.snapshots.value.phase,
           mode == WorkspaceNavigationMode.multipleTabs && concurrent
@@ -5906,6 +5936,14 @@ void main() {
         await _pumpFrames(tester);
         expect(secondSession.snapshots.value.phase, PlaybackPhase.playing);
         expect(firstSession.media, isNull);
+        expect(muteButton, findsOneWidget);
+        final remainingEngine = secondSession.engine as _FakeEngine;
+        remainingEngine._emit(
+          remainingEngine.currentSnapshot.copyWith(phase: PlaybackPhase.ended),
+        );
+        await _pumpFrames(tester);
+        expect(muteButton, findsNothing);
+        expect(unmuteButton, findsNothing);
         await tester.pumpWidget(const SizedBox());
         await _pumpFrames(tester);
         final closing = manager.close();

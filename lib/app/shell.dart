@@ -2,6 +2,7 @@ import '../core/presentation/motion_preferences.dart';
 
 import 'dart:ui' show ViewFocusEvent, ViewFocusState;
 
+import 'package:bili_player/bili_player.dart' show PlaybackPhase;
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
@@ -10,6 +11,8 @@ import 'package:go_router/go_router.dart';
 import '../core/platform/window_caption.dart';
 import '../core/platform/window_size_policy.dart';
 import '../features/feed/domain/home_channel.dart';
+import '../features/playback/application/playback_manager.dart';
+import '../features/playback/presentation/playback_snapshot_builder.dart';
 import '../features/search/presentation/search_category_bar.dart';
 import '../features/search/presentation/search_entry_header.dart';
 import '../core/presentation/workspace_activity.dart';
@@ -135,6 +138,7 @@ final class BiliAppShell extends StatefulWidget {
     this.accountBuilder,
     this.pageBuilder,
     this.pageScopeBuilder,
+    this.playbackManager,
     this.windowControlsBuilder,
     this.dragRegionBuilder,
     this.shortcuts = const ShortcutSettings.defaults(),
@@ -179,6 +183,7 @@ final class BiliAppShell extends StatefulWidget {
   final WidgetBuilder? accountBuilder;
   final WorkspacePageBuilder? pageBuilder;
   final WorkspacePageScopeBuilder? pageScopeBuilder;
+  final PlaybackManager? playbackManager;
   final WidgetBuilder? windowControlsBuilder;
   final DragRegionBuilder? dragRegionBuilder;
   @override
@@ -2073,6 +2078,10 @@ final class _BiliAppShellState extends State<BiliAppShell>
                         style: const TextStyle(fontSize: 12),
                       ),
                     ),
+                    if (widget.playbackManager case final manager?
+                        when tab.isPlayback &&
+                            WorkspaceActivity.isVisible(context))
+                      _TabSoundButton(manager: manager, tab: tab),
                     if (!tab.pinned && (!_dualTabs || tab.isPlayback))
                       IconButton(
                         key: ValueKey('close-workspace-tab-${tab.id}'),
@@ -2319,5 +2328,42 @@ final class _BiliAppShellState extends State<BiliAppShell>
     constraints: const BoxConstraints.tightFor(width: 34, height: 34),
     padding: EdgeInsets.zero,
     icon: Icon(icon, size: 18),
+  );
+}
+
+class _TabSoundButton extends StatelessWidget {
+  const _TabSoundButton({required this.manager, required this.tab});
+
+  final PlaybackManager manager;
+  final WorkspaceTab tab;
+
+  @override
+  Widget build(BuildContext context) => StreamBuilder<void>(
+    stream: manager.sessionChanges,
+    builder: (context, _) {
+      final session = manager.sessionFor(tab.id);
+      if (session == null) return const SizedBox.shrink();
+      return PlaybackSnapshotBuilder(
+        snapshots: session.snapshots,
+        select: (snapshot) =>
+            (snapshot.phase == PlaybackPhase.playing, snapshot.volume == 0),
+        builder: (context, snapshot) {
+          if (snapshot.phase != PlaybackPhase.playing) {
+            return const SizedBox.shrink();
+          }
+          final muted = snapshot.volume == 0;
+          return IconButton(
+            tooltip: muted ? '取消标签页静音' : '将标签页静音',
+            onPressed: () => session.toggleMute(tabOnly: true),
+            constraints: const BoxConstraints.tightFor(width: 30, height: 30),
+            padding: EdgeInsets.zero,
+            icon: Icon(
+              muted ? Icons.volume_off_outlined : Icons.volume_up_outlined,
+              size: 16,
+            ),
+          );
+        },
+      );
+    },
   );
 }
