@@ -52,6 +52,8 @@ class SqliteSettingsRepository implements SettingsRepository {
     }
     bool boolean(String key, bool fallback) =>
         decoded[key] is bool ? decoded[key] as bool : fallback;
+    String text(String key) =>
+        decoded[key] is String ? decoded[key] as String : '';
     double number(String key, double fallback) {
       final value = decoded[key];
       return value is num ? value.toDouble() : fallback;
@@ -216,6 +218,17 @@ class SqliteSettingsRepository implements SettingsRepository {
               .where((item) => item.name == decoded['preferredAudioQuality'])
               .firstOrNull ??
           AudioQualityPreference.aac192,
+      avoidHdrDolby: boolean('avoidHdrDolby', false),
+      unlockHighestBitrate: boolean('unlockHighestBitrate', false),
+      unlimitedQualityTrial: boolean('unlimitedQualityTrial', false),
+      qualityTrialUiSync: boolean('qualityTrialUiSync', true),
+      fakeWifi: boolean('fakeWifi', false),
+      pgcResolverEnabled: boolean('pgcResolverEnabled', false),
+      pgcResolverHk: text('pgcResolverHk'),
+      pgcResolverTw: text('pgcResolverTw'),
+      pgcResolverSea: text('pgcResolverSea'),
+      pgcResolverCn: text('pgcResolverCn'),
+      pgcResolverDefaultRegion: text('pgcResolverDefaultRegion'),
       mediaCdn:
           MediaCdnPreference.values
               .where((item) => item.name == decoded['mediaCdn'])
@@ -319,7 +332,7 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 56,
+        'schemaVersion': 57,
         'appIcon': value.appIcon.name,
         'recommendations': value.recommendations.toJson(),
         'navigationBarMode': value.navigationBarMode.name,
@@ -389,6 +402,17 @@ class SqliteSettingsRepository implements SettingsRepository {
         'liveStreamPreference': value.liveStreamPreference.toJson(),
         'preferredAudioQuality': value.preferredAudioQuality.name,
         'preferredVideoCodec': value.preferredVideoCodec.name,
+        'avoidHdrDolby': value.avoidHdrDolby,
+        'unlockHighestBitrate': value.unlockHighestBitrate,
+        'unlimitedQualityTrial': value.unlimitedQualityTrial,
+        'qualityTrialUiSync': value.qualityTrialUiSync,
+        'fakeWifi': value.fakeWifi,
+        'pgcResolverEnabled': value.pgcResolverEnabled,
+        'pgcResolverHk': value.pgcResolverHk,
+        'pgcResolverTw': value.pgcResolverTw,
+        'pgcResolverSea': value.pgcResolverSea,
+        'pgcResolverCn': value.pgcResolverCn,
+        'pgcResolverDefaultRegion': value.pgcResolverDefaultRegion,
         'mediaCdn': value.mediaCdn.name,
         'videoDecoding': value.videoDecoding.name,
         'androidVideoOutput': value.androidVideoOutput.name,

@@ -93,7 +93,7 @@ void main() {
         final snapshot = jsonDecode(
           (await database.readSetting('preferences.v1'))!,
         ) as Map<String, Object?>;
-        expect(snapshot['schemaVersion'], 56);
+        expect(snapshot['schemaVersion'], 57);
         expect(snapshot['wheelScrollAnimation'], mode.name);
       }
       expect(database.schemaVersion, 3);
@@ -314,6 +314,70 @@ void main() {
         expect(loaded.preferredQuality, 80);
         expect(loaded.preferredLiveQuality, 250);
       }
+    },
+  );
+
+  test(
+    'avoid HDR preference persists and legacy snapshots default to off',
+    () async {
+      expect(AppSettings().avoidHdrDolby, isFalse);
+      expect(const AppSettings.defaults().avoidHdrDolby, isFalse);
+      await repository.save(
+        const AppSettings.defaults().copyWith(avoidHdrDolby: true),
+      );
+      final loaded = await SqliteSettingsRepository(database).load();
+      expect(loaded.avoidHdrDolby, isTrue);
+      final enhanced = loaded.copyWith(
+        unlockHighestBitrate: true,
+        unlimitedQualityTrial: true,
+        qualityTrialUiSync: false,
+        fakeWifi: true,
+        pgcResolverEnabled: true,
+        pgcResolverHk: 'https://hk.example.com/',
+        pgcResolverTw: 'https://tw.example.com',
+        pgcResolverSea: 'http://sea.example.com:8080',
+        pgcResolverCn: 'not a url',
+        pgcResolverDefaultRegion: 'sea',
+      );
+      await repository.save(enhanced);
+      final enhancedReload = await SqliteSettingsRepository(database).load();
+      expect(enhancedReload.unlockHighestBitrate, isTrue);
+      expect(enhancedReload.unlimitedQualityTrial, isTrue);
+      expect(enhancedReload.qualityTrialUiSync, isFalse);
+      expect(enhancedReload.fakeWifi, isTrue);
+      expect(enhancedReload.pgcResolverEnabled, isTrue);
+      expect(enhancedReload.pgcResolverHk, 'https://hk.example.com');
+      expect(enhancedReload.pgcResolverTw, 'https://tw.example.com');
+      expect(enhancedReload.pgcResolverSea, 'http://sea.example.com:8080');
+      expect(enhancedReload.pgcResolverCn, isEmpty);
+      expect(enhancedReload.pgcResolverDefaultRegion, 'sea');
+      expect(enhancedReload.copyWith().unlockHighestBitrate, isTrue);
+      final snapshot = jsonDecode(
+        (await database.readSetting('preferences.v1'))!,
+      ) as Map<String, Object?>;
+      expect(snapshot['avoidHdrDolby'], isTrue);
+      expect(snapshot['unlockHighestBitrate'], isTrue);
+      expect(snapshot['unlimitedQualityTrial'], isTrue);
+      expect(snapshot['qualityTrialUiSync'], isFalse);
+      expect(snapshot['fakeWifi'], isTrue);
+      expect(snapshot['pgcResolverEnabled'], isTrue);
+      expect(snapshot['pgcResolverHk'], 'https://hk.example.com');
+      expect(snapshot['pgcResolverDefaultRegion'], 'sea');
+      expect(snapshot['schemaVersion'], 57);
+      await database.writeSetting(
+        'preferences.v1',
+        jsonEncode({'schemaVersion': 56, 'preferredQuality': 112}),
+      );
+      final legacy = await repository.load();
+      expect(legacy.avoidHdrDolby, isFalse);
+      expect(legacy.unlockHighestBitrate, isFalse);
+      expect(legacy.unlimitedQualityTrial, isFalse);
+      expect(legacy.qualityTrialUiSync, isTrue);
+      expect(legacy.fakeWifi, isFalse);
+      expect(legacy.pgcResolverEnabled, isFalse);
+      expect(legacy.pgcResolverHk, isEmpty);
+      expect(legacy.pgcResolverDefaultRegion, isEmpty);
+      expect(legacy.preferredQuality, 112);
     },
   );
 

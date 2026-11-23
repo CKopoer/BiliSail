@@ -39,6 +39,78 @@ final _silentDash = <String, Object?>{
 };
 
 void main() {
+  group('opt-in quality enhancements', () {
+    test(
+      'defaults preserve the requested quality and omit trial flags',
+      () async {
+        final transport = _Transport((_) => _response(_dash));
+
+        await _client(transport).getPlayInfo(_bvid, _cid, qn: 80);
+
+        final query = transport.plays.single.queryParameters;
+        expect(query['qn'], '80');
+        expect(query['fnval'], '4048');
+        expect(query['fourk'], '1');
+        expect(query.containsKey('is_need_trial'), isFalse);
+        expect(query.containsKey('is_need_view_info'), isFalse);
+        expect(query.containsKey('try_look'), isFalse);
+      },
+    );
+
+    test(
+      'highest and trial policies emit exact compatible parameters',
+      () async {
+        final transport = _Transport((_) => _response(_dash));
+
+        await _client(transport).getPlayInfo(
+          _bvid,
+          _cid,
+          qn: 16,
+          unlockHighestBitrate: true,
+          unlimitedQualityTrial: true,
+        );
+
+        final query = transport.plays.single.queryParameters;
+        expect(query['qn'], '127');
+        expect(query['fnval'], '4048');
+        expect(query['fourk'], '1');
+        expect(query['is_need_trial'], '1');
+        expect(query['is_need_view_info'], '1');
+        expect(query['try_look'], '1');
+      },
+    );
+
+    test('highest policy alone does not implicitly request a trial', () async {
+      final transport = _Transport((_) => _response(_dash));
+
+      await _client(
+        transport,
+      ).getPlayInfo(_bvid, _cid, unlockHighestBitrate: true);
+
+      final query = transport.plays.single.queryParameters;
+      expect(query['qn'], '127');
+      expect(query.containsKey('is_need_trial'), isFalse);
+      expect(query.containsKey('is_need_view_info'), isFalse);
+      expect(query.containsKey('try_look'), isFalse);
+    });
+
+    test('trial-enabled is_preview=true response still fails', () async {
+      final transport = _Transport(
+        (_) => _response({..._dash, 'is_preview': true}),
+      );
+
+      await expectLater(
+        _client(
+          transport,
+        ).getPlayInfo(_bvid, _cid, unlimitedQualityTrial: true),
+        throwsA(_failure(ApiFailureCategory.permission)),
+      );
+
+      expect(transport.plays, hasLength(1));
+      expect(transport.plays.single.queryParameters['try_look'], '1');
+    });
+  });
+
   test(
     'explicit silent DASH is complete media, not a missing audio retry',
     () async {

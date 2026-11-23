@@ -6,7 +6,8 @@ import 'package:flutter/services.dart';
 import 'app_request_device.dart';
 
 /// Resolve the default qn once per new room. Explicit quality skips this read.
-Future<int> defaultNetworkLiveQuality() async {
+Future<int> defaultNetworkLiveQuality({bool fakeWifi = false}) async {
+  if (fakeWifi) return 10000;
   const channel = MethodChannel('dev.bilisail/live_network');
   try {
     final preferOriginal = switch (defaultTargetPlatform) {

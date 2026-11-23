@@ -1,12 +1,22 @@
 import '../api_client.dart';
 import '../models.dart';
 import '../models/pgc_models.dart';
-import '../mappers/dash_audio_parser.dart';
+import '../pgc_resolver.dart';
 
 /// Web Cookie PGC metadata and follows. Playurl decides viewing entitlement.
 final class PgcClient {
-  const PgcClient(this.api);
+  const PgcClient(this.api, {this.resolver, this.resolverProvider});
   final BiliApiClient api;
+  final PgcResolver? resolver;
+
+  /// Optional live configuration source used by app settings. Fixed resolver
+  /// injection remains convenient for tests and long-lived configurations.
+  final Future<PgcResolver?> Function()? resolverProvider;
+
+  Future<PgcResolver?> _resolver() async {
+    final provider = resolverProvider;
+    return provider == null ? resolver : await provider();
+  }
 
   Future<bool> isFollowed(String seasonId, {ApiRequestContext? context}) async {
     _validateId(seasonId);
@@ -53,14 +63,28 @@ final class PgcClient {
     }
     if (seasonId != null) _validateId(seasonId);
     if (episodeId != null) _validateId(episodeId);
-    return api.requestPgcSeason(
-      Uri.https('api.bilibili.com', '/pgc/view/web/season', {
-        'season_id': ?seasonId,
-        'ep_id': ?episodeId,
-      }),
-      requireEpisodes: requireEpisodes,
-      context: context,
-    );
+    try {
+      return await api.requestPgcSeason(
+        Uri.https('api.bilibili.com', '/pgc/view/web/season', {
+          'season_id': ?seasonId,
+          'ep_id': ?episodeId,
+        }),
+        requireEpisodes: requireEpisodes,
+        context: context,
+      );
+    } on ApiFailure catch (error) {
+      final fallback = await _resolver();
+      if (fallback == null || !_isRegionRefusal(error)) rethrow;
+      return _preserveOfficialError(
+        error,
+        () => fallback.resolveSeason(
+          seasonId: seasonId,
+          episodeId: episodeId,
+          requireEpisodes: requireEpisodes,
+          context: context,
+        ),
+      );
+    }
   }
 
   Future<ApiPlayInfo> getPlayInfo(
@@ -70,6 +94,23 @@ final class PgcClient {
   }) async {
     _validateId(episodeId);
     if (qn < 1 || qn > 30000) throw ArgumentError.value(qn, 'qn');
+    try {
+      return await _officialPlayInfo(episodeId, qn, context);
+    } on ApiFailure catch (error) {
+      final fallback = await _resolver();
+      if (fallback == null || !_isRegionRefusal(error)) rethrow;
+      return _preserveOfficialError(
+        error,
+        () => fallback.resolvePlayInfo(episodeId, qn: qn, context: context),
+      );
+    }
+  }
+
+  Future<ApiPlayInfo> _officialPlayInfo(
+    String episodeId,
+    int qn,
+    ApiRequestContext? context,
+  ) async {
     const endpoint = 'pgc_playurl';
     late final Map<String, Object?> data;
     try {
@@ -96,148 +137,32 @@ final class PgcClient {
       }
       rethrow;
     }
-    final innerCode = _int(data['code']);
-    if (innerCode != null && innerCode != 0) {
-      throw ApiFailure(
-        switch (innerCode) {
-          -101 || -111 => ApiFailureCategory.authentication,
-          -404 || 62002 || 62004 => ApiFailureCategory.notFound,
-          -412 || -352 || -509 || -799 => ApiFailureCategory.rateLimited,
-          _ => ApiFailureCategory.permission,
-        },
-        endpoint,
-        businessCode: innerCode,
-      );
-    }
-    final dash = _mapOrEmpty(data['dash']);
-    if (dash.isEmpty) {
-      throw const ApiFailure(ApiFailureCategory.unavailable, endpoint);
-    }
-    final videos = _list(
-      dash['video'],
-      endpoint,
-    ).map((v) => _track(_map(v, endpoint))).toList();
-    final audios = dashAudioEntries(dash, endpoint).map(_track).toList();
-    if (videos.isEmpty || audios.isEmpty) {
-      throw const ApiFailure(ApiFailureCategory.unavailable, endpoint);
-    }
-    final seconds = _double(dash['duration']);
-    final durationMs = seconds == null
-        ? _int(data['timelength']) ?? 0
-        : (seconds * 1000).round();
-    return ApiPlayInfo(
-      pgcSkipSegments: _skipSegments(data, durationMs),
-      duration: Duration(milliseconds: durationMs.clamp(0, 86400000)),
-      dashVideo: List.unmodifiable(videos),
-      loudness: ApiAudioLoudness.parse(data['volume']),
-      dashAudio: List.unmodifiable(audios),
-      isPreview: data['is_preview'] == true || _int(data['is_preview']) == 1,
-      acceptQuality: List.unmodifiable(
-        _list(
-          data['accept_quality'] ?? const [],
-          endpoint,
-        ).map(_int).whereType<int>(),
-      ),
-    );
+    return parsePgcPlayInfo(data);
   }
 
-  static List<ApiPgcSkipSegment> _skipSegments(
-    Map<String, Object?> data,
-    int durationMs,
-  ) {
-    // Optional metadata must never prevent an otherwise playable DASH source.
-    final raw = data['clip_info_list'];
-    if (raw is! List ||
-        data['is_preview'] == true ||
-        _int(data['is_preview']) == 1) {
-      return const [];
-    }
-    final result = <ApiPgcSkipSegment>[];
-    for (final entry in raw.take(64)) {
-      final clip = _mapOrEmpty(entry);
-      final type = switch (clip['clipType']) {
-        'CLIP_TYPE_OP' => ApiPgcSkipType.intro,
-        'CLIP_TYPE_ED' => ApiPgcSkipType.outro,
-        _ => null,
-      };
-      final start = _double(clip['start']);
-      final end = _double(clip['end']);
-      if (type == null ||
-          start == null ||
-          end == null ||
-          !start.isFinite ||
-          !end.isFinite ||
-          start < 0 ||
-          end <= start ||
-          end * 1000 > durationMs) {
-        continue;
-      }
-      final from = Duration(milliseconds: (start * 1000).round());
-      final to = Duration(milliseconds: (end * 1000).round());
-      if (to > from) result.add(ApiPgcSkipSegment(type, from, to));
-    }
-    return List.unmodifiable(result);
-  }
+  static bool _isRegionRefusal(ApiFailure error) =>
+      error.category == ApiFailureCategory.permission ||
+      error.category == ApiFailureCategory.notFound ||
+      const {-10403, 6002003, -10493}.contains(error.businessCode);
 
-  static ApiMediaTrack _track(Map<String, Object?> data) {
-    const endpoint = 'pgc_playurl';
-    final uri = _uri(data['baseUrl'] ?? data['base_url']);
-    if (uri == null) {
-      throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
+  static Future<T> _preserveOfficialError<T>(
+    ApiFailure officialError,
+    Future<T?> Function() resolve,
+  ) async {
+    try {
+      final result = await resolve();
+      if (result != null) return result;
+    } on ApiFailure catch (error) {
+      if (error.category == ApiFailureCategory.cancelled) rethrow;
+      // Resolver timeout/protocol/network errors do not replace the refusal
+      // that triggered fallback. Cancellation remains a caller-owned result.
     }
-    return ApiMediaTrack(
-      id:
-          _int(data['id']) ??
-          (throw const ApiFailure(ApiFailureCategory.protocol, endpoint)),
-      url: uri,
-      backupUrls: List.unmodifiable(
-        _list(
-          data['backupUrl'] ?? data['backup_url'] ?? const [],
-          endpoint,
-        ).map(_uri).whereType<Uri>(),
-      ),
-      bandwidth: _int(data['bandwidth']) ?? 0,
-      mimeType: _text(data['mimeType'] ?? data['mime_type']) ?? '',
-      codecs: _text(data['codecs']) ?? '',
-    );
+    throw officialError;
   }
 
   static void _validateId(String value) {
     if (!RegExp(r'^[1-9][0-9]*$').hasMatch(value)) {
       throw ArgumentError('Invalid PGC ID');
     }
-  }
-
-  static Map<String, Object?> _map(Object? value, String endpoint) =>
-      value is Map<String, Object?>
-      ? value
-      : throw ApiFailure(ApiFailureCategory.protocol, endpoint);
-  static Map<String, Object?> _mapOrEmpty(Object? value) =>
-      value is Map<String, Object?> ? value : const {};
-  static List<Object?> _list(Object? value, String endpoint) => value is List
-      ? value
-      : throw ApiFailure(ApiFailureCategory.protocol, endpoint);
-  static int? _int(Object? value) => value is int
-      ? value
-      : value is String
-      ? int.tryParse(value)
-      : null;
-  static double? _double(Object? value) => value is num
-      ? value.toDouble()
-      : value is String
-      ? double.tryParse(value)
-      : null;
-  static String? _text(Object? value) =>
-      value is String && value.isNotEmpty ? value : null;
-  static Uri? _uri(Object? value) {
-    if (value is! String || value.isEmpty || value.length > 8192) return null;
-    final uri = Uri.tryParse(value.startsWith('//') ? 'https:$value' : value);
-    if (uri == null || uri.host.isEmpty || uri.userInfo.isNotEmpty) return null;
-    if (uri.scheme == 'https') return uri;
-    if (uri.scheme == 'http' &&
-        (uri.host == 'hdslb.com' || uri.host.endsWith('.hdslb.com'))) {
-      return uri.replace(scheme: 'https');
-    }
-    return null;
   }
 }

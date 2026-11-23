@@ -4,26 +4,48 @@ import '../../../domain/app_failure.dart';
 import '../../../domain/audio_normalization.dart';
 import '../../../domain/media_cdn.dart';
 import '../../../domain/audio_quality.dart';
+import '../../../domain/video_quality.dart';
 import '../domain/playback_repository.dart';
 import '../domain/sponsor_repository.dart';
+import 'playback_enhancement_policy.dart';
 
 /// Quality takes priority; a missing preferred codec does not downgrade it.
+///
+/// [avoidHdrDolby] drops HDR and Dolby Vision streams so output stays SDR. A
+/// source that only offers tone-mapped streams still plays the highest one the
+/// server returned instead of failing.
+///
+/// [unlockHighestBitrate] ignores the requested ceiling and applies BBZQ's
+/// explicit quality order. The default numeric quality selection is unchanged.
 PlaybackMedia selectDashMedia(
   ApiPlayInfo info, {
   required int quality,
   required VideoCodecPreference preferredCodec,
   required Map<String, String> headers,
   MediaCdnPreference cdnPreference = MediaCdnPreference.automatic,
+  bool avoidHdrDolby = false,
+  bool unlockHighestBitrate = false,
   bool videoOnly = false,
   AudioQualityPreference audioQuality = AudioQualityPreference.aac192,
 }) {
-  final videos =
-      info.dashVideo
-          .where(
-            (track) => VideoCodecPreference.fromCodec(track.codecs) != null,
-          )
-          .toList()
-        ..sort((a, b) => b.id.compareTo(a.id));
+  if (info.isPreview && !videoOnly) {
+    throw const AppFailure(AppFailureKind.playback, '服务器仅返回预览，不能作为完整视频播放');
+  }
+  final knownVideos = info.dashVideo
+      .where((track) => VideoCodecPreference.fromCodec(track.codecs) != null)
+      .toList();
+  final sdrVideos = avoidHdrDolby
+      ? knownVideos.where((track) => !_isHdrOrDolbyTrack(track)).toList()
+      : knownVideos;
+  final videos = (sdrVideos.isEmpty ? knownVideos : sdrVideos)
+    ..sort((a, b) {
+      if (unlockHighestBitrate) {
+        final rank = _highestBitrateRank(a.id)
+            .compareTo(_highestBitrateRank(b.id));
+        if (rank != 0) return rank;
+      }
+      return b.id.compareTo(a.id);
+    });
   final audios =
       info.dashAudio
           .where(
@@ -55,9 +77,11 @@ PlaybackMedia selectDashMedia(
       videoOnly ? '未取得可用的预览视频轨道' : '未取得可用的视频和音频轨道',
     );
   }
-  final selectedQuality =
-      (videos.where((track) => track.id <= quality).firstOrNull ?? videos.last)
-          .id;
+  final selectedQuality = unlockHighestBitrate
+      ? videos.first.id
+      : (videos.where((track) => track.id <= quality).firstOrNull ??
+                videos.last)
+            .id;
   final candidates = videos
       .where((track) => track.id == selectedQuality)
       .toList();
@@ -146,3 +170,20 @@ PlaybackMedia selectDashMedia(
         const PlaybackVoice.original(),
   );
 }
+
+int _highestBitrateRank(int quality) {
+  final index = PlaybackEnhancementPolicy.highestBitrateQualityOrder.indexOf(
+    quality,
+  );
+  return index < 0
+      ? PlaybackEnhancementPolicy.highestBitrateQualityOrder.length
+      : index;
+}
+
+/// Whether this track is HDR by quality tier or Dolby Vision by codec.
+///
+/// Both need tone mapping the SDR preference is meant to avoid.
+bool _isHdrOrDolbyTrack(ApiMediaTrack track) =>
+    hdrVideoQualities.contains(track.id) ||
+    VideoCodecPreference.fromCodec(track.codecs) ==
+        VideoCodecPreference.dolbyVision;

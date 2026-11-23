@@ -14,6 +14,7 @@ import '../domain/playback_repository.dart';
 import '../domain/high_energy_trend.dart';
 import 'high_energy_cache.dart';
 import 'dash_media_selection.dart';
+import 'playback_enhancement_policy.dart';
 
 class ApiPlaybackRepository
     implements
@@ -27,12 +28,16 @@ class ApiPlaybackRepository
     this.requests, {
     this.cdnPreference,
     this.audioQualityPreference,
+    this.avoidHdrPreference,
+    this.enhancementPolicy,
     this.imageDimensions,
   });
   final BiliApiClient api;
   final ApiRequests requests;
   final Future<MediaCdnPreference> Function()? cdnPreference;
   final Future<AudioQualityPreference> Function()? audioQualityPreference;
+  final Future<bool> Function()? avoidHdrPreference;
+  final Future<PlaybackEnhancementPolicy> Function()? enhancementPolicy;
   final Future<({int width, int height})> Function(Uri)? imageDimensions;
   late final _highEnergyCache = HighEnergyCache(requests);
 
@@ -233,6 +238,8 @@ class ApiPlaybackRepository
     required VideoCodecPreference preferredCodec,
     required RequestCancellation cancellation,
   }) => requests.run((context) async {
+    final enhancements =
+        await enhancementPolicy?.call() ?? PlaybackEnhancementPolicy.disabled;
     // Discover the full entitled DASH ladder before applying the preference.
     // Some responses omit a lower representation until it is requested alone.
     var info = await api.getPlayInfo(
@@ -241,9 +248,12 @@ class ApiPlaybackRepository
       qn: 129,
       language: voice.languageCode,
       productionType: voice.productionType,
+      unlockHighestBitrate: enhancements.unlockHighestBitrate,
+      unlimitedQualityTrial: enhancements.unlimitedQualityTrial,
       context: context,
     );
-    if (info.dashVideo.any((track) => track.id > quality) &&
+    if (!enhancements.unlockHighestBitrate &&
+        info.dashVideo.any((track) => track.id > quality) &&
         info.acceptQuality.contains(quality) &&
         !info.dashVideo.any((track) => track.id == quality)) {
       try {
@@ -253,6 +263,7 @@ class ApiPlaybackRepository
           qn: quality,
           language: voice.languageCode,
           productionType: voice.productionType,
+          unlimitedQualityTrial: enhancements.unlimitedQualityTrial,
           context: context,
         );
         if (supplement.currentLanguage == info.currentLanguage &&
@@ -302,6 +313,8 @@ class ApiPlaybackRepository
           await audioQualityPreference?.call() ?? AudioQualityPreference.aac192,
       quality: quality,
       preferredCodec: preferredCodec,
+      unlockHighestBitrate: enhancements.unlockHighestBitrate,
+      avoidHdrDolby: await avoidHdrPreference?.call() ?? false,
       cdnPreference:
           await cdnPreference?.call() ?? MediaCdnPreference.automatic,
       headers: {

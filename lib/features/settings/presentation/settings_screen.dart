@@ -26,6 +26,7 @@ import 'app_icon_settings.dart';
 import 'recommendation_settings_section.dart';
 import 'responsive_layout_settings_controls.dart';
 import 'cdn_settings_tile.dart';
+import 'pgc_resolver_settings_section.dart';
 import 'log_export_button.dart';
 
 const _usageNotice = <Widget>[
@@ -756,6 +757,32 @@ final class _SettingsCategoryPageState
                             '按接口返回的可用清晰度选择；权限和片源限制仍适用',
                             style: TextStyle(fontSize: 12),
                           ),
+                          _toggle(
+                            '解锁最高码率',
+                            s.unlockHighestBitrate,
+                            controller.setUnlockHighestBitrate,
+                            '取流时请求最高画质档，并按 BBZQ 的顺序优先高码率；实际结果取决于接口返回，下次加载播放源时生效',
+                          ),
+                          _toggle(
+                            '无限试用会员画质',
+                            s.unlimitedQualityTrial,
+                            controller.setUnlimitedQualityTrial,
+                            '发送会员画质试用请求；预览片仍按预览处理，不会伪装成完整视频，下次加载播放源时生效',
+                          ),
+                          _toggle(
+                            '无限试用界面同步',
+                            s.qualityTrialUiSync,
+                            s.unlimitedQualityTrial
+                                ? controller.setQualityTrialUiSync
+                                : null,
+                            '画质列表始终跟随实际返回轨道；BiliSail 没有官方 needVip/vipFree 字段可改写，此兼容开关不会伪造会员状态',
+                          ),
+                          _toggle(
+                            '避开 HDR／杜比视界',
+                            s.avoidHdrDolby,
+                            controller.setAvoidHdrDolby,
+                            '播放时跳过 HDR 与杜比视界片源，改选最高 SDR 清晰度，减少偏色、发热和耗电；片源只有 HDR 时仍按原样播放',
+                          ),
                           _choices(
                             '直播默认清晰度',
                             s.preferredLiveQuality,
@@ -825,7 +852,13 @@ final class _SettingsCategoryPageState
                           ),
                         ]),
                       if (widget.category == SettingsCategory.playback)
-                        _section('CDN 线路', [
+                        _section('网络与 CDN 线路', [
+                          _toggle(
+                            '伪装 Wi-Fi 连接',
+                            s.fakeWifi,
+                            controller.setFakeWifi,
+                            'App 身份请求与直播网络默认画质按 Wi-Fi 处理；不修改真实网络、系统设置或 Web 取流请求',
+                          ),
                           CdnSettingsTile(preference: s.mediaCdn),
                           const Text(
                             '自动沿用接口调度；运营商偏好优先使用返回线路，也可选择具体 CDN 节点。连接失败时尝试原始备用地址。',
@@ -833,6 +866,32 @@ final class _SettingsCategoryPageState
                           ),
                           const SizedBox(height: 8),
                           const Text('适用于视频、影视和悬停预览，下次加载播放源时生效。'),
+                        ]),
+                      if (widget.category == SettingsCategory.playback)
+                        _section('番剧地区解锁', [
+                          PgcResolverSettingsSection(
+                            enabled: s.pgcResolverEnabled,
+                            servers: {
+                              'hk': s.pgcResolverHk,
+                              'tw': s.pgcResolverTw,
+                              'sea': s.pgcResolverSea,
+                              'cn': s.pgcResolverCn,
+                            },
+                            defaultRegion: s.pgcResolverDefaultRegion,
+                            onEnabledChanged: (value) => _save(
+                              () => controller.setPgcResolverEnabled(value),
+                            ),
+                            onServerChanged: (region, value) => _save(
+                              () => controller.setPgcResolverServer(
+                                region,
+                                value,
+                              ),
+                            ),
+                            onDefaultRegionChanged: (value) => _save(
+                              () =>
+                                  controller.setPgcResolverDefaultRegion(value),
+                            ),
+                          ),
                         ]),
                       if (widget.category == SettingsCategory.playback)
                         _section('视频编解码', [

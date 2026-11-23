@@ -49,6 +49,7 @@ export 'src/models/dynamic_poll_models.dart';
 export 'src/clients/dynamic_publish_client.dart';
 export 'src/models/dynamic_composer_models.dart';
 export 'src/clients/pgc_client.dart';
+export 'src/pgc_resolver.dart' show PgcResolver, PgcResolverRegion;
 export 'src/clients/live_client.dart';
 export 'src/models/pgc_models.dart';
 export 'src/models/live_models.dart';

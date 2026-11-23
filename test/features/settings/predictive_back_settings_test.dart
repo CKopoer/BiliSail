@@ -72,7 +72,7 @@ void main() {
       jsonDecode(
         (await database.readSetting('preferences.v1'))!,
       )['schemaVersion'],
-      56,
+      57,
     );
   });
 

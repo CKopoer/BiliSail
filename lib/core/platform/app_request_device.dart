@@ -18,10 +18,17 @@ final class AppRequestDevice {
     return facts == null ? null : facts['network'] == 'wifi';
   }
 
-  Future<AppDeviceInfo> load() async {
+  /// Loads the App request profile. [fakeWifi] changes only its declared
+  /// network type; it neither changes nor hides the real OS network state.
+  Future<AppDeviceInfo> load({bool fakeWifi = false}) async {
     if (defaultTargetPlatform != TargetPlatform.android) {
       return const AppDeviceInfo();
     }
+    AppDeviceInfo unavailable() => AppDeviceInfo(
+      model: 'android',
+      osVersion: '',
+      network: fakeWifi ? 'wifi' : '',
+    );
     try {
       final data = await _read();
       String value(String key, String fallback) {
@@ -38,14 +45,18 @@ final class AppRequestDevice {
       return AppDeviceInfo(
         model: value('model', 'android'),
         osVersion: value('osVersion', ''),
-        network: const {'wifi', 'mobile'}.contains(network) ? network : '',
+        network: fakeWifi
+            ? 'wifi'
+            : const {'wifi', 'mobile'}.contains(network)
+            ? network
+            : '',
       );
     } on MissingPluginException {
-      return const AppDeviceInfo(model: 'android', osVersion: '', network: '');
+      return unavailable();
     } on TimeoutException {
-      return const AppDeviceInfo(model: 'android', osVersion: '', network: '');
+      return unavailable();
     } on PlatformException {
-      return const AppDeviceInfo(model: 'android', osVersion: '', network: '');
+      return unavailable();
     }
   }
 }

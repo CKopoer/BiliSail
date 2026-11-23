@@ -28,6 +28,7 @@ void main() {
         (_) async => {'network': type},
       );
       expect(await defaultNetworkLiveQuality(), type == 'wifi' ? 10000 : 250);
+      expect(await defaultNetworkLiveQuality(fakeWifi: true), 10000);
     }
     messenger.setMockMethodCallHandler(channel, null);
     expect(await defaultNetworkLiveQuality(), 10000);
@@ -66,6 +67,31 @@ void main() {
     expect(wifi.network, 'wifi');
     mobile = true;
     expect((await service.load()).network, 'mobile');
+  });
+
+  test('fake Wi-Fi changes only the App profile declaration', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    messenger.setMockMethodCallHandler(
+      channel,
+      (_) async => {'model': 'Pixel 9', 'osVersion': '16', 'network': 'mobile'},
+    );
+    const service = AppRequestDevice();
+    final info = await service.load(fakeWifi: true);
+    expect(info.model, 'Pixel 9');
+    expect(info.network, 'wifi');
+    expect((await service.load()).network, 'mobile');
+    expect(await service.usesWifi(), isFalse);
+  });
+
+  test('fake Wi-Fi survives unavailable native facts', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    messenger.setMockMethodCallHandler(
+      channel,
+      (_) async => throw PlatformException(code: 'unavailable'),
+    );
+    final info = await const AppRequestDevice().load(fakeWifi: true);
+    expect(info.network, 'wifi');
+    expect(info.model, 'android');
   });
 
   test(

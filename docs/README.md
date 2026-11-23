@@ -10,6 +10,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [BBZQ 能力对照与移植](validation/bbzq-integration-2026-11-23.md) | 上游 Xposed 模组逐项对照、避开 HDR／杜比视界与 CDN 一键最优线路、未实现项边界与验证状态 |
 | [互动视频](validation/interactive-video.md) | 剧情节点与片尾选项、同 CID 分支、公开只读验证 |
 | [macOS 评论选图与窗口归属](validation/macos-comment-image-picker-2026-11-18.md) | 显式调用视图、异步 sheet、重入／关闭保护和平台验证边界 |
 | [Windows 评论选图与窗口归属](validation/windows-comment-image-picker-2026-11-18.md) | 显式调用视图、独立 STA、重入／取消／关闭保护与离线回归 |

@@ -1,6 +1,7 @@
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
 import '../../../domain/video_codec.dart';
+import '../../../domain/video_quality.dart';
 import '../../../domain/app_failure.dart';
 import '../../../domain/audio_normalization.dart';
 import '../../../domain/audio_quality.dart';
@@ -86,7 +87,7 @@ final class PlaybackMedia {
   /// Use the selected representation, including offline selections and Dolby
   /// codec hints, rather than the requested quality that may have fallen back.
   bool get isHdr =>
-      const {125, 126, 129}.contains(quality) ||
+      hdrVideoQualities.contains(quality) ||
       VideoCodecPreference.fromCodec(video.codec) ==
           VideoCodecPreference.dolbyVision;
 

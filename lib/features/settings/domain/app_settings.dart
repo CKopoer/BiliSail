@@ -122,6 +122,17 @@ final class AppSettings {
     this.liveStreamPreference = LiveStreamPreference.automatic,
     this.preferredAudioQuality = AudioQualityPreference.aac192,
     this.preferredVideoCodec = VideoCodecPreference.h264,
+    this.avoidHdrDolby = false,
+    this.unlockHighestBitrate = false,
+    this.unlimitedQualityTrial = false,
+    this.qualityTrialUiSync = true,
+    this.fakeWifi = false,
+    this.pgcResolverEnabled = false,
+    this.pgcResolverHk = '',
+    this.pgcResolverTw = '',
+    this.pgcResolverSea = '',
+    this.pgcResolverCn = '',
+    this.pgcResolverDefaultRegion = '',
     this.mediaCdn = MediaCdnPreference.automatic,
     this.videoDecoding = VideoDecodingPreference.automatic,
     this.playbackBackend = PlaybackBackendPreference.mediaKit,
@@ -223,6 +234,17 @@ final class AppSettings {
        liveStreamPreference = LiveStreamPreference.automatic,
        preferredAudioQuality = AudioQualityPreference.aac192,
        preferredVideoCodec = VideoCodecPreference.h264,
+       avoidHdrDolby = false,
+       unlockHighestBitrate = false,
+       unlimitedQualityTrial = false,
+       qualityTrialUiSync = true,
+       fakeWifi = false,
+       pgcResolverEnabled = false,
+       pgcResolverHk = '',
+       pgcResolverTw = '',
+       pgcResolverSea = '',
+       pgcResolverCn = '',
+       pgcResolverDefaultRegion = '',
        mediaCdn = MediaCdnPreference.automatic,
        videoDecoding = VideoDecodingPreference.automatic,
        playbackBackend = PlaybackBackendPreference.mediaKit,
@@ -317,6 +339,28 @@ final class AppSettings {
   final LiveStreamPreference liveStreamPreference;
   final AudioQualityPreference preferredAudioQuality;
   final VideoCodecPreference preferredVideoCodec;
+
+  /// Skip HDR tiers and Dolby Vision streams so output stays SDR.
+  final bool avoidHdrDolby;
+
+  /// Request the highest server-supported tier before applying local fallback.
+  final bool unlockHighestBitrate;
+
+  /// Opt in to the upstream quality-trial request flags. Preview-only replies
+  /// remain previews and are never treated as complete playback.
+  final bool unlimitedQualityTrial;
+  final bool qualityTrialUiSync;
+
+  /// Report Wi-Fi in the App-profile device identity without changing Android.
+  final bool fakeWifi;
+
+  /// Optional user-hosted PGC resolvers. Empty URLs disable that region.
+  final bool pgcResolverEnabled;
+  final String pgcResolverHk;
+  final String pgcResolverTw;
+  final String pgcResolverSea;
+  final String pgcResolverCn;
+  final String pgcResolverDefaultRegion;
   final MediaCdnPreference mediaCdn;
   final VideoDecodingPreference videoDecoding;
   final PlaybackBackendPreference playbackBackend;
@@ -422,6 +466,17 @@ final class AppSettings {
     LiveStreamPreference? liveStreamPreference,
     AudioQualityPreference? preferredAudioQuality,
     VideoCodecPreference? preferredVideoCodec,
+    bool? avoidHdrDolby,
+    bool? unlockHighestBitrate,
+    bool? unlimitedQualityTrial,
+    bool? qualityTrialUiSync,
+    bool? fakeWifi,
+    bool? pgcResolverEnabled,
+    String? pgcResolverHk,
+    String? pgcResolverTw,
+    String? pgcResolverSea,
+    String? pgcResolverCn,
+    String? pgcResolverDefaultRegion,
     MediaCdnPreference? mediaCdn,
     VideoDecodingPreference? videoDecoding,
     PlaybackBackendPreference? playbackBackend,
@@ -535,6 +590,18 @@ final class AppSettings {
     liveStreamPreference: liveStreamPreference ?? this.liveStreamPreference,
     preferredAudioQuality: preferredAudioQuality ?? this.preferredAudioQuality,
     preferredVideoCodec: preferredVideoCodec ?? this.preferredVideoCodec,
+    avoidHdrDolby: avoidHdrDolby ?? this.avoidHdrDolby,
+    unlockHighestBitrate: unlockHighestBitrate ?? this.unlockHighestBitrate,
+    unlimitedQualityTrial: unlimitedQualityTrial ?? this.unlimitedQualityTrial,
+    qualityTrialUiSync: qualityTrialUiSync ?? this.qualityTrialUiSync,
+    fakeWifi: fakeWifi ?? this.fakeWifi,
+    pgcResolverEnabled: pgcResolverEnabled ?? this.pgcResolverEnabled,
+    pgcResolverHk: pgcResolverHk ?? this.pgcResolverHk,
+    pgcResolverTw: pgcResolverTw ?? this.pgcResolverTw,
+    pgcResolverSea: pgcResolverSea ?? this.pgcResolverSea,
+    pgcResolverCn: pgcResolverCn ?? this.pgcResolverCn,
+    pgcResolverDefaultRegion:
+        pgcResolverDefaultRegion ?? this.pgcResolverDefaultRegion,
     mediaCdn: mediaCdn ?? this.mediaCdn,
     videoDecoding: videoDecoding ?? this.videoDecoding,
     playbackBackend: playbackBackend ?? this.playbackBackend,
@@ -616,6 +683,21 @@ final class AppSettings {
           : '';
     }
 
+    String resolverUrl(String value) {
+      final text = value.trim();
+      if (text.isEmpty || text.length > 2048) return '';
+      final uri = Uri.tryParse(text);
+      if (uri == null ||
+          !const {'http', 'https'}.contains(uri.scheme) ||
+          uri.host.isEmpty ||
+          uri.userInfo.isNotEmpty ||
+          uri.hasQuery ||
+          uri.hasFragment) {
+        return '';
+      }
+      return text.endsWith('/') ? text.substring(0, text.length - 1) : text;
+    }
+
     double bounded(double value, double min, double max, double fallback) =>
         value.isFinite ? value.clamp(min, max) : fallback;
     return copyWith(
@@ -634,6 +716,14 @@ final class AppSettings {
       ),
       systemFontFamily: family(systemFontFamily),
       danmakuSystemFontFamily: family(danmakuSystemFontFamily),
+      pgcResolverHk: resolverUrl(pgcResolverHk),
+      pgcResolverTw: resolverUrl(pgcResolverTw),
+      pgcResolverSea: resolverUrl(pgcResolverSea),
+      pgcResolverCn: resolverUrl(pgcResolverCn),
+      pgcResolverDefaultRegion:
+          const {'', 'hk', 'tw', 'sea', 'cn'}.contains(pgcResolverDefaultRegion)
+          ? pgcResolverDefaultRegion
+          : '',
       preferredQuality: supportedQualities.contains(preferredQuality)
           ? preferredQuality
           : 80,

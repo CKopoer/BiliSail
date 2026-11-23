@@ -8,6 +8,7 @@ import '../../../domain/media_cdn.dart';
 import '../domain/content_playback.dart';
 import '../domain/playback_repository.dart';
 import 'dash_media_selection.dart';
+import 'playback_enhancement_policy.dart';
 
 final class ApiContentPlaybackRepository
     implements ContentPlaybackRepository, LiveStreamPlaybackRepository {
@@ -17,12 +18,16 @@ final class ApiContentPlaybackRepository
     this.requests, {
     this.cdnPreference,
     this.audioQualityPreference,
+    this.avoidHdrPreference,
+    this.enhancementPolicy,
   });
   final PgcClient pgc;
   final LiveClient live;
   final ApiRequests requests;
   final Future<MediaCdnPreference> Function()? cdnPreference;
   final Future<AudioQualityPreference> Function()? audioQualityPreference;
+  final Future<bool> Function()? avoidHdrPreference;
+  final Future<PlaybackEnhancementPolicy> Function()? enhancementPolicy;
 
   Future<bool> isRoomLive(
     LivePlaybackTarget target,
@@ -48,9 +53,12 @@ final class ApiContentPlaybackRepository
       case OfflinePlaybackTarget():
         throw const AppFailure(AppFailureKind.playback, '离线播放服务未配置');
       case PgcPlaybackTarget(:final episodeId):
+        final enhancements =
+            await enhancementPolicy?.call() ??
+            PlaybackEnhancementPolicy.disabled;
         final info = await pgc.getPlayInfo(
           episodeId,
-          qn: quality,
+          qn: enhancements.unlockHighestBitrate ? 127 : quality,
           context: context,
         );
         return selectDashMedia(
@@ -60,6 +68,8 @@ final class ApiContentPlaybackRepository
               AudioQualityPreference.aac192,
           quality: quality,
           preferredCodec: preferredCodec,
+          unlockHighestBitrate: enhancements.unlockHighestBitrate,
+          avoidHdrDolby: await avoidHdrPreference?.call() ?? false,
           cdnPreference:
               await cdnPreference?.call() ?? MediaCdnPreference.automatic,
           headers: _headers,

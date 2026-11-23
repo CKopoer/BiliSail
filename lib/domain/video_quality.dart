@@ -14,3 +14,11 @@ const videoQualityOptions = <int, String>{
 
 String videoQualityLabel(int quality) =>
     videoQualityOptions[quality] ?? '$quality';
+
+/// Quality tiers whose stream is HDR or Dolby Vision rather than SDR.
+///
+/// The player has to tone-map these frames; on devices without reliable HDR
+/// output they look washed out and cost extra power. Selection skips them when
+/// the user turns on the SDR preference, falling back to the highest SDR tier
+/// the server actually returned.
+const hdrVideoQualities = <int>{125, 126, 129};

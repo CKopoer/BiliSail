@@ -235,6 +235,41 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
       update((current) => current.copyWith(preferredAudioQuality: value));
   Future<void> setPreferredVideoCodec(VideoCodecPreference value) =>
       update((current) => current.copyWith(preferredVideoCodec: value));
+  Future<void> setAvoidHdrDolby(bool value) =>
+      update((current) => current.copyWith(avoidHdrDolby: value));
+  Future<void> setUnlockHighestBitrate(bool value) =>
+      update((current) => current.copyWith(unlockHighestBitrate: value));
+  Future<void> setUnlimitedQualityTrial(bool value) =>
+      update((current) => current.copyWith(unlimitedQualityTrial: value));
+  Future<void> setQualityTrialUiSync(bool value) =>
+      update((current) => current.copyWith(qualityTrialUiSync: value));
+  Future<void> setFakeWifi(bool value) =>
+      update((current) => current.copyWith(fakeWifi: value));
+  Future<void> setPgcResolverEnabled(bool value) =>
+      update((current) => current.copyWith(pgcResolverEnabled: value));
+  Future<void> setPgcResolverServer(String region, String value) {
+    if (!const {'hk', 'tw', 'sea', 'cn'}.contains(region)) {
+      throw ArgumentError.value(region, 'region');
+    }
+    return update(
+      (current) => switch (region) {
+        'hk' => current.copyWith(pgcResolverHk: value),
+        'tw' => current.copyWith(pgcResolverTw: value),
+        'sea' => current.copyWith(pgcResolverSea: value),
+        _ => current.copyWith(pgcResolverCn: value),
+      },
+    );
+  }
+
+  Future<void> setPgcResolverDefaultRegion(String value) {
+    if (!const {'', 'hk', 'tw', 'sea', 'cn'}.contains(value)) {
+      throw ArgumentError.value(value, 'value');
+    }
+    return update(
+      (current) => current.copyWith(pgcResolverDefaultRegion: value),
+    );
+  }
+
   Future<void> setMediaCdn(MediaCdnPreference value) =>
       update((current) => current.copyWith(mediaCdn: value));
   Future<void> setVideoDecoding(VideoDecodingPreference value) =>

@@ -7,6 +7,7 @@ import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/playback/data/api_playback_repository.dart';
+import 'package:bilisail/features/playback/data/playback_enhancement_policy.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -140,13 +141,52 @@ void main() {
       expect(media.voice.isOriginal, isTrue);
     },
   );
+
+  test(
+    'injected policies drive the highest request and trial selection',
+    () async {
+      final transport = _Transport();
+      final repository = _repository(
+        transport,
+        enhancementPolicy: const PlaybackEnhancementPolicy(
+          unlockHighestBitrate: true,
+          unlimitedQualityTrial: true,
+          trialUiSync: true,
+        ),
+      );
+
+      final media = await repository.resolve(
+        const VideoId('BV1VNxr63EZp'),
+        '43202641987',
+        quality: 80,
+        cancellation: RequestCancellation(),
+      );
+
+      expect(transport.qualities, [127]);
+      expect(media.quality, 112);
+      final query = transport.playRequests.single.queryParameters;
+      expect(query['fnval'], '4048');
+      expect(query['fourk'], '1');
+      expect(query['is_need_trial'], '1');
+      expect(query['is_need_view_info'], '1');
+      expect(query['try_look'], '1');
+    },
+  );
 }
 
-ApiPlaybackRepository _repository(_Transport transport) {
+ApiPlaybackRepository _repository(
+  _Transport transport, {
+  PlaybackEnhancementPolicy enhancementPolicy =
+      const PlaybackEnhancementPolicy(),
+}) {
   final requests = ApiRequests();
   final api = BiliApiClient(transport: transport, sessionProvider: requests);
   addTearDown(api.close);
-  return ApiPlaybackRepository(api, requests);
+  return ApiPlaybackRepository(
+    api,
+    requests,
+    enhancementPolicy: () async => enhancementPolicy,
+  );
 }
 
 final class _Transport implements ApiTransport {
@@ -165,6 +205,7 @@ final class _Transport implements ApiTransport {
   final bool wrongVoice;
   final bool silent;
   final qualities = <int>[];
+  final playRequests = <Uri>[];
 
   @override
   Future<ApiHttpResponse> get(
@@ -194,6 +235,7 @@ final class _Transport implements ApiTransport {
       case '/x/player/wbi/playurl':
         final qn = int.parse(uri.queryParameters['qn']!);
         qualities.add(qn);
+        playRequests.add(uri);
         if (qn != 129 && cancelSupplement) cancellation?.cancel();
         if (qn != 129 && supplementFailure != null) {
           return ApiHttpResponse(
@@ -214,7 +256,8 @@ final class _Transport implements ApiTransport {
             'duration': 309,
             'video': [
               for (final quality in [
-                if (entitled && qn == 129) 116,
+                if (entitled && (qn == 129 || qn == 127)) 116,
+                if (entitled && qn == 127) 112,
                 if (!missingLower || qn != 129) 80,
               ])
                 for (final codec in [

@@ -2564,12 +2564,15 @@ final class BiliApiClient {
     int qn = 80,
     String language = '',
     int productionType = 0,
+    bool unlockHighestBitrate = false,
+    bool unlimitedQualityTrial = false,
     ApiRequestContext? context,
   }) => _getPlayInfo(
     bvid,
     cid,
-    qn: qn,
+    qn: unlockHighestBitrate ? 127 : qn,
     language: language,
+    unlimitedQualityTrial: unlimitedQualityTrial,
     productionType: productionType,
     context: context,
   );
@@ -2589,6 +2592,7 @@ final class BiliApiClient {
     bool preview = false,
     String language = '',
     int productionType = 0,
+    bool unlimitedQualityTrial = false,
     ApiRequestContext? context,
   }) async {
     final active = boundedReadContext(context);
@@ -2608,6 +2612,7 @@ final class BiliApiClient {
           preview: preview,
           language: language,
           productionType: productionType,
+          unlimitedQualityTrial: unlimitedQualityTrial,
           context: active,
           attempts: attempts,
           readAccess: () => access,
@@ -2634,6 +2639,7 @@ final class BiliApiClient {
     required bool preview,
     required String language,
     required int productionType,
+    required bool unlimitedQualityTrial,
     required ApiRequestContext context,
     required _ReadAttemptBudget attempts,
     required Future<ApiVideoAccess> Function() readAccess,
@@ -2665,6 +2671,11 @@ final class BiliApiClient {
             'cur_language': language,
             'cur_production_type': '$productionType',
             'client_attr': '1',
+            if (unlimitedQualityTrial) ...{
+              'is_need_trial': '1',
+              'is_need_view_info': '1',
+              'try_look': '1',
+            },
           },
           if (preview) ...{'from_client': 'BROWSER', 'need_fragment': 'false'},
         },

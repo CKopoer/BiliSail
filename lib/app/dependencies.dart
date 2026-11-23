@@ -116,6 +116,7 @@ import '../features/playback/data/api_playback_repository.dart';
 import '../features/playback/data/api_video_preview_repository.dart';
 import '../features/playback/data/api_playback_history_repository.dart';
 import '../features/playback/data/api_content_playback_repository.dart';
+import '../features/playback/data/playback_enhancement_policy.dart';
 import '../features/pgc/application/pgc_controller.dart';
 import '../features/pgc/application/pgc_follow_controller.dart';
 import '../features/pgc/data/api_pgc_follow_repository.dart';
@@ -151,6 +152,7 @@ class AppDependencies {
     this.database,
     this.requests,
     this.api,
+    this.pgc,
     this.session,
     this.library,
     this.playback,
@@ -175,6 +177,7 @@ class AppDependencies {
   final AppDatabase database;
   final ApiRequests requests;
   final BiliApiClient api;
+  final PgcClient pgc;
   final SessionRepository session;
   final CredentialStore _appRecommendationCredentials;
   late final appRecommendationIdentity = AppRecommendationIdentityStore(
@@ -276,8 +279,11 @@ class AppDependencies {
     final webDevice = WebDeviceStore(
       SystemCredentialStore(keyPrefix: 'bilisail.web_device.v1'),
     );
+    late final SqliteSettingsRepository settings;
+    Future<AppDeviceInfo> appRequestDevice() async => const AppRequestDevice()
+        .load(fakeWifi: (await settings.load()).fakeWifi);
     final api = BiliApiClient(
-      loadAppDevice: const AppRequestDevice().load,
+      loadAppDevice: appRequestDevice,
       sessionProvider: requests,
       prepareWebRequests: true,
       loadWebDevice: webDevice.load,
@@ -291,7 +297,7 @@ class AppDependencies {
     );
     final sponsorTransport = DioApiTransport();
     final playbackLog = await PlaybackDiagnosticLog.create();
-    final settings = SqliteSettingsRepository(
+    settings = SqliteSettingsRepository(
       database,
       defaultNavigationMode: defaultWorkspaceNavigationMode,
       defaultShortcuts: defaultShortcuts,
@@ -301,15 +307,53 @@ class AppDependencies {
       defaultPlayerControlsMode: defaultPlayerControlsMode,
       defaultVideoCardHoverPlayback: defaultVideoCardHoverPlayback,
     );
+    Future<PgcResolver?> loadPgcResolver() async {
+      final value = (await settings.load()).normalized();
+      if (!value.pgcResolverEnabled) return null;
+      final servers = <PgcResolverRegion, Uri>{
+        if (value.pgcResolverHk.isNotEmpty)
+          PgcResolverRegion.hk: Uri.parse(value.pgcResolverHk),
+        if (value.pgcResolverTw.isNotEmpty)
+          PgcResolverRegion.tw: Uri.parse(value.pgcResolverTw),
+        if (value.pgcResolverSea.isNotEmpty)
+          PgcResolverRegion.sea: Uri.parse(value.pgcResolverSea),
+        if (value.pgcResolverCn.isNotEmpty)
+          PgcResolverRegion.cn: Uri.parse(value.pgcResolverCn),
+      };
+      if (servers.isEmpty) return null;
+      return PgcResolver(
+        servers: servers,
+        defaultRegion: PgcResolverRegion.tryParse(
+          value.pgcResolverDefaultRegion,
+        ),
+        // Shared anonymous transport is closed with the composition root.
+        transport: sponsorTransport,
+      );
+    }
+
+    final pgc = PgcClient(api, resolverProvider: loadPgcResolver);
     Future<MediaCdnPreference> cdnPreference() async =>
         (await settings.load()).mediaCdn;
     Future<AudioQualityPreference> audioQualityPreference() async =>
         (await settings.load()).preferredAudioQuality;
+    Future<bool> avoidHdrPreference() async =>
+        (await settings.load()).avoidHdrDolby;
+    Future<PlaybackEnhancementPolicy> enhancementPolicy() async {
+      final value = await settings.load();
+      return PlaybackEnhancementPolicy(
+        unlockHighestBitrate: value.unlockHighestBitrate,
+        unlimitedQualityTrial: value.unlimitedQualityTrial,
+        trialUiSync: value.qualityTrialUiSync,
+      );
+    }
+
     final playbackRepository = ApiPlaybackRepository(
       api,
       requests,
       cdnPreference: cdnPreference,
       audioQualityPreference: audioQualityPreference,
+      avoidHdrPreference: avoidHdrPreference,
+      enhancementPolicy: enhancementPolicy,
       imageDimensions: images.dimensions,
     );
     final downloadSources = ApiDownloadSourceRepository(
@@ -393,11 +437,13 @@ class AppDependencies {
       systemMediaControls: systemMedia,
       createSession: (sleepTimer) {
         final networkContent = ApiContentPlaybackRepository(
-          PgcClient(api),
+          pgc,
           LiveClient(api),
           requests,
           cdnPreference: cdnPreference,
           audioQualityPreference: audioQualityPreference,
+          avoidHdrPreference: avoidHdrPreference,
+          enhancementPolicy: enhancementPolicy,
         );
         final repository = OfflinePlaybackRepository(
           downloads: downloads,
@@ -425,7 +471,9 @@ class AppDependencies {
           metadataRepository: repository,
           contentRepository: repository.content,
           isRoomLive: networkContent.isRoomLive,
-          defaultLiveQuality: defaultNetworkLiveQuality,
+          defaultLiveQuality: () async => defaultNetworkLiveQuality(
+            fakeWifi: (await settings.load()).fakeWifi,
+          ),
           accountScope: () => session.accountScope,
           progress: LocalProgressStore(
             readProgress: library.resumePosition,
@@ -445,7 +493,7 @@ class AppDependencies {
     );
     session = SessionRepository(
       loginClientFactory: () => BiliApiClient(
-        loadAppDevice: const AppRequestDevice().load,
+        loadAppDevice: appRequestDevice,
         prepareWebRequests: true,
         loadWebDevice: webDevice.load,
         saveWebDevice: webDevice.save,
@@ -482,6 +530,7 @@ class AppDependencies {
       database,
       requests,
       api,
+      pgc,
       session,
       library,
       playback,
@@ -587,7 +636,7 @@ class AppDependencies {
         }),
         pgcRepositoryProvider.overrideWithValue(
           ApiPgcRepository(
-            PgcClient(api),
+            pgc,
             requests,
             accountScope: () => session.accountScope,
           ),

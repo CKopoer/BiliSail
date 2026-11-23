@@ -467,6 +467,74 @@ void main() {
       );
     },
   );
+
+  group('avoidHdrDolby', () {
+    PlaybackMedia select(
+      List<ApiMediaTrack> videos, {
+      required int quality,
+      required bool avoidHdrDolby,
+    }) => selectDashMedia(
+      ApiPlayInfo(
+        duration: const Duration(seconds: 60),
+        dashVideo: videos,
+        dashAudio: [_track(30280, 'mp4a.40.2')],
+        acceptQuality: videos.map((track) => track.id).toList(),
+      ),
+      quality: quality,
+      preferredCodec: VideoCodecPreference.h264,
+      avoidHdrDolby: avoidHdrDolby,
+      headers: const {},
+    );
+
+    test('skips the HDR tier and keeps the highest SDR quality', () {
+      final tracks = [
+        _track(125, 'hev1.1.6.L120'),
+        _track(120, 'avc1'),
+        _track(80, 'avc1'),
+      ];
+      expect(select(tracks, quality: 127, avoidHdrDolby: false).quality, 125);
+      final sdr = select(tracks, quality: 127, avoidHdrDolby: true);
+      expect(sdr.quality, 120);
+      expect(sdr.qualities, [80, 120]);
+      expect(sdr.isHdr, isFalse);
+    });
+
+    test('drops Dolby Vision codecs and the Dolby quality tier', () {
+      final tracks = [
+        _track(126, 'dvh1.05.06'),
+        _track(120, 'dvh1.05.06'),
+        _track(120, 'avc1'),
+      ];
+      final sdr = select(tracks, quality: 126, avoidHdrDolby: true);
+      expect(sdr.quality, 120);
+      expect(sdr.video.codec, 'avc1');
+      expect(sdr.qualities, [120]);
+      expect(sdr.isHdr, isFalse);
+    });
+
+    test('an HDR-only source still plays instead of failing', () {
+      final hdrOnly = select(
+        [_track(125, 'hev1.1.6.L120')],
+        quality: 125,
+        avoidHdrDolby: true,
+      );
+      expect(hdrOnly.quality, 125);
+    });
+
+    test('HDR-only fallback preserves the preferred codec order', () {
+      final media = select(
+        [_track(126, 'dvh1.05.06'), _track(126, 'avc1')],
+        quality: 126,
+        avoidHdrDolby: true,
+      );
+      expect(media.video.codec, 'avc1');
+    });
+
+    test('off by default keeps HDR available', () {
+      final tracks = [_track(125, 'hev1.1.6.L120'), _track(120, 'avc1')];
+      expect(select(tracks, quality: 127, avoidHdrDolby: false).quality, 125);
+    });
+  });
 }
 
 ApiMediaTrack _track(int quality, String codec) => ApiMediaTrack(

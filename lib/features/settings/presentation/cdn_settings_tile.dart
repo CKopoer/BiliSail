@@ -72,6 +72,21 @@ final class _CdnSettingsDialogState extends ConsumerState<CdnSettingsDialog> {
     }
   }
 
+  /// Fastest line with a completed sample; null while every line is pending.
+  MediaCdnPreference? _fastest(
+    Map<MediaCdnPreference, CdnSpeedResult> results,
+  ) {
+    MediaCdnPreference? best;
+    var bestSpeed = 0.0;
+    for (final entry in results.entries) {
+      final speed = entry.value.measurement?.mebibytesPerSecond;
+      if (speed == null || speed <= bestSpeed) continue;
+      best = entry.key;
+      bestSpeed = speed;
+    }
+    return best;
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(cdnSpeedTestControllerProvider);
@@ -87,6 +102,7 @@ final class _CdnSettingsDialogState extends ConsumerState<CdnSettingsDialog> {
               !['等待测速', '正在测速…'].contains(result.message),
         )
         .length;
+    final fastest = _fastest(state.results);
     return AlertDialog(
       title: const Text('CDN 线路与测速'),
       content: SizedBox(
@@ -144,6 +160,13 @@ final class _CdnSettingsDialogState extends ConsumerState<CdnSettingsDialog> {
         ),
       ),
       actions: [
+        TextButton(
+          key: const ValueKey('cdn-use-fastest'),
+          onPressed: _saving || state.running || fastest == null
+              ? null
+              : () => unawaited(_select(fastest)),
+          child: const Text('用最快线路'),
+        ),
         TextButton(
           onPressed: state.running
               ? _controller.stop

@@ -134,12 +134,61 @@ void main() {
           matching: find.byType(Scrollable),
         ),
       );
+      await tester.ensureVisible(last);
+      await tester.pumpAndSettle();
       await tester.tap(last);
       await tester.pumpAndSettle();
       expect(settings.settings.mediaCdn, MediaCdnPreference.hkBcache);
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('fastest action stays disabled until a line is measured', (
+    tester,
+  ) async {
+    final speed = _Speed()..pending = Completer<CdnSpeedSample>();
+    await open(tester, _Settings(), speed);
+    final apply = find.byKey(const ValueKey('cdn-use-fastest'));
+    expect(tester.widget<TextButton>(apply).onPressed, isNull);
+  });
+
+  testWidgets('fastest action waits for the active measurement run', (
+    tester,
+  ) async {
+    final settings = _Settings();
+    final speed = _Speed()..holdSecondMeasurement = true;
+    await open(tester, settings, speed);
+    expect(speed.measurementCount, 2);
+    expect(find.textContaining('2.00 MiB/s'), findsWidgets);
+    final apply = find.byKey(const ValueKey('cdn-use-fastest'));
+    expect(tester.widget<TextButton>(apply).onPressed, isNull);
+
+    await tester.tap(find.text('停止测速'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextButton>(apply).onPressed, isNotNull);
+    expect(settings.settings.mediaCdn, MediaCdnPreference.automatic);
+    speed.releaseSecondMeasurement();
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('fastest measured line can be applied in one tap', (
+    tester,
+  ) async {
+    final settings = _Settings();
+    final speed = _Speed()
+      ..speedFor = (host) =>
+          host == 'upos-sz-mirrorali.bilivideo.com' ? 8.0 : 1.0;
+    await open(tester, settings, speed);
+    expect(find.text('测速完成'), findsOneWidget);
+    final apply = find.byKey(const ValueKey('cdn-use-fastest'));
+    expect(tester.widget<TextButton>(apply).onPressed, isNotNull);
+    await tester.tap(apply);
+    await tester.pumpAndSettle();
+    expect(settings.settings.mediaCdn, MediaCdnPreference.ali);
+    expect(find.byType(CdnSettingsDialog), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 final class _Settings implements SettingsRepository {
@@ -172,14 +221,32 @@ final class _Speed implements CdnSpeedTestRepository {
     return pending?.future ?? sample;
   }
 
+  /// Per-host throughput in MiB/s; every host ties at 2 MiB/s when unset.
+  double Function(String host)? speedFor;
+  int measurementCount = 0;
+  bool holdSecondMeasurement = false;
+  Completer<void>? secondMeasurement;
+
+  void releaseSecondMeasurement() {
+    secondMeasurement?.complete();
+  }
+
   @override
   Future<CdnSpeedMeasurement> measure(
     Uri url, {
     required int sessionEpoch,
     required RequestCancellation cancellation,
-  }) async => CdnSpeedMeasurement(
-    bytes: 1024 * 1024,
-    elapsed: const Duration(milliseconds: 500),
-    host: url.host,
-  );
+  }) async {
+    measurementCount++;
+    if (holdSecondMeasurement && measurementCount == 2) {
+      await (secondMeasurement ??= Completer<void>()).future;
+    }
+    return CdnSpeedMeasurement(
+      bytes: 1024 * 1024,
+      elapsed: Duration(
+        milliseconds: (1000 / (speedFor?.call(url.host) ?? 2)).round(),
+      ),
+      host: url.host,
+    );
+  }
 }
