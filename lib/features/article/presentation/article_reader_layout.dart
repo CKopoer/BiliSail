@@ -23,12 +23,16 @@ class ArticleReaderLayout extends ConsumerStatefulWidget {
     required this.actions,
     required this.onLogin,
     required this.onOpenUser,
+    this.onBack,
+    this.focusComments = false,
   });
   final ArticleDocument document;
   final Widget sliver;
   final List<Widget> actions;
   final VoidCallback onLogin;
   final ValueChanged<UserId> onOpenUser;
+  final VoidCallback? onBack;
+  final bool focusComments;
 
   @override
   ConsumerState<ArticleReaderLayout> createState() =>
@@ -43,6 +47,12 @@ class _ArticleReaderLayoutState extends ConsumerState<ArticleReaderLayout> {
   int _scrollCommentsToTop = 0;
   double? _articleFractionDraft;
   ContentLink? _link;
+
+  @override
+  void initState() {
+    super.initState();
+    _commentsSelected = widget.focusComments;
+  }
 
   @override
   void didChangeDependencies() {
@@ -175,7 +185,7 @@ class _ArticleReaderLayoutState extends ConsumerState<ArticleReaderLayout> {
                 if (wide) _ratioControl(articleFraction),
                 if (!commentsOnly) ...widget.actions,
               ],
-              onBack: localBack ? back : null,
+              onBack: localBack ? back : widget.onBack,
               body: body!,
             ),
           );

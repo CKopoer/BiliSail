@@ -29,12 +29,16 @@ final class ArticleScreen extends ConsumerWidget {
     required this.onOpenLink,
     required this.onOpenWeb,
     required this.onLogin,
+    this.onBack,
+    this.focusComments = false,
   });
 
   final ArticleAddress address;
   final ValueChanged<UserId> onOpenUser;
   final ValueChanged<Uri> onOpenLink, onOpenWeb;
   final VoidCallback onLogin;
+  final VoidCallback? onBack;
+  final bool focusComments;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -118,8 +122,12 @@ final class ArticleScreen extends ConsumerWidget {
         ),
       ],
     ];
-    Widget frame(Widget body) =>
-        ArticlePageFrame(title: '专栏', actions: actions, body: body);
+    Widget frame(Widget body) => ArticlePageFrame(
+      title: '专栏',
+      actions: actions,
+      onBack: onBack,
+      body: body,
+    );
     if (state == null) return frame(const StateView.empty(message: '专栏地址无效'));
     return state.when(
       skipLoadingOnReload: false,
@@ -130,6 +138,8 @@ final class ArticleScreen extends ConsumerWidget {
         actions: actions,
         onLogin: onLogin,
         onOpenUser: onOpenUser,
+        onBack: onBack,
+        focusComments: focusComments,
         sliver: _ArticleContent(
           document: document,
           onOpenUser: onOpenUser,

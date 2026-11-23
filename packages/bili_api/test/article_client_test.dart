@@ -433,6 +433,41 @@ void main() {
   );
 
   test(
+    'reads ordered CV paragraphs when opus detail is rate limited',
+    () async {
+      final transport = _Transport({
+        _opus: const ApiFailure(
+          ApiFailureCategory.rateLimited,
+          'opus_detail',
+          businessCode: -352,
+        ),
+        _legacy: {
+          'id': 123,
+          'dyn_id_str': _id,
+          'opus': {
+            'opus_id': _id,
+            'content': {'paragraphs': _paragraphs},
+          },
+        },
+      }, location: '/opus/$_id');
+      final client = ArticleClient(BiliApiClient(transport: transport));
+      final article = await client.read('123', opus: false);
+      expect(article.dynamicId, _id);
+      expect(article.commentOid, '123');
+      expect(article.blocks.map((block) => block.kind), [
+        ApiArticleBlockKind.paragraph,
+        ApiArticleBlockKind.image,
+        ApiArticleBlockKind.code,
+      ]);
+      expect(transport.getCalls.map((call) => call.path), [
+        '/x/web-interface/nav',
+        _opus,
+        _legacy,
+      ]);
+    },
+  );
+
+  test(
     'reuses the CV response when its opus falls back to the same CV',
     () async {
       final transport = _Transport({
@@ -763,9 +798,15 @@ final class _Transport
     getCalls.add(uri);
     final value = uri.path == '/x/web-interface/nav' ? _nav : data[uri.path];
     if (value == null) throw StateError('Unexpected request to ${uri.path}');
+    final body = value is ApiFailure
+        ? {
+            'code': value.businessCode,
+            if (value.requiresVerification) 'v_voucher': 'fixture',
+          }
+        : {'code': 0, 'data': value};
     return ApiHttpResponse(
       200,
-      Uint8List.fromList(utf8.encode(jsonEncode({'code': 0, 'data': value}))),
+      Uint8List.fromList(utf8.encode(jsonEncode(body))),
       const {},
     );
   }

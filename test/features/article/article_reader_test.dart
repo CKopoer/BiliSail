@@ -10,6 +10,7 @@ import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/article_address.dart';
 import 'package:bilisail/domain/comment_target.dart';
 import 'package:bilisail/domain/content_link.dart';
+import 'package:bilisail/domain/dynamic_post.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/features/article/application/article_provider.dart';
@@ -32,6 +33,7 @@ import 'package:bilisail/shared/ui/app_network_image.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:flutter/gestures.dart';
 import 'package:bilisail/shared/ui/content_link_scope.dart';
+import 'package:bilisail/shared/ui/dynamic_post_interactions.dart';
 import 'package:bilisail/shared/ui/image_viewer.dart';
 import 'package:bilisail/shared/ui/post_author_header.dart';
 import 'package:bilisail/shared/ui/post_card_surface.dart';
@@ -143,6 +145,132 @@ void main() {
       expect(repository.reads, [_column, _opus, _opus]);
     },
   );
+
+  for (final fromFeed in [false, true]) {
+    testWidgets(
+      'article dynamic renders all body images in order (feed: $fromFeed)',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(800, 1200));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final auth = DynamicAuthFake(signedIn: false);
+        addTearDown(auth.stream.close);
+        final images = [
+          for (var i = 0; i < 6; i++)
+            Uri.https('i0.hdslb.com', '/bfs/new_dyn/picture$i.png'),
+        ];
+        final summary = DynamicPost(
+          id: _opus.id,
+          text: '只有封面的摘要[图片]',
+          articleAddress: _column,
+          commentTarget: _commentTarget,
+        );
+        final dynamics = DynamicRepositoryFake()..loaded = summary;
+        final articles = _Repository((address, _) async {
+          expect(address, _column);
+          return ArticleDocument(
+            url: _opus.webUri,
+            title: '图文动态',
+            commentTarget: _commentTarget,
+            blocks: [
+              for (final (i, image) in images.indexed) ...[
+                ArticleBlock(
+                  ArticleBlockKind.paragraph,
+                  text: [
+                    (
+                      text: '第 ${i + 1} 段',
+                      link: null,
+                      bold: false,
+                      italic: false,
+                      strike: false,
+                    ),
+                  ],
+                ),
+                ArticleBlock(
+                  ArticleBlockKind.image,
+                  image: image,
+                  aspectRatio: 8,
+                ),
+              ],
+            ],
+          );
+        });
+        final router = createBiliRouter(
+          initialLocation: '/dynamic/${_opus.id}',
+          playerBuilder: (_, _, _) => const SizedBox.shrink(),
+        );
+        addTearDown(router.dispose);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              articleRepositoryProvider.overrideWithValue(articles),
+              authRepositoryProvider.overrideWithValue(auth),
+              dynamicRepositoryProvider.overrideWithValue(dynamics),
+              commentsRepositoryProvider.overrideWith(
+                (_, _) => DynamicCommentsFake(),
+              ),
+              settingsRepositoryProvider.overrideWithValue(const _Settings()),
+              originalImageRepositoryProvider.overrideWithValue(
+                _Originals(
+                  OriginalImage(
+                    bytes: base64Decode(
+                      'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGMwCasA'
+                      'IgYIBQAbNgQJ4mDIDgAAAABJRU5ErkJggg==',
+                    ),
+                    width: 2,
+                    height: 2,
+                  ),
+                ),
+              ),
+            ],
+            child: fromFeed
+                ? MaterialApp(
+                    home: Scaffold(
+                      body: InteractiveDynamicPostCard(post: summary),
+                    ),
+                  )
+                : MaterialApp.router(routerConfig: router),
+          ),
+        );
+        await tester.pumpAndSettle();
+        if (fromFeed) {
+          expect(find.byType(ArticleScreen), findsNothing);
+          await tester.tap(findMaterialTooltip('查看动态详情'));
+          await tester.pumpAndSettle();
+        }
+        expect(articles.reads, [_column]);
+        final reader = find.byType(ArticleScreen);
+        expect(reader, findsOneWidget);
+        expect(
+          find.descendant(of: reader, matching: find.text(summary.text)),
+          findsNothing,
+        );
+        final bodyImages = tester
+            .widgetList<AppNetworkImage>(
+              find.descendant(
+                of: reader,
+                matching: find.byType(AppNetworkImage),
+              ),
+            )
+            .toList();
+        expect(bodyImages.map((widget) => widget.viewerOriginal), images);
+        expect(
+          bodyImages.map((widget) => widget.fit),
+          everyElement(BoxFit.contain),
+        );
+        for (var i = 1; i <= images.length; i++) {
+          expect(
+            tester.getTopLeft(find.text('第 $i 段')).dy,
+            lessThan(tester.getTopLeft(find.bySemanticsLabel('查看图片 $i')).dy),
+          );
+        }
+        await tester.tap(find.bySemanticsLabel('查看图片 4'));
+        await tester.pumpAndSettle();
+        final viewer = tester.widget<ImageViewer>(find.byType(ImageViewer));
+        expect(viewer.request.images, images);
+        expect(viewer.request.initialIndex, 3);
+      },
+    );
+  }
 
   testWidgets(
     'account transitions cancel older reads and retry uses the current session',

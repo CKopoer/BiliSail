@@ -128,6 +128,7 @@ final class ApiDynamicPost {
     this.linkDescription = '',
     this.linkCoverUrl,
     this.linkUrl,
+    this.articleUrl,
     this.commentOid,
     this.commentType,
     this.liked = false,
@@ -156,6 +157,7 @@ final class ApiDynamicPost {
   final String badge, notice;
   final List<ApiDynamicContentCard> contentCards;
   final Uri? authorAvatarUrl, authorPendantUrl, linkCoverUrl, linkUrl;
+  final Uri? articleUrl;
   final DateTime? publishedAt;
   final List<ApiDynamicTextSpan> spans;
   final List<Uri> imageUrls;
