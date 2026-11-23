@@ -171,7 +171,7 @@ jobs:
               directory: 'release-assets', version: process.env.RELEASE_VERSION,
               targets: JSON.parse(process.env.BUILD_MATRIX).include.map(({ target }) => target),
               sourceRevision: context.sha,
-              flutterVersion: readFileSync('.flutter-version', 'utf8').trim(),
+              flutterRevision: readFileSync('.flutter-version', 'utf8').trim(),
               pubspecLockSha256s: [lockfile, lockfile.replace(/\n/g, '\r\n')]
                 .map((content) => createHash('sha256').update(content).digest('hex')),
             });
@@ -225,7 +225,7 @@ jobs:
           国内下载：[夸克网盘](https://pan.quark.cn/s/ffceda8afc83)。
 
           - 源码提交：$env:GITHUB_SHA
-          - Flutter 3.50.1；各平台 SDK、签名信息及 mux 源码归档见 [Actions 构建记录]($env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID) 中所列的来源构建产物。
+          - Flutter main；各平台 SDK、签名信息及 mux 源码归档见 [Actions 构建记录]($env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID) 中所列的来源构建产物。
           - 仅包含本次选中的平台；包旁附 SHA-256 校验文件。
           - $bundleName 汇总本次所选平台的完整产物，包含安装包、构建信息、mux 源码归档、校验文件与第三方说明，可一次下载。
           - Windows 同时提供 MSIX、MSI 和 EXE 安装包；EXE 内嵌同一 MSI，任选一种安装。MSI 向导可选择安装目录，EXE 通过 Options → Browse 选择，升级默认沿用原目录。三者复用同一签名证书，测试签名需先信任包旁的 .cer。

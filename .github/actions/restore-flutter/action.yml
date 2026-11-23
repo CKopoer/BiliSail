@@ -2,7 +2,7 @@ name: Restore pinned Flutter and Pub
 description: Restore shared dependencies without registering automatic cache writers.
 inputs:
   architecture:
-    description: Flutter distribution architecture; Windows ARM64 bootstraps from x64.
+    description: Native SDK host architecture.
     default: '${{ runner.arch }}'
   cache-sdk:
     description: Retain SDK caches only where repeated reads justify their size.
@@ -25,16 +25,23 @@ runs:
   steps:
     - name: Resolve cache paths without downloading Flutter
       id: metadata
-      uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
-      with:
-        flutter-version: '3.50.1'
-        channel: stable
-        architecture: ${{ inputs.architecture }}
-        cache: false
-        pub-cache: false
-        dry-run: true
-        # Pub uses the actual host ABI, including after Windows ARM64 bootstrap.
-        pub-cache-key: 'bilisail-pub-v2-:os:-${{ runner.arch }}-:version:'
+      shell: pwsh
+      env:
+        SDK_ARCH: ${{ inputs.architecture }}
+      run: |
+        $revision = (Get-Content -LiteralPath .flutter-version -Raw).Trim()
+        if ($revision -cnotmatch '^[a-f0-9]{40}$') { throw 'Expected a full Flutter main Git revision.' }
+        $platform = $env:RUNNER_OS.ToLowerInvariant()
+        $arch = $env:SDK_ARCH.ToLowerInvariant()
+        $root = Join-Path $env:RUNNER_TOOL_CACHE "flutter-main/$revision/$arch"
+        $pub = Join-Path $env:RUNNER_TOOL_CACHE 'bilisail-pub'
+        "CACHE-KEY=flutter-$platform-main-$revision-$arch" >> $env:GITHUB_OUTPUT
+        "CACHE-PATH=$root" >> $env:GITHUB_OUTPUT
+        "PUB-CACHE-PATH=$pub" >> $env:GITHUB_OUTPUT
+        "PUB-CACHE-KEY=bilisail-pub-v2-$platform-$env:RUNNER_ARCH-$revision" >> $env:GITHUB_OUTPUT
+        "FLUTTER_ROOT=$root" >> $env:GITHUB_ENV
+        "PUB_CACHE=$pub" >> $env:GITHUB_ENV
+        @((Join-Path $root 'bin'), (Join-Path $root 'bin/cache/dart-sdk/bin'), (Join-Path $pub 'bin')) >> $env:GITHUB_PATH
     - name: Restore Flutter SDK
       id: sdk
       if: inputs.cache-sdk == 'true'
@@ -50,20 +57,6 @@ runs:
         key: ${{ steps.metadata.outputs.PUB-CACHE-KEY }}-${{ hashFiles('**/pubspec.lock') }}
         restore-keys: |
           ${{ steps.metadata.outputs.PUB-CACHE-KEY }}-
-    - name: Install pinned Flutter
-      if: runner.os != 'Windows'
-      uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
-      with:
-        flutter-version: '3.50.1'
-        channel: stable
-        architecture: ${{ inputs.architecture }}
-        cache: false
-        pub-cache: false
-    - name: Install pinned Windows SDK with native extraction
-      if: runner.os == 'Windows'
+    - name: Bootstrap pinned Flutter main
       shell: pwsh
-      env:
-        SDK_DESTINATION: ${{ steps.metadata.outputs.CACHE-PATH }}
-        SDK_EXPECTED_KEY: ${{ steps.metadata.outputs.CACHE-KEY }}
-        SDK_PUB_CACHE: ${{ steps.metadata.outputs.PUB-CACHE-PATH }}
-      run: ./tool/setup-windows-flutter.ps1 -Destination $env:SDK_DESTINATION -ExpectedCacheKey $env:SDK_EXPECTED_KEY -PubCache $env:SDK_PUB_CACHE
+      run: ./tool/setup-flutter-main.ps1 -Destination $env:FLUTTER_ROOT

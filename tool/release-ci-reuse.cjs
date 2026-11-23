@@ -85,7 +85,7 @@ async function hashFile(file) {
 }
 
 async function verifyReleaseAssets({ directory, version, targets, sourceRevision,
-  flutterVersion, pubspecLockSha256s }) {
+  flutterRevision, pubspecLockSha256s }) {
   validateSelection(version, targets);
   const expectedFiles = targets.flatMap((target) => {
     const prefix = `BiliSail-${version}-${target}`;
@@ -115,7 +115,7 @@ async function verifyReleaseAssets({ directory, version, targets, sourceRevision
       .replace(/^\uFEFF/, ''));
     if (metadata.version !== version || metadata.target !== target ||
         metadata.sourceRevision !== sourceRevision || metadata.sourceDirty !== false ||
-        metadata.flutterVersion !== flutterVersion ||
+        metadata.flutterChannel !== 'main' || metadata.flutterRevision !== flutterRevision ||
         !pubspecLockSha256s.includes(metadata.pubspecLockSha256)) {
       throw new Error(`Build provenance does not match this release for ${target}.`);
     }

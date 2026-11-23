@@ -101,7 +101,7 @@
 - SQLite migration 必须增版本并有迁移验证；禁止靠清空用户数据完成升级。数据库 schema 与 `preferences.v1` 等 JSON 快照版本分别管理；当前定义以 `AppDatabase` 和对应仓储为准，增加设置字段不必然改表。
 - 下载队列由进程级仓储持有，页面关闭不停止任务；账号变化暂停旧任务，重启等待用户显式继续。校验 206/Content-Range、文件完整性及 URL 刷新后的资源身份，不将带签名 URL 或凭据落盘。
 - 下载文件、manifest 与 SQLite 按可恢复的提交顺序处理；分轨/MP4/MKV 均需兼容已有任务及离线打开。封装在 worker isolate 执行，取消、临时文件清理、校验和原子发布由下载仓储负责，离线媒体不受普通缓存清理影响。
-- 工程固定 Flutter **3.50.1 stable / Dart 3.14.0**，以 `.flutter-version`、检查脚本和 CI 配置共同约束；升级须同步这些入口及验证记录。直接依赖使用精确版本，提交根应用和四个包的五份 `pubspec.lock`。
+- 工程固定 **Flutter main 的完整 Git 提交与其自带的 Dart SDK**，以 `.flutter-version`、检查脚本和 CI 配置共同约束；升级须同步这些入口及验证记录。直接依赖使用精确版本，提交根应用和四个包的五份 `pubspec.lock`。
 - media_kit、media_kit_video 的 Git ref 使用相同完整提交。更新根应用、bili_player 的依赖、overrides 和两份锁文件。弹幕依赖更新同步根应用与 bili_danmaku 锁文件。
 - 原生 libmpv 由固定 Native Assets 清单选择并校验。升级时逐项检查归档、生命周期补丁、源码与许可，保留 Linux 发行版 notices。
 - `bili_mux` 原生资产按其 README 从固定源码构建，不能借用系统 FFmpeg 或播放器私有库；预构建资产不提交 Git，分发保留许可、来源和可重建材料。

@@ -8,23 +8,23 @@ function canWriteCaches(context) {
     context.ref === `refs/heads/${context.payload.repository.default_branch}`;
 }
 
-function cacheFamily(key, flutterVersion) {
+function cacheFamily(key, flutterRevision) {
   const mux = /^bilisail-mux-v1-(windows-(?:x64|arm64)|macos-(?:x64|arm64)|android-arm64|ios-arm64|linux-x64)-[a-f0-9]{64}$/.exec(key);
   if (mux) return { name: `mux-${mux[1]}` };
-  const sdk = /^flutter-(linux|macos|windows)-stable-([\d.]+)-(x64|arm64)(?:-|$)/i.exec(key);
+  const sdk = /^flutter-(linux|macos|windows)-(?:stable|main)-([a-f0-9]{40}|[\d.]+)-(x64|arm64)(?:-|$)/i.exec(key);
   if (sdk) {
     const [, os, version, architecture] = sdk;
     const enabled = `${os}-${architecture}`.toLowerCase();
-    return { name: `sdk-${enabled}`, retired: version !== flutterVersion ||
+    return { name: `sdk-${enabled}`, retired: version !== flutterRevision ||
       !['linux-x64', 'macos-arm64'].includes(enabled) };
   }
   const pub = /^(bilisail-pub-v2|flutter-pub)-(linux|macos|windows)-(.+)$/i.exec(key);
   if (pub) {
     const architecture = /(?:^|-)(x64|arm64)(?:-|$)/i.exec(pub[3])?.[1]?.toLowerCase();
-    const version = /\d+\.\d+\.\d+/.exec(pub[3])?.[0];
+    const version = /(?:^|-)([a-f0-9]{40}|\d+\.\d+\.\d+)(?:-|$)/i.exec(pub[3])?.[1];
     if (!architecture || !version) return null;
     return { name: `pub-${pub[2].toLowerCase()}-${architecture}`,
-      retired: version !== flutterVersion || (pub[2].toLowerCase() === 'macos' && architecture === 'x64'),
+      retired: version !== flutterRevision || (pub[2].toLowerCase() === 'macos' && architecture === 'x64'),
       legacy: pub[1] === 'flutter-pub' };
   }
   if (key.startsWith('linux-downloads-v1-ubuntu24.04-x64-')) {
@@ -42,9 +42,9 @@ function cacheFamily(key, flutterVersion) {
   return null;
 }
 
-function planCleanup(caches, { ref, flutterVersion, preferredKey = '' }) {
+function planCleanup(caches, { ref, flutterRevision, preferredKey = '' }) {
   const owned = caches.filter((cache) => cache.ref === ref)
-    .map((cache) => ({ cache, family: cacheFamily(cache.key, flutterVersion) }))
+    .map((cache) => ({ cache, family: cacheFamily(cache.key, flutterRevision) }))
     .filter(({ family }) => family);
   const groups = Map.groupBy(owned, ({ family }) => family.name);
   return owned.filter(({ cache, family }) => {
@@ -65,8 +65,8 @@ async function cleanupCaches({ github, context, core, preferredKey = '' }) {
   const caches = await github.paginate(github.rest.actions.getActionsCacheList, {
     ...context.repo, per_page: 100,
   });
-  const flutterVersion = readFileSync('.flutter-version', 'utf8').trim();
-  const obsolete = planCleanup(caches, { ref: context.ref, flutterVersion, preferredKey });
+  const flutterRevision = readFileSync('.flutter-version', 'utf8').trim();
+  const obsolete = planCleanup(caches, { ref: context.ref, flutterRevision, preferredKey });
   await deleteCaches({ github, context, core, caches: obsolete });
   const removed = new Set(obsolete.map(({ id }) => id));
   return caches.filter(({ id }) => !removed.has(id));
@@ -96,10 +96,10 @@ async function prepareCacheSave({ github, context, core, key, reserveBytes }) {
     if (usedBytes + reserveBytes > cacheBudgetBytes) {
       // The replacement is already prepared locally. If necessary, rotate its
       // own previous snapshot before upload rather than evicting another family.
-      const flutterVersion = readFileSync('.flutter-version', 'utf8').trim();
-      const family = cacheFamily(key, flutterVersion);
+      const flutterRevision = readFileSync('.flutter-version', 'utf8').trim();
+      const family = cacheFamily(key, flutterRevision);
       const replaced = caches.filter((cache) => cache.ref === context.ref &&
-        family && cacheFamily(cache.key, flutterVersion)?.name === family.name);
+        family && cacheFamily(cache.key, flutterRevision)?.name === family.name);
       const replacedBytes = replaced.reduce((total, cache) => total + cache.size_in_bytes, 0);
       if (usedBytes - replacedBytes + reserveBytes <= cacheBudgetBytes) {
         await deleteCaches({ github, context, core, caches: replaced });

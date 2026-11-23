@@ -254,13 +254,13 @@ async function makeAssets(t, targets = allTargets) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'bilisail-release-reuse-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const expected = { directory, version, targets, sourceRevision: context.sha,
-    flutterVersion: '3.50.0', pubspecLockSha256s: ['c'.repeat(64), 'f'.repeat(64)] };
+    flutterRevision: 'e'.repeat(40), pubspecLockSha256s: ['c'.repeat(64), 'f'.repeat(64)] };
   const suffixes = [['.apk'], ['.msix', '.msi', '.exe', '.cer'], ['.msix', '.msi', '.exe', '.cer'], ['.dmg'], ['.dmg'],
     ['-unsigned.ipa'], ['.AppImage', '.flatpak']];
   for (const target of targets) {
     const prefix = `BiliSail-${version}-${target}`;
     const metadata = { version, target, sourceRevision: context.sha, sourceDirty: false,
-      flutterVersion: expected.flutterVersion, pubspecLockSha256: expected.pubspecLockSha256s[0],
+      flutterChannel: 'main', flutterRevision: expected.flutterRevision, pubspecLockSha256: expected.pubspecLockSha256s[0],
       signing: target === 'android-arm64' ? 'configured-keystore' : 'ad-hoc-not-notarized' };
     await writeChecksummed(directory, prefix + '.build-info.json', '\uFEFF' + JSON.stringify(metadata));
     for (const suffix of [...suffixes[allTargets.indexOf(target)], '.mux-source.zip']) {
@@ -434,7 +434,7 @@ test('rejects missing files, unexpected platforms and tampered archives before d
 test('rejects mismatched provenance even when the metadata checksum is valid', async (t) => {
   for (const change of [
     { version: '1.2.5+1' }, { target: 'ios-arm64' }, { sourceRevision: 'b'.repeat(40) },
-    { sourceDirty: true }, { flutterVersion: '3.0.0' }, { pubspecLockSha256: 'd'.repeat(64) },
+    { sourceDirty: true }, { flutterChannel: 'stable' }, { flutterRevision: 'a'.repeat(40) }, { pubspecLockSha256: 'd'.repeat(64) },
     { signing: 'temporary-debug-key' },
   ]) {
     await t.test(JSON.stringify(change), async (t) => {

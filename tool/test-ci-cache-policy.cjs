@@ -3,11 +3,11 @@ const { readFileSync } = require('node:fs');
 const { test } = require('node:test');
 const { canWriteCaches, planCleanup, cleanupCaches, prepareCacheSave } = require('./ci-cache-policy.cjs');
 
-const flutterVersion = readFileSync('.flutter-version', 'utf8').trim();
+const flutterRevision = readFileSync('.flutter-version', 'utf8').trim();
 const context = { repo: { owner: 'CKopoer', repo: 'BiliSail' }, eventName: 'push',
   ref: 'refs/heads/master', payload: { repository: { default_branch: 'master' } } };
-const options = { ref: context.ref, flutterVersion };
-const pubPrefix = `bilisail-pub-v2-linux-X64-${flutterVersion}-`;
+const options = { ref: context.ref, flutterRevision };
+const pubPrefix = `bilisail-pub-v2-linux-X64-${flutterRevision}-`;
 const cache = (id, key, overrides = {}) => ({ id, key, ref: context.ref,
   size_in_bytes: 100_000_000, created_at: `2026-11-0${id}T00:00:00Z`, ...overrides });
 
@@ -41,19 +41,19 @@ test('only trusted default-branch pushes and dispatches write or delete caches',
 });
 
 test('cleanup preserves other refs, unknown caches and current useful large SDKs', () => {
-  const caches = [cache(1, `flutter-linux-stable-${flutterVersion}-x64-sdk`),
-    cache(2, `flutter-macos-stable-${flutterVersion}-arm64-sdk`),
-    cache(3, `flutter-macos-stable-${flutterVersion}-x64-sdk`),
-    cache(4, `flutter-windows-stable-${flutterVersion}-x64-sdk`),
+  const caches = [cache(1, `flutter-linux-main-${flutterRevision}-x64-sdk`),
+    cache(2, `flutter-macos-main-${flutterRevision}-arm64-sdk`),
+    cache(3, `flutter-macos-main-${flutterRevision}-x64-sdk`),
+    cache(4, `flutter-windows-main-${flutterRevision}-x64-sdk`),
     cache(5, 'flutter-linux-stable-1.0.0-x64-sdk'),
     cache(6, 'unknown-large-cache'),
-    cache(7, `flutter-windows-stable-${flutterVersion}-x64-sdk`, { ref: 'refs/heads/active' }),
+    cache(7, `flutter-windows-main-${flutterRevision}-x64-sdk`, { ref: 'refs/heads/active' }),
     cache(8, pubPrefix + 'old', { ref: 'refs/pull/42/merge' })];
   assert.deepEqual(planCleanup(caches, options).map(({ id }) => id), [3, 4, 5]);
 });
 
 test('new complete Pub replaces legacy partial snapshots; last access cannot keep an old generation', () => {
-  const caches = [cache(1, `flutter-pub-linux-x64-${flutterVersion}-legacy`),
+  const caches = [cache(1, `flutter-pub-linux-x64-${flutterRevision}-legacy`),
     cache(2, pubPrefix + 'old', { last_accessed_at: '2026-12-01T00:00:00Z' }),
     cache(3, pubPrefix + 'current')];
   assert.deepEqual(planCleanup(caches, options).map(({ id }) => id), [1, 2]);
@@ -61,15 +61,15 @@ test('new complete Pub replaces legacy partial snapshots; last access cannot kee
 });
 
 test('legacy Pub stays available until its OS/ABI has a new complete replacement', () => {
-  const caches = [cache(1, `flutter-pub-macos-stable-${flutterVersion}-arm64-sdk-lock`),
-    cache(2, pubPrefix + 'current'), cache(3, `bilisail-pub-v2-windows-ARM64-${flutterVersion}-current`)];
+  const caches = [cache(1, `flutter-pub-macos-stable-${flutterRevision}-arm64-sdk-lock`),
+    cache(2, pubPrefix + 'current'), cache(3, `bilisail-pub-v2-windows-ARM64-${flutterRevision}-current`)];
   assert.deepEqual(planCleanup(caches, options), []);
 });
 
 test('cross-building Intel on ARM64 retires the unused Intel host Pub cache only on the default ref', () => {
-  const caches = [cache(1, `bilisail-pub-v2-macos-X64-${flutterVersion}-old`),
-    cache(2, `bilisail-pub-v2-macos-ARM64-${flutterVersion}-current`),
-    cache(3, `bilisail-pub-v2-macos-X64-${flutterVersion}-branch`, { ref: 'refs/heads/active' })];
+  const caches = [cache(1, `bilisail-pub-v2-macos-X64-${flutterRevision}-old`),
+    cache(2, `bilisail-pub-v2-macos-ARM64-${flutterRevision}-current`),
+    cache(3, `bilisail-pub-v2-macos-X64-${flutterRevision}-branch`, { ref: 'refs/heads/active' })];
   assert.deepEqual(planCleanup(caches, options).map(({ id }) => id), [1]);
 });
 
@@ -100,14 +100,14 @@ test('MSYS2 keeps one package snapshot per compiler configuration', () => {
 
 test('native mux rotates only its own target and does not evict a useful SDK', () => {
   const prefix = 'bilisail-mux-v1-windows-arm64-';
-  const caches = [cache(1, `flutter-linux-stable-${flutterVersion}-x64-sdk`),
+  const caches = [cache(1, `flutter-linux-main-${flutterRevision}-x64-sdk`),
     cache(2, prefix + 'a'.repeat(64)), cache(3, prefix + 'b'.repeat(64)),
     cache(4, 'bilisail-mux-v1-macos-x64-' + 'c'.repeat(64))];
   assert.deepEqual(planCleanup(caches, options).map(({ id }) => id), [2]);
 });
 
 test('space reservations skip low-priority writes rather than deleting another useful family', async () => {
-  const supplied = fixture([cache(1, `flutter-linux-stable-${flutterVersion}-x64-sdk`, { size_in_bytes: 8_500_000_000 })]);
+  const supplied = fixture([cache(1, `flutter-linux-main-${flutterRevision}-x64-sdk`, { size_in_bytes: 8_500_000_000 })]);
   assert.equal(await prepareCacheSave({ ...supplied, key: pubPrefix + 'new', reserveBytes: 600_000_000 }), false);
   assert.deepEqual(supplied.deleted, []);
   assert.match(supplied.warnings[0], /Skipping cache save/);
@@ -144,7 +144,7 @@ test('API failure prevents unbudgeted writes and cache deletion races tolerate 4
   supplied.github.paginate = async () => { throw new Error('No Actions permission'); };
   assert.equal(await prepareCacheSave({ ...supplied, key: pubPrefix + 'new', reserveBytes: 1 }), false);
   assert.match(supplied.warnings[0], /maintenance failed/);
-  const race = fixture([cache(1, `flutter-windows-stable-${flutterVersion}-x64-sdk`)]);
+  const race = fixture([cache(1, `flutter-windows-main-${flutterRevision}-x64-sdk`)]);
   race.github.rest.actions.deleteActionsCacheById = async () => { throw Object.assign(new Error('Evicted'), { status: 404 }); };
   assert.deepEqual(await cleanupCaches(race), []);
 });
@@ -152,9 +152,8 @@ test('API failure prevents unbudgeted writes and cache deletion races tolerate 4
 test('restore jobs cannot automatically publish SDK or partial Pub caches', () => {
   const action = readFileSync('.github/actions/restore-flutter/action.yml', 'utf8');
   assert.doesNotMatch(action, /uses: actions\/cache@|uses: actions\/cache\/save@/);
-  assert.equal((action.match(/pub-cache: false/g) ?? []).length, 2);
-  assert.equal((action.match(/cache: false/g) ?? []).length, 4);
-  assert.match(action, /pub-cache-key: 'bilisail-pub-v2-:os:-\$\{\{ runner.arch \}\}-:version:'/);
+  assert.equal((action.match(/uses: actions\/cache\/restore@/g) ?? []).length, 2);
+  assert.match(action, /bilisail-pub-v2-\$platform-\$env:RUNNER_ARCH-\$revision/);
   assert.match(action, /restore-keys:/);
 });
 

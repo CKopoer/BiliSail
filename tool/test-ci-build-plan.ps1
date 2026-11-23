@@ -60,7 +60,7 @@ try {
   $checks++
   $windows = ((Invoke-Plan '1.2.5+0' 2).matrix | ConvertFrom-Json).include
   $arm64 = $windows | Where-Object target -eq 'windows-arm64'
-  if ($arm64.runner -cne 'windows-11-arm' -or $arm64.arch -cne 'x64') { throw 'Windows ARM64 requires an ARM64 host with the x64 Flutter SDK.' }
+  if ($arm64.runner -cne 'windows-11-arm' -or $arm64.arch -cne 'arm64') { throw 'Windows ARM64 requires an ARM64 host with a native ARM64 Flutter SDK.' }
   $checks++
   $allTargets = @('android-arm64', 'windows-x64', 'windows-arm64', 'macos-arm64', 'macos-x64', 'ios-arm64', 'linux-x64')
   for ($mask = 1; $mask -lt (1 -shl $allTargets.Count); $mask++) {

@@ -196,8 +196,10 @@ try {
   $sdkJson = & flutter --version --machine
   if ($LASTEXITCODE -ne 0) { throw 'Could not read Flutter SDK version.' }
   $sdk = $sdkJson | ConvertFrom-Json
-  $flutterVersion = (Get-Content -LiteralPath (Join-Path $repoRoot '.flutter-version') -Raw).Trim()
-  if ($sdk.frameworkVersion -ne $flutterVersion) { throw "This checkout is verified with Flutter $flutterVersion." }
+  $flutterRevision = (Get-Content -LiteralPath (Join-Path $repoRoot '.flutter-version') -Raw).Trim()
+  if ($sdk.channel -cne 'main' -or $sdk.frameworkRevision -cne $flutterRevision) {
+    throw "This checkout requires Flutter main at $flutterRevision. Found $($sdk.channel) at $($sdk.frameworkRevision)."
+  }
   if ($isWindowsTarget) {
     $flutterRoot = Split-Path (Split-Path (Get-Command flutter).Source -Parent) -Parent
     $dartBinary = Join-Path $flutterRoot 'bin/cache/dart-sdk/bin/dart.exe'
@@ -408,6 +410,7 @@ try {
     sourceDirty = $sourceDirty
     androidVersionCode = $androidVersionCode
     androidSigningCertificateSha256 = $androidCertificateSha256
+    flutterChannel = $sdk.channel
     flutterVersion = $sdk.frameworkVersion
     flutterRevision = $sdk.frameworkRevision
     engineRevision = $sdk.engineRevision

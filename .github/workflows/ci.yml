@@ -314,11 +314,6 @@ jobs:
           key: ${{ steps.flutter.outputs.sdk-key }}
           path: ${{ steps.flutter.outputs.sdk-path }}
           reserve-bytes: '2800000000'
-      - name: Require native ARM64 Dart for Windows
-        if: matrix.target == 'windows-arm64'
-        timeout-minutes: 10
-        shell: pwsh
-        run: ./tool/setup-windows-arm64-flutter.ps1
       - name: Set up the Android mux compiler
         if: matrix.target == 'android-arm64'
         shell: bash

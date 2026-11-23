@@ -61,3 +61,13 @@ flutter build windows --release -t lib/main.dart
 最终日志：`build/flutter-350-check-final.log`、`build/flutter-350-native-smoke-final.log`、`build/flutter-350-windows-release.log`。另有 162 项动效／窗口／Markdown 定向测试、522 项播放面板／弹幕样式回归，以及其余受影响组件定向验证；这些范围互有重叠，不累加进全量统计。
 
 本机未执行 Android／macOS 构建与实机验收，也未执行安装升级、真实视频播放全回归或性能测量；没有从引擎更新推导帧率、视频解码或 GPU 性能结论。
+
+## 2026-11-23 Windows 图片上传期间的原生闪退
+
+系统安装的 x64 MSIX `1.3.0.7` 在 22:15 和 22:24 两次出现 `nvwgf2umx.dll+0x19632f` 读取地址 `0x230` 的异常。匹配的 Flutter PDB 显示，IO 线程经 Skia 和 ANGLE 提交单帧图片，上传尺寸分别为 48×48 和 60×30。两次光栅线程均停在 `GL_WaitSync` 入口获取 ANGLE 全局互斥锁处。转储没有记录先前两条命令是否曾并发访问同一个 D3D11 immediate context，也没有将异常地址关联到具体纹理。
+
+Flutter 3.50 的 Windows 引擎中，窗口呈现和 IO 图片上传共用 ANGLE 的 D3D11 immediate context。部分 EGL 调用与 GL 调用使用不同的锁，两条线程可能同时访问该 context。开启 Impeller 的报告和显式关闭 Impeller 的报告被 Flutter 归入同一问题。引擎维护者采用的缓解措施是在引擎取得的 D3D11 immediate context 上启用多线程保护。该安装包所用的 media_kit 在自己的 ANGLE 设备上启用保护，无法由此推断 Flutter 引擎设备也受到保护。[Flutter #196618](https://github.com/flutter/flutter/issues/196618) · [Skia 报告 #196587](https://github.com/flutter/flutter/issues/196587) · [Flutter 修复 #196897](https://github.com/flutter/flutter/pull/196897)
+
+11 月 23 日发生闪退的安装包使用 Flutter 3.50.1，该版本缺少这项保护，3.50 稳定分支回移仍在审查。已在 SDK 提交 `ae9b586f34` 上用 `git apply --check` 核对回移差异可以应用。当前结论来自源码和转储，修复后的 Windows 构建及本机播放稳定性仍待验证。[稳定分支回移 #196991](https://github.com/flutter/flutter/pull/196991)
+
+同日，项目切换到 Flutter 3.51.0-1.0.pre-292（main），自带 Dart 3.15.0-174.0.dev。对应的 Flutter 提交为 `a7c861f6b2e720aed2d93a7d5fbea844a3322636`。Git 祖先关系确认其中包含 `6ace1aedf0`。官方构建记录将此提交对应到引擎内容哈希 `7287464421953ee518d1f84ee8effd98fa9e76b5`。Windows x64 和 ARM64 的 Release 引擎归档均已发布。偶发闪退是否消失仍需使用新引擎重复实测。[Flutter 源码](https://github.com/flutter/flutter/commit/a7c861f6b2e720aed2d93a7d5fbea844a3322636) · [官方引擎构建记录](https://storage.googleapis.com/flutter_infra_release/flutter/7287464421953ee518d1f84ee8effd98fa9e76b5/engine_stamp.json)

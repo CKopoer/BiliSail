@@ -25,11 +25,11 @@
 
 PowerShell 7 是跨平台 shell；Ubuntu 上复用 `.ps1` 不要求 Windows。Windows 原生构建需要对应架构的 Windows 主机与 Visual Studio 工具链，macOS 构建需要 macOS/Xcode 主机。`enable_macos` 同时控制 arm64 和 x64；两项现在均使用 Apple Silicon runner 及 ARM64 Flutter SDK，产物和 mux 按目标架构隔离，SDK／Pub 按宿主 ABI 共享。arm64 启用 `--enable-macos-arm64-only`，x64 显式关闭；两者通过固定 SDK 的 `FLUTTER_XCODE_ARCHS` 指定 `arm64`／`x86_64`，mux 同步交叉编译对应切片。Intel Mac 上的本地 x64 打包入口仍保留。参见 [Flutter Windows 构建](https://docs.flutter.dev/platform-integration/windows/building)、[GitHub runner 范围](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)。
 
-Flutter 固定 **3.50.1 stable / Dart 3.14.0**；升级需同时调整工作流、检查/构建脚本、[Windows SDK 归档固定值](../../tool/flutter-windows-sdk.json)并重新验证。根及各包保留各自 `pubspec.lock`，pub 缓存键包含锁文件哈希。Actions 使用已查询的提交 SHA，并以注释标明主版本。Android SDK/NDK 由该 SDK 的 Flutter Gradle 配置选择，AGP/Gradle 版本沿用工程。Apple 构建按目标从矩阵读取 Xcode 版本，在 Flutter 和 mux 编译前通过 `DEVELOPER_DIR` 选择工具链，并打印 Xcode、Swift 和 SDK 版本。系统映像仍由对应 runner 提供，不能据此宣称完全可重现的原生工具链。
+Flutter 使用 main channel。所有构建从[项目 SDK 固定值](../../.flutter-version)读取同一完整 Git 提交，通过[安装脚本](../../tool/setup-flutter-main.ps1)签出 main 并下载对应引擎。发布复用校验检查构建信息中的频道和提交。根及各包保留各自 `pubspec.lock`，pub 缓存键包含锁文件哈希。Actions 使用已查询的提交 SHA，并以注释标明主版本。Android SDK/NDK 由该 SDK 的 Flutter Gradle 配置选择，AGP/Gradle 版本沿用工程。Apple 构建按目标从矩阵读取 Xcode 版本，在 Flutter 和 mux 编译前通过 `DEVELOPER_DIR` 选择工具链，并打印 Xcode、Swift 和 SDK 版本。系统映像仍由对应 runner 提供，不能据此宣称完全可重现的原生工具链。
 
 iOS 使用 27.1 SDK，让系统在 iPhone Duo 展开时提供完整内屏窗口。CI 从最终 IPA 读取 `DTSDKName` 和 `MinimumOSVersion`，检查打包使用的 SDK 和 iOS 15.0 部署下限。[GitHub runner 镜像清单](https://github.com/actions/runner-images/blob/main/images/macos/xcode-27-arm64-Readme.md) · [Apple 适配说明](https://developer.apple.com/iphone-duo/prepare/)
 
-2026-11-08 起，[依赖恢复组合 Action](../../.github/actions/restore-flutter/action.yml) 关闭 `flutter-action` 的自动 SDK／Pub 写入，使用独立的 restore／save。SDK 仅保留 Linux x64 与 macOS ARM64，沿用系统、架构、版本及 revision 隔离的原键；Windows 两种架构每次安装固定 SDK，避免大型快照互相挤占。Intel macOS 目标改用 ARM64 宿主后也读取现有 ARM64 SDK。Pub 使用 `bilisail-pub-v2` 前缀、系统、实际 runner ABI、Flutter 版本和五份锁文件哈希，精确命中优先，未命中时回退同系统／ABI／SDK 的快照，仍执行 `pub get --enforce-lockfile`。Windows ARM64 的 Pub 键使用 ARM64，不与其初始 x64 Flutter 分发包的 ABI 混淆。
+[依赖恢复组合 Action](../../.github/actions/restore-flutter/action.yml) 分别恢复 SDK 和 Pub 缓存。Linux x64 与 macOS ARM64 可保存 SDK，键包含系统、宿主架构和 Flutter 提交。Intel macOS 目标使用 ARM64 宿主。Windows 两种架构按需安装 SDK 并验证 Dart PE 架构。Pub 缓存按系统、实际宿主 ABI、Flutter 提交及五份锁文件哈希区分。
 
 Linux SDK 与完整 Pub 的唯一写入者是 lint；Pub 只在根应用与四包依赖解析、分析成功后保存，mux／根测试／包测试／Android 与 Linux 构建仅读取。其他 host ABI 各有一个构建写入者；Apple ARM64 写入者按本次选中目标依次选择 macOS ARM64、macOS x64、iOS，全部目标与缺失目标补建均只有一个。构建在正确 host ABI 下严格解析依赖后输出 `pub-resolved=true`，缓存未精确命中且该标志存在时，后续原生编译／打包成功或失败都能保存完整快照，取消时跳过。源码清洁状态仍在 Pub 前记录。自动写入、清理只允许默认分支的 push／手动运行，分支与 PR 仅读取；MSYS2 上游 Action 不提供只读缓存模式，因此非默认分支关闭其缓存。Gradle 独立恢复／受控保存，依赖键覆盖 Android 脚本、properties、Wrapper、全部 Pub 锁文件与 SDK 版本；Wrapper 按自身配置单独缓存，不随 Pub 更新复制，使用固定版本的 `-bin.zip` 和官方 SHA-256。
 
@@ -202,7 +202,7 @@ Windows／Flutter 3.50.0 的 `tool/check.ps1 -SkipPub` 完整通过：格式、�
 
 原生回归的缓存命中路径及全部新回归均已在远端通过。首次冷构建后，七份 mux 快照压缩合计 **4,194,191 bytes**；清单合计 **7,823,322,397 bytes／20 条**，比之前减少约 186 MB，旧 Intel 宿主 Pub 已退休。保留现有预算、身份键和唯一写入者，本轮不增加 SDK 快照或更换 mux 键；下一次可直接观察其余目标的暖 mux 收益。
 
-Windows 的剩余热点是 SDK 冷安装和 C++ 编译。[上游固定 Action](https://github.com/subosito/flutter-action/blob/1a449444c387b1966244ae4d4f8c696479add0b2/setup.sh#L40-L55)用 MSYS `unzip` 解压 Windows 分发包；本轮保留其元数据／缓存键解析与非 Windows 安装，Windows 改用[原生安装入口](../../tool/setup-windows-flutter.ps1)，调用 runner 自带 7-Zip，最多四个解压线程。下载保持固定版本与 HTTPS，解压前核对 SHA-256，随后核对实际 Git revision、必要文件和 Dart PE 架构；ARM64 后续仍执行原生 Dart 自举并拒绝 x64 运行回退。安装目标限定在 runner tool cache，临时 ZIP 在结束时清理，不自动覆盖错误版本的既有 SDK。
+Windows 的剩余热点是 SDK 冷安装和 C++ 编译。[上游固定 Action](https://github.com/subosito/flutter-action/blob/1a449444c387b1966244ae4d4f8c696479add0b2/setup.sh#L40-L55)用 MSYS `unzip` 解压 Windows 分发包；本轮保留其元数据／缓存键解析与非 Windows 安装，Windows 改用[原生安装入口](https://github.com/CKopoer/BiliSail/blob/251169ff0c6bd33438b29cde76c5144a7f6a9d47/tool/setup-windows-flutter.ps1)，调用 runner 自带 7-Zip，最多四个解压线程。下载保持固定版本与 HTTPS，解压前核对 SHA-256，随后核对实际 Git revision、必要文件和 Dart PE 架构；ARM64 后续仍执行原生 Dart 自举并拒绝 x64 运行回退。安装目标限定在 runner tool cache，临时 ZIP 在结束时清理，不自动覆盖错误版本的既有 SDK。
 
 归档及摘要来自[官方 Windows 发布清单](https://storage.googleapis.com/flutter_infra_release/releases/releases_windows.json)：`stable/windows/flutter_windows_3.47.6-stable.zip`，revision `5fc346839b5d0eef006ed8404392afb4dfae428d`，SHA-256 `a01bb0d26de91bc23c97cd9ccfaad281a612fb8304213fdd5df1119a09404796`。元数据 Action 的键必须与该固定 revision 一致，升级 SDK 时同步 JSON 固定值，不能只更改版本字符串。
 
@@ -233,7 +233,7 @@ Windows MSVC／Visual Studio 下，CI 的 runner 与 WebView 私有 `/MP` 并行
 
 2026-11-07 新增 `windows-arm64`。现有 `enable_windows` 同时选择 x64 和 ARM64；push／PR 默认构建两种架构，复用调用方的 `build_targets` 可单独选择其中一种。目标、产物名、诊断目录、Release 缺失目标重建和 SHA-256 校验均独立。
 
-固定 Flutter 3.47.6 的 `build windows` 根据 Dart 进程 ABI 选择目标，没有可用的 Windows 交叉编译参数，因此 ARM64 使用 `windows-11-arm` runner。Flutter Action 先取得 x64 发行配置，再通过 [ARM64 引导脚本](../../tool/setup-windows-arm64-flutter.ps1) 检查 Dart PE 架构；必要时调用该固定 SDK 自带的 `update_dart_sdk.ps1` 下载对应 engine 的原生 ARM64 Dart 并重建工具 snapshot。拒绝 x64 回退，SDK 缓存按目标隔离。不能将 matrix 的发行 `arch: x64` 当成应用目标架构。入口在非匹配 Windows 主机上立即拒绝构建，避免把 x64 包重命名为 ARM64。
+Windows ARM64 使用 `windows-11-arm` runner。Flutter main 从源码签出后用 SDK 自带的脚本下载原生 Dart。安装脚本校验 Dart PE 架构，打包时再次按目标检查，防止将 x64 应用作为 ARM64 产物发布。
 
 - mux 使用 MSYS2 CLANGARM64 的 Clang／LLVM，从既定 FFmpeg n9.0.2 源码构建，输出到 `native/prebuilt/windows-arm64`。
 - media-kit 的库插件按 `FLUTTER_TARGET_PLATFORM` 选择完整 SDK 和 ANGLE，镜像、归档和逐文件 SHA-256 均由个人 fork 维护，详见[媒体来源](media-kit-personal-fork-2026-11-07.md)。ARM64 mpv 使用 7-Zip 解压 ARM64 BCJ 过滤器，保留标准 OpenGL render API。
