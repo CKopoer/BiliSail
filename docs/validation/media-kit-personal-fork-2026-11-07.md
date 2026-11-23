@@ -1,5 +1,7 @@
 # 官方基线与个人媒体 fork 统一维护
 
+2026-11-23 修复 Windows Release 关闭主窗口时的访问冲突。Flutter 3.50.1 在销毁插件前先断开引擎与 messenger 的关联；视频插件随后调用 `SetMethodCallHandler(nullptr)`，即使未打开视频也会在 `FlutterDesktopMessengerSetCallback` 中崩溃。新的固定提交让 Flutter 的插件注册器随引擎释放处理器，视频插件继续等待管理和渲染任务结束、处理已排队的回调并销毁消息窗口。八个媒体包均使用该提交。[个人 fork 修复](https://github.com/CKopoer/media-kit/commit/8e16eba1b01be05927b4fa098323ed496fea380d) · [Windows 关闭实测](main-window-close.md#windows-release-关闭时的插件访问冲突2026-11-23)
+
 2026-11-23 修复 Windows D3D11 视频纹理重建与插件退出时的资源释放。根应用和 `bili_player` 的八个媒体包统一固定到 [3bd90a7d](https://github.com/CKopoer/media-kit/commit/3bd90a7d84a605d75da2de6196b3cea57ec92815)，父提交为 `aaa85281`。申请新纹理、取得共享句柄并验证 EGL 绑定后才替换旧表面。失败时继续使用原尺寸与上一帧，相同尺寸可重试；纹理由 `ComPtr` 单独持有。插件在销毁消息窗口前按顺序完成已接收的管理操作、渲染释放和平台回调。
 
 fork 的受控 C++ 回归覆盖五个重建失败点、绘制异常后继续调度、插件退出时仍在执行的创建和渲染，以及已排队的释放与平台回复。Windows x64 上，真实 D3D11/ANGLE 的 100 帧像素和快照生命周期检查、纹理描述符检查及 9 项原生生命周期测试通过。Flutter 3.50.1 Debug 真实窗口播放本地 H.264 视频与独立音轨，在暂停和播放时反复缩放并切换信息栏，输出宽度在 320 和 228 之间变化，纹理 ID 稳定，最终释放成功。这次窗口测试保留 `toImage`，未执行逐帧 CPU 像素读回。改用远端提交后再次通过上述真实窗口和原生测试，普通应用入口的 Windows x64 Debug 构建成功。`tool/check.ps1 -EnforceLockfile` 通过，已配置 `bili_mux` 原生库和 ffprobe 9.0.2。反馈者设备上 NVIDIA 驱动异常与这三处实现缺陷的因果关系仍待现场复测。

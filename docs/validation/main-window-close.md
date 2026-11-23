@@ -2,6 +2,14 @@
 
 日期：2026-10-25。
 
+## Windows Release 关闭时的插件访问冲突（2026-11-23）
+
+Windows x64 的 `1.3.0+7` Release 停留在首页时，向主窗口发送 `WM_CLOSE` 后，三次进程退出分别耗时 1868、1804、1832 毫秒，退出码均为 `0xc0000005`。本机 Windows 应用程序事件中，用户此前的退出和这三次复现均指向 `flutter_windows.dll+0x15cdf`。匹配的 Flutter 符号将地址定位到 `FlutterDesktopMessengerSetCallback`，转储中的调用方是 `media_kit_video_plugin.dll`。
+
+Flutter 3.50.1 的 Windows 引擎析构先执行 `messenger_->SetEngine(nullptr)`，随后销毁注册的插件。视频插件在析构时注销方法处理器，触发了对已断开引擎的访问。修复让注册器管理处理器的剩余生命周期。用原 Release 的可执行文件、AOT 和资源做对照，仅替换重新编译的视频插件后，三次主窗口销毁耗时 23–40 毫秒，进程退出耗时 122–135 毫秒，退出码均为 0。受控 C++ 回归同时覆盖 messenger 已断开、管理和渲染任务在途、平台回调等待处理的情况。[插件修复及回归](https://github.com/CKopoer/media-kit/commit/8e16eba1b01be05927b4fa098323ed496fea380d)
+
+使用新锁定依赖和本地 DASH 双轨运行 Release 退出探针。独立播放窗口处于普通、最小化、全屏状态时，各从主窗口关闭三次，进程退出分别耗时 310–324、136–153、154–167 毫秒。九次均确认播放 view 和原生播放窗口已关闭。重新构建普通入口 `lib/main.dart` 后，首页关闭三次，进程退出分别耗时 126、114、129 毫秒。以上十二次退出码均为 0。[退出探针脚本](../../tool/test-windows-exit-latency.ps1)
+
 ## 问题与修复
 
 - Windows 双标签的播放窗和主浏览窗共用 engine。固定 Flutter 3.47.6 的 `WindowsLifecycleManager.HandleCloseMessage` 仅在进程最后一个顶层窗口关闭时请求 Dart 退出；播放窗尚在时，主窗会直接进入 `WM_DESTROY` 并销毁 engine，绕过应用的播放／下载／数据库清理。
