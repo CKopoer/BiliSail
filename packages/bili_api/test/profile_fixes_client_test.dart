@@ -41,7 +41,10 @@ void main() {
           'card': {
             'mid': '7',
             'name': '用户',
-            'pendant': {'image': '//i0.hdslb.com/pendant.png'},
+            'pendant': {
+              'image': '//i0.hdslb.com/pendant.png',
+              'image_enhance': '//i0.hdslb.com/enhanced.webp',
+            },
             'vip': {
               'status': 1,
               'type': 2,
@@ -67,30 +70,21 @@ void main() {
     },
   );
   test(
-    'profile prefers enhanced pendant and rejects unsafe enhancement',
+    'profile omits the pendant when its static URL is missing or invalid',
     () async {
-      for (final enhanced in [
-        '//i0.hdslb.com/enhanced.webp',
-        'file:///bad',
-        null,
-      ]) {
+      for (final image in [null, '', 'file:///bad']) {
         transport.handler = (_) => {
           'card': {
             'mid': '7',
             'name': '用户',
             'pendant': {
-              'image': '//i0.hdslb.com/static.png',
-              'image_enhance': enhanced,
+              if (image != null) 'image': image,
+              'image_enhance': '//i0.hdslb.com/enhanced.webp',
             },
           },
         };
         final result = await client.loadProfile('7');
-        expect(
-          result.pendantUrl.toString(),
-          enhanced == '//i0.hdslb.com/enhanced.webp'
-              ? 'https://i0.hdslb.com/enhanced.webp'
-              : 'https://i0.hdslb.com/static.png',
-        );
+        expect(result.pendantUrl, isNull);
       }
     },
   );
