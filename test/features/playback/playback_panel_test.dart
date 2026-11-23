@@ -661,10 +661,21 @@ void main() {
         );
         await _pumpFrames(tester);
         expect(back.hitTestable(), findsNothing);
+        await tester.dragFrom(const Offset(5, 150), const Offset(500, 0));
+        await _pumpFrames(tester);
+        expect(find.text('iOS modal'), findsOneWidget);
         Navigator.of(fullScreenContext).pop();
         await _pumpFrames(tester);
         expect(window.fullScreen, isTrue);
-        await tester.tap(back);
+        if (mode == WorkspaceNavigationMode.singlePage) {
+          await tester.tap(back);
+        } else {
+          await tester.flingFrom(
+            const Offset(5, 150),
+            const Offset(120, 0),
+            950,
+          );
+        }
         await _pumpFrames(tester);
         expect(window.fullScreen, isFalse);
         expect(

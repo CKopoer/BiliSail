@@ -214,10 +214,10 @@ void main() {
           router.go('$path/2');
           await tester.pumpAndSettle();
           final back = switch (mode) {
-            WorkspaceNavigationMode.singlePage => find.byKey(
+            WorkspaceNavigationMode.singlePage ||
+            WorkspaceNavigationMode.dualTabs => find.byKey(
               const ValueKey('workspace-back'),
             ),
-            WorkspaceNavigationMode.dualTabs => findMaterialTooltip('返回上一视频'),
             WorkspaceNavigationMode.multipleTabs => find.byKey(
               const ValueKey('test-player-back'),
             ),
@@ -232,6 +232,8 @@ void main() {
           await tester.tap(back);
           await tester.pumpAndSettle();
           expect(router.routeInformationProvider.value.uri.path, '$path/1');
+          final disposalsAfterBack = List.of(disposed);
+          final restored = tester.element(find.byType(_CounterPage));
           final home = find.byKey(
             ValueKey(
               mode == WorkspaceNavigationMode.multipleTabs
@@ -246,7 +248,8 @@ void main() {
             mode == WorkspaceNavigationMode.multipleTabs ? '/' : '/downloads',
           );
           if (mode != WorkspaceNavigationMode.singlePage) {
-            expect(disposed, isEmpty);
+            expect(restored.mounted, isTrue);
+            expect(disposed, disposalsAfterBack);
           }
           expect(tester.takeException(), isNull);
           await tester.pumpWidget(const SizedBox());
@@ -754,8 +757,7 @@ void main() {
                 !const ['/', '/settings'].contains(location) &&
                 (!mobile ||
                     (!profile &&
-                        (!playback ||
-                            (single && platform == TargetPlatform.iOS))));
+                        (!playback || platform == TargetPlatform.iOS)));
             expect(
               find.byKey(const ValueKey('workspace-back')),
               hasBack ? findsOneWidget : findsNothing,
@@ -767,10 +769,9 @@ void main() {
               find.byKey(const ValueKey('workspace-profile-back-header')),
               findsNothing,
             );
-            expect(
-              findMaterialTooltip('返回上一视频'),
-              playbackHeader ? findsOneWidget : findsNothing,
-            );
+            if (hasBack && platform == TargetPlatform.iOS) {
+              expect(findMaterialTooltip('返回上一页'), findsOneWidget);
+            }
             expect(
               findMaterialTooltip('关闭播放'),
               playbackHeader ? findsOneWidget : findsNothing,
@@ -837,7 +838,9 @@ void main() {
         await tester.pumpAndSettle();
         expect(
           router.routeInformationProvider.value.uri.path,
-          dual ? '/history' : '/video/BV1234567890',
+          dual && platform != TargetPlatform.iOS
+              ? '/history'
+              : '/video/BV1234567890',
         );
       }, variant: TargetPlatformVariant.only(platform));
     }

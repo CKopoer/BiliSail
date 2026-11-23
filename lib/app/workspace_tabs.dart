@@ -66,6 +66,8 @@ final class WorkspaceTab {
   );
 }
 
+typedef _PlaybackVisit = ({Uri location, String? browseOrigin});
+
 final class WorkspaceTabs {
   static const maximumTabs = 16;
   static const maximumHistory = 64;
@@ -85,8 +87,8 @@ final class WorkspaceTabs {
   String _browseId = 'home';
   String? _playbackId;
   final List<String> _playbackVisits = [];
-  final List<Uri> _playbackHistory = [];
-  final List<Uri> _playbackForward = [];
+  final List<_PlaybackVisit> _playbackHistory = [];
+  final List<_PlaybackVisit> _playbackForward = [];
   List<String>? _playbackTraversal;
   ({String id, Uri location, List<String> history})? _playbackEntry;
   ({String tabId, String browseId, Uri rootLocation, List<String> history})?
@@ -95,7 +97,7 @@ final class WorkspaceTabs {
   bool get canReturnFromMessages =>
       active.isMessages && _messagesReturnPoint != null;
 
-  /// Android's inbox Back restores its entry page, including the root channel.
+  /// Mobile inbox Back restores its entry page, including the root channel.
   bool returnFromMessages() {
     final point = _messagesReturnPoint;
     if (!active.isMessages || point == null) return false;
@@ -162,7 +164,8 @@ final class WorkspaceTabs {
     return null;
   }
 
-  List<Uri> get playbackHistory => List.unmodifiable(_playbackHistory);
+  List<Uri> get playbackHistory =>
+      List.unmodifiable(_playbackHistory.map((visit) => visit.location));
   bool get canGoBackBrowsing => _browseId != 'home';
 
   /// Selecting a primary destination leaves the temporary browsing stack.
@@ -179,26 +182,46 @@ final class WorkspaceTabs {
     return true;
   }
 
-  /// Desktop dual windows keep media navigation out of the browser's Back.
-  bool goBackBrowsing() {
+  WorkspaceTab? _previousVisit({
+    required bool includePlayback,
+    required String leaving,
+  }) {
+    for (final id in _backHistory.reversed) {
+      if (id == leaving) continue;
+      final tab = _tabs.where((tab) => tab.id == id).firstOrNull;
+      if (tab != null && (includePlayback || !tab.isPlayback)) return tab;
+    }
+    return null;
+  }
+
+  void _consumeBackThrough(String id) {
+    final index = _backHistory.lastIndexOf(id);
+    _backHistory.removeRange(index < 0 ? 0 : index, _backHistory.length);
+  }
+
+  /// In a shared iOS window a detail can return to the player that opened it.
+  /// Detached desktop windows keep media out of the browser's history.
+  bool goBackBrowsing({bool includePlayback = false}) {
     if (!canGoBackBrowsing) return false;
     final leaving = _browseId;
-    var destination = 'home';
-    while (_backHistory.isNotEmpty) {
-      final id = _backHistory.removeLast();
-      if (id == leaving ||
-          !_tabs.any((tab) => tab.id == id && !tab.isPlayback)) {
-        continue;
-      }
-      destination = id;
-      break;
-    }
-    _activeId = _browseId = destination;
-    // Change the selected browsing slot before closing it; ordinary close
-    // intentionally protects the currently visible dual browsing slot.
+    final destination =
+        _previousVisit(includePlayback: includePlayback, leaving: leaving) ??
+        _tabs.first;
+    _consumeBackThrough(destination.id);
+    _activeId = destination.id;
+    _browseId = destination.isPlayback
+        ? (_previousVisit(includePlayback: false, leaving: leaving)?.id ??
+              'home')
+        : destination.id;
     close(leaving);
     _trimHistory();
     return true;
+  }
+
+  WorkspaceTab? get _playbackBrowseOrigin {
+    final id = _playbackHistory.lastOrNull?.browseOrigin;
+    if (id == null || _backHistory.lastOrNull != id) return null;
+    return _tabs.where((tab) => tab.id == id).firstOrNull;
   }
 
   void clearPlaybackHistory() {
@@ -231,14 +254,22 @@ final class WorkspaceTabs {
   bool _movePlaybackSlot(WorkspaceTab tab, {required bool backwards}) {
     final from = backwards ? _playbackHistory : _playbackForward;
     final to = backwards ? _playbackForward : _playbackHistory;
-    if (from.isEmpty || !updateLocation(tab.id, from.last)) return false;
-    from.removeLast();
-    _appendPlaybackLocation(to, tab.location);
+    if (from.isEmpty || !updateLocation(tab.id, from.last.location)) {
+      return false;
+    }
+    final visit = from.removeLast();
+    _appendPlaybackLocation(to, (
+      location: tab.location,
+      browseOrigin: visit.browseOrigin,
+    ));
     return true;
   }
 
-  void _appendPlaybackLocation(List<Uri> history, Uri location) {
-    history.add(location);
+  void _appendPlaybackLocation(
+    List<_PlaybackVisit> history,
+    _PlaybackVisit visit,
+  ) {
+    history.add(visit);
     if (history.length > maximumTabs) history.removeAt(0);
   }
 
@@ -297,7 +328,10 @@ final class WorkspaceTabs {
   }
 
   /// Resolves a preview without selecting a page or consuming its history.
-  WorkspaceTab? backDestination({bool fromMessages = false}) {
+  WorkspaceTab? backDestination({
+    bool fromMessages = false,
+    bool includePlayback = false,
+  }) {
     WorkspaceTab rootAt(Uri location) =>
         WorkspaceTab(id: 'home', location: location, pinned: true);
     if (fromMessages && canReturnFromMessages) {
@@ -310,21 +344,27 @@ final class WorkspaceTabs {
     }
     if (!canGoBack) return null;
     if (_singleMode && active.isPlayback && _playbackHistory.isNotEmpty) {
-      return WorkspaceTab(id: activeId, location: _playbackHistory.last);
+      return WorkspaceTab(
+        id: activeId,
+        location: _playbackHistory.last.location,
+      );
     }
     if (_dualMode && active.isPlayback) {
+      final origin = includePlayback ? _playbackBrowseOrigin : null;
+      if (origin != null) return origin;
       if (_playbackHistory.isNotEmpty) {
-        return WorkspaceTab(id: activeId, location: _playbackHistory.last);
+        return WorkspaceTab(
+          id: activeId,
+          location: _playbackHistory.last.location,
+        );
       }
       return _tabs.firstWhere((tab) => tab.id == _browseId);
     }
-    for (final id in _backHistory.reversed) {
-      final destination = _tabs.where((tab) => tab.id == id).firstOrNull;
-      if (destination == null || id == activeId) continue;
-      if (_dualMode && destination.isPlayback) continue;
-      return destination;
-    }
-    return _dualMode || _singleMode ? _tabs.first : null;
+    return _previousVisit(
+          includePlayback: !_dualMode || includePlayback,
+          leaving: activeId,
+        ) ??
+        (_dualMode || _singleMode ? _tabs.first : null);
   }
 
   void _activate(String id, {bool traversingPlayback = false}) {
@@ -354,19 +394,25 @@ final class WorkspaceTabs {
   }
 
   /// Back traverses visits, rather than the visual order of the tab strip.
-  bool goBack() {
+  bool goBack({bool includePlayback = false}) {
     if (!canGoBack) return false;
     if (_singleMode && active.isPlayback && _playbackHistory.isNotEmpty) {
       return _movePlaybackSlot(active, backwards: true);
     }
     if (_dualMode && active.isPlayback) {
-      if (_playbackHistory.isNotEmpty) {
-        return _movePlaybackSlot(active, backwards: true);
-      } else {
-        return close(activeId);
+      if (_playbackHistory.isEmpty) return close(activeId);
+      final origin = includePlayback ? _playbackBrowseOrigin : null;
+      if (!_movePlaybackSlot(active, backwards: true)) return false;
+      if (origin != null) {
+        // A -> profile -> B. Restore A in the hidden slot as B returns to
+        // the profile; its next Back can now reveal the original A.
+        _consumeBackThrough(origin.id);
+        _activeId = _browseId = origin.id;
+        _trimHistory();
       }
+      return true;
     }
-    if (_dualMode) return goBackBrowsing();
+    if (_dualMode) return goBackBrowsing(includePlayback: includePlayback);
     _trimHistory();
     final leaving = _activeId;
     _playbackTraversal = null;
@@ -465,7 +511,7 @@ final class WorkspaceTabs {
 
   /// Primary destinations select home; explicit feed tabs and detail routes
   /// retain their independent page identities.
-  bool acceptRoute(Uri route) {
+  bool acceptRoute(Uri route, {bool primaryMessages = false}) {
     final requestedId = route.queryParameters['tab'];
     final parameters = {...route.queryParameters}..remove('tab');
     final location = route.replace(queryParameters: parameters);
@@ -482,7 +528,9 @@ final class WorkspaceTabs {
         history: List.of(_backHistory),
       );
     }
-    if (target.isMessages && !active.isMessages) {
+    if (primaryMessages) {
+      _messagesReturnPoint = null;
+    } else if (target.isMessages && !active.isMessages) {
       final root = _tabs.first;
       _messagesReturnPoint = (
         tabId: activeId,
@@ -512,7 +560,10 @@ final class WorkspaceTabs {
       final slot = _tabs.firstWhere((tab) => tab.id == _playbackId);
       // Route commits and part/quality updates are not new media visits.
       if (slot.location.path != location.path) {
-        _appendPlaybackLocation(_playbackHistory, slot.location);
+        _appendPlaybackLocation(_playbackHistory, (
+          location: slot.location,
+          browseOrigin: active.isPlayback ? null : activeId,
+        ));
         _playbackForward.clear();
       }
       updateLocation(slot.id, location);
@@ -569,6 +620,11 @@ final class WorkspaceTabs {
     final index = candidates.indexWhere((tab) => tab.id == activeId);
     final offset = backwards ? -1 : 1;
     _activate(candidates[(index + offset) % candidates.length].id);
+  }
+
+  WorkspaceTab? get destinationAfterClosingActive {
+    if (active.pinned || _tabs.length < 2) return null;
+    return _tabs[activeIndex > 0 ? activeIndex - 1 : 1];
   }
 
   bool close(String id) {

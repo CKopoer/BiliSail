@@ -86,7 +86,7 @@ final class _SearchEntryHeaderState extends State<SearchEntryHeader> {
     final container = ProviderScope.containerOf(context, listen: false);
     final result = await Navigator.of(context).push<String>(
       MaterialPageRoute(
-        fullscreenDialog: true,
+        fullscreenDialog: Theme.of(context).platform != TargetPlatform.iOS,
         builder: (context) => UncontrolledProviderScope(
           container: container,
           child: _SearchPage(

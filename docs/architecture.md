@@ -280,6 +280,8 @@ Android 工作区预测式返回动画随根页面导航栏布局启停：底栏
 
 2026-10-31 主窗口和独立播放窗口分别持久保存普通大小、位置和最大化，跨账号共用，跨启动恢复；最小化／全屏不覆盖普通状态。原生平台适配在业务数据库和首次显示之前恢复本机呈现记录，不作为产品设置或账号数据；平台范围和验证见[桌面窗口状态持久化](validation/window-geometry-persistence.md)。
 
+iOS 工作区使用触摸拖动驱动页面预览。起始边缘负责导航，普通正文参与手势竞争，横向分页和播放控件保留内容区优先权。确认返回时才切换页面和播放所有权。页内详情、搜索和全屏各自处理最上层返回，见 [iOS 跟手返回](validation/single-page-navigation.md#ios-跟手返回2026-11-23)。
+
 macOS 内容区触控板向右滑动可通过工作区原有返回入口回退页面或视频历史；左侧箭头随拖动反馈，达到距离阈值后松手确认。共享识别器参与 Flutter 手势竞争，保留内层横向列表及播放器进度条的优先权，模态层阻止底层返回。实现和平台验收边界见 [macOS 触控板滑动返回](validation/macos-trackpad-back.md)。
 
 `PlatformServices` 分成小接口：`WindowService`、`AudioSessionService`、`PowerService`、`MediaControlsService`、`PipService`、`FileAccessService`、`ExternalLinkService`。通过 capability 返回支持状态，页面不散落 `Platform.isWindows`。

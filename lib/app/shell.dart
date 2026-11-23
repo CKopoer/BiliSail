@@ -234,6 +234,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
   }
 
   bool get _android => Theme.of(context).platform == TargetPlatform.android;
+  bool get _ios => Theme.of(context).platform == TargetPlatform.iOS;
   bool get _mobile => WindowSizePolicy.isMobile(Theme.of(context).platform);
   bool _compactLayout(double width) => WindowSizePolicy.compactLayout(
     mobile: _mobile,
@@ -254,7 +255,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
   }
 
   bool get _canReturnFromMessages =>
-      _android && _workspace.canReturnFromMessages;
+      _mobile && _workspace.canReturnFromMessages;
 
   bool get _desktopDual =>
       _dualTabs && widget.playbackWindowBuilder != null && !_windowFailed;
@@ -279,7 +280,9 @@ final class _BiliAppShellState extends State<BiliAppShell>
   bool _goBackWithinPage() => _pageBack[_displayTab.id]?.goBack() ?? false;
 
   bool get _canGestureBack => !_dualTabs && !_singlePage
-      ? (_pageBack[_displayTab.id]?.canGoBack ?? false) || !_displayTab.pinned
+      ? (_pageBack[_displayTab.id]?.canGoBack ?? false) ||
+            (_ios && _canReturnFromMessages) ||
+            !_displayTab.pinned
       : _canGoBack;
 
   void _closeCurrentTabOrBackWithinPage() {
@@ -289,7 +292,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
   void _gestureBack() {
     // Separate tabs close just like the close command; visit history can
     // otherwise select an old player while retaining the page being left.
-    if (!_dualTabs && !_singlePage) {
+    if (!_dualTabs && !_singlePage && !(_ios && _canReturnFromMessages)) {
       _closeCurrentTabOrBackWithinPage();
     } else {
       _goBack();
@@ -524,7 +527,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
         )) {
       return;
     }
-    if (_android) {
+    if (_mobile) {
       final next = WorkspaceTab(id: tab.id, location: location);
       final previousLocation = _viewLocation(tab);
       final nextLocation = _viewLocation(next);
@@ -567,7 +570,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
         ? _workspace.returnFromMessages()
         : _desktopDual
         ? _workspace.goBackBrowsing()
-        : _workspace.goBack())) {
+        : _workspace.goBack(includePlayback: _ios))) {
       return false;
     }
     _prunePages();
@@ -784,23 +787,52 @@ final class _BiliAppShellState extends State<BiliAppShell>
         },
         child: Focus(
           autofocus: true,
-          child: (_android
+          child: (_mobile
               ? pages
               : _workspaceFrame(context, _displayTab, pages)),
         ),
       ),
     );
     final windowBuilder = widget.playbackWindowBuilder;
+    final localBack = _pageBack[_displayTab.id]?.canGoBack ?? false;
+    final destination =
+        _ios && !_singlePage && !_dualTabs && !_canReturnFromMessages
+        ? _workspace.destinationAfterClosingActive
+        : _workspace.backDestination(
+            fromMessages: _canReturnFromMessages,
+            includePlayback: _ios,
+          );
+    final iosPreview =
+        _ios &&
+        !localBack &&
+        widget.pageBuilder != null &&
+        destination != null &&
+        _workspace.shouldMount(destination.id) &&
+        _viewsForTab(
+          _workspace.tabs.firstWhere((tab) => tab.id == destination.id),
+        ).any((view) => view.location == destination.location);
     final presented = HistoryBackRegion(
       enabled: _canGestureBack,
       identity: (
         _backIdentity(_displayTab),
-        _desktopDual
-            ? _workspace.browseId
-            : _workspace.backDestination()?.location,
-        _pageBack[_displayTab.id]?.canGoBack ?? false,
+        _desktopDual ? _workspace.browseId : destination?.id,
+        destination?.location,
+        localBack,
       ),
-      onBack: _gestureBack,
+      // A local dismissal may become unavailable before the shell rebuilds.
+      // Its gesture must never fall through and close the underlying page.
+      onBack: _ios && localBack ? _goBackWithinPage : _gestureBack,
+      iosPreviewAvailable: iosPreview,
+      iosTransitionBuilder: (progress, previewing, child) =>
+          WorkspaceBackPresentation(
+            progress: progress,
+            edge: Directionality.of(context) == TextDirection.rtl
+                ? SwipeEdge.right
+                : SwipeEdge.left,
+            source: previewing ? _displayTab : null,
+            destination: previewing ? destination : null,
+            child: child,
+          ),
       child: _withBackPreview(context, main),
     );
     if (windowBuilder == null) return presented;
@@ -1068,7 +1100,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
         child: Row(
           children: [
             ?navigationTools,
-            if (_singlePage)
+            if (_singlePage || _ios)
               _backButton()
             else
               IconButton(
@@ -1079,7 +1111,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
             _homeButton(),
             Expanded(
               child: Text(
-                _workspace.active.title,
+                _frameTab(context).title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -1148,7 +1180,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
 
   (String, String) _viewKey(WorkspaceTab tab) => (
     tab.id,
-    !_android
+    !_mobile
         ? 'slot'
         : _viewIds.putIfAbsent(
             _viewLocation(tab),
@@ -1157,7 +1189,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
   );
 
   List<WorkspaceTab> _viewsForTab(WorkspaceTab tab) {
-    if (!_android || tab.id != _workspace.playbackId) {
+    if (!_mobile || tab.id != _workspace.playbackId) {
       return [tab];
     }
     final views = <WorkspaceTab>[tab];
@@ -1175,7 +1207,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
   Widget _pages(BuildContext context) {
     final builder = widget.pageBuilder;
     if (builder == null) {
-      return _android
+      return _mobile
           ? _workspaceFrame(
               context,
               _displayTab,
@@ -1301,7 +1333,8 @@ final class _BiliAppShellState extends State<BiliAppShell>
                                       _desktopDual &&
                                           tab.id == _workspace.playbackId
                                       ? _playbackWindowBack
-                                      : view.isTopic ||
+                                      : _ios ||
+                                            view.isTopic ||
                                             view.isArticle ||
                                             view.isArticleCollection
                                       ? _gestureBack
@@ -1315,7 +1348,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
                                         backwards: backwards,
                                       ),
                                   showInPlayer: _playerShowsNavigation,
-                                  child: _android
+                                  child: _mobile
                                       ? _workspaceFrame(context, view, page)
                                       : page,
                                 );
@@ -1362,6 +1395,14 @@ final class _BiliAppShellState extends State<BiliAppShell>
       case WorkspaceSection.mine:
         context.go('/me');
       case WorkspaceSection.messages:
+        if (_ios) {
+          setState(
+            () => _workspace.acceptRoute(
+              Uri(path: '/messages'),
+              primaryMessages: true,
+            ),
+          );
+        }
         context.go('/messages');
       case WorkspaceSection.downloads:
         context.go('/downloads');

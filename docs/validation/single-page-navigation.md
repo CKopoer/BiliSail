@@ -4,6 +4,15 @@
 
 2026-10-25：按用户后续要求恢复单标签，Android 默认单标签，其他平台默认双标签。设置提供单／双／多标签，保留所有已保存的有效选择；此前已保存为 `dualTabs` 的值继续按双标签读取，尚存的 `singlePage` 直接恢复，不再强制迁移。平台默认仅补缺失／非法值，数据库与设置快照版本不变。以下“恢复单标签”说明当前行为，后续旧章节保留历史记录。
 
+## iOS 跟手返回（2026-11-23）
+
+- 工作区从起始边缘右划时，当前页跟手移开，露出保留的目标页。普通正文也可起手，分页、轮播和进度条优先处理内容区横向拖动。RTL 镜像。iOS 取消圆形箭头，macOS 继续使用触控板箭头。
+- 松手快划按每秒一个页面宽度判断方向。慢拖达到页面宽度的三分之一即可返回，上限为 140 个逻辑像素。回拖、指针取消、页面切换或窗口几何改变会取消这次返回。开启减少动态效果时省略平移动画。
+- 拖动只预览，确认后才消费一次历史。工作区复用移动端已有的有界历史视图、页面存储和播放器占位。双标签从视频 A 进入 UP 空间再打开视频 B，依次返回空间、A、浏览来源。多标签返回与关闭当前临时标签的目的地一致。消息优先退出会话或子栏目，通过详情入口打开时可继续返回来源，通过一级导航进入则停在消息根页。
+- 页内详情和全屏播放器使用小幅位移反馈，全屏仅接收边缘起手，松手恢复普通播放布局。窄屏搜索输入使用普通 iOS 页面路由，系统风格的侧滑与导航栏返回按钮均可退出并保留未提交草稿。弹窗隔离底层手势。
+- [手势组件](../../test/core/presentation/ios_back_region_test.dart)、[工作区返回](../../test/app/ios_swipe_back_test.dart)、[真实页面复用](../../test/app/predictive_back_page_reuse_test.dart)、[搜索输入](../../test/features/search/search_entry_header_test.dart)和[播放器全屏](../../test/features/playback/playback_panel_test.dart)覆盖上述入口。iPhone 实际手感、横屏安全区和原生画面转场待实机确认。
+- 本轮根检查的格式、静态分析、打包边界及四包离线测试通过。最终根应用 5984 项通过、14 项跳过，四包共 1493 项通过、20 项跳过，其中 10 项 mux 原生用例因未配置 `BILI_MUX_LIBRARY` 跳过。日志见 `build/ios-back-check-final.log`、`build/ios-back-verified-root.log` 和 `build/ios-back-verified-lint.log`。按要求未构建安装包。
+
 ## iOS 边缘滑动返回修复（2026-11-09）
 
 - 原因：工作区通过 `WorkspaceTabs` 保留页面与访问历史，ShellRoute 内的 Navigator 只承载占位。存在可返回页面时外壳的 `PopScope.canPop` 为 false；iOS 的 Cupertino 路由手势在这种情况下不会检测滑动或触发返回回调，见 [Flutter PopScope](https://api.flutter.dev/flutter/widgets/PopScope-class.html)。原有手势入口只有 Android 系统预测返回和 macOS 触控板，iOS 没有将触摸映射到工作区返回。

@@ -311,8 +311,9 @@ void main() {
         find.byKey(const ValueKey('search-page-input')),
         '未提交的草稿',
       );
-      await tester.pageBack();
+      await tester.flingFrom(const Offset(5, 350), const Offset(80, 0), 650);
       await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('search-discovery-page')), findsNothing);
       await tester.tap(find.byKey(const ValueKey('workspace-search')));
       await tester.pumpAndSettle();
       expect(
@@ -328,6 +329,7 @@ void main() {
       );
       expect(calls, isEmpty);
     },
+    variant: TargetPlatformVariant.only(TargetPlatform.iOS),
   );
 
   testWidgets(

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'motion_preferences.dart';
 
 import 'package:flutter/gestures.dart';
@@ -34,12 +36,22 @@ class HistoryBackRegion extends StatefulWidget {
     required this.enabled,
     required this.identity,
     required this.onBack,
+    this.iosTransitionBuilder,
+    this.iosEdgeOnly = false,
+    this.iosPreviewAvailable = false,
     required this.child,
   });
 
   final bool enabled;
   final Object identity;
   final VoidCallback onBack;
+  final bool iosEdgeOnly, iosPreviewAvailable;
+  final Widget Function(
+    Animation<double> progress,
+    bool previewing,
+    Widget child,
+  )?
+  iosTransitionBuilder;
   final Widget child;
 
   @override
@@ -48,10 +60,11 @@ class HistoryBackRegion extends StatefulWidget {
 
 class _HistoryBackRegionState extends State<HistoryBackRegion>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
-  // iOS follows viewport size; macOS keeps its fixed logical-pixel threshold.
-  double get _commitDistance => _iOS
-      ? (context.size?.width ?? MediaQuery.sizeOf(context).width) / 2
-      : 120;
+  double get _width => context.size!.width;
+  // Bound slow drags as well as normalizing flick speed to the viewport.
+  double get _commitDistance => _iOS ? (_width / 3).clamp(0, 140) : 120;
+  bool _previewing = false;
+  MediaQueryData? _gestureMetrics;
   late final _progress = AnimationController(vsync: this);
   final _windowFocus = WindowInputFocus.instance;
   InputScope<Object>? _input;
@@ -104,24 +117,44 @@ class _HistoryBackRegionState extends State<HistoryBackRegion>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _foreground = state == AppLifecycleState.resumed;
-    if (!_foreground) _reset();
+    if (!_foreground) _invalidate();
   }
 
   void _focusChanged() {
-    if (_windowFocus.observed && _windowFocus.viewId != _viewId) _reset();
+    if (_windowFocus.observed && _windowFocus.viewId != _viewId) _invalidate();
   }
 
   @override
-  void didChangeMetrics() => _reset();
+  void didChangeMetrics() {
+    if (_iOS &&
+        (!_previewing ||
+            MediaQueryData.fromView(View.of(context)) == _gestureMetrics)) {
+      return;
+    }
+    _invalidate();
+  }
+
+  void _invalidate() {
+    if (_previewing) {
+      setState(_reset);
+    } else {
+      _reset();
+    }
+  }
 
   void _reset() {
-    _tracking = false;
+    _tracking = _previewing = false;
+    _gestureMetrics = null;
     if (_disposed) return;
     _progress.stop();
     _progress.value = 0;
   }
 
   void _cancel() {
+    if (_iOS) {
+      if (_tracking) unawaited(_finishIos(false));
+      return;
+    }
     _tracking = false;
     if (_disposed) return;
     if (_progress.value == 0) {
@@ -140,9 +173,14 @@ class _HistoryBackRegionState extends State<HistoryBackRegion>
   }
 
   void _start(DragStartDetails details) {
+    if (_iOS && _previewing) return;
     _progress.stop();
     _progress.value = 0;
     _tracking = _available;
+    if (_iOS && _tracking) {
+      _gestureMetrics = MediaQueryData.fromView(View.of(context));
+      setState(() => _previewing = true);
+    }
     _distance = 0;
   }
 
@@ -151,25 +189,116 @@ class _HistoryBackRegionState extends State<HistoryBackRegion>
   void _update(DragUpdateDetails details) {
     if (!_tracking) return;
     if (!_available) {
-      _reset();
+      setState(_reset);
       return;
     }
     _distance += (details.primaryDelta ?? 0) * _direction;
-    _progress.value = (_distance / _commitDistance).clamp(0, 1);
+    _progress.value = (_distance / (_iOS ? _width : _commitDistance)).clamp(
+      0,
+      1,
+    );
   }
 
   void _end(DragEndDetails details) {
+    if (!_tracking) return;
     final velocity = (details.primaryVelocity ?? 0) * _direction;
     final commit =
-        _tracking &&
         _available &&
-        (_iOS && velocity.abs() >= 1000
+        (_iOS && velocity.abs() >= _width
             ? velocity > 0 && _distance > kTouchSlop
             : _distance >= _commitDistance);
+    if (_iOS) {
+      unawaited(_finishIos(commit));
+      return;
+    }
     _cancel();
     if (!commit) return;
     _input?.dispatcher.beforeNavigation();
     widget.onBack();
+  }
+
+  Future<void> _finishIos(bool commit) async {
+    _tracking = false;
+    final target = commit && widget.iosPreviewAvailable ? 1.0 : 0.0;
+    try {
+      // Local details and fullscreen share the current view. Never reveal a
+      // workspace page behind them or navigate it while settling a local step.
+      if (!commit || target == 1) {
+        await _progress
+            .animateTo(
+              target,
+              duration: shouldReduceMotion(context)
+                  ? Duration.zero
+                  : Duration(
+                      milliseconds: (200 * (target - _progress.value).abs())
+                          .round(),
+                    ),
+              curve: Curves.easeOutCubic,
+            )
+            .orCancel;
+      }
+      if (!mounted || !_previewing) return;
+      if (commit && _available) {
+        _input?.dispatcher.beforeNavigation();
+        widget.onBack();
+      }
+      setState(_reset);
+    } on TickerCanceled {
+      // The route, page identity or window changed while settling.
+    }
+  }
+
+  GestureRecognizerFactory<_IosBackDragRecognizer> _iosDrag({
+    required bool edge,
+  }) => GestureRecognizerFactoryWithHandlers<_IosBackDragRecognizer>(
+    _IosBackDragRecognizer.new,
+    (recognizer) {
+      recognizer
+        ..direction = _direction
+        ..canStart = (event) {
+          if (!_available || _previewing) return false;
+          if (edge) return true;
+          final box = context.findRenderObject()! as RenderBox;
+          final x = box.globalToLocal(event.position).dx;
+          return (_direction > 0 ? x : box.size.width - x) > _edgeWidth;
+        }
+        ..onStart = _start
+        ..onUpdate = _update
+        ..onEnd = _end
+        ..onCancel = _cancel;
+    },
+  );
+
+  double get _edgeWidth =>
+      (_direction > 0
+              ? MediaQuery.paddingOf(context).left
+              : MediaQuery.paddingOf(context).right)
+          .clamp(20, double.infinity);
+
+  Widget _iosContent() {
+    final builder = widget.iosTransitionBuilder;
+    return AnimatedBuilder(
+      animation: _progress,
+      child:
+          builder?.call(
+            _progress,
+            _previewing &&
+                widget.iosPreviewAvailable &&
+                !shouldReduceMotion(context),
+            widget.child,
+          ) ??
+          widget.child,
+      builder: (context, child) => Transform.translate(
+        // Only a small displacement for in-place steps with no separate page.
+        offset: Offset(
+          widget.iosPreviewAvailable || shouldReduceMotion(context)
+              ? 0
+              : _direction * 32 * _progress.value,
+          0,
+        ),
+        child: child,
+      ),
+    );
   }
 
   @override
@@ -188,6 +317,8 @@ class _HistoryBackRegionState extends State<HistoryBackRegion>
           behavior: HitTestBehavior.translucent,
           excludeFromSemantics: true,
           gestures: {
+            if (_iOS && _active && widget.enabled && !widget.iosEdgeOnly)
+              _IosBackDragRecognizer: _iosDrag(edge: false),
             if (_macOS && _active && widget.enabled)
               _BackDragRecognizer:
                   GestureRecognizerFactoryWithHandlers<_BackDragRecognizer>(
@@ -205,116 +336,98 @@ class _HistoryBackRegionState extends State<HistoryBackRegion>
           child: Stack(
             fit: StackFit.passthrough,
             children: [
-              widget.child,
-              // Like Cupertino's detector, reserve only the leading edge. A
-              // page-wide touch recognizer would compete with paging/seek.
+              if (_iOS) _iosContent() else widget.child,
+              // The edge takes precedence over paging; elsewhere the ancestor
+              // competes normally and a descendant horizontal control wins.
               if (_iOS && _active && widget.enabled)
                 PositionedDirectional(
                   start: 0,
                   top: 0,
                   bottom: 0,
-                  width:
-                      (_direction > 0
-                              ? MediaQuery.paddingOf(context).left
-                              : MediaQuery.paddingOf(context).right)
-                          .clamp(20, double.infinity),
+                  width: _edgeWidth,
                   child: RawGestureDetector(
                     behavior: HitTestBehavior.translucent,
                     excludeFromSemantics: true,
-                    gestures: {
-                      _EdgeBackDragRecognizer:
-                          GestureRecognizerFactoryWithHandlers<
-                            _EdgeBackDragRecognizer
-                          >(() => _EdgeBackDragRecognizer(), (recognizer) {
-                            recognizer
-                              ..canStart = (() => _available)
-                              ..onStart = _start
-                              ..onUpdate = _update
-                              ..onEnd = _end
-                              ..onCancel = _cancel;
-                          }),
-                    },
+                    gestures: {_IosBackDragRecognizer: _iosDrag(edge: true)},
                   ),
                 ),
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: ExcludeSemantics(
-                    child: Align(
-                      alignment: _direction > 0
-                          ? Alignment.centerLeft
-                          : Alignment.centerRight,
-                      child: AnimatedBuilder(
-                        animation: _progress,
-                        builder: (context, _) {
-                          final progress = _progress.value;
-                          final colors = Theme.of(context).colorScheme;
-                          final ready = progress >= 1;
-                          return Transform.translate(
-                            offset: Offset(
-                              _direction * (-48 + 64 * progress),
-                              0,
-                            ),
-                            child: Opacity(
-                              opacity: progress,
-                              child: Container(
-                                key: ValueKey(
-                                  _iOS
-                                      ? 'ios-back-indicator'
-                                      : 'trackpad-back-indicator',
-                                ),
-                                width: 48,
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: ready
-                                      ? colors.primaryContainer
-                                      : colors.surfaceContainerHigh,
-                                  boxShadow: const [
-                                    BoxShadow(
-                                      blurRadius: 8,
-                                      color: Color(0x26000000),
-                                    ),
-                                  ],
-                                ),
-                                child: Transform.scale(
-                                  scale: .75 + .25 * progress,
-                                  child: Icon(
-                                    Icons.arrow_back_rounded,
-                                    // macOS keeps its physical direction; iOS
-                                    // follows the leading edge in RTL.
-                                    textDirection: _direction > 0
-                                        ? TextDirection.ltr
-                                        : TextDirection.rtl,
+              if (_macOS)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: ExcludeSemantics(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: AnimatedBuilder(
+                          animation: _progress,
+                          builder: (context, _) {
+                            final progress = _progress.value;
+                            final colors = Theme.of(context).colorScheme;
+                            final ready = progress >= 1;
+                            return Transform.translate(
+                              offset: Offset(-48 + 64 * progress, 0),
+                              child: Opacity(
+                                opacity: progress,
+                                child: Container(
+                                  key: const ValueKey(
+                                    'trackpad-back-indicator',
+                                  ),
+                                  width: 48,
+                                  height: 48,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
                                     color: ready
-                                        ? colors.onPrimaryContainer
-                                        : colors.onSurface,
+                                        ? colors.primaryContainer
+                                        : colors.surfaceContainerHigh,
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        blurRadius: 8,
+                                        color: Color(0x26000000),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Transform.scale(
+                                    scale: .75 + .25 * progress,
+                                    child: Icon(
+                                      Icons.arrow_back_rounded,
+                                      textDirection: TextDirection.ltr,
+                                      color: ready
+                                          ? colors.onPrimaryContainer
+                                          : colors.onSurface,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
             ],
           ),
         );
 }
 
-class _EdgeBackDragRecognizer extends HorizontalDragGestureRecognizer {
-  _EdgeBackDragRecognizer()
+class _IosBackDragRecognizer extends HorizontalDragGestureRecognizer {
+  _IosBackDragRecognizer()
     : super(supportedDevices: {PointerDeviceKind.touch}) {
     dragStartBehavior = DragStartBehavior.down;
+    onlyAcceptDragOnThreshold = true;
   }
 
-  bool Function()? canStart;
+  late bool Function(PointerEvent) canStart;
+  double direction = 1;
 
   @override
   bool isPointerAllowed(PointerEvent event) =>
-      (canStart?.call() ?? false) && super.isPointerAllowed(event);
+      canStart(event) && super.isPointerAllowed(event);
+
+  @override
+  bool hasSufficientGlobalDistanceToAccept(
+    PointerDeviceKind kind,
+    double? deviceTouchSlop,
+  ) => globalDistanceMoved * direction > computeHitSlop(kind, gestureSettings);
 
   @override
   void handleEvent(PointerEvent event) {

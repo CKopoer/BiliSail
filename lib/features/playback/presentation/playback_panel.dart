@@ -14,6 +14,7 @@ import '../../../core/platform/window_service.dart';
 import '../../../core/platform/picture_in_picture_service.dart';
 import '../../../core/platform/window_size_policy.dart';
 import '../../../core/presentation/workspace_activity.dart';
+import '../../../core/presentation/history_back_region.dart';
 import '../../../core/presentation/android_system_ui.dart';
 import '../../../core/presentation/mobile_playback_status_bar.dart';
 import '../../../shared/ui/playback_page_commands.dart';
@@ -430,6 +431,24 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   }
 
   bool _exitingFullScreen = false;
+  Widget _withFullScreenBack(
+    BuildContext context,
+    Object request,
+    Widget player,
+  ) {
+    if (Theme.of(context).platform != TargetPlatform.iOS) return player;
+    return ColoredBox(
+      color: Colors.black,
+      child: HistoryBackRegion(
+        enabled: true,
+        identity: request,
+        iosEdgeOnly: true,
+        onBack: () => unawaited(_exitFullScreen()),
+        child: player,
+      ),
+    );
+  }
+
   Future<void> _exitFullScreen() async {
     if (_exitingFullScreen) return;
     _exitingFullScreen = true;
@@ -858,39 +877,44 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
                 fullScreenVideo: !_session.audioOnly,
                 builder: (_) => child!,
               ),
-              child: AndroidSystemUi(
-                backgroundColor: Colors.black,
-                brightness: Brightness.dark,
-                child: Dialog.fullscreen(
+              child: _withFullScreenBack(
+                dialogContext,
+                request,
+                AndroidSystemUi(
                   backgroundColor: Colors.black,
-                  child: _PlayerView(
-                    session: _session,
-                    settings: _settings,
-                    controlsVisible: _controlsVisible,
-                    picture: _picture,
-                    shortcuts: _shortcuts,
-                    onToggleComments: () => widget.onToggleComments(),
-                    danmakuComposerBuilder:
-                        widget.danmakuComposerBuilder == null
-                        ? null
-                        : (context) => _buildDanmakuComposer(context),
-                    danmakuOverlayBuilder: widget.danmakuOverlayBuilder == null
-                        ? null
-                        : (context) =>
-                              widget.danmakuOverlayBuilder?.call(context) ??
-                              const SizedBox.shrink(),
-                    pageCommands: _pageCommands,
-                    navigation: _navigation,
-                    onNavigate: _navigateFromPlayer,
-                    fullScreen: true,
-                    onFullScreen: () {
-                      if (identical(
-                        _fullScreenRoute,
-                        ModalRoute.of(dialogContext),
-                      )) {
-                        unawaited(_exitFullScreen());
-                      }
-                    },
+                  brightness: Brightness.dark,
+                  child: Dialog.fullscreen(
+                    backgroundColor: Colors.black,
+                    child: _PlayerView(
+                      session: _session,
+                      settings: _settings,
+                      controlsVisible: _controlsVisible,
+                      picture: _picture,
+                      shortcuts: _shortcuts,
+                      onToggleComments: () => widget.onToggleComments(),
+                      danmakuComposerBuilder:
+                          widget.danmakuComposerBuilder == null
+                          ? null
+                          : (context) => _buildDanmakuComposer(context),
+                      danmakuOverlayBuilder:
+                          widget.danmakuOverlayBuilder == null
+                          ? null
+                          : (context) =>
+                                widget.danmakuOverlayBuilder?.call(context) ??
+                                const SizedBox.shrink(),
+                      pageCommands: _pageCommands,
+                      navigation: _navigation,
+                      onNavigate: _navigateFromPlayer,
+                      fullScreen: true,
+                      onFullScreen: () {
+                        if (identical(
+                          _fullScreenRoute,
+                          ModalRoute.of(dialogContext),
+                        )) {
+                          unawaited(_exitFullScreen());
+                        }
+                      },
+                    ),
                   ),
                 ),
               ),

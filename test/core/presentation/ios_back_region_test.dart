@@ -15,16 +15,17 @@ void main() {
     final drag = await tester.startGesture(const Offset(5, 300));
     await drag.moveBy(const Offset(200, 0));
     await tester.pump();
-    expect(_opacity(tester), closeTo(.5, .01));
+    expect(_translation(tester), .25);
+    expect(find.byKey(const ValueKey('ios-back-indicator')), findsNothing);
     expect(backs, 0);
     await drag.moveBy(const Offset(250, 0));
     await tester.pump();
-    expect(_opacity(tester), 1);
+    expect(_translation(tester), 450 / 800);
     expect(backs, 0);
     await drag.up();
     await tester.pumpAndSettle();
     expect(backs, 1);
-    expect(_opacity(tester), 0);
+    expect(_translation(tester), 0);
   });
 
   for (final offsets in [
@@ -46,7 +47,7 @@ void main() {
       await drag.up();
       await tester.pumpAndSettle();
       expect(backs, 0);
-      expect(_opacity(tester), 0);
+      expect(_translation(tester), 0);
     });
   }
 
@@ -60,6 +61,37 @@ void main() {
     expect(backs, 1);
   });
 
+  testWidgets('a short thumb flick works on phone edges and ordinary content', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    var backs = 0;
+    await tester.pumpWidget(_app(onBack: () => backs++));
+    for (final start in [5.0, 110.0]) {
+      await tester.flingFrom(Offset(start, 420), const Offset(80, 0), 600);
+      await tester.pumpAndSettle();
+    }
+    expect(backs, 2);
+  });
+
+  testWidgets('slow drags have a bounded distance on wide screens', (
+    tester,
+  ) async {
+    var backs = 0;
+    await tester.pumpWidget(_app(onBack: () => backs++));
+    final drag = await tester.startGesture(const Offset(5, 320));
+    await drag.moveBy(const Offset(145, 0));
+    await tester.pump();
+    tester.binding.handleMetricsChanged();
+    await tester.pump(const Duration(milliseconds: 250));
+    await drag.up();
+    await tester.pumpAndSettle();
+    expect(backs, 1);
+  });
+
   testWidgets('pointer cancellation does not consume Back', (tester) async {
     var backs = 0;
     await tester.pumpWidget(_app(onBack: () => backs++));
@@ -68,7 +100,7 @@ void main() {
     await drag.cancel();
     await tester.pumpAndSettle();
     expect(backs, 0);
-    expect(_opacity(tester), 0);
+    expect(_translation(tester), 0);
   });
 
   for (final change in [
@@ -87,7 +119,7 @@ void main() {
       final drag = await tester.startGesture(const Offset(5, 300));
       await drag.moveBy(const Offset(450, 0));
       await tester.pump();
-      expect(_opacity(tester), 1);
+      expect(_translation(tester), 450 / 800);
       switch (change) {
         case 'identity':
           await tester.pumpWidget(_app(onBack: onBack, identity: 'another'));
@@ -110,7 +142,7 @@ void main() {
       await drag.up();
       await tester.pumpAndSettle();
       expect(backs, 0);
-      expect(_opacity(tester), 0);
+      expect(_translation(tester), 0);
       expect(tester.takeException(), isNull);
     });
   }
@@ -210,14 +242,10 @@ void main() {
   });
 }
 
-double _opacity(WidgetTester tester) => tester
-    .widget<Opacity>(
-      find.ancestor(
-        of: find.byKey(const ValueKey('ios-back-indicator')),
-        matching: find.byType(Opacity),
-      ),
-    )
-    .opacity;
+double _translation(WidgetTester tester) => tester
+    .widget<FractionalTranslation>(find.byKey(const ValueKey('ios-test-page')))
+    .translation
+    .dx;
 
 Widget _app({
   required VoidCallback onBack,
@@ -241,6 +269,17 @@ Widget _app({
               enabled: enabled,
               identity: identity,
               onBack: onBack,
+              iosPreviewAvailable: true,
+              iosTransitionBuilder: (progress, previewing, child) =>
+                  AnimatedBuilder(
+                    animation: progress,
+                    child: child,
+                    builder: (_, child) => FractionalTranslation(
+                      key: const ValueKey('ios-test-page'),
+                      translation: Offset(previewing ? progress.value : 0, 0),
+                      child: child,
+                    ),
+                  ),
               child: child,
             ),
           ),

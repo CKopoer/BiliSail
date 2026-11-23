@@ -19,6 +19,7 @@ import 'package:bilisail/features/video/application/video_controller.dart';
 import 'package:bilisail/features/video/domain/video_repository.dart';
 import 'package:bilisail/features/video/presentation/video_screen.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -26,6 +27,10 @@ import '../support/input_test_app.dart';
 import '../support/system_back_gesture.dart';
 
 void main() {
+  final mobile = TargetPlatformVariant({
+    TargetPlatform.android,
+    TargetPlatform.iOS,
+  });
   testWidgets('history UI is reused and only its player mounts after commit', (
     tester,
   ) async {
@@ -94,7 +99,33 @@ void main() {
     expect(players, [a, b]);
     expect(videos.loads, {a: 1, b: 1});
     final commentLoads = Map.of(comments.loads);
-    expect(await systemBackGesture(tester, 'startBackGesture'), isTrue);
+    TestGesture? drag;
+    Future<void> startBack() async {
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        drag = await tester.startGesture(const Offset(5, 400));
+        await drag!.moveBy(const Offset(150, 0));
+      } else {
+        expect(await systemBackGesture(tester, 'startBackGesture'), isTrue);
+      }
+    }
+
+    Future<void> finishBack({required bool commit}) async {
+      if (drag case final touch?) {
+        if (commit) {
+          await touch.up();
+        } else {
+          await touch.cancel();
+        }
+        drag = null;
+      } else {
+        await systemBackGesture(
+          tester,
+          commit ? 'commitBackGesture' : 'cancelBackGesture',
+        );
+      }
+    }
+
+    await startBack();
     await tester.pumpAndSettle();
     expect(tester.state(page(a)), same(stateA));
     expect(tester.state(find.byType(CommentsPanel)), same(commentState));
@@ -113,12 +144,12 @@ void main() {
     );
     expect(players, [a, b]);
     expect(videos.loads, {a: 1, b: 1});
-    await systemBackGesture(tester, 'cancelBackGesture');
+    await finishBack(commit: false);
     await tester.pumpAndSettle();
     expect(players, [a, b]);
     expect(router.routeInformationProvider.value.uri.path, '/video/${b.value}');
-    await systemBackGesture(tester, 'startBackGesture');
-    await systemBackGesture(tester, 'commitBackGesture');
+    await startBack();
+    await finishBack(commit: true);
     await tester.pumpAndSettle();
     expect(tester.state(page(a)), same(stateA));
     expect(players, [a, b, a]);
@@ -137,14 +168,14 @@ void main() {
       findsNothing,
     );
 
-    await systemBackGesture(tester, 'startBackGesture');
+    await startBack();
     await tester.pumpAndSettle();
     expect(
       tester.element(find.byKey(const ValueKey('workspace-search'))),
       same(header),
     );
     expect(tester.element(find.byType(NavigationBar)), same(navigation));
-    await systemBackGesture(tester, 'commitBackGesture');
+    await finishBack(commit: true);
     await tester.pumpAndSettle();
     expect(router.routeInformationProvider.value.uri.path, '/');
     expect(
@@ -159,7 +190,7 @@ void main() {
     expect(players, [a, b, a]);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
-  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+  }, variant: mobile);
 }
 
 class _PlayerProbe extends StatefulWidget {
