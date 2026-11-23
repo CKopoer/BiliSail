@@ -1588,8 +1588,8 @@ final class BiliApiClient {
       medalName: _text(_commentMap(member['fans_detail'])['medal_name']),
       medalLevel: _int(_commentMap(member['fans_detail'])['level']),
       pendantUrl:
-          _commentImage(pendant['image_enhance']) ??
-          _commentImage(pendant['image']),
+          _commentImage(pendant['image']) ??
+          _commentImage(pendant['image_enhance']),
       decorationImageUrl:
           _commentImage(card['image_enhance']) ?? _commentImage(card['image']),
       decorationName: _text(card['name']),
