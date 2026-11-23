@@ -148,8 +148,8 @@ private:
 class VideoOutputManager {
 public:
   void Dispose(int64_t handle, std::function<void()> on_disposed);
-  std::mutex mutex_;
   std::unordered_map<int64_t, std::unique_ptr<VideoOutput>> video_outputs_;
+  ThreadPool management_tasks_{1};
 };
 
 // Same method bodies included by the patched upstream translation units.

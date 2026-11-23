@@ -1,5 +1,9 @@
 # 官方基线与个人媒体 fork 统一维护
 
+2026-11-23 修复 Windows D3D11 视频纹理重建与插件退出时的资源释放。根应用和 `bili_player` 的八个媒体包统一固定到 [3bd90a7d](https://github.com/CKopoer/media-kit/commit/3bd90a7d84a605d75da2de6196b3cea57ec92815)，父提交为 `aaa85281`。申请新纹理、取得共享句柄并验证 EGL 绑定后才替换旧表面。失败时继续使用原尺寸与上一帧，相同尺寸可重试；纹理由 `ComPtr` 单独持有。插件在销毁消息窗口前按顺序完成已接收的管理操作、渲染释放和平台回调。
+
+fork 的受控 C++ 回归覆盖五个重建失败点、绘制异常后继续调度、插件退出时仍在执行的创建和渲染，以及已排队的释放与平台回复。Windows x64 上，真实 D3D11/ANGLE 的 100 帧像素和快照生命周期检查、纹理描述符检查及 9 项原生生命周期测试通过。Flutter 3.50.1 Debug 真实窗口播放本地 H.264 视频与独立音轨，在暂停和播放时反复缩放并切换信息栏，输出宽度在 320 和 228 之间变化，纹理 ID 稳定，最终释放成功。这次窗口测试保留 `toImage`，未执行逐帧 CPU 像素读回。改用远端提交后再次通过上述真实窗口和原生测试，普通应用入口的 Windows x64 Debug 构建成功。`tool/check.ps1 -EnforceLockfile` 通过，已配置 `bili_mux` 原生库和 ffprobe 9.0.2。反馈者设备上 NVIDIA 驱动异常与这三处实现缺陷的因果关系仍待现场复测。
+
 2026-11-21 修复 [Linux 软件视频输出关闭时闪退（#152）](https://github.com/CKopoer/BiliSail/issues/152)。根应用和 `bili_player` 的八个媒体包统一固定到 [aaa85281](https://github.com/CKopoer/media-kit/commit/aaa85281530b1ad80fa9e7d7808fcfdd7b5d30bd)，直接父提交为原锁定版本 `302d60ee`。每个软件输出持有一个可取消的 GTK 渲染源，关闭时断开 mpv 回调、销毁渲染源，并等待正在复制图像的 raster 回调脱离输出，再释放资源。传给 libmpv 的软件行跨度按接口使用 `size_t`。
 
 Ubuntu 24.04 x64 下使用 Flutter 3.50.0 Linux engine 和固定的 libmpv 完成原生编译与 CTest。回归用例检查真实软件帧首尾像素、首帧前关闭、复制期间关闭和关闭后读取保留的纹理，ASan／UBSan 检查通过。WSL2 的 Xvfb 桌面上，BiliSail Linux Debug 普通入口构建成功；独立验证入口通过实际 Flutter 纹理完成 10 次显示 64×36 本地视频帧后关闭、10 次打开期间关闭。本地 Debug 链接阶段在临时构建目录为已固定的 libmpv 补建了链接名，运行时与 AppImage 一致，优先加载 bundle 内的 libmpv。普通主窗口的 Alt+F4 退出检查超时；上述 20 次检查的对象为视频播放器。报告者的原设备和发布 AppImage 尚未复测。
