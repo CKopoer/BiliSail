@@ -1,9 +1,9 @@
-import '../../domain/comment_target.dart';
-
 import 'package:bili_api/bili_api.dart';
 
 import 'video_access_mapper.dart';
 
+import '../../domain/article_address.dart';
+import '../../domain/comment_target.dart';
 import '../../domain/dynamic_post.dart';
 import '../../domain/user.dart';
 import '../../domain/video.dart';
@@ -104,6 +104,10 @@ DynamicPost mapDynamicPost(ApiDynamicPost p) {
     linkDescription: p.linkDescription,
     linkCoverUrl: p.linkCoverUrl,
     linkUrl: p.linkUrl,
+    articleAddress: switch (p.articleUrl) {
+      final url? => ArticleAddress.fromWebUri(url),
+      null => null,
+    },
     commentTarget: CommentTarget.fromTypeValue(p.commentOid, p.commentType),
     liked: p.liked,
     commentForbidden: p.commentForbidden,

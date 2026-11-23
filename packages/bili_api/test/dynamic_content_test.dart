@@ -37,6 +37,48 @@ Future<ApiDynamicPost> load(
 }
 
 void main() {
+  test(
+    'only full works get an article destination from dynamic data',
+    () async {
+      final column = await load(
+        richPost(
+          major: {
+            'type': 'MAJOR_TYPE_ARTICLE',
+            'article': {
+              'id': '54048565',
+              'title': '专栏标题',
+              'desc': '摘要[图片]',
+              'covers': ['//i0.hdslb.com/bfs/new_dyn/cover.png'],
+            },
+          },
+        )..['type'] = 'DYNAMIC_TYPE_ARTICLE',
+      );
+      expect(column.articleUrl?.path, '/read/cv54048565');
+      expect(column.imageUrls, isEmpty);
+
+      for (final foldAction in ['展开', '全文']) {
+        final work = await load(
+          richPost(
+            major: {
+              'type': 'MAJOR_TYPE_OPUS',
+              'opus': {
+                'fold_action': [foldAction],
+                'pics': [
+                  {'url': '//i0.hdslb.com/bfs/new_dyn/preview.png'},
+                ],
+              },
+            },
+          )..['type'] = 'DYNAMIC_TYPE_DRAW',
+        );
+        expect(
+          work.articleUrl?.path,
+          foldAction == '全文' ? '/opus/${work.id}' : null,
+        );
+        expect(work.imageUrls, hasLength(1));
+      }
+    },
+  );
+
   for (final home in [true, false]) {
     test(
       'inline pictures retain their own gallery in ${home ? "feed" : "space"}',

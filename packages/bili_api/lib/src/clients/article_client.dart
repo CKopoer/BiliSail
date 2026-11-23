@@ -18,7 +18,7 @@ final class ArticleClient {
     if (opus) return _readOpus(id, active);
     final redirect = await api.articleRedirect(id, context: active);
     final redirectedId = _redirectOpusId(redirect);
-    if (redirectedId != null) return _readOpus(redirectedId, active);
+    if (redirectedId != null) return _readMigratedCv(id, redirectedId, active);
 
     final data = await _loadCv(id, active);
     // The legacy response can identify a migrated work even when the site
@@ -26,7 +26,36 @@ final class ArticleClient {
     final opusId = articleId(articleMap(data['opus'])['opus_id']);
     return opusId == null
         ? _parseCv(id, data)
-        : _readOpus(opusId, active, legacy: (id: id, data: data));
+        : _readMigratedCv(id, opusId, active, data: data);
+  }
+
+  Future<ApiArticle> _readMigratedCv(
+    String cvId,
+    String opusId,
+    ApiRequestContext context, {
+    Map<String, Object?>? data,
+  }) async {
+    try {
+      return await _readOpus(
+        opusId,
+        context,
+        legacy: data == null ? null : (id: cvId, data: data),
+      );
+    } on ApiFailure catch (error) {
+      if (error.category != ApiFailureCategory.rateLimited ||
+          error.endpointId != 'opus_detail' ||
+          error.requiresVerification) {
+        rethrow;
+      }
+      // Some migrated columns still publish structured paragraphs via CV.
+      final legacy = data ?? await _loadCv(cvId, context);
+      final opus = articleMap(legacy['opus']);
+      if (articleId(opus['opus_id']) != opusId ||
+          articleMap(opus['content'])['paragraphs'] is! List<Object?>) {
+        rethrow;
+      }
+      return _parseCv(cvId, legacy);
+    }
   }
 
   Future<ApiArticle> _readOpus(

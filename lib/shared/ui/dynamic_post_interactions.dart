@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app_dialog.dart';
+import '../../core/platform/external_links.dart';
 import '../../domain/dynamic_post.dart';
 import '../../domain/user.dart';
 import '../../domain/video.dart';
@@ -13,6 +14,7 @@ import 'content_detail_page.dart';
 import 'dynamic_post_card.dart';
 import 'comments_panel.dart';
 import 'dynamic_detail_layout.dart';
+import '../../features/article/presentation/article_screen.dart';
 import '../../features/dynamic/application/dynamic_actions_controller.dart';
 import '../../features/dynamic/application/dynamic_content_state.dart';
 import '../../features/dynamic/application/dynamic_management_controller.dart';
@@ -105,8 +107,9 @@ class InteractiveDynamicPostCard extends ConsumerWidget {
         context: context,
         builder: (context) => UncontrolledProviderScope(
           container: container,
-          child: _DynamicDetailDialog(
+          child: DynamicDetailPage(
             post: value,
+            inDialog: true,
             focusComments: focusComments,
             onOpenUser: onOpenUser,
             onOpenVideo: onOpenVideo,
@@ -195,50 +198,83 @@ String? _pollDynamicId(DynamicPost post, String pollId) {
   return original == null ? null : _pollDynamicId(original, pollId);
 }
 
-class _DynamicDetailDialog extends StatelessWidget {
-  const _DynamicDetailDialog({
+class DynamicDetailPage extends ConsumerWidget {
+  const DynamicDetailPage({
+    super.key,
     required this.post,
     required this.focusComments,
+    this.inDialog = false,
     this.onOpenUser,
     this.onOpenVideo,
     this.onOpenLink,
     this.onLogin,
   });
   final DynamicPost post;
-  final bool focusComments;
+  final bool focusComments, inDialog;
   final ValueChanged<UserId>? onOpenUser;
   final ValueChanged<VideoSummary>? onOpenVideo;
   final ValueChanged<Uri>? onOpenLink;
   final VoidCallback? onLogin;
 
   @override
-  Widget build(BuildContext context) => ContentDetailPage(
-    title: '动态详情',
-    inDialog: true,
-    body: DynamicDetailContent(
-      post: post,
-      focusComments: focusComments,
-      onOpenUser: onOpenUser == null
-          ? null
-          : (id) {
-              Navigator.pop(context);
-              onOpenUser!(id);
-            },
-      onOpenVideo: onOpenVideo == null
-          ? null
-          : (video) {
-              Navigator.pop(context);
-              onOpenVideo!(video);
-            },
-      onOpenLink: onOpenLink == null
-          ? null
-          : (url) {
-              Navigator.pop(context);
-              onOpenLink!(url);
-            },
-      onLogin: onLogin,
-    ),
-  );
+  Widget build(BuildContext context, WidgetRef ref) {
+    void close() => Navigator.pop(context);
+    ValueChanged<T>? navigate<T>(ValueChanged<T>? open) =>
+        open == null || !inDialog
+        ? open
+        : (target) {
+            close();
+            open(target);
+          };
+    final openUser = navigate(onOpenUser);
+    final openLink = navigate(onOpenLink);
+    if (post.articleAddress case final address? when !post.unavailable) {
+      final reader = ArticleScreen(
+        key: ValueKey(address),
+        address: address,
+        focusComments: focusComments,
+        onBack: inDialog ? close : null,
+        onOpenUser: (id) => openUser?.call(id),
+        onOpenLink: (url) => openLink?.call(url),
+        onOpenWeb: (url) async {
+          var opened = false;
+          try {
+            opened = await ref.read(webLinkOpenerProvider)(url);
+          } on PlatformException {
+            opened = false;
+          }
+          if (!opened && context.mounted) {
+            showAppNotice(context, '无法打开链接，请稍后重试');
+          }
+        },
+        onLogin: onLogin ?? () => showAppNotice(context, '请先登录后操作'),
+      );
+      return inDialog
+          ? Dialog(
+              insetPadding: const EdgeInsets.all(12),
+              constraints: const BoxConstraints(
+                maxWidth: 1280,
+                maxHeight: 1000,
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: SizedBox(width: 1280, child: reader),
+            )
+          : reader;
+    }
+    return ContentDetailPage(
+      title: '动态详情',
+      inDialog: inDialog,
+      backButtonKey: const ValueKey('dynamic-detail-back'),
+      body: DynamicDetailContent(
+        post: post,
+        focusComments: focusComments,
+        onOpenUser: openUser,
+        onOpenVideo: navigate(onOpenVideo),
+        onOpenLink: openLink,
+        onLogin: onLogin,
+      ),
+    );
+  }
 }
 
 class DynamicDetailContent extends ConsumerStatefulWidget {

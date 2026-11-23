@@ -275,6 +275,19 @@ class _PostBody extends StatelessWidget {
             onOpenLink: onOpenLink,
           ),
         ],
+        if (post.articleAddress case final address?
+            when !post.contentCards.any(
+              (card) => card.kind == DynamicCardKind.article,
+            ))
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: onOpenLink == null
+                  ? null
+                  : () => onOpenLink!(address.webUri),
+              child: const Text('阅读全文'),
+            ),
+          ),
         if (post.unavailable && post.text.isEmpty && post.spans.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 12),

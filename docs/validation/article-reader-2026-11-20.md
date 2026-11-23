@@ -63,3 +63,11 @@ Windows Release 的脱敏日志记录了鉴权失败。原有发送表单带 Web
 回归覆盖连续换行、连续相同正文、随后切换到不同高度的段落，以及未知段落携带文字或缺少文字的情况。使用公开页面的正文数据在 Flutter 无头运行时重放，阅读页取得 31 个内容块（含 14 张图），滚动到文末后总滚动范围保持稳定。热重载后未记录运行时异常。
 
 `tool/check.ps1 -SkipPub` 通过，全工程 7,426 项测试通过，34 项按环境跳过，其中 10 项 mux 原生测试需要 `BILI_MUX_LIBRARY`。已重建 Windows x64 Release 并核对 `data/app.so` 已更新。桌面窗口里从文集点击原文仍待手动复测。
+
+## 2026-11-24 动态中的专栏正文图片
+
+[样本动态](https://t.bilibili.com/1273841696053919760)的普通动态响应提供专栏摘要和一张封面，正文接口提供 37 个段落，其中 6 个是图片。动态详情现在使用现有专栏阅读组件，按段落顺序显示图片。动态列表仍为摘要预览，标记「全文」的图文可直接进入阅读页。普通图文动态继续使用动态图片网格。
+
+已迁移专栏优先读取新版正文。新版接口返回普通限流时，对已知的 CV 号使用现有专栏接口补读。仅在作品 ID 一致且返回结构化正文时采用该响应。验证码与权限错误继续按原流程处理。
+
+只读对照 PiliPlus 提交 [`217fb54f`](https://github.com/bggRGjQaUbCoE/PiliPlus/tree/217fb54f51f6764176319bbdedab2a7522d75401) 的 `lib/pages/dynamics/widgets/rich_node_panel.dart`、`lib/pages/article/controller.dart` 和 `lib/pages/article/widgets/opus_content.dart`，参考「全文」标记、正文接口与段落顺序。BiliSail 复用现有阅读组件，独立实现动态入口与专栏回退。

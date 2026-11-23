@@ -1,3 +1,4 @@
+import 'article_address.dart';
 import 'comment_target.dart';
 import 'user.dart';
 import 'video.dart';
@@ -146,6 +147,7 @@ final class DynamicPost {
     this.linkDescription = '',
     this.linkCoverUrl,
     this.linkUrl,
+    this.articleAddress,
     this.commentTarget,
     this.liked = false,
     this.commentForbidden = false,
@@ -173,6 +175,7 @@ final class DynamicPost {
   final String badge, notice;
   final List<DynamicContentCard> contentCards;
   final Uri? authorAvatarUrl, authorPendantUrl, linkCoverUrl, linkUrl;
+  final ArticleAddress? articleAddress;
   final DateTime? publishedAt;
   final List<DynamicTextSpan> spans;
   final List<Uri> imageUrls;
@@ -224,6 +227,7 @@ final class DynamicPost {
     linkDescription: linkDescription,
     linkCoverUrl: linkCoverUrl,
     linkUrl: linkUrl,
+    articleAddress: articleAddress,
     commentTarget: commentTarget,
     liked: liked,
     commentForbidden: commentForbidden ?? this.commentForbidden,

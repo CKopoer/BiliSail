@@ -141,11 +141,28 @@ ApiDynamicPost parseDynamicPost(
       ? common
       : live;
   final cards = _contentCards(major, content, live, id);
+  final basic = _map(item['basic']);
+  final column = type == 'DYNAMIC_TYPE_ARTICLE';
+  final (commentOid, commentType) = _commentTarget(id, type, basic, major);
+  final articleCard = cards
+      .where((card) => card.kind == ApiDynamicCardKind.article)
+      .firstOrNull;
+  final hasFullOpus =
+      opus.isNotEmpty && (column || _list(opus['fold_action']).contains('全文'));
+  final articleUrl = unavailable
+      ? null
+      : articleCard?.url ??
+            (hasFullOpus
+                ? Uri.https(
+                    'www.bilibili.com',
+                    column && commentType == 12 && commentOid != null
+                        ? '/read/cv$commentOid'
+                        : '/opus/$id',
+                  )
+                : null);
   final topic = _topic(_map(content['topic']));
   final counts = _map(modules['module_stat']);
   final original = _map(item['orig']);
-  final basic = _map(item['basic']);
-  final (commentOid, commentType) = _commentTarget(id, type, basic, major);
   final like = _map(counts['like']);
   return ApiDynamicPost(
     id: id,
@@ -237,6 +254,7 @@ ApiDynamicPost parseDynamicPost(
     linkCoverUrl: _uri(link['cover'] ?? (_list(article['covers']).firstOrNull)),
     linkUrl:
         _officialUri(link['jump_url']) ?? Uri.https('t.bilibili.com', '/$id'),
+    articleUrl: articleUrl,
     commentOid: unavailable ? null : commentOid,
     commentType: unavailable ? null : commentType,
     liked: like['status'] == true || like['status'] == 1,

@@ -37,28 +37,30 @@ class DynamicDetailScreen extends ConsumerWidget {
     final state = RegExp(r'^[1-9][0-9]{0,127}$').hasMatch(id)
         ? ref.watch(provider)
         : null;
-    return ContentDetailPage(
+    Widget frame(Widget body) => ContentDetailPage(
       title: '动态详情',
       backButtonKey: const ValueKey('dynamic-detail-back'),
-      body: state == null
-          ? const StateView.empty(message: '动态地址无效')
-          : state.when(
-              skipLoadingOnRefresh: false,
-              data: (post) => DynamicDetailContent(
-                key: ValueKey(post.id),
-                post: post,
-                focusComments: ContentLinkScope.of(context).comment != null,
-                onOpenUser: onOpenUser,
-                onOpenVideo: onOpenVideo,
-                onOpenLink: onOpenLink,
-                onLogin: onLogin,
-              ),
-              loading: () => const StateView.loading(message: '正在加载动态…'),
-              error: (error, _) => StateView.error(
-                message: error is AppFailure ? error.message : '动态加载失败，请稍后再试',
-                onAction: () => ref.invalidate(provider),
-              ),
-            ),
+      body: body,
+    );
+    if (state == null) return frame(const StateView.empty(message: '动态地址无效'));
+    return state.when(
+      skipLoadingOnRefresh: false,
+      data: (post) => DynamicDetailPage(
+        key: ValueKey(post.id),
+        post: post,
+        focusComments: ContentLinkScope.of(context).comment != null,
+        onOpenUser: onOpenUser,
+        onOpenVideo: onOpenVideo,
+        onOpenLink: onOpenLink,
+        onLogin: onLogin,
+      ),
+      loading: () => frame(const StateView.loading(message: '正在加载动态…')),
+      error: (error, _) => frame(
+        StateView.error(
+          message: error is AppFailure ? error.message : '动态加载失败，请稍后再试',
+          onAction: () => ref.invalidate(provider),
+        ),
+      ),
     );
   }
 }
