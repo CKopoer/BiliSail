@@ -62,6 +62,10 @@ AppImage 的宿主要求由 Ubuntu 24.04 构建基线决定。[linuxdeploy 文�
 
 运行中从 100% 切换到 150% 时，该视频样例的 240 逻辑像素宽色块被绘制到约 720 物理像素，重新打开后恢复约 360 像素。Flutter 3.50.1 的 Wayland 子表面在创建时设置缓冲区倍率，更换不同倍率的显示器也可能触发这一上游问题。切档后出现裁切或点击错位时，可退出并在目标显示器上重新启动。[Flutter #196476](https://github.com/flutter/flutter/issues/196476)
 
+Linux 的箭头、手形和文本指针由 GTK 按 Flutter 请求的系统光标名称选择。界面倍率只作用于 Flutter 内容。Flatpak 将宿主用户和系统安装的图标主题分别挂载到 `/run/host/user-share/icons` 和 `/run/host/share/icons`。包内 Ubuntu 光标库默认不搜索这两个位置，主题缺失时可能在进入窗口后退回很小的指针。[Flatpak 启动器](../../linux/packaging/flatpak-launcher)将这两个目录加入 `XCURSOR_PATH`，保留用户显式指定的路径优先级，由桌面和 GTK 决定主题和大小。[Flatpak 桌面集成](https://docs.flatpak.org/en/latest/desktop-integration.html#icons) · [用户反馈](https://github.com/CKopoer/BiliSail/issues/167#issuecomment-7095995519)
+
+使用反馈对应的 `1.3.0+7` CI 二进制，在 Freedesktop 25.08 沙盒内启动 BiliSail，以独立 Sway 会话和软件渲染复测 4K、150% 下的 Breeze 光标。GTK 请求 48 像素档时，原启动路径加载了 10×16 的后备箭头，修复后加载 Breeze 的 64×64 图像。图像尺寸包含主题的透明留白。同一沙盒内的 X11 测试通过 GTK 设置光标，再用 XFixes 读取实际指针。24 像素档下，修复后箭头、手形和文本指针均使用 32×32 的主题图像。测试包与 CI 包的文件树仅有 `/app/bin/bilisail` 不同。[对应 CI 构建](https://github.com/CKopoer/BiliSail/actions/runs/45135360166)
+
 Flatpak 单文件不携带 Runtime。本地需先安装 Flatpak，并确保存在 Flathub remote；包内指定 runtime 仓库供解析依赖：[Flatpak 单文件说明](https://docs.flatpak.org/en/latest/single-file-bundles.html)。
 
 ```sh

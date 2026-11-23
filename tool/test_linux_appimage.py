@@ -23,6 +23,36 @@ class DisplayBackendTests(unittest.TestCase):
         self.assertNotIn("--socket=x11", args)
         self.assertFalse(any(arg.startswith("--env=GDK_BACKEND=") for arg in args))
 
+    @unittest.skipUnless(sys.platform.startswith("linux"), "Flatpak launcher")
+    def test_flatpak_cursor_search_preserves_overrides_and_finds_host_themes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            app = Path(temp)
+            launcher = (PACKAGING / "flatpak-launcher").read_text()
+            # Redirect only the final exec from the sandbox to the test AppRun.
+            launcher = launcher.replace("exec /app/AppRun", 'exec "$TEST_APPRUN"')
+            program = app / "AppRun"
+            program.write_text(
+                '#!/bin/sh\nprintf "%s\\n" "$XCURSOR_PATH" "$XCURSOR_THEME" "$XCURSOR_SIZE" "$@"\n'
+            )
+            program.chmod(0o755)
+            for override in (None, "/custom cursors:/other"):
+                with self.subTest(override=override):
+                    env = dict(os.environ, TEST_APPRUN=str(program), HOME="/home/test",
+                               XDG_DATA_HOME="/sandbox/data", XCURSOR_THEME="Breeze", XCURSOR_SIZE="48")
+                    env.pop("XCURSOR_PATH", None)
+                    if override:
+                        env["XCURSOR_PATH"] = override
+                    path, theme, size, arg = subprocess.check_output(
+                        ["sh", "-c", launcher, "bilisail", "one argument"], env=env, text=True,
+                    ).splitlines()
+                    expected = (override.split(":") if override else []) + [
+                        "/run/host/user-share/icons", "/run/host/share/icons",
+                        "/sandbox/data/icons", "/home/test/.icons", "/app/share/icons",
+                        "/usr/share/icons", "/usr/share/pixmaps",
+                    ]
+                    self.assertEqual(path.split(":"), expected)
+                    self.assertEqual((theme, size, arg), ("Breeze", "48", "one argument"))
+
     @unittest.skipUnless(sys.platform.startswith("linux"), "Linux GTK launcher")
     def test_gtk_hook_preserves_backend_selection(self):
         with tempfile.TemporaryDirectory(prefix="bilisail display ") as temp:
