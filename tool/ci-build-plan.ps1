@@ -21,10 +21,10 @@ $platforms = @(
     @{ target = 'windows-arm64'; runner = 'windows-11-arm'; arch = 'x64' }
   }
   if ($env:ENABLE_MACOS -eq 'true') {
-    @{ target = 'macos-arm64'; runner = 'macos-15'; arch = 'arm64' }
-    @{ target = 'macos-x64'; runner = 'macos-15'; arch = 'arm64' }
+    @{ target = 'macos-arm64'; runner = 'macos-15'; arch = 'arm64'; xcode = '26.2' }
+    @{ target = 'macos-x64'; runner = 'macos-15'; arch = 'arm64'; xcode = '26.2' }
   }
-  if ($env:ENABLE_IOS -eq 'true') { @{ target = 'ios-arm64'; runner = 'macos-15'; arch = 'arm64' } }
+  if ($env:ENABLE_IOS -eq 'true') { @{ target = 'ios-arm64'; runner = 'xcode-27'; arch = 'arm64'; xcode = '27.1' } }
   if ($env:ENABLE_LINUX -eq 'true') { @{ target = 'linux-x64'; runner = 'ubuntu-24.04'; arch = 'x64' } }
 )
 if (!$platforms.Count) { throw 'Select at least one platform.' }

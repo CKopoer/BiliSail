@@ -292,10 +292,9 @@ jobs:
       - name: Select Apple toolchain
         if: startsWith(matrix.target, 'macos-') || matrix.target == 'ios-arm64'
         shell: bash
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_${{ matrix.xcode }}.app/Contents/Developer
         run: |
-          # video_player_avfoundation uses AVFoundation's isolation-aware load API.
-          # Both macOS runner architectures default to the incompatible Xcode 16.4.
-          export DEVELOPER_DIR=/Applications/Xcode_26.2.app/Contents/Developer
           test -d "$DEVELOPER_DIR"
           echo "DEVELOPER_DIR=$DEVELOPER_DIR" >> "$GITHUB_ENV"
           xcodebuild -version
@@ -429,6 +428,16 @@ jobs:
           MSIX_CERTIFICATE_BASE64: ${{ startsWith(matrix.target, 'windows-') && github.event_name != 'pull_request' && secrets.MSIX_CERTIFICATE_BASE64 || '' }}
           MSIX_CERTIFICATE_PASSWORD: ${{ startsWith(matrix.target, 'windows-') && github.event_name != 'pull_request' && secrets.MSIX_CERTIFICATE_PASSWORD || '' }}
         run: ./tool/build-release.ps1 -Target $env:BUILD_TARGET -Version $env:BUILD_VERSION -AndroidPreviewSigning:($env:ANDROID_PREVIEW_SIGNING -eq 'true')
+      - name: Verify iOS SDK and minimum version in IPA
+        if: matrix.target == 'ios-arm64'
+        shell: bash
+        run: |
+          plist="$RUNNER_TEMP/Runner-Info.plist"
+          unzip -p artifacts/ios-arm64/release/*-unsigned.ipa Payload/Runner.app/Info.plist > "$plist"
+          sdk=$(plutil -extract DTSDKName raw -o - "$plist")
+          minimum=$(plutil -extract MinimumOSVersion raw -o - "$plist")
+          echo "Packaged Runner uses $sdk with deployment target $minimum"
+          [[ "$sdk" == "iphoneos$(xcrun --sdk iphoneos --show-sdk-version)" && "$minimum" == "15.0" ]]
       - name: Exercise Windows mux reuse without MSYS2
         if: startsWith(matrix.target, 'windows-')
         shell: pwsh

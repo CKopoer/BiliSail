@@ -19,13 +19,15 @@
 | Windows ARM64 | `windows-11-arm`，Visual Studio ARM64 / Windows SDK / WiX 6.0.2 | ARM64 MSIX、MSI 和 EXE，独立 mux／媒体 SDK／VC++ runtime；打包前检查全部 EXE／DLL 的 PE 架构 |
 | macOS | `macos-15`，Apple Silicon / Xcode 26.2 | arm64 DMG；先验证签名／最终权限、同一 Release 应用首帧和跨进程 Keychain 读写删除，再由 `hdiutil` 打包校验；仅 ad-hoc 签名，未 notarize |
 | macOS Intel | `macos-15`，Apple Silicon / Xcode 26.2，交叉构建 | x64 DMG；校验架构、版本、签名、权限和镜像；不运行启动／窗口／Keychain smoke，metadata 明确记录跳过；新宿主配置待远端验证 |
-| iOS | `macos-15`，Apple Silicon / Xcode 26.2 / CocoaPods | arm64 未签名 IPA；核对应用版本、bundle ID、arm64 framework 及 Payload 布局；安装前需自行 Apple 签名 |
+| iOS | `xcode-27`，Apple Silicon / Xcode 27.1 / CocoaPods | arm64 未签名 IPA；校验 iOS 27.1 SDK、最低 iOS 15.0、应用版本、bundle ID、arm64 framework 及 Payload 布局；安装前需自行 Apple 签名 |
 | Linux | `ubuntu-24.04`，GTK / libsecret / libmpv / Flatpak SDK | x64 AppImage 与 Flatpak；携带媒体依赖，核对版本及主机／实际 Flatpak Runtime 内动态依赖；X11／XWayland |
 | Release 上传 | `ubuntu-24.04` | 合并并校验本次所选平台的 Actions artifacts，上传汇总 ZIP artifact 后创建草稿 |
 
 PowerShell 7 是跨平台 shell；Ubuntu 上复用 `.ps1` 不要求 Windows。Windows 原生构建需要对应架构的 Windows 主机与 Visual Studio 工具链，macOS 构建需要 macOS/Xcode 主机。`enable_macos` 同时控制 arm64 和 x64；两项现在均使用 Apple Silicon runner 及 ARM64 Flutter SDK，产物和 mux 按目标架构隔离，SDK／Pub 按宿主 ABI 共享。arm64 启用 `--enable-macos-arm64-only`，x64 显式关闭；两者通过固定 SDK 的 `FLUTTER_XCODE_ARCHS` 指定 `arm64`／`x86_64`，mux 同步交叉编译对应切片。Intel Mac 上的本地 x64 打包入口仍保留。参见 [Flutter Windows 构建](https://docs.flutter.dev/platform-integration/windows/building)、[GitHub runner 范围](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)。
 
-Flutter 固定 **3.50.1 stable / Dart 3.14.0**；升级需同时调整工作流、检查/构建脚本、[Windows SDK 归档固定值](../../tool/flutter-windows-sdk.json)并重新验证。根及各包保留各自 `pubspec.lock`，pub 缓存键包含锁文件哈希。Actions 使用已查询的提交 SHA，并以注释标明主版本。Android SDK/NDK 由该 SDK 的 Flutter Gradle 配置选择，AGP/Gradle 版本沿用工程；Apple 构建在 Flutter 和 mux 编译前通过 `DEVELOPER_DIR` 显式选择 runner 中的 Xcode 26.2，并打印 Xcode、Swift 和 SDK 版本，缺少该版本立即失败。系统映像仍由对应 runner 提供，不能据此宣称完全可重现的原生工具链。
+Flutter 固定 **3.50.1 stable / Dart 3.14.0**；升级需同时调整工作流、检查/构建脚本、[Windows SDK 归档固定值](../../tool/flutter-windows-sdk.json)并重新验证。根及各包保留各自 `pubspec.lock`，pub 缓存键包含锁文件哈希。Actions 使用已查询的提交 SHA，并以注释标明主版本。Android SDK/NDK 由该 SDK 的 Flutter Gradle 配置选择，AGP/Gradle 版本沿用工程。Apple 构建按目标从矩阵读取 Xcode 版本，在 Flutter 和 mux 编译前通过 `DEVELOPER_DIR` 选择工具链，并打印 Xcode、Swift 和 SDK 版本。系统映像仍由对应 runner 提供，不能据此宣称完全可重现的原生工具链。
+
+iOS 使用 27.1 SDK，让系统在 iPhone Duo 展开时提供完整内屏窗口。CI 从最终 IPA 读取 `DTSDKName` 和 `MinimumOSVersion`，检查打包使用的 SDK 和 iOS 15.0 部署下限。[GitHub runner 镜像清单](https://github.com/actions/runner-images/blob/main/images/macos/xcode-27-arm64-Readme.md) · [Apple 适配说明](https://developer.apple.com/iphone-duo/prepare/)
 
 2026-11-08 起，[依赖恢复组合 Action](../../.github/actions/restore-flutter/action.yml) 关闭 `flutter-action` 的自动 SDK／Pub 写入，使用独立的 restore／save。SDK 仅保留 Linux x64 与 macOS ARM64，沿用系统、架构、版本及 revision 隔离的原键；Windows 两种架构每次安装固定 SDK，避免大型快照互相挤占。Intel macOS 目标改用 ARM64 宿主后也读取现有 ARM64 SDK。Pub 使用 `bilisail-pub-v2` 前缀、系统、实际 runner ABI、Flutter 版本和五份锁文件哈希，精确命中优先，未命中时回退同系统／ABI／SDK 的快照，仍执行 `pub get --enforce-lockfile`。Windows ARM64 的 Pub 键使用 ARM64，不与其初始 x64 Flutter 分发包的 ABI 混淆。
 
