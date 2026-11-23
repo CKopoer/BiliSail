@@ -41,10 +41,7 @@ void main() {
           'card': {
             'mid': '7',
             'name': '用户',
-            'pendant': {
-              'image': '//i0.hdslb.com/pendant.png',
-              'image_enhance': '//i0.hdslb.com/enhanced.webp',
-            },
+            'pendant': {'image': '//i0.hdslb.com/pendant.png'},
             'vip': {
               'status': 1,
               'type': 2,
@@ -69,25 +66,28 @@ void main() {
       expect(result.vipType, 2);
     },
   );
-  test(
-    'profile omits the pendant when its static URL is missing or invalid',
-    () async {
-      for (final image in [null, '', 'file:///bad']) {
-        transport.handler = (_) => {
-          'card': {
-            'mid': '7',
-            'name': '用户',
-            'pendant': {
-              'image': ?image,
-              'image_enhance': '//i0.hdslb.com/enhanced.webp',
-            },
+  test('profile prefers the enhanced pendant and falls back safely', () async {
+    const preferred = '//i0.hdslb.com/enhanced.webp';
+    for (final enhanced in [preferred, 'file:///bad', '', null]) {
+      transport.handler = (_) => {
+        'card': {
+          'mid': '7',
+          'name': '用户',
+          'pendant': {
+            'image': '//i0.hdslb.com/static.png',
+            'image_enhance': ?enhanced,
           },
-        };
-        final result = await client.loadProfile('7');
-        expect(result.pendantUrl, isNull);
-      }
-    },
-  );
+        },
+      };
+      final result = await client.loadProfile('7');
+      expect(
+        result.pendantUrl.toString(),
+        enhanced == preferred
+            ? 'https://i0.hdslb.com/enhanced.webp'
+            : 'https://i0.hdslb.com/static.png',
+      );
+    }
+  });
   test('unsafe and absent decoration urls remain absent', () async {
     transport.handler = (_) => {
       'card': {

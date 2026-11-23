@@ -205,10 +205,10 @@ void main() {
     },
   );
   test(
-    'comments and replies prefer static pendants and enhanced cards',
+    'comments and replies prefer enhanced decorations and fall back safely',
     () async {
-      const preferred = '//i0.hdslb.com/preferred.png';
-      for (final candidate in [preferred, 'file:///bad', '', null]) {
+      const preferred = '//i0.hdslb.com/enhanced.webp';
+      for (final enhanced in [preferred, 'file:///bad', '', null]) {
         final client = BiliApiClient(
           transport: _FakeTransport(
             (_, _) async => _jsonResponse({
@@ -221,13 +221,13 @@ void main() {
                     'member': {
                       'uname': 'reader',
                       'pendant': {
-                        'image': candidate,
-                        'image_enhance': '//i0.hdslb.com/pendant.webp',
+                        'image': '//i0.hdslb.com/pendant.png',
+                        'image_enhance': enhanced,
                       },
                       'user_sailing': {
                         'cardbg': {
                           'image': '//i0.hdslb.com/card.png',
-                          'image_enhance': candidate,
+                          'image_enhance': enhanced,
                         },
                       },
                     },
@@ -245,14 +245,14 @@ void main() {
           final c = page.items.single;
           expect(
             c.pendantUrl.toString(),
-            candidate == preferred
-                ? 'https://i0.hdslb.com/preferred.png'
-                : 'https://i0.hdslb.com/pendant.webp',
+            enhanced == preferred
+                ? 'https://i0.hdslb.com/enhanced.webp'
+                : 'https://i0.hdslb.com/pendant.png',
           );
           expect(
             c.decorationImageUrl.toString(),
-            candidate == preferred
-                ? 'https://i0.hdslb.com/preferred.png'
+            enhanced == preferred
+                ? 'https://i0.hdslb.com/enhanced.webp'
                 : 'https://i0.hdslb.com/card.png',
           );
         }
