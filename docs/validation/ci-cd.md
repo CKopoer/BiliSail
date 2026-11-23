@@ -61,6 +61,8 @@ Dart 3.13.5 内置的 [Pub 源码](https://github.com/dart-lang/pub/blob/ec276d1
 
 [安装回归夹具](../../tool/test_linux_cmake_install.py) 现在同时加载真实的 CMake 模块，通过本地替身提供插件源码和清单。WSL 下 44 项 Linux 脚本回归通过，覆盖默认安装目录、依赖配置失败重试、自定义安装前缀及清单落盘。真实播放器依赖和安装包由平台构建矩阵验证。
 
+同日，[CI #492 的 Windows x64 构建](https://github.com/CKopoer/BiliSail/actions/runs/45208438266/job/137812535772) 发现 runner 的 `tar.exe` 无法读取固定 libmpv `.7z` 的 LZMA 压缩。发布脚本在启动 Flutter 前使用 Visual Studio 的 CMake 解包已通过 SHA-256 校验的归档，并生成 Native Assets hook 会复核的文件清单。Windows ARM64 的固定归档为 ZIP，由 hook 直接解包。[Windows 归档准备脚本](../../tool/prepare-windows-media-assets.ps1)
+
 ## Flutter 3.50.1 验证（2026-11-21）
 
 ### SDK 升级验证（原锁文件）

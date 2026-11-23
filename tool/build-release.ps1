@@ -229,6 +229,12 @@ try {
     $runtime = Get-ChildItem "$visualStudio/VC/Redist/MSVC/*/$windowsArch/Microsoft.VC*.CRT" -Directory | Sort-Object FullName -Descending | Select-Object -First 1
     if (!$runtime) { throw "Visual C++ $windowsArch redistributable DLLs were not found." }
     $windowsRuntimeFiles = @(Get-WindowsRuntimeFiles $runtime.FullName $windowsArch)
+    if ($Target -eq 'windows-x64') {
+      $cmake = Join-Path $visualStudio 'Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe'
+      Invoke-BuildStage 'Windows media assets' {
+        & (Join-Path $PSScriptRoot 'prepare-windows-media-assets.ps1') -CMake $cmake
+      }
+    }
   }
   Invoke-BuildStage 'SQLite assets' { Invoke-BuildCommand python @((Join-Path $PSScriptRoot 'prepare-sqlite-assets.py'), '--target', $Target) }
   Invoke-BuildStage 'Mux component preparation' { & (Join-Path $PSScriptRoot 'build-download-mux.ps1') -Target $Target }

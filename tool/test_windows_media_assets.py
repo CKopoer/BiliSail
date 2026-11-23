@@ -11,12 +11,13 @@ from media_kit_sources import package_source, stage
 class WindowsVideoAssetsTests(unittest.TestCase):
     def test_both_architectures_use_the_reviewed_render_api_build(self):
         catalog = json.loads((package_source("media_kit") / "hook/native_bundles.json").read_text())
-        hashes = {
-            "windows_x64": "bb6ce9e53c083002fad640011632aef96167cb1d4fffcfe4ed79acbc153bb497",
-            "windows_arm64": "0a9067375c6517b93549fa421a4ab16b301a93b4d91e653117e8b053e1490d83",
+        archives = {
+            "windows_x64": ("7z", "bb6ce9e53c083002fad640011632aef96167cb1d4fffcfe4ed79acbc153bb497"),
+            "windows_arm64": ("zip", "0a9067375c6517b93549fa421a4ab16b301a93b4d91e653117e8b053e1490d83"),
         }
-        for target, digest in hashes.items():
+        for target, (archive_format, digest) in archives.items():
             bundle = catalog["bundles"][target]
+            self.assertEqual(bundle["format"], archive_format)
             self.assertEqual(bundle["sha256"], digest)
             self.assertEqual(bundle["library"], "libmpv-2.dll")
             self.assertIn("/Predidit/libmpv-win32-video-cmake/releases/download/202611230430/", bundle["url"])
