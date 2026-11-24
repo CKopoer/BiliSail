@@ -28,6 +28,17 @@ const _dash = <String, Object?>{
   'accept_quality': [80],
   'dash': _dashTracks,
 };
+const _progressiveSegment = {
+  'order': 1,
+  'length': 50991,
+  'url': 'https://cdn.example/annual-report.mp4',
+};
+const _progressive = <String, Object?>{
+  'quality': 64,
+  'format': 'mp4720',
+  'video_codecid': 7,
+  'durl': [_progressiveSegment],
+};
 final _silentDash = <String, Object?>{
   ..._dash,
   'dash': {
@@ -39,6 +50,70 @@ final _silentDash = <String, Object?>{
 };
 
 void main() {
+  test('DASH takes precedence over a progressive response', () async {
+    final transport = _Transport((_) => _response({..._progressive, ..._dash}));
+    final info = await _client(transport).getPlayInfo(_bvid, _cid);
+    expect(info.progressive, isNull);
+    expect(info.dashAudio, hasLength(1));
+    expect(transport.details, 0);
+  });
+
+  for (final fields in <Map<String, Object?>>[
+    {'is_preview': 1},
+    {
+      'accept_description': ['试看'],
+    },
+  ]) {
+    test('a progressive trial cannot become full playback: $fields', () async {
+      final transport = _Transport(
+        (_) => _response({..._progressive, ...fields}),
+      );
+      await expectLater(
+        _client(transport).getPlayInfo(_bvid, _cid),
+        throwsA(_failure(ApiFailureCategory.permission)),
+      );
+      expect(transport.plays, hasLength(1));
+    });
+  }
+
+  test('a progressive trial preserves charging entitlement failure', () async {
+    final transport = _Transport(
+      (_) => _response({..._progressive, 'is_preview': 1}),
+      access: {'is_upower_exclusive': true, 'is_upower_play': false},
+    );
+    await expectLater(
+      _client(transport).getPlayInfo(_bvid, _cid),
+      throwsA(
+        _failure(ApiFailureCategory.permission).having(
+          (failure) => failure.videoAccessKind,
+          'access kind',
+          ApiVideoAccessKind.chargingExclusive,
+        ),
+      ),
+    );
+    expect(transport.plays, hasLength(1));
+  });
+
+  test('a multi-segment response cannot play just its first file', () async {
+    final transport = _Transport(
+      (index) => _response(
+        index == 0
+            ? {
+                ..._progressive,
+                'durl': [
+                  _progressiveSegment,
+                  {..._progressiveSegment, 'order': 2},
+                ],
+              }
+            : _dash,
+      ),
+    );
+    final info = await _client(transport).getPlayInfo(_bvid, _cid);
+    expect(info.progressive, isNull);
+    expect(info.dashAudio, hasLength(1));
+    expect(transport.plays, hasLength(2));
+  });
+
   test(
     'explicit silent DASH is complete media, not a missing audio retry',
     () async {

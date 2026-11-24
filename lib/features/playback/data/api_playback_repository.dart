@@ -296,18 +296,38 @@ class ApiPlaybackRepository
             ))) {
       throw const AppFailure(AppFailureKind.playback, '所选语音暂不可用，请切回原声');
     }
+    const headers = {
+      'Referer': 'https://www.bilibili.com/',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/132.0.0.0 Safari/537.36',
+    };
+    final cdn = await cdnPreference?.call() ?? MediaCdnPreference.automatic;
+    final progressive = info.progressive;
+    if (progressive != null) {
+      return PlaybackMedia(
+        kind: PlaybackMediaKind.progressive,
+        video: PlaybackTrack(
+          urls: orderMediaCdnUrls([
+            progressive.url,
+            ...progressive.backupUrls,
+          ], cdn),
+          codec: progressive.codecs,
+          bandwidth: progressive.bandwidth,
+        ),
+        audio: null,
+        quality: progressive.id,
+        qualities: info.acceptQuality,
+        duration: info.duration,
+        headers: headers,
+      );
+    }
     return selectDashMedia(
       info,
       audioQuality:
           await audioQualityPreference?.call() ?? AudioQualityPreference.aac192,
       quality: quality,
       preferredCodec: preferredCodec,
-      cdnPreference:
-          await cdnPreference?.call() ?? MediaCdnPreference.automatic,
-      headers: {
-        'Referer': 'https://www.bilibili.com/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/132.0.0.0 Safari/537.36',
-      },
+      cdnPreference: cdn,
+      headers: headers,
     );
   }, cancellation: cancellation);
 
