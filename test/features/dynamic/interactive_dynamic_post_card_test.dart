@@ -24,6 +24,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/dynamic_fakes.dart';
+import '../../support/input_test_app.dart';
 
 void main() {
   late DynamicAuthFake auth;
@@ -71,7 +72,7 @@ void main() {
             return comments;
           }),
         ],
-        child: MaterialApp(
+        child: InputTestApp(
           builder: (context, child) => MediaQuery(
             data: MediaQuery.of(context).copyWith(
               textScaler: TextScaler.linear(scale),
@@ -128,6 +129,30 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('iOS Back closes a dynamic comment thread before its dialog', (
+    tester,
+  ) async {
+    comments.items = const [
+      CommentEntry(id: '50', author: '评论作者', message: '一级评论', replyCount: 3),
+    ];
+    await show(tester, width: 390);
+    await tester.tap(findMaterialTooltip('查看评论'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('共 3 条回复 ›'));
+    await tester.pumpAndSettle();
+    expect(find.text('评论详情'), findsOneWidget);
+
+    await tester.dragFrom(const Offset(5, 300), const Offset(240, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('评论详情'), findsNothing);
+    expect(find.text('一级评论'), findsOneWidget);
+
+    await tester.dragFrom(const Offset(5, 300), const Offset(240, 0));
+    await tester.pumpAndSettle();
+    expect(find.byType(CommentsPanel), findsNothing);
+    expect(findMaterialTooltip('查看评论'), findsOneWidget);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 
   testWidgets('video link in dynamic comments closes dialog and navigates', (
     tester,

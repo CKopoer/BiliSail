@@ -28,8 +28,7 @@ class TrackpadBackBlocker extends StatelessWidget {
       : child;
 }
 
-/// Adapts retained-page history to iOS edge swipes and macOS trackpad drags.
-/// These pages are not a Navigator stack, so Cupertino route pops cannot help.
+/// Handles iOS edge swipes and macOS trackpad drags for custom back steps.
 class HistoryBackRegion extends StatefulWidget {
   const HistoryBackRegion({
     super.key,
@@ -68,6 +67,7 @@ class _HistoryBackRegionState extends State<HistoryBackRegion>
   late final _progress = AnimationController(vsync: this);
   final _windowFocus = WindowInputFocus.instance;
   InputScope<Object>? _input;
+  ModalRoute<Object?>? _route;
   bool _active = false;
   bool _macOS = false;
   bool _iOS = false;
@@ -83,7 +83,7 @@ class _HistoryBackRegionState extends State<HistoryBackRegion>
       _active &&
       _foreground &&
       (!_windowFocus.observed || _windowFocus.viewId == _viewId) &&
-      _input?.routes.modal != true &&
+      (_input?.routes.modal != true || identical(_input?.routes.top, _route)) &&
       (_input?.dispatcher.barriers ?? 0) == 0;
 
   @override
@@ -97,6 +97,7 @@ class _HistoryBackRegionState extends State<HistoryBackRegion>
   void didChangeDependencies() {
     super.didChangeDependencies();
     _input = InputScope.of<Object>(context);
+    _route = ModalRoute.of(context);
     _viewId = View.of(context).viewId;
     _macOS = Theme.of(context).platform == TargetPlatform.macOS;
     _iOS = Theme.of(context).platform == TargetPlatform.iOS;
@@ -104,7 +105,7 @@ class _HistoryBackRegionState extends State<HistoryBackRegion>
         (_macOS || _iOS) &&
         WorkspaceActivity.isActive(context) &&
         TickerMode.valuesOf(context).enabled &&
-        (ModalRoute.isCurrentOf(context) ?? true);
+        (_route?.isCurrent ?? true);
     if (!_available) _reset();
   }
 

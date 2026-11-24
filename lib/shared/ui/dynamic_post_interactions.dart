@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app_dialog.dart';
 import '../../core/platform/external_links.dart';
+import '../../core/presentation/history_back_region.dart';
 import '../../domain/dynamic_post.dart';
 import '../../domain/user.dart';
 import '../../domain/video.dart';
@@ -105,18 +106,27 @@ class InteractiveDynamicPostCard extends ConsumerWidget {
       final container = ProviderScope.containerOf(context);
       await showAppDialog<void>(
         context: context,
-        builder: (context) => UncontrolledProviderScope(
-          container: container,
-          child: DynamicDetailPage(
-            post: value,
-            inDialog: true,
-            focusComments: focusComments,
-            onOpenUser: onOpenUser,
-            onOpenVideo: onOpenVideo,
-            onOpenLink: onOpenLink,
-            onLogin: onLogin,
-          ),
-        ),
+        builder: (context) {
+          final detail = UncontrolledProviderScope(
+            container: container,
+            child: DynamicDetailPage(
+              post: value,
+              inDialog: true,
+              focusComments: focusComments,
+              onOpenUser: onOpenUser,
+              onOpenVideo: onOpenVideo,
+              onOpenLink: onOpenLink,
+              onLogin: onLogin,
+            ),
+          );
+          if (Theme.of(context).platform != TargetPlatform.iOS) return detail;
+          return HistoryBackRegion(
+            enabled: true,
+            identity: value.id,
+            onBack: () => unawaited(Navigator.of(context).maybePop()),
+            child: detail,
+          );
+        },
       );
     }
 

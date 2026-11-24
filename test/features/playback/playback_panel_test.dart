@@ -4774,7 +4774,7 @@ void main() {
     }, variant: TargetPlatformVariant.only(TargetPlatform.android));
   }
 
-  testWidgets('portrait browse lock still allows physical player rotation', (
+  testWidgets('iOS physical rotation under portrait browse lock', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
@@ -4798,11 +4798,19 @@ void main() {
         null,
       ),
     );
-    final events = StreamController<FullScreenOrientation>.broadcast(
-      sync: true,
+    MockStreamHandlerEventSink? events;
+    tester.binding.defaultBinaryMessenger.setMockStreamHandler(
+      const EventChannel('bilisail/device_orientation'),
+      MockStreamHandler.inline(
+        onListen: (_, sink) {
+          events = sink;
+        },
+        onCancel: (_) {
+          events = null;
+        },
+      ),
     );
-    addTearDown(events.close);
-    final window = _MobileWindowService(orientationEvents: events.stream);
+    final window = _MobileWindowService.platform();
     await window.updateDisplaySize(const Size(400, 800));
     final engine = _FakeEngine();
     final session = _session(engine);
@@ -4818,10 +4826,10 @@ void main() {
       ),
     );
     await _pumpFrames(tester);
-    expect(events.hasListener, isTrue);
+    expect(events, isNotNull);
     final opens = engine.opens;
-    events.add(FullScreenOrientation.portrait);
-    events.add(FullScreenOrientation.landscape);
+    events!.success('portrait');
+    events!.success('landscape');
     await _pumpFrames(tester);
     expect(window.isFullScreen, isTrue);
     expect(orientations.last, [
@@ -4832,7 +4840,7 @@ void main() {
     // forced by the player. The physical posture owns this transition.
     tester.view.physicalSize = const Size(800, 400);
     await _pumpFrames(tester);
-    events.add(FullScreenOrientation.portrait);
+    events!.success('portrait');
     await _pumpFrames(tester);
     expect(window.isFullScreen, isFalse);
     expect(orientations.last, ['DeviceOrientation.portraitUp']);
@@ -4842,9 +4850,9 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await _pumpFrames(tester);
     await window.clearDisplayOrientationPolicy();
-    expect(events.hasListener, isFalse);
+    expect(events, isNull);
     expect(tester.takeException(), isNull);
-  });
+  }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 
   for (final fullscreen in [false, true]) {
     testWidgets(
@@ -11632,11 +11640,13 @@ class _FakeWindowService extends WindowService {
 }
 
 final class _MobileWindowService extends WindowService {
-  _MobileWindowService({this.orientationEvents = const Stream.empty()});
-  final Stream<FullScreenOrientation?> orientationEvents;
+  _MobileWindowService() : _orientationEvents = const Stream.empty();
+  _MobileWindowService.platform() : _orientationEvents = null;
+  final Stream<FullScreenOrientation?>? _orientationEvents;
 
   @override
-  Stream<FullScreenOrientation?> get deviceOrientations => orientationEvents;
+  Stream<FullScreenOrientation?> get deviceOrientations =>
+      _orientationEvents ?? super.deviceOrientations;
 
   @override
   bool get hasDesktopWindow => false;
@@ -12055,6 +12065,8 @@ final class _DelayedWindow extends WindowService {
   final orientations = <FullScreenOrientation?>[];
   @override
   bool get hasDesktopWindow => desktop;
+  @override
+  Stream<FullScreenOrientation?> get deviceOrientations => const Stream.empty();
   @override
   bool get keepsBrowsePortrait => keepPortrait;
   @override
