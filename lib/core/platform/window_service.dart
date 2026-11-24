@@ -36,10 +36,10 @@ class WindowService {
 
   /// Null invalidates the physical rotation baseline and queued actions.
   Stream<FullScreenOrientation?> get deviceOrientations =>
-      Platform.isAndroid ? _deviceOrientations : const Stream.empty();
+      supportsPhoneRotationActions ? _deviceOrientations : const Stream.empty();
 
-  // iOS has no public API for reading the user's rotation-lock setting.
-  bool get supportsPhoneRotationActions => !Platform.isIOS;
+  bool get supportsPhoneRotationActions =>
+      WindowSizePolicy.isMobile(defaultTargetPlatform);
 
   WindowService()
     : viewId = null,

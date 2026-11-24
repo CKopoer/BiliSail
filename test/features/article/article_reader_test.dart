@@ -42,6 +42,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../support/dynamic_fakes.dart';
+import '../../support/input_test_app.dart';
 import '../../support/material_tooltip_finder.dart';
 
 const _column = ArticleAddress(ArticleKind.column, '789');
@@ -271,6 +272,65 @@ void main() {
       },
     );
   }
+
+  testWidgets('iOS Back retraces an article dialog comment thread', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final auth = DynamicAuthFake();
+    addTearDown(auth.stream.close);
+    final comments = DynamicCommentsFake()
+      ..items = const [
+        CommentEntry(id: '50', author: '读者', message: '一级留言', replyCount: 3),
+      ];
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(auth),
+          articleRepositoryProvider.overrideWithValue(
+            _Repository((_, _) async => _longArticle()),
+          ),
+          dynamicRepositoryProvider.overrideWithValue(DynamicRepositoryFake()),
+          commentsRepositoryProvider.overrideWith((_, _) => comments),
+          settingsRepositoryProvider.overrideWithValue(const _Settings()),
+        ],
+        child: InputTestApp(
+          home: Scaffold(
+            body: InteractiveDynamicPostCard(
+              post: DynamicPost(
+                id: '100',
+                text: '图文动态',
+                commentCount: 1,
+                commentTarget: _commentTarget,
+                articleAddress: _column,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(findMaterialTooltip('查看评论'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('共 3 条回复 ›'));
+    await tester.pumpAndSettle();
+    expect(find.text('评论详情'), findsOneWidget);
+
+    await tester.dragFrom(const Offset(5, 300), const Offset(240, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('评论详情'), findsNothing);
+    expect(find.text('一级留言').hitTestable(), findsOneWidget);
+
+    await tester.dragFrom(const Offset(5, 300), const Offset(240, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('专栏评论').hitTestable(), findsNothing);
+    expect(find.byType(ArticleScreen), findsOneWidget);
+
+    await tester.dragFrom(const Offset(5, 300), const Offset(240, 0));
+    await tester.pumpAndSettle();
+    expect(find.byType(ArticleScreen), findsNothing);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 
   testWidgets(
     'account transitions cancel older reads and retry uses the current session',

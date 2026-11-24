@@ -39,17 +39,27 @@ final class PageBackScope extends InheritedWidget {
   const PageBackScope({
     super.key,
     required this.controller,
+    this.route,
     required super.child,
   });
 
   final PageBackController controller;
 
-  static PageBackController? maybeOf(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<PageBackScope>()?.controller;
+  /// A scope inside a popup owns only the handlers on that route.
+  final ModalRoute<Object?>? route;
+
+  static PageBackController? maybeOf(
+    BuildContext context,
+    ModalRoute<Object?>? currentRoute,
+  ) {
+    final scope = context.dependOnInheritedWidgetOfExactType<PageBackScope>();
+    if (currentRoute is PopupRoute && scope?.route != currentRoute) return null;
+    return scope?.controller;
+  }
 
   @override
   bool updateShouldNotify(PageBackScope oldWidget) =>
-      controller != oldWidget.controller;
+      controller != oldWidget.controller || route != oldWidget.route;
 }
 
 final class PageBackHandler extends StatefulWidget {
@@ -80,10 +90,7 @@ final class _PageBackHandlerState extends State<PageBackHandler> {
     super.didChangeDependencies();
     _active = WorkspaceActivity.isActive(context);
     _route = ModalRoute.of(context);
-    // A dialog has its own back stack, even when opened from a workspace page.
-    final controller = _route is PopupRoute
-        ? null
-        : PageBackScope.maybeOf(context);
+    final controller = PageBackScope.maybeOf(context, _route);
     if (_controller != controller) {
       _controller?._handlers.remove(this);
       _controller?._changed();

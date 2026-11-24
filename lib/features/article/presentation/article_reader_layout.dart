@@ -150,6 +150,7 @@ class _ArticleReaderLayoutState extends ConsumerState<ArticleReaderLayout> {
                           showComments && WorkspaceActivity.isVisible(context),
                       child: PageBackScope(
                         controller: _commentBack,
+                        route: ModalRoute.of(context),
                         child: DecoratedBox(
                           decoration: BoxDecoration(
                             border: wide

@@ -167,6 +167,27 @@ void main() {
 
   for (final pgc in [false, true]) {
     testWidgets(
+      'iOS swipe Back closes ${pgc ? 'PGC' : 'video'} comment detail first',
+      (tester) async {
+        final harness = await _mount(
+          tester,
+          platform: TargetPlatform.iOS,
+          pgc: pgc,
+        );
+        final location = harness.router.routeInformationProvider.value.uri;
+        await _openDetail(tester);
+
+        await tester.dragFrom(const Offset(5, 300), const Offset(240, 0));
+        await tester.pumpAndSettle();
+
+        expect(find.text('评论详情'), findsNothing);
+        expect(find.text('共 3 条回复 ›'), findsOneWidget);
+        expect(harness.router.routeInformationProvider.value.uri, location);
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+    );
+
+    testWidgets(
       'desktop dual ${pgc ? 'PGC' : 'video'} detail consumes side and keyboard back before closing',
       (tester) async {
         final harness = await _mount(tester, pgc: pgc, detached: true);
@@ -369,7 +390,7 @@ _mount(
 }) async {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = Size(
-    platform == TargetPlatform.android ? 390 : 1200,
+    platform == TargetPlatform.windows ? 1200 : 390,
     844,
   );
   addTearDown(tester.view.resetDevicePixelRatio);
