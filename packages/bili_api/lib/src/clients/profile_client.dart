@@ -276,10 +276,17 @@ final class ProfileClient {
       e,
       context: context,
     );
-    final items = _list(
-      _map(data['list'], e)['vlist'],
-      e,
-    ).map((v) => _video({..._map(v, e), 'mid': mid}, e)).toList();
+    final items = _list(_map(data['list'], e)['vlist'], e).map((value) {
+      final item = _map(value, e);
+      final percent = item['playback_position'];
+      return _video(
+        {...item, 'mid': mid},
+        e,
+        watchProgress: percent is num && percent > 0 && percent <= 100
+            ? percent / 100
+            : null,
+      );
+    }).toList();
     final total = _number(_map(data['page'], e)['count']);
     if (total == null || total < 0) _fail(e);
     return _paged(items, page, total);
@@ -627,7 +634,11 @@ final class ProfileClient {
     );
   }
 
-  static ApiProfileEntry _video(Map<String, Object?> item, String e) {
+  static ApiProfileEntry _video(
+    Map<String, Object?> item,
+    String e, {
+    double? watchProgress,
+  }) {
     final bvid = _text(item['bvid'], e);
     if (!RegExp(r'^BV[0-9A-Za-z]{10}$').hasMatch(bvid)) _fail(e);
     final title = _text(item['title'], e);
@@ -657,6 +668,7 @@ final class ProfileClient {
       title: title,
       coverUrl: video.coverUrl,
       video: video,
+      watchProgress: watchProgress,
       publishedAt: video.publishedAt,
       count: video.playCount,
     );

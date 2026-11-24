@@ -164,6 +164,7 @@ final class ProfileEntry {
     this.subtitle = '',
     this.coverUrl,
     this.video,
+    this.watchProgress,
     this.userId,
     this.publishedAt,
     this.count,
@@ -176,6 +177,9 @@ final class ProfileEntry {
   final ProfileEntryKind kind;
   final Uri? coverUrl;
   final VideoSummary? video;
+
+  /// Viewing fraction in (0, 1] for the current viewer's submission card.
+  final double? watchProgress;
   final UserId? userId;
   final DateTime? publishedAt;
   final int? count;

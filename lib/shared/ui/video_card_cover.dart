@@ -22,6 +22,7 @@ class VideoCardCover extends StatefulWidget {
     super.key,
     required this.video,
     required this.child,
+    this.progress,
     this.focused = false,
     this.borderRadius = 6,
     this.hovered,
@@ -29,6 +30,7 @@ class VideoCardCover extends StatefulWidget {
   });
   final VideoSummary video;
   final Widget child;
+  final double? progress;
   final bool focused;
   final double borderRadius;
   final bool? hovered;
@@ -190,6 +192,7 @@ class _VideoCardCoverState extends State<VideoCardCover> {
     final configuration = (
       widget.child,
       widget.video,
+      widget.progress,
       widget.borderRadius,
       widget.hovered == null,
       hovered,
@@ -217,6 +220,15 @@ class _VideoCardCoverState extends State<VideoCardCover> {
       fit: StackFit.expand,
       children: [
         widget.child,
+        if (widget.progress case final progress?)
+          Align(
+            alignment: Alignment.bottomLeft,
+            child: LinearProgressIndicator(
+              value: progress.clamp(0.0, 1.0),
+              minHeight: 3,
+              backgroundColor: Colors.transparent,
+            ),
+          ),
         if (hovered &&
             scope != null &&
             scope.hoverPlaybackEnabled &&

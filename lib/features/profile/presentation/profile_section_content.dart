@@ -177,14 +177,18 @@ class _ProfileSectionContentState extends State<ProfileSectionContent> {
             crossAxisSpacing: 24,
             mainAxisSpacing: 24,
           ),
-          itemBuilder: (context, index) => _video(widget.entries[index].video!),
+          itemBuilder: (context, index) {
+            final entry = widget.entries[index];
+            return _video(entry, entry.video!);
+          },
         );
       },
     );
   }
 
-  Widget _video(VideoSummary video) => ProfileVideoCard(
+  Widget _video(ProfileEntry entry, VideoSummary video) => ProfileVideoCard(
     video: video,
+    watchProgress: entry.watchProgress,
     onTap: () => widget.onOpenVideo?.call(video),
   );
 
@@ -305,7 +309,7 @@ class _ProfileSectionContentState extends State<ProfileSectionContent> {
     }
     final video = entry.video;
     if (video != null && entry.kind == ProfileEntryKind.video) {
-      return _video(video);
+      return _video(entry, video);
     }
     if (entry.kind == ProfileEntryKind.video) {
       return Card(

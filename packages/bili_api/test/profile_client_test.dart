@@ -487,6 +487,54 @@ void main() {
       throwsUnsupportedError,
     );
   });
+  test('submissions map optional viewing percentages from the Web list', () async {
+    final positions = <Object?>[37.5, 100, null, 0, -1, 101, '25', {}];
+    final page = await client((uri) {
+      if (uri.path == '/x/web-interface/nav') {
+        return {
+          'code': 0,
+          'data': {
+            'wbi_img': {
+              'img_url':
+                  'https://i0.hdslb.com/bfs/wbi/7cd084941338484aae1ad9425b84077c.png',
+              'sub_url':
+                  'https://i0.hdslb.com/bfs/wbi/4932caff0ff746eab6f01bf08b70ac45.png',
+            },
+          },
+        };
+      }
+      expect(uri.path, '/x/space/wbi/arc/search');
+      return {
+        'code': 0,
+        'data': {
+          'list': {
+            'vlist': [
+              for (final (index, position) in positions.indexed)
+                {
+                  'bvid': 'BV123456789$index',
+                  'title': 'Video $index',
+                  'length': '05:00',
+                  'playback_position': ?position,
+                },
+            ],
+          },
+          'page': {'count': positions.length},
+        },
+      };
+    }).loadVideos('1', page: 1);
+
+    expect(page.items.map((item) => item.watchProgress), [
+      .375,
+      1.0,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+    ]);
+    expect(page.items.first.video?.duration, const Duration(minutes: 5));
+  });
   test('dynamic opaque cursor stops when server makes no progress', () async {
     final page = await client((uri) {
       expect(uri.queryParameters['offset'], 'opaque:cursor');
