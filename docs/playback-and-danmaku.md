@@ -242,6 +242,8 @@ Bilibili playurl 的 DASH 响应通常提供 representation 信息而非可以�
 
 首选路径：`DashPairSource → MediaKitEngine`，在暂停状态装载视频与外部音轨，确认轨道与目标进度准备好后统一播放。必须验证外部音轨是否获得需要的 headers、seek 同步和换轨行为，不能用两个互不关联的 Player 分别播放音视频。
 
+部分投稿（如 `BV19C4y1T7t3` 年度报告）通过同一 Web playurl 返回单条 `durl`。无 DASH 时，完整的单文件响应使用 `ProgressiveSource`，由播放器读取内嵌音轨，保留实际画质和备用 CDN。试看仍按权限错误处理，多段 `durl` 按资源不可用处理。参考 PiliPlus 的播放格式分流，代码由本项目独立实现。[样例视频](https://www.bilibili.com/video/BV19C4y1T7t3) · [PiliPlus 播放控制器](https://github.com/bggRGjQaUbCoE/PiliPlus/blob/217fb54f51f6764176319bbdedab2a7522d75401/lib/pages/video/controller.dart#L929-L961)
+
 2026-10-10 点播打开改为提前配置 mpv `audio-files`，由原生文件加载 worker 装载外部音轨；确认当前选中的外部文件后，播放时继续验证真实音频解码。避免串行 `audio-add` 网络等待占住命令锁，关闭、换源及 deadline 可中断准备。普通点播有不同备用地址时，首地址最多 6 秒（2026-10-11 从 8 秒调整），两次打开共享 35 秒预算；匹配当前文件的 mpv 错误终止事件立即结束就绪等待，普通错误日志继续等待。自动模式首地址仍保留服务端顺序，失败后的备用优先本次响应中的常规 CDN。直播和只有一个地址的源保持原预算。证据、竞态与跨平台边界见 [点播打开优化](validation/playback-startup.md)。
 
 2026-10-24 将 DASH 首次播放时的音频解码失败接入同一备用恢复：打开和音频准备共用最多两次打开额度及 35 秒累计预算，有备用地址的首轮共用 6 秒。暂停打开不主动播放探测，首次播放沿用剩余额度，暂停等待不计时；恢复保留进度、倍速、音量与最新播放许可。此项不增加播放途中音频实际输出的持续监测，边界见[音频解码失败恢复](validation/playback-startup.md#2026-10-24-音频解码失败复用有界备用恢复)。

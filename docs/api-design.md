@@ -288,7 +288,7 @@ Cookie 由 domain/path/secure/expiry 规则的 CookieStore 维护，持久化整
 | --- | --- |
 | 取消、旧 epoch、旧 query | 停止，不 toast，不重试，不写缓存 |
 | 网络断开/超时/部分 5xx | 对读请求最多额外 2 次，指数退避+抖动；每次网络尝试最多 2 秒，且不超过剩余总 deadline |
-| UGC playurl 缺少 DASH／所需音视频轨，或未分类业务错误 | 核对权益后仅重试 `unavailable`；与网络重试、WBI 重签共用最多 3 次 playurl 请求和同一 deadline，见[播放地址重试](validation/playurl-unavailable-retry-2026-11-05.md) |
+| UGC playurl 缺少可用媒体，或未分类业务错误 | 投稿主播放支持 DASH 和完整的单条 `durl`。缺少可用媒体时核对权益后仅重试 `unavailable`，与网络重试、WBI 重签共用最多 3 次 playurl 请求和同一 deadline。[播放地址重试](validation/playurl-unavailable-retry-2026-11-05.md) |
 | 限流或风控 | 停止自动重试，遵守 Retry-After 或冷却；向用户显示可恢复状态 |
 | 认证失效 | 单飞刷新或重新登录；不循环切换 Web/App/TV |
 | 内容不存在/权限不足/区域受限 | 明确不可用；不尝试其他通道绕过服务端限制 |

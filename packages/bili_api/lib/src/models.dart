@@ -370,6 +370,7 @@ final class ApiPlayInfo {
     required this.dashVideo,
     required this.dashAudio,
     required this.acceptQuality,
+    this.progressive,
     this.isIntentionallySilent = false,
     this.isPreview = false,
     this.voices = const [],
@@ -381,6 +382,9 @@ final class ApiPlayInfo {
   final Duration duration;
   final List<ApiMediaTrack> dashVideo;
   final List<ApiMediaTrack> dashAudio;
+
+  /// A complete single-file stream supplied instead of separate DASH tracks.
+  final ApiMediaTrack? progressive;
   final ApiAudioLoudness? loudness;
   final List<int> acceptQuality;
 

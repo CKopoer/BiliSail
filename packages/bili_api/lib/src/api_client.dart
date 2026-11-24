@@ -2603,8 +2603,8 @@ final class BiliApiClient {
   }) async {
     final active = boundedReadContext(context);
     final attempts = _ReadAttemptBudget();
-    // Entitlement is checked only after a failed payload and reused within this
-    // operation. Complete DASH playback still needs no extra detail request.
+    // Reuse entitlement within this operation. Complete media with audio
+    // needs no extra detail request.
     late final access = getVideoDetail(
       bvid,
       context: active,
@@ -2691,6 +2691,17 @@ final class BiliApiClient {
     }
     final trial =
         !preview && (data['is_preview'] == true || data['is_preview'] == 1);
+    final segments = data['durl'];
+    if (!preview &&
+        data['dash'] == null &&
+        segments is List &&
+        segments.length == 1) {
+      final descriptions = data['accept_description'];
+      if (trial || descriptions is List && descriptions.contains('试看')) {
+        throw await _videoPlaybackFailure(readAccess, trial: true);
+      }
+      return _progressivePlayInfo(data, _map(segments.single, 'playurl'));
+    }
     final dash = _optionalMap(data['dash']);
     if (dash == null || dash['video'] == null) {
       throw await _videoPlaybackFailure(readAccess, trial: trial);
@@ -2751,6 +2762,54 @@ final class BiliApiClient {
     );
   }
 
+  static ApiPlayInfo _progressivePlayInfo(
+    Map<String, Object?> data,
+    Map<String, Object?> segment,
+  ) {
+    Uri? mediaUrl(Object? value) {
+      final url = _uri(value);
+      return url != null && url.host.isNotEmpty && url.userInfo.isEmpty
+          ? url
+          : null;
+    }
+
+    final url = mediaUrl(segment['url']);
+    final quality = _int(data['quality']);
+    final durationMs = _int(data['timelength']) ?? _int(segment['length']) ?? 0;
+    if (url == null || quality == null || quality <= 0 || durationMs <= 0) {
+      throw const ApiFailure(ApiFailureCategory.protocol, 'playurl');
+    }
+    final backups = segment['backup_url'];
+    final format = _string(data['format']) ?? '';
+    return ApiPlayInfo(
+      duration: Duration(milliseconds: durationMs),
+      dashVideo: const [],
+      dashAudio: const [],
+      acceptQuality: List.unmodifiable([quality]),
+      progressive: ApiMediaTrack(
+        id: quality,
+        url: url,
+        backupUrls: List.unmodifiable(
+          backups is List
+              ? backups.map(mediaUrl).whereType<Uri>()
+              : const <Uri>[],
+        ),
+        bandwidth: 0,
+        mimeType: format.startsWith('mp4')
+            ? 'video/mp4'
+            : format.startsWith('flv')
+            ? 'video/x-flv'
+            : '',
+        codecs: switch (_int(data['video_codecid'])) {
+          7 => 'avc1',
+          12 => 'hev1',
+          13 => 'av01',
+          _ => '',
+        },
+      ),
+    );
+  }
+
   static Map<String, String> _playurlWebContext() {
     final random = Random.secure();
     String placeholder(int bytes) => base64Encode(
@@ -2773,8 +2832,8 @@ final class BiliApiClient {
     bool trial = false,
     ApiFailure? originalFailure,
   }) async {
-    // Only unsupported/blocked play responses need this extra read. Successful
-    // authorized DASH playback keeps its existing request count and behavior.
+    // The detail response distinguishes restricted content from an unavailable
+    // stream and confirms entitlement for explicitly silent DASH media.
     final access = await readAccess();
     if (trial ||
         access.kind != ApiVideoAccessKind.normal && access.canWatch != true) {
