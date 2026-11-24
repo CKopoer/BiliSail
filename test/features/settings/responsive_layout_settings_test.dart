@@ -202,6 +202,7 @@ void main() {
           PlaybackSplitPage.video: PlaybackSplitStyle.below,
           PlaybackSplitPage.pgc: PlaybackSplitStyle.right,
           PlaybackSplitPage.live: PlaybackSplitStyle.automatic,
+          PlaybackSplitPage.course: PlaybackSplitStyle.below,
         };
         await repository.save(
           AppSettings(
@@ -233,6 +234,7 @@ void main() {
         PlaybackSplitPage.video: PlaybackSplitStyle.below,
         PlaybackSplitPage.pgc: PlaybackSplitStyle.right,
         PlaybackSplitPage.live: PlaybackSplitStyle.right,
+        PlaybackSplitPage.course: PlaybackSplitStyle.right,
       });
     });
 
@@ -298,7 +300,7 @@ void main() {
             57,
           ),
         );
-        expect(database.schemaVersion, 3);
+        expect(database.schemaVersion, 4);
         await repository.save(const AppSettings.defaults());
         expect(
           (await repository.load()).responsiveLayout.videoGridMinWidths,

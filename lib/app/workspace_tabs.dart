@@ -14,9 +14,10 @@ final class WorkspaceTab {
 
   bool get isVideo => location.path.startsWith('/video/');
   bool get isPgc => location.path.startsWith('/pgc/');
+  bool get isCourse => location.path.startsWith('/course/');
   bool get isLive => location.path.startsWith('/live/');
   bool get isOffline => location.path.startsWith('/offline/');
-  bool get isPlayback => isVideo || isPgc || isLive || isOffline;
+  bool get isPlayback => isVideo || isPgc || isCourse || isLive || isOffline;
   bool get isProfile =>
       location.pathSegments.length == 2 &&
       location.pathSegments.first == 'user';
@@ -51,6 +52,7 @@ final class WorkspaceTab {
     if (location.path == '/me') return '我的';
     if (isOffline) return '离线播放';
     if (isVideo) return videoTitle ?? location.pathSegments.last;
+    if (isCourse) return '课程 · ${location.pathSegments.last}';
     if (isPgc) return '影视 · ${location.pathSegments.last}';
     if (isLive) return '直播 · ${location.pathSegments.last}';
     if (isProfile) return '用户主页 · ${location.pathSegments.last}';

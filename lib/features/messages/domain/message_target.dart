@@ -2,9 +2,12 @@ import '../../../domain/user.dart';
 import '../../../domain/video.dart';
 import '../../../domain/content_link.dart';
 import '../../../domain/article_address.dart';
+import '../../../domain/course_address.dart';
 
 /// Resolves supported public message links without fetching or following them.
 String? messageWorkspaceLocation(Uri target) {
+  final course = CourseAddress.parse(target);
+  if (course != null) return _contentLocation(course.location, target);
   if (target.scheme != 'https' ||
       target.userInfo.isNotEmpty ||
       target.port != 443) {

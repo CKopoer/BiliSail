@@ -599,6 +599,7 @@ class PlaybackSession extends ChangeNotifier {
   String? get danmakuCid => switch (contentTarget) {
     LivePlaybackTarget() => null,
     PgcPlaybackTarget(:final cid) => cid ?? part?.cid,
+    CoursePlaybackTarget(:final cid) => cid,
     _ => part?.cid,
   };
 
@@ -1520,6 +1521,7 @@ class PlaybackSession extends ChangeNotifier {
     final selected = part;
     if (isLive ||
         contentTarget is OfflinePlaybackTarget ||
+        (contentTarget is CoursePlaybackTarget && video?.aid == null) ||
         video == null ||
         selected == null ||
         !video.summary.id.isValid ||
@@ -1529,12 +1531,15 @@ class PlaybackSession extends ChangeNotifier {
     return PlaybackHistoryTarget(
       video.summary.id,
       selected.cid,
+      courseAid: contentTarget is CoursePlaybackTarget ? video.aid : null,
       episodeId: switch (contentTarget) {
-        PgcPlaybackTarget(:final episodeId) => episodeId,
+        PgcPlaybackTarget(:final episodeId) ||
+        CoursePlaybackTarget(:final episodeId) => episodeId,
         _ => null,
       },
       seasonId: switch (contentTarget) {
         PgcPlaybackTarget(:final seasonId) => seasonId,
+        CoursePlaybackTarget(:final seasonId) => seasonId,
         _ => null,
       },
     );

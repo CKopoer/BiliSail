@@ -12,6 +12,11 @@ final pgcRepositoryProvider = Provider<PgcRepository>(
   (ref) => throw UnimplementedError('PgcRepository must be provided by app'),
 );
 
+final courseRepositoryProvider = Provider<PgcRepository>(
+  (ref) =>
+      throw UnimplementedError('Course repository must be provided by app'),
+);
+
 final pgcResumeRepositoryProvider = Provider<PgcResumeRepository?>(
   (ref) => null,
 );
@@ -88,7 +93,9 @@ final class PgcController extends Notifier<PgcState> {
     final cancellation = RequestCancellation();
     _active = cancellation;
     final generation = ++_generation;
-    final repository = ref.read(pgcRepositoryProvider);
+    final repository = ref.read(
+      locator.course ? courseRepositoryProvider : pgcRepositoryProvider,
+    );
     final scope = repository.accountScope;
     final epoch = repository.sessionEpoch;
     final previous = state;
@@ -116,7 +123,9 @@ final class PgcController extends Notifier<PgcState> {
               ?.resumeEpisode(season, scope: scope, cancellation: cancellation)
               .timeout(const Duration(seconds: 3));
         } catch (_) {
-          resumeMessage = '观看记录读取失败，本次从首集播放';
+          resumeMessage = locator.course
+              ? '学习记录读取失败，本次从首个可播课时开始'
+              : '观看记录读取失败，本次从首集播放';
         }
       }
       if (!_isCurrent(generation, cancellation, repository, scope, epoch)) {
@@ -149,7 +158,7 @@ final class PgcController extends Notifier<PgcState> {
       state = PgcState(
         season: previous.season,
         selectedEpisodeId: previous.selectedEpisodeId,
-        message: '影视详情暂时无法加载，请重试',
+        message: locator.course ? '课程详情暂时无法加载，请重试' : '影视详情暂时无法加载，请重试',
       );
     }
   }

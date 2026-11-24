@@ -4,22 +4,23 @@ import 'dart:typed_data';
 import '../models.dart';
 import '../models/pgc_models.dart';
 import '../risk_control.dart';
+import '../video_identifiers.dart';
 
 /// Pure bounded PGC metadata decoding, safe to run in a worker isolate.
-ApiPgcSeason decodePgcSeasonBytes(Uint8List bytes) {
-  const endpoint = 'pgc_season';
+ApiPgcSeason decodePgcSeasonBytes(Uint8List bytes, {bool course = false}) {
+  final endpoint = course ? 'course_season' : 'pgc_season';
   if (bytes.length > 4 * 1024 * 1024) {
-    throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
+    throw ApiFailure(ApiFailureCategory.protocol, endpoint);
   }
   Object? decoded;
   try {
     decoded = jsonDecode(utf8.decode(bytes));
   } on FormatException {
-    throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
+    throw ApiFailure(ApiFailureCategory.protocol, endpoint);
   }
   final root = _map(decoded, endpoint);
   if (hasRiskVoucher(root)) {
-    throw const ApiFailure(
+    throw ApiFailure(
       ApiFailureCategory.rateLimited,
       endpoint,
       requiresVerification: true,
@@ -27,7 +28,7 @@ ApiPgcSeason decodePgcSeasonBytes(Uint8List bytes) {
   }
   final code = _int(root['code']);
   if (code == null) {
-    throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
+    throw ApiFailure(ApiFailureCategory.protocol, endpoint);
   }
   if (code != 0) {
     throw ApiFailure(
@@ -42,7 +43,66 @@ ApiPgcSeason decodePgcSeasonBytes(Uint8List bytes) {
       businessCode: code,
     );
   }
-  return parsePgcSeasonData(_map(root['data'] ?? root['result'], endpoint));
+  final data = _map(root['data'] ?? root['result'], endpoint);
+  return course ? _parseCourse(data) : parsePgcSeasonData(data);
+}
+
+ApiPgcSeason _parseCourse(Map<String, Object?> data) {
+  const endpoint = 'course_season';
+  final sections = <int, String>{};
+  for (final raw in _list(
+    data['ep_catalogue'] ?? const [],
+    endpoint,
+  ).take(5000)) {
+    final section = _map(raw, endpoint);
+    final index = _int(section['index']);
+    final title = _text(section['title']);
+    if (index != null && title != null) sections[index] = title;
+  }
+  final episodes = <ApiPgcEpisode>[];
+  for (final raw in _list(data['episodes'], endpoint).take(5000)) {
+    final item = _map(raw, endpoint);
+    final aid = _optionalId(item['aid']);
+    final duration = _int(item['duration']);
+    final available =
+        item['playable'] == true && item['episode_can_view'] != false;
+    episodes.add(
+      ApiPgcEpisode(
+        episodeId: _id(item['id'], endpoint),
+        aid: aid,
+        bvid:
+            _text(item['bvid']) ??
+            (aid == null ? null : VideoIdentifiers.bvidFromAid(aid)),
+        cid: _optionalId(item['cid']),
+        title: _requiredText(item['title'], endpoint),
+        longTitle: '',
+        coverUrl: _uri(item['cover']),
+        duration: duration == null || duration < 0
+            ? null
+            : Duration(seconds: duration),
+        badge: _text(item['label']),
+        sectionTitle: sections[_int(item['catalogue_index'])] ?? '全部课时',
+        playable: available,
+        permissionText: available ? null : '当前账号暂无本课时的观看权限',
+      ),
+    );
+  }
+  final progress = _mapOrEmpty(_mapOrEmpty(data['user_status'])['progress']);
+  return ApiPgcSeason(
+    lastEpisodeId: _optionalId(progress['last_ep_id']),
+    lastPosition: _lastPosition(progress),
+    course: true,
+    instructor: _text(_mapOrEmpty(data['up_info'])['uname']),
+    seasonId: _id(data['season_id'], endpoint),
+    title: _requiredText(data['title'], endpoint),
+    coverUrl: _uri(data['cover']),
+    description: _text(data['subtitle'])?.trim() ?? '',
+    type: null,
+    episodes: List.unmodifiable(episodes),
+    playCount: _int(_mapOrEmpty(data['stat'])['play']),
+    publishText: _text(data['release_info']),
+    relatedSeasons: const [],
+  );
 }
 
 ApiPgcSeason parsePgcSeasonData(Map<String, Object?> data) {
@@ -93,11 +153,7 @@ ApiPgcSeason parsePgcSeasonData(Map<String, Object?> data) {
     publishText: _text(publish['pub_time_show'] ?? publish['pub_time']),
     lastEpisodeId: _optionalId(progress['last_ep_id']),
     // Season history uses seconds, unlike player/v2's milliseconds.
-    lastPosition: switch (_int(progress['last_time'])) {
-      final seconds? when seconds >= -1 && seconds <= 7 * 24 * 60 * 60 =>
-        Duration(seconds: seconds < 0 ? 0 : seconds),
-      _ => null,
-    },
+    lastPosition: _lastPosition(progress),
   );
 }
 
@@ -182,3 +238,10 @@ Uri? _uri(Object? value) {
   }
   return null;
 }
+
+Duration? _lastPosition(Map<String, Object?> progress) =>
+    switch (_int(progress['last_time'])) {
+      final seconds? when seconds >= -1 && seconds <= 7 * 24 * 60 * 60 =>
+        Duration(seconds: seconds < 0 ? 0 : seconds),
+      _ => null,
+    };

@@ -108,7 +108,7 @@ void main() {
           .read(settingsControllerProvider.notifier)
           .resetToDefaults();
       expect((await repository.load()).playbackMode, PlaybackMode.pause);
-      expect(database.schemaVersion, 3);
+      expect(database.schemaVersion, 4);
     },
   );
 }

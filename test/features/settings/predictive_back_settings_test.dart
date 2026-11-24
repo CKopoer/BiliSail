@@ -34,7 +34,7 @@ void main() {
       expect(restored.predictiveBackEnabled, isTrue);
       expect(restored.theme, AppThemePreference.dark);
     }
-    expect(database.schemaVersion, 3);
+    expect(database.schemaVersion, 4);
   });
 
   test('predictive Back persists both choices and resets to enabled', () async {

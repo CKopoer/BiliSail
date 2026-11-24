@@ -8,11 +8,13 @@ final class PlaybackHistoryTarget {
     this.cid, {
     this.episodeId,
     this.seasonId,
+    this.courseAid,
   });
   final VideoId video;
   final String cid;
-  final String? episodeId, seasonId;
-  String get key => '${video.value}:$cid:${episodeId ?? ''}';
+  final String? episodeId, seasonId, courseAid;
+  String get key =>
+      '${video.value}:$cid:${episodeId ?? ''}${courseAid == null ? '' : ':course:$courseAid'}';
 }
 
 final class PlaybackHistoryRecord {

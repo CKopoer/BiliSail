@@ -12,13 +12,17 @@ final class PlaybackHistoryClient {
     String cid, {
     String? episodeId,
     String? seasonId,
+    String? courseAid,
     ApiRequestContext? context,
   }) async {
-    _identity(bvid, cid, episodeId, seasonId);
+    _identity(bvid, cid, episodeId, seasonId, courseAid);
     if (episodeId != null) {
-      final season = await PgcClient(
-        api,
-      ).getSeason(episodeId: episodeId, seasonId: seasonId, context: context);
+      final season = await PgcClient(api).getSeason(
+        episodeId: episodeId,
+        seasonId: seasonId,
+        course: courseAid != null,
+        context: context,
+      );
       // PGC history belongs to an episode, not the UGC player/v2 part record.
       return season.lastEpisodeId == episodeId ? season.lastPosition : null;
     }
@@ -53,11 +57,12 @@ final class PlaybackHistoryClient {
     required bool completed,
     String? episodeId,
     String? seasonId,
+    String? courseAid,
     String? trackId,
     String? fromSpmid,
     ApiRequestContext? context,
   }) async {
-    _identity(bvid, cid, episodeId, seasonId);
+    _identity(bvid, cid, episodeId, seasonId, courseAid);
     if ([trackId, fromSpmid].any(
       (value) =>
           value != null &&
@@ -74,13 +79,17 @@ final class PlaybackHistoryClient {
       '/x/click-interface/web/heartbeat',
       'playback_history_report',
       {
-        'bvid': bvid,
+        if (courseAid != null) 'aid': courseAid else 'bvid': bvid,
         'cid': cid,
         'played_time': completed
             ? '-1'
             : '${position.inSeconds.clamp(0, duration.inSeconds)}',
         'video_duration': '${duration.inSeconds}',
-        'type': episodeId == null ? '3' : '4',
+        'type': courseAid != null
+            ? '10'
+            : episodeId == null
+            ? '3'
+            : '4',
         'epid': ?episodeId,
         'sid': ?seasonId,
         'track_id': ?trackId,
@@ -96,12 +105,15 @@ final class PlaybackHistoryClient {
     String cid,
     String? episode,
     String? season,
+    String? courseAid,
   ) {
-    if (!RegExp(r'^BV[0-9A-Za-z]{10}$').hasMatch(bvid) ||
+    if ((courseAid != null && (episode == null || season == null)) ||
+        !RegExp(r'^BV[0-9A-Za-z]{10}$').hasMatch(bvid) ||
         [
           cid,
           ?episode,
           ?season,
+          ?courseAid,
         ].any((id) => !RegExp(r'^[1-9][0-9]*$').hasMatch(id))) {
       throw ArgumentError('Invalid playback identity');
     }

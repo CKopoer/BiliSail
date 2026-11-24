@@ -69,6 +69,54 @@ final _season = PgcSeason(
 );
 
 void main() {
+  testWidgets('course player switches lessons and stops at a locked lesson', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1440, 920);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final course = PgcSeason(
+      id: _season.id,
+      title: '法语入门',
+      course: true,
+      instructor: '李老师',
+      episodes: _season.episodes,
+    );
+    final auth = _Auth();
+    addTearDown(auth.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          courseRepositoryProvider.overrideWithValue(_Repo()..value = course),
+          authRepositoryProvider.overrideWithValue(auth),
+        ],
+        child: InputTestApp(
+          home: Scaffold(
+            body: PgcScreen(
+              course: true,
+              episodeId: 'e1',
+              playerBuilder: (_, _, episode) => Text('播放 ${episode.episodeId}'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('讲师 · 李老师'), findsOneWidget);
+    expect(find.text('播放 e1'), findsOneWidget);
+    expect(find.textContaining('课程目录'), findsOneWidget);
+    expect(course.commentTarget(course.episodes.first)?.type.value, 33);
+    expect(course.commentTarget(course.episodes.first)?.oid, 'e1');
+    await tester.tap(find.byKey(const ValueKey('pgc-episode-e2')));
+    await tester.pumpAndSettle();
+    expect(find.text('播放 e2'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('pgc-episode-e3')));
+    await tester.pumpAndSettle();
+    expect(find.text('播放 e2'), findsNothing);
+    expect(find.text('会员专享'), findsWidgets);
+  });
+
   testWidgets('custom PGC layout threshold switches without replacing player', (
     tester,
   ) async {

@@ -25,6 +25,18 @@ final class PgcPlaybackTarget extends ContentPlaybackTarget {
   String get key => 'episode:$episodeId${cid == null ? '' : ':$cid'}';
 }
 
+final class CoursePlaybackTarget extends ContentPlaybackTarget {
+  const CoursePlaybackTarget(
+    this.episodeId,
+    this.cid, {
+    required this.seasonId,
+  });
+  final String seasonId;
+  final String episodeId, cid;
+  @override
+  String get key => 'course:$episodeId:$cid';
+}
+
 final class LivePlaybackTarget extends ContentPlaybackTarget {
   const LivePlaybackTarget(this.roomId);
   final String roomId;

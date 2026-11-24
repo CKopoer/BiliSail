@@ -586,6 +586,7 @@ void main() {
   for (final (path, label, screenType) in [
     ('/video/BV1234567890', '视频', VideoScreen),
     ('/pgc/episode/123', '影视', PgcScreen),
+    ('/course/episode/123', '课程', PgcScreen),
     ('/live/1024', '直播', LiveScreen),
   ]) {
     _workspaceTestWidgets('playback sidebar follows preference for $path', (
@@ -604,7 +605,7 @@ void main() {
         autoCollapsePlaybackSidebar: true,
       );
       final router = createBiliRouter(
-        initialLocation: path,
+        initialLocation: label == '课程' ? '/' : path,
         playerBuilder: (_, _, _) => const Text('测试播放器'),
         pgcPlayerBuilder: (_, _, _) => const Text('测试播放器'),
         livePlayerBuilder: (_, _, _) => const Text('测试播放器'),
@@ -619,6 +620,9 @@ void main() {
             relatedVideosProvider.overrideWith((ref, id) async => []),
             videoTagsProvider.overrideWith((ref, id) async => []),
             pgcRepositoryProvider.overrideWithValue(_ContentPgcRepository()),
+            courseRepositoryProvider.overrideWithValue(
+              _ContentPgcRepository(course: true),
+            ),
             liveRepositoryProvider.overrideWithValue(_ContentLiveRepository()),
             feedRepositoryProvider.overrideWithValue(_FeedRepository()),
             homeRepositoryProvider.overrideWithValue(_HomeRepository()),
@@ -627,6 +631,14 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      if (label == '课程') {
+        await tester.enterText(
+          find.byKey(const ValueKey('workspace-search')),
+          'https://www.bilibili.com/cheese/play/ep123',
+        );
+        await tester.testTextInput.receiveAction(TextInputAction.search);
+        await tester.pumpAndSettle();
+      }
       final screen = find.byType(screenType);
       final screenState = tester.state(screen);
       final player = find.text('测试播放器');
@@ -3397,6 +3409,8 @@ final class _ProfileRepository implements ProfileRepository {
 }
 
 final class _ContentPgcRepository implements PgcRepository {
+  _ContentPgcRepository({this.course = false});
+  final bool course;
   int reads = 0;
   @override
   String get accountScope => 'guest';
@@ -3411,6 +3425,7 @@ final class _ContentPgcRepository implements PgcRepository {
   }) async {
     reads++;
     return PgcSeason(
+      course: course,
       id: seasonId ?? const PgcSeasonId('28747'),
       title: '作品样本',
       relatedSeasons: const [

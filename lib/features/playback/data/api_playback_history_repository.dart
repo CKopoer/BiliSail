@@ -36,6 +36,7 @@ final class ApiPlaybackHistoryRepository implements PlaybackHistoryRepository {
       target.cid,
       episodeId: target.episodeId,
       seasonId: target.seasonId,
+      courseAid: target.courseAid,
       context: context,
     );
     _check(scope);
@@ -68,6 +69,7 @@ final class ApiPlaybackHistoryRepository implements PlaybackHistoryRepository {
       completed: record.completed,
       episodeId: target.episodeId,
       seasonId: target.seasonId,
+      courseAid: target.courseAid,
       trackId: validRecommendation?.trackId,
       fromSpmid: validRecommendation?.fromSpmid,
       context: context,

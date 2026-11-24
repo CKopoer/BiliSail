@@ -14,6 +14,29 @@ PgcEpisode _ep(String id, {String? section, bool available = true}) =>
 
 void main() {
   test(
+    'course playback crosses directory sections and stops at locked lessons',
+    () {
+      final lessons = [
+        _ep('1', section: '基础'),
+        _ep('2', section: '语法'),
+        _ep('3', section: '语法', available: false),
+      ];
+      final course = PgcSeason(
+        course: true,
+        id: const PgcSeasonId('7'),
+        title: '法语',
+        episodes: lessons,
+      );
+      expect(adjacentPgcEpisode(course, lessons.first, 1), lessons[1]);
+      expect(adjacentPgcEpisode(course, lessons[1], 1), isNull);
+      expect(
+        adjacentPgcEpisode(course, lessons.last, 1, loop: true),
+        lessons.first,
+      );
+    },
+  );
+
+  test(
     'duplicate IDs retain first position within each raw/display section',
     () {
       final episodes = [

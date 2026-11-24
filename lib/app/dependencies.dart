@@ -586,6 +586,14 @@ class AppDependencies {
             accountScope: () => session.accountScope,
           ),
         ),
+        courseRepositoryProvider.overrideWithValue(
+          ApiPgcRepository(
+            PgcClient(api),
+            requests,
+            course: true,
+            accountScope: () => session.accountScope,
+          ),
+        ),
         pgcFollowRepositoryProvider.overrideWithValue(
           ApiPgcFollowRepository(
             PgcClient(api),
@@ -597,6 +605,8 @@ class AppDependencies {
           LocalPgcResumeRepository(
             resumeEnabled: () async => (await settings.load()).resumePlayback,
             latestEpisode: library.latestPgcEpisode,
+            latestCourseEpisode: (scope, ids) =>
+                library.latestPgcEpisode(scope, ids, course: true),
           ),
         ),
         pgcDanmakuRepositoryProvider.overrideWithValue(

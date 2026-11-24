@@ -1,5 +1,9 @@
 # API、鉴权与数据边界
 
+2026-11-24 课程（PUGV）以 Web Cookie 读取 `api.bilibili.com` 的 JSON 接口。`GET /pugv/view/web/season` 接受 `ep_id` 或 `season_id`，返回课程、章节及课时目录；`GET /pugv/player/web/playurl` 使用 `ep_id/cid/qn/fnver/fnval/fourk` 获取可播放的 DASH 音视频分轨。两者无 WBI、CSRF 或客户端翻页，沿用 25 秒总期限、账号 epoch、取消与有界读重试。课时时长以秒计，目录保留不可播项。每一课时的评论用 `oid=课时 ID, type=33`。登录账号沿用原有心跳设置和单次 CSRF POST，课程使用 `type=10, aid, cid, epid, sid`。课程与影视详情分开缓存，本地 SQLite v4 为课时新增可空列。
+
+协议对照本地 PiliPlus `217fb54f51f6764176319bbdedab2a7522d75401` 的 `lib/http/search.dart`、`lib/http/video.dart`、`lib/models/common/video/video_type.dart` 和 `lib/pages/video/reply/controller.dart`。本项目独立实现 Web PUGV 接口与页面，复用已有播放器。[公开样本](https://www.bilibili.com/cheese/play/ep20766) 的游客目录含 603 节，其中 3 节可试看。Windows 已验证首节 146 秒源的音视频解码及进度推进。已购账号、线上账号写入和移动设备播放尚未实测。
+
 2026-11-16 App 推荐继续使用 GET `app.bilibili.com/x/v2/feed/index`，改为显式 flush／pull 场景与服务端首卡锚点，采用与现有 HD 凭据一致的 query／UA／签名。Android 读取公开型号、系统及网络事实；其他平台使用固定参考。推荐 trackid 经内存上下文传到既有 Web 播放心跳的 track_id／from_spmid，不增加端点或写请求次数。协议与验证见[请求和归因修正](validation/app-recommendation-alignment-2026-11-16.md)。
 
 2026-11-15 PGC 沿用 `GET https://api.bilibili.com/pgc/player/web/playurl` 的 Web Cookie profile、`ep_id/qn/fnver/fnval/fourk/module/voice_balance` 参数、JSON `result`、有界只读重试、总 deadline 和取消／epoch；无新增签名、CSRF 或分页。增加可选 `clip_info_list` 元数据解析：`CLIP_TYPE_OP/ED`、以秒计的 `start/end`，转换为毫秒后检查源时长与正向区间，最多 64 项。未知／非法项和缺失列表不阻塞播放，试看不启用整集跳过数据。官方与空降优先级、精确参考提交及在线样本见[PGC 跳过记录](validation/pgc-skip-segments-2026-11-15.md)。

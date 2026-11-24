@@ -47,10 +47,12 @@ final class ApiContentPlaybackRepository
     switch (target) {
       case OfflinePlaybackTarget():
         throw const AppFailure(AppFailureKind.playback, '离线播放服务未配置');
-      case PgcPlaybackTarget(:final episodeId):
+      case PgcPlaybackTarget(:final episodeId) ||
+          CoursePlaybackTarget(:final episodeId):
         final info = await pgc.getPlayInfo(
           episodeId,
           qn: quality,
+          courseCid: target is CoursePlaybackTarget ? target.cid : null,
           context: context,
         );
         return selectDashMedia(

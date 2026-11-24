@@ -29,7 +29,7 @@ import 'cdn_settings_tile.dart';
 import 'log_export_button.dart';
 
 const _usageNotice = <Widget>[
-  Text('本应用是哔哩哔哩第三方客户端，视频、影视、直播及相关内容均来自哔哩哔哩，与官方无隶属关系。'),
+  Text('本应用是哔哩哔哩第三方客户端，视频、影视、直播、课程及相关内容均来自哔哩哔哩，与官方无隶属关系。'),
   SizedBox(height: 8),
   Text('本程序仅供学习交流与编程技术研究使用。'),
   SizedBox(height: 8),
@@ -442,6 +442,7 @@ final class _SettingsCategoryPageState
                           for (final (page, label) in const [
                             (PlaybackSplitPage.video, '视频页左右布局样式'),
                             (PlaybackSplitPage.pgc, '番剧页左右布局样式'),
+                            (PlaybackSplitPage.course, '课程页左右布局样式'),
                             (PlaybackSplitPage.live, '直播页左右布局样式'),
                           ])
                             _choices(
@@ -671,13 +672,13 @@ final class _SettingsCategoryPageState
                             '进入播放页默认显示评论区',
                             s.defaultShowComments,
                             controller.setDefaultShowComments,
-                            '打开视频或影视时优先显示评论区；关闭时默认显示简介',
+                            '打开视频、影视或课程时优先显示评论区，关闭时默认显示简介',
                           ),
                           _toggle(
                             '自动收起播放页侧边栏',
                             s.autoCollapsePlaybackSidebar,
                             controller.setAutoCollapsePlaybackSidebar,
-                            '视频、影视和直播使用分栏布局时默认收起右侧信息，可手动展开',
+                            '视频、影视、直播和课程使用分栏布局时默认收起右侧信息，可手动展开',
                           ),
                           _toggle(
                             '自动播放',
@@ -842,7 +843,7 @@ final class _SettingsCategoryPageState
                             style: TextStyle(fontSize: 12),
                           ),
                           const SizedBox(height: 8),
-                          const Text('适用于视频、影视和悬停预览，下次加载播放源时生效。'),
+                          const Text('适用于视频、影视、课程和悬停预览，下次加载播放源时生效。'),
                         ]),
                       if (widget.category == SettingsCategory.playback)
                         _section('视频编解码', [
@@ -881,7 +882,7 @@ final class _SettingsCategoryPageState
                             ),
                           ],
                           const Text(
-                            '解码设置适用于视频、影视、直播、离线播放和悬停预览，下次打开或重新加载播放源时生效。',
+                            '解码设置适用于视频、影视、直播、课程、离线播放和悬停预览，下次打开或重新加载播放源时生效。',
                             style: TextStyle(fontSize: 12),
                           ),
                           _choices('优先视频编码', s.preferredVideoCodec, const {

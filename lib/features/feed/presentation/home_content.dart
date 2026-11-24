@@ -893,7 +893,7 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
   }
 
   Future<void> _openDynamicLink(Uri uri) async {
-    if (context.openArticleLink(uri)) return;
+    if (context.openArticleOrCourseLink(uri)) return;
     final query = dynamicSearchQuery(uri);
     if (query != null) {
       context.openWorkspaceLink(

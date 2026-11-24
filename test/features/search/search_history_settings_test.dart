@@ -37,7 +37,7 @@ void main() {
           .recordSearchHistory,
       isFalse,
     );
-    expect(database.schemaVersion, 3);
+    expect(database.schemaVersion, 4);
   });
 
   test('recording preference persists, rolls back failed saves and restores defaults', () async {

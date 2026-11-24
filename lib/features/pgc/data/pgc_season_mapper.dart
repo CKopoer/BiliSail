@@ -9,6 +9,8 @@ PgcSeason mapApiPgcSeason(ApiPgcSeason result) => PgcSeason(
   description: result.description,
   type: result.type,
   rating: result.rating,
+  course: result.course,
+  instructor: result.instructor,
   playCount: result.playCount,
   danmakuCount: result.danmakuCount,
   followCount: result.followCount,

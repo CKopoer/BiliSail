@@ -1,6 +1,9 @@
 import '../../../core/presentation/motion_preferences.dart';
 
 import 'dart:async';
+
+import '../../../domain/course_address.dart';
+
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
@@ -70,6 +73,10 @@ final class _SearchEntryHeaderState extends State<SearchEntryHeader> {
       text: query,
       selection: TextSelection.collapsed(offset: query.length),
     );
+    if (CourseAddress.parse(Uri.tryParse(query)) != null) {
+      widget.onSearch(query);
+      return;
+    }
     unawaited(
       ProviderScope.containerOf(
         context,

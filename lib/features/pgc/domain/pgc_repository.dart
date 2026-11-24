@@ -1,4 +1,5 @@
 import '../../../domain/request_cancellation.dart';
+import '../../../domain/comment_target.dart';
 import '../../../domain/video.dart';
 
 final class PgcSeasonId {
@@ -23,17 +24,19 @@ final class PgcEpisodeId {
 
 /// A season link or an episode link can identify the same detail page.
 final class PgcLocator {
-  const PgcLocator({this.seasonId, this.episodeId});
+  const PgcLocator({this.seasonId, this.episodeId, this.course = false});
+  final bool course;
   final PgcSeasonId? seasonId;
   final PgcEpisodeId? episodeId;
 
   @override
   bool operator ==(Object other) =>
       other is PgcLocator &&
+      other.course == course &&
       other.seasonId == seasonId &&
       other.episodeId == episodeId;
   @override
-  int get hashCode => Object.hash(seasonId, episodeId);
+  int get hashCode => Object.hash(seasonId, episodeId, course);
 }
 
 final class PgcEpisode {
@@ -100,6 +103,8 @@ final class PgcSeason {
     this.description = '',
     this.type,
     this.rating,
+    this.course = false,
+    this.instructor,
     this.playCount,
     this.danmakuCount,
     this.followCount,
@@ -111,6 +116,8 @@ final class PgcSeason {
   final String title, description;
   final Uri? coverUrl;
   final int? type, playCount, danmakuCount, followCount;
+  final bool course;
+  final String? instructor;
   final double? rating;
   final String? publishText;
   final PgcEpisodeId? lastEpisodeId;
@@ -119,6 +126,15 @@ final class PgcSeason {
   // The immutable season owns all episode derivations. A refreshed season gets
   // a new index; panel rebuilds and playback sequencing share this one instance.
   late final _episodeIndex = _PgcEpisodeIndex(episodes);
+
+  CommentTarget? commentTarget(PgcEpisode? episode) {
+    if (episode == null) return null;
+    if (course) {
+      return CommentTarget(episode.episodeId, CommentTargetType.course);
+    }
+    final aid = episode.aid;
+    return aid == null ? null : CommentTarget(aid, CommentTargetType.video);
+  }
 
   String get seasonId => id.value;
   Map<String, List<PgcEpisode>> get episodeGroups => _episodeIndex.groups;
