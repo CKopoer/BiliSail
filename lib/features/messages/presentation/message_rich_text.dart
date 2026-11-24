@@ -110,6 +110,7 @@ class _MessageRichTextState extends State<MessageRichText> {
         overflow: TextOverflow.ellipsis,
       );
     }
-    return SelectableText.rich(span);
+    // Paint message text directly in the list while keeping selection support.
+    return SelectionArea(child: Text.rich(span));
   }
 }
