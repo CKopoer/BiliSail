@@ -55,6 +55,9 @@ void main() {
       'https://www.bilibili.com/video/BV17x411w7KC/?from=message':
           '/video/BV17x411w7KC',
       'https://bilibili.com/video/BV17x411w7KC': '/video/BV17x411w7KC',
+      'https://www.bilibili.com/cheese/play/ep20766': '/course/episode/20766',
+      'https://m.bilibili.com/cheese/play/ss556': '/course/season/556',
+      'bilibili://cheese/season/556': '/course/season/556',
       'https://www.bilibili.com/bangumi/play/ep123#reply': '/pgc/episode/123',
       'https://www.bilibili.com/bangumi/play/ss456': '/pgc/season/456',
       'https://live.bilibili.com/123': '/live/123',

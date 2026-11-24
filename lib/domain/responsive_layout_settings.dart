@@ -1,6 +1,6 @@
 enum PlaybackSplitStyle { automatic, right, below }
 
-enum PlaybackSplitPage { video, pgc, live }
+enum PlaybackSplitPage { video, pgc, live, course }
 
 /// Responsive layout preferences, with width breakpoints in logical pixels.
 final class ResponsiveLayoutSettings {

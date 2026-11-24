@@ -207,6 +207,8 @@ GoRouter createBiliRouter({
           '/video/:bvid',
           '/pgc/season/:id',
           '/pgc/episode/:id',
+          '/course/season/:id',
+          '/course/episode/:id',
           '/live/:roomId',
           '/user/:mid',
           '/topic/:id',
@@ -662,7 +664,7 @@ final class _WorkspacePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final defaultShowComments = tab.isVideo || tab.isPgc
+    final defaultShowComments = tab.isVideo || tab.isPgc || tab.isCourse
         ? ref.watch(
             settingsControllerProvider.select(
               (settings) =>
@@ -672,7 +674,7 @@ final class _WorkspacePage extends ConsumerWidget {
           )
         : false;
     final autoCollapseSidebar =
-        (tab.isVideo || tab.isPgc || tab.isLive) &&
+        (tab.isVideo || tab.isPgc || tab.isCourse || tab.isLive) &&
         ref.watch(
           settingsControllerProvider.select(
             (settings) => settings.value?.autoCollapsePlaybackSidebar ?? false,
@@ -823,7 +825,7 @@ final class _WorkspacePage extends ConsumerWidget {
                     onOpenVideo: (video) =>
                         context.openWorkspaceLink('/video/${video.id.value}'),
                     onOpenLink: (target) async {
-                      if (context.openArticleLink(target)) return;
+                      if (context.openArticleOrCourseLink(target)) return;
                       final query = dynamicSearchQuery(target);
                       if (query != null) {
                         context.openWorkspaceLink(
@@ -891,13 +893,16 @@ final class _WorkspacePage extends ConsumerWidget {
                     coverProvider: downloadCoverProvider,
                   );
                 }
-                if (tab.isPgc) {
+                if (tab.isPgc || tab.isCourse) {
+                  final kind = tab.isCourse ? '课程' : '影视';
+                  final prefix = tab.isCourse ? '/course' : '/pgc';
                   final id = uri.pathSegments.last;
                   if (!RegExp(r'^[1-9][0-9]*$').hasMatch(id)) {
-                    return const StateView.empty(message: '影视地址无效');
+                    return StateView.empty(message: '$kind地址无效');
                   }
                   return PgcScreen(
-                    key: PageStorageKey('pgc-${tab.id}'),
+                    key: PageStorageKey('$prefix-${tab.id}'),
+                    course: tab.isCourse,
                     onLogin: () => showAppDialog<void>(
                       context: context,
                       builder: (_) => const AccountDialog(),
@@ -917,20 +922,20 @@ final class _WorkspacePage extends ConsumerWidget {
                                 season,
                                 episode,
                               ) ??
-                              const StateView.empty(message: '影视播放服务未配置'),
+                              StateView.empty(message: '$kind播放服务未配置'),
                         ),
                     commentsBuilder: pgcCommentsBuilder,
-                    onDownload: onDownloadSeason == null
+                    onDownload: tab.isCourse || onDownloadSeason == null
                         ? null
                         : (season, selected) =>
                               onDownloadSeason?.call(context, season, selected),
                     onOpenSeason: (season) => context.openWorkspaceLink(
-                      '/pgc/season/${season.seasonId}',
+                      '$prefix/season/${season.seasonId}',
                     ),
                     onEpisodeChanged: (episode) {
                       final target = uri.replace(
                         path: uri.pathSegments[1] == 'episode'
-                            ? '/pgc/episode/${episode.episodeId}'
+                            ? '$prefix/episode/${episode.episodeId}'
                             : uri.path,
                         queryParameters: {
                           ...uri.queryParameters,

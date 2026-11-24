@@ -8,6 +8,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
+import '../domain/course_address.dart';
 import '../core/platform/window_caption.dart';
 import '../core/platform/window_size_policy.dart';
 import '../features/feed/domain/home_channel.dart';
@@ -670,7 +671,11 @@ final class _BiliAppShellState extends State<BiliAppShell>
   void _search(String input) {
     final query = input.trim();
     if (query.isEmpty) return;
-    context.go(Uri(path: '/search', queryParameters: {'q': query}).toString());
+    final course = CourseAddress.parse(Uri.tryParse(query));
+    context.go(
+      course?.location ??
+          Uri(path: '/search', queryParameters: {'q': query}).toString(),
+    );
   }
 
   void _selectChannel(HomeChannel channel) {

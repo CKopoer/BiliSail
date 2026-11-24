@@ -30,10 +30,11 @@ import '../../../shared/ui/playback_page_layout.dart';
 import '../../../shared/ui/scroll_collapsing_header.dart';
 import '../../../shared/ui/playback_info_tabs.dart';
 import '../../../shared/ui/comment_detail_builder.dart';
-import '../../../domain/comment_target.dart';
+import '../../../domain/course_address.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/video_card.dart';
 import '../application/pgc_controller.dart';
+import '../../auth/application/auth_controller.dart';
 import '../application/pgc_follow_controller.dart';
 import '../domain/pgc_repository.dart';
 import '../domain/pgc_playback_sequence.dart';
@@ -54,6 +55,7 @@ typedef PgcCommentsBuilder = Widget Function(
 final class PgcScreen extends ConsumerStatefulWidget {
   const PgcScreen({
     super.key,
+    this.course = false,
     this.seasonId,
     this.episodeId,
     this.defaultShowComments = false,
@@ -66,6 +68,7 @@ final class PgcScreen extends ConsumerStatefulWidget {
     this.onLogin,
   });
 
+  final bool course;
   final String? seasonId, episodeId;
   final bool? defaultShowComments;
   final bool autoCollapseSidebar;
@@ -87,6 +90,8 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
   bool _wide = false;
   ({PgcSeasonId season, bool expanded})? _descriptionOverride;
   ContentLink? _contentLink;
+
+  String get _kind => widget.course ? '课程' : '影视';
 
   bool get _infoVisible =>
       _infoVisibilityOverride ?? !(_wide && widget.autoCollapseSidebar);
@@ -127,6 +132,7 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
     final seasonId = widget.seasonId?.trim();
     final episodeId = widget.episodeId?.trim();
     return PgcLocator(
+      course: widget.course,
       seasonId: seasonId == null || seasonId.isEmpty
           ? null
           : PgcSeasonId(seasonId),
@@ -140,7 +146,8 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
   void didUpdateWidget(covariant PgcScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     final next = _fromWidget();
-    if (oldWidget.seasonId != widget.seasonId) {
+    if (oldWidget.course != widget.course ||
+        oldWidget.seasonId != widget.seasonId) {
       _locator = next;
       _tab = null;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -233,16 +240,18 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
     }
     final tab = _tab ?? 0;
     if (_locator.seasonId == null && _locator.episodeId == null) {
-      return const StateView.empty(message: '缺少剧集或作品编号');
+      return StateView.empty(
+        message: widget.course ? '缺少课程或课时编号' : '缺少剧集或作品编号',
+      );
     }
     final state = ref.watch(pgcControllerProvider(_locator));
     final season = state.season;
     if (season == null) {
       if (state.loading) {
-        return const StateView.loading(message: '正在加载影视详情…');
+        return StateView.loading(message: '正在加载$_kind详情…');
       }
       return StateView.error(
-        message: state.message ?? '影视详情暂时无法加载',
+        message: state.message ?? '$_kind详情暂时无法加载',
         onAction: () =>
             ref.read(pgcControllerProvider(_locator).notifier).load(),
       );
@@ -306,13 +315,7 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
                         WorkspaceActivity.isVisible(context) &&
                         !WorkspaceActivity.isActive(context),
                     child: CommentDetailBuilder(
-                      target: switch (selected?.aid) {
-                        final String aid => CommentTarget(
-                          aid,
-                          CommentTargetType.video,
-                        ),
-                        null => null,
-                      },
+                      target: season.commentTarget(selected),
                       enabled: tab == 1 && widget.commentsBuilder != null,
                       builder: (context, detailOpen) => PlaybackInfoTabs(
                         showNavigation: !detailOpen,
@@ -328,7 +331,7 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
                         labels: [
                           Text(
                             PlaybackSplitLayout.infoBelowOf(context)
-                                ? '选集'
+                                ? (widget.course ? '课时' : '选集')
                                 : '简介',
                           ),
                           if (widget.commentsBuilder != null &&
@@ -417,7 +420,9 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
             builder: (context, constraints, listening) =>
                 PlaybackVideoDimensions(
                   builder: (context, dimensions) => PlaybackPageLayout(
-                    splitPage: PlaybackSplitPage.pgc,
+                    splitPage: widget.course
+                        ? PlaybackSplitPage.course
+                        : PlaybackSplitPage.pgc,
                     wide: wide,
                     showInfo: showInfo,
                     listening: listening,
@@ -450,7 +455,7 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
                     player: player,
                     info: info,
                     toggleInfo: _toggleInfo,
-                    toggleTooltip: showInfo ? '收起影视信息' : '展开影视信息',
+                    toggleTooltip: showInfo ? '收起$_kind信息' : '展开$_kind信息',
                   ),
                 ),
           );
@@ -468,22 +473,35 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
       _playerSeason = season;
       _playerEpisode = episode;
       final builder = _playerBuilder = widget.playerBuilder;
-      final content = ColoredBox(
-        key: const ValueKey('pgc-player'),
-        color: Colors.black,
-        child: episode == null
-            ? const StateView.empty(
-                message: '这个作品暂无可选择的剧集',
-                icon: Icons.movie_outlined,
-              )
-            : episode.playable
-            // Keep inherited dependencies on this element, so settings/theme
-            // updates still reach the injected player without sidebar rebuilds.
-            ? Builder(builder: (context) => builder(context, season, episode))
-            : StateView.empty(
-                message: episode.unavailableReason,
-                icon: Icons.lock_outline,
-              ),
+      final content = Builder(
+        builder: (context) => ColoredBox(
+          key: const ValueKey('pgc-player'),
+          color: widget.course && episode?.playable != true
+              ? Theme.of(context).colorScheme.surfaceContainer
+              : Colors.black,
+          child: episode == null
+              ? StateView.empty(
+                  message: widget.course ? '这门课程暂无课时' : '这个作品暂无可选择的剧集',
+                  icon: widget.course
+                      ? Icons.school_outlined
+                      : Icons.movie_outlined,
+                )
+              : episode.playable
+              // Keep inherited dependencies on this element, so settings/theme
+              // updates still reach the injected player without sidebar rebuilds.
+              ? builder(context, season, episode)
+              : StateView.empty(
+                  message: episode.unavailableReason,
+                  icon: Icons.lock_outline,
+                  actionLabel: '登录已购账号',
+                  onAction:
+                      widget.course &&
+                          !episode.available &&
+                          !ref.read(authControllerProvider).isSignedIn
+                      ? widget.onLogin
+                      : null,
+                ),
+        ),
       );
       _playerContent = content;
       return content;
@@ -544,14 +562,19 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
     VoidCallback toggleInfo,
   ) {
     return PopupMenuButton<String>(
-      tooltip: '更多影视操作',
+      tooltip: '更多$_kind操作',
       onSelected: (action) {
         if (action == 'download') {
           widget.onDownload?.call(season, episode);
         } else if (action == 'refresh') {
           unawaited(_reload());
         } else if (action == 'copy') {
-          final url = episode == null
+          final url = widget.course
+              ? CourseAddress(
+                  episode?.episodeId ?? season.seasonId,
+                  season: episode == null,
+                ).webUrl
+              : episode == null
               ? 'https://www.bilibili.com/bangumi/play/ss${_locator.seasonId?.value ?? ''}'
               : 'https://www.bilibili.com/bangumi/play/ep${episode.episodeId}';
           unawaited(_copyLink(context, url));
@@ -562,10 +585,10 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
       itemBuilder: (context) => [
         if (widget.onDownload != null)
           const PopupMenuItem(value: 'download', child: Text('下载剧集')),
-        const PopupMenuItem(value: 'refresh', child: Text('刷新影视详情')),
+        PopupMenuItem(value: 'refresh', child: Text('刷新$_kind详情')),
         if (episode != null || _locator.seasonId != null)
           const PopupMenuItem(value: 'copy', child: Text('复制播放链接')),
-        const PopupMenuItem(value: 'collapse', child: Text('收起影视信息')),
+        PopupMenuItem(value: 'collapse', child: Text('收起$_kind信息')),
       ],
     );
   }
@@ -583,7 +606,7 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
     final season = ref.read(pgcControllerProvider(_locator)).season;
     await Future.wait([
       ref.read(pgcControllerProvider(_locator).notifier).load(),
-      if (season != null)
+      if (season != null && !widget.course)
         ref.read(pgcFollowControllerProvider(season.id).notifier).refresh(),
     ]);
   }
@@ -615,19 +638,27 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
-              ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: constraints.maxWidth / 2),
-                child: PgcFollowButton(
-                  seasonId: season.id,
-                  seasonType: season.type,
-                  onLogin: widget.onLogin,
+              if (!widget.course) ...[
+                const SizedBox(width: 12),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: constraints.maxWidth / 2,
+                  ),
+                  child: PgcFollowButton(
+                    seasonId: season.id,
+                    seasonType: season.type,
+                    onLogin: widget.onLogin,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
-        if (below && selected != null) ...[
+        if (season.instructor case final instructor?) ...[
+          const SizedBox(height: 5),
+          _stat(context, Icons.school_outlined, '讲师 · $instructor'),
+        ],
+        if ((below || widget.course) && selected != null) ...[
           const SizedBox(height: 4),
           Text(selected.displayTitle, style: text.bodyMedium),
         ],

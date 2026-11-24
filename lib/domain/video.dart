@@ -146,6 +146,7 @@ final class VideoPart {
     required this.title,
     required this.duration,
     this.interactiveEdgeId,
+    this.courseEpisodeId,
   });
 
   final String cid;
@@ -153,6 +154,7 @@ final class VideoPart {
   final String title;
   final Duration duration;
   final String? interactiveEdgeId;
+  final String? courseEpisodeId;
 
   (String, String?) get playbackKey => (cid, interactiveEdgeId);
 }

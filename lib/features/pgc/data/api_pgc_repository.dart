@@ -17,6 +17,7 @@ final class ApiPgcRepository implements PgcRepository {
     Duration cacheTtl = const Duration(minutes: 2),
     int maxCachedSeasons = 8,
     int maxPendingSeasons = 8,
+    bool course = false,
   }) => ApiPgcRepository._(
     client,
     requests,
@@ -25,6 +26,7 @@ final class ApiPgcRepository implements PgcRepository {
     cacheTtl,
     maxCachedSeasons,
     maxPendingSeasons,
+    course,
   );
 
   ApiPgcRepository._(
@@ -35,6 +37,7 @@ final class ApiPgcRepository implements PgcRepository {
     this.cacheTtl,
     this.maxCachedSeasons,
     this.maxPendingSeasons,
+    this.course,
   ) {
     if (maxCachedSeasons < 1 ||
         maxPendingSeasons < 1 ||
@@ -43,6 +46,7 @@ final class ApiPgcRepository implements PgcRepository {
     }
   }
 
+  final bool course;
   final PgcClient client;
   final ApiRequests requests;
   final String Function() _accountScope;
@@ -95,7 +99,10 @@ final class ApiPgcRepository implements PgcRepository {
     var flight = refresh ? null : _pending[key];
     if (flight == null || flight.cancellation.isCancelled) {
       if (_flights.length >= maxPendingSeasons) {
-        throw const AppFailure(AppFailureKind.rateLimited, '影视详情请求繁忙，请稍后重试');
+        throw AppFailure(
+          AppFailureKind.rateLimited,
+          course ? '课程详情请求繁忙，请稍后重试' : '影视详情请求繁忙，请稍后重试',
+        );
       }
       flight = _SeasonFlight();
       _pending[key] = flight;
@@ -127,9 +134,15 @@ final class ApiPgcRepository implements PgcRepository {
         final result = await client.getSeason(
           seasonId: seasonId?.value,
           episodeId: episodeId?.value,
+          course: course,
           requireEpisodes: episodeId != null,
           context: context,
         );
+        if (course &&
+            episodeId != null &&
+            !result.episodes.any((ep) => ep.episodeId == episodeId.value)) {
+          throw const AppFailure(AppFailureKind.notFound, '未找到指定的课时');
+        }
         return mapApiPgcSeason(result);
       }, cancellation: flight.cancellation);
       if (flight.cancellation.isCancelled ||

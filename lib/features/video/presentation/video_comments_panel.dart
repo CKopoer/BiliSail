@@ -13,18 +13,25 @@ class VideoCommentsPanel extends ConsumerWidget {
     super.key,
     required this.detail,
     this.onLogin,
+    this.target,
     this.onOpenUser,
   });
   final VideoDetail detail;
+  final CommentTarget? target;
   final VoidCallback? onLogin;
   final ValueChanged<UserId>? onOpenUser;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final aid = detail.aid;
-    if (aid == null || aid.isEmpty) return const Center(child: Text('暂无评论信息'));
+    final resolved =
+        target ??
+        (aid == null || aid.isEmpty
+            ? null
+            : CommentTarget(aid, CommentTargetType.video));
+    if (resolved == null) return const Center(child: Text('暂无评论信息'));
     return CommentsPanel(
-      target: CommentTarget(aid, CommentTargetType.video),
+      target: resolved,
       replyCount: detail.replyCount,
       onLogin: onLogin,
       onOpenUser: onOpenUser,

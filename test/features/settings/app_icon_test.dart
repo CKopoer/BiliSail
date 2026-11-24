@@ -28,7 +28,7 @@ void main() {
       expect((await repository.load()).appIcon, AppIconPreference.bilibili);
       await repository.save(const AppSettings.defaults());
       expect((await repository.load()).appIcon, AppIconPreference.bilisail);
-      expect(database.schemaVersion, 3);
+      expect(database.schemaVersion, 4);
     },
   );
 

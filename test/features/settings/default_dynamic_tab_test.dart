@@ -76,7 +76,7 @@ void main() {
       ) as Map<String, Object?>;
       expect(snapshot['defaultDynamicTab'], tab.name);
       expect(snapshot['schemaVersion'], greaterThanOrEqualTo(38));
-      expect(database.schemaVersion, 3);
+      expect(database.schemaVersion, 4);
       container.invalidate(settingsControllerProvider);
       expect(
         (await container.read(settingsControllerProvider.future))

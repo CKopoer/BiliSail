@@ -34,6 +34,7 @@ class SqliteLibraryRepository {
               duration: Duration(milliseconds: row.read<int>('duration_ms')),
             ),
             part: VideoPart(
+              courseEpisodeId: row.readNullable<String>('course_episode_id'),
               cid: row.read<String>('cid'),
               page: row.read<int>('part_number'),
               title: row.read<String>('part_title'),
@@ -74,24 +75,26 @@ class SqliteLibraryRepository {
 
   Future<String?> latestPgcEpisode(
     String scope,
-    Iterable<String> episodeIds,
-  ) async {
+    Iterable<String> episodeIds, {
+    bool course = false,
+  }) async {
     if (scope != accountScope()) return null;
     final ids = episodeIds.toSet();
     if (ids.isEmpty) return null;
     // Progress is already bounded to 500 rows per account. Match IDs in Dart
     // instead of exceeding SQLite's parameter limit on long-running seasons.
+    final column = course ? 'course_episode_id' : 'pgc_episode_id';
     final rows = await database
         .customSelect(
-          '''SELECT pgc_episode_id FROM playback_progress
-      WHERE scope = ? AND pgc_episode_id IS NOT NULL
+          '''SELECT $column FROM playback_progress
+      WHERE scope = ? AND $column IS NOT NULL
       ORDER BY updated_at_ms DESC, rowid DESC LIMIT 500''',
           variables: [Variable<String>(scope)],
         )
         .get();
     if (scope != accountScope()) return null;
     for (final row in rows) {
-      final id = row.read<String>('pgc_episode_id');
+      final id = row.read<String>(column);
       if (ids.contains(id)) return id;
     }
     return null;
@@ -110,12 +113,12 @@ class SqliteLibraryRepository {
       if (scope != accountScope()) return;
       await database.customStatement(
         '''INSERT INTO playback_progress
-        (scope,bvid,cid,title,cover_url,author,duration_ms,part_title,part_number,position_ms,updated_at_ms,pgc_episode_id)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(scope,bvid,cid) DO UPDATE SET
+        (scope,bvid,cid,title,cover_url,author,duration_ms,part_title,part_number,position_ms,updated_at_ms,pgc_episode_id,course_episode_id)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(scope,bvid,cid) DO UPDATE SET
         title=excluded.title,cover_url=excluded.cover_url,author=excluded.author,
         duration_ms=excluded.duration_ms,part_title=excluded.part_title,
         position_ms=excluded.position_ms,updated_at_ms=excluded.updated_at_ms,
-        pgc_episode_id=excluded.pgc_episode_id''',
+        pgc_episode_id=excluded.pgc_episode_id, course_episode_id=excluded.course_episode_id''',
         [
           scope,
           video.id.value,
@@ -129,6 +132,7 @@ class SqliteLibraryRepository {
           position.inMilliseconds.clamp(0, duration.inMilliseconds),
           DateTime.now().millisecondsSinceEpoch,
           episodeId,
+          part.courseEpisodeId,
         ],
       );
       // Bounded per-account metadata. This never deletes offline media.

@@ -50,7 +50,7 @@ void main() {
       final snapshot =
           jsonDecode((await database.readSetting('preferences.v1'))!) as Map;
       expect(snapshot['schemaVersion'], greaterThanOrEqualTo(40));
-      expect(database.schemaVersion, 3);
+      expect(database.schemaVersion, 4);
       await repository.save(const AppSettings.defaults());
       expect((await repository.load()).playbackRates, PlaybackRates.values);
     },

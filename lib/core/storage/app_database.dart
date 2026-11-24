@@ -20,7 +20,7 @@ class AppDatabase extends GeneratedDatabase {
   }
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   Iterable<TableInfo<Table, Object?>> get allTables => const [];
@@ -48,6 +48,7 @@ class AppDatabase extends GeneratedDatabase {
         position_ms INTEGER NOT NULL,
         updated_at_ms INTEGER NOT NULL,
         pgc_episode_id TEXT,
+        course_episode_id TEXT,
         PRIMARY KEY (scope, bvid, cid)
       )''');
       await customStatement(
@@ -56,16 +57,18 @@ class AppDatabase extends GeneratedDatabase {
       await _createDownloads();
     },
     onUpgrade: (migrator, from, to) async {
+      if (from < 1 || from > 3 || to != 4) {
+        throw StateError('Unsupported database migration $from → $to');
+      }
       if (from == 1) {
         await customStatement(
           'ALTER TABLE playback_progress ADD COLUMN pgc_episode_id TEXT',
         );
       }
-      if (from <= 2 && to == 3) {
-        await _createDownloads();
-        return;
-      }
-      throw StateError('Unsupported database migration $from → $to');
+      if (from <= 2) await _createDownloads();
+      await customStatement(
+        'ALTER TABLE playback_progress ADD COLUMN course_episode_id TEXT',
+      );
     },
   );
 

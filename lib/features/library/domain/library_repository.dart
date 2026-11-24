@@ -1,4 +1,5 @@
 import '../../../domain/article_address.dart';
+import '../../../domain/course_address.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
 import '../../../domain/user.dart';
@@ -80,14 +81,18 @@ final class WatchHistoryEntry {
   final bool courseSeason;
   HistoryContentType get type =>
       contentType ??
-      (episodeId == null ? HistoryContentType.video : HistoryContentType.pgc);
+      (part?.courseEpisodeId != null
+          ? HistoryContentType.course
+          : episodeId == null
+          ? HistoryContentType.video
+          : HistoryContentType.pgc);
   String get title => video?.title ?? contentTitle;
   String get coverUrl => video?.coverUrl ?? contentCoverUrl;
   String get author => video?.author ?? contentAuthor;
   UserId? get authorId => video?.authorId ?? contentAuthorId;
   (HistoryContentType, String, String?) get identity => (
     type,
-    contentId ?? episodeId ?? video?.id.value ?? '',
+    contentId ?? part?.courseEpisodeId ?? episodeId ?? video?.id.value ?? '',
     switch (type) {
       HistoryContentType.course => courseSeason ? 'season' : 'episode',
       HistoryContentType.articleList => collectionArticleId,
@@ -106,9 +111,11 @@ final class WatchHistoryEntry {
       final id? => ArticleAddress(ArticleKind.column, id).location,
       null => ArticleCollectionId(contentId ?? '').location,
     }),
-    HistoryContentType.course => Uri.https(
-      'www.bilibili.com',
-      '/cheese/play/${courseSeason ? 'ss' : 'ep'}$contentId',
+    HistoryContentType.course => Uri.parse(
+      CourseAddress(
+        contentId ?? part!.courseEpisodeId!,
+        season: courseSeason,
+      ).location,
     ),
     _ =>
       episodeId == null

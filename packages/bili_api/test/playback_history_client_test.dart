@@ -131,6 +131,41 @@ void main() {
       expect(transport.posts.last.fields['played_time'], '-1');
     },
   );
+  test('course history uses PUGV identity and a type 10 heartbeat', () async {
+    transport.data = _pgcProgress('7', 42);
+    expect(
+      await client.read(
+        _bvid,
+        _cid,
+        courseAid: '9',
+        episodeId: '7',
+        seasonId: '8',
+      ),
+      const Duration(seconds: 42),
+    );
+    expect(transport.reads.single.path, '/pugv/view/web/season');
+    await client.report(
+      _bvid,
+      _cid,
+      courseAid: '9',
+      episodeId: '7',
+      seasonId: '8',
+      position: const Duration(seconds: 42),
+      duration: const Duration(seconds: 120),
+      completed: false,
+    );
+    expect(transport.posts.single.fields, {
+      'aid': '9',
+      'cid': _cid,
+      'epid': '7',
+      'sid': '8',
+      'type': '10',
+      'played_time': '42',
+      'video_duration': '120',
+      'csrf': 'fixture-csrf',
+    });
+  });
+
   test('PGC read and write carry real episode and season identity', () async {
     transport.data = _pgcProgress('7', 426);
     expect(

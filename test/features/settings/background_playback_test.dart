@@ -77,6 +77,6 @@ void main() {
     }
     await container.read(settingsControllerProvider.notifier).resetToDefaults();
     expect((await repository.load()).backgroundPlayback, isTrue);
-    expect(database.schemaVersion, 3);
+    expect(database.schemaVersion, 4);
   });
 }

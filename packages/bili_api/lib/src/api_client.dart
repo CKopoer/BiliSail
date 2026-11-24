@@ -606,12 +606,13 @@ final class BiliApiClient {
     bool requireEpisodes = false,
     ApiRequestContext? context,
   }) async {
-    const endpoint = 'pgc_season';
+    final course = uri.path == '/pugv/view/web/season';
+    final endpoint = course ? 'course_season' : 'pgc_season';
     if (uri.scheme != 'https' ||
         uri.host != 'api.bilibili.com' ||
         uri.port != 443 ||
         uri.userInfo.isNotEmpty ||
-        uri.path != '/pgc/view/web/season') {
+        (!course && uri.path != '/pgc/view/web/season')) {
       throw ArgumentError('Unsupported PGC destination');
     }
     final active = boundedReadContext(context);
@@ -629,11 +630,17 @@ final class BiliApiClient {
         attemptBudget: attempts,
       );
       check();
-      final season = await _decodePgcSeason(response, active, endpoint, check);
+      final season = await _decodePgcSeason(
+        response,
+        active,
+        endpoint,
+        check,
+        course,
+      );
       check();
       if (!requireEpisodes || season.episodes.isNotEmpty) return season;
       if (attempts.isExhausted) {
-        throw const ApiFailure(ApiFailureCategory.unavailable, endpoint);
+        throw ApiFailure(ApiFailureCategory.unavailable, endpoint);
       }
       await _retryDelay(attempts.used - 1, deadline, active.cancellation);
     }
@@ -644,6 +651,7 @@ final class BiliApiClient {
     ApiRequestContext context,
     String endpoint,
     void Function() check,
+    bool course,
   ) async {
     // Also enforce the transport's 4 MiB limit for injected transports and
     // before copying bytes into the worker message.
@@ -651,7 +659,7 @@ final class BiliApiClient {
       throw ApiFailure(ApiFailureCategory.protocol, endpoint);
     }
     if (response.body.length < 512 * 1024) {
-      return decodePgcSeasonBytes(response.body);
+      return decodePgcSeasonBytes(response.body, course: course);
     }
     await _decodeGate.enter(
       context.cancellation,
@@ -661,7 +669,9 @@ final class BiliApiClient {
     );
     try {
       check();
-      return await _pgcSeasonDecoder(response.body);
+      return course
+          ? await _decodePgcInIsolate(response.body, course: true)
+          : await _pgcSeasonDecoder(response.body);
     } finally {
       // Cancellation discards output; the running worker retains its slot
       // until it really finishes, so cancelled work cannot exceed the budget.
@@ -3772,10 +3782,16 @@ Future<List<ApiDanmakuItem>> _decodeInIsolate(Uint8List bytes) {
   );
 }
 
-Future<ApiPgcSeason> _decodePgcInIsolate(Uint8List bytes) {
+Future<ApiPgcSeason> _decodePgcInIsolate(
+  Uint8List bytes, {
+  bool course = false,
+}) {
   final payload = TransferableTypedData.fromList([bytes]);
   return Isolate.run(
-    () => decodePgcSeasonBytes(payload.materialize().asUint8List()),
+    () => decodePgcSeasonBytes(
+      payload.materialize().asUint8List(),
+      course: course,
+    ),
   );
 }
 

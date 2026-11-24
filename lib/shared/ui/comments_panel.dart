@@ -5,11 +5,13 @@ import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart' show OverflowBoxFit;
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app_dialog.dart';
 import 'content_link_scope.dart';
 import '../../domain/content_link.dart';
+import '../../domain/course_address.dart';
 import '../../core/platform/external_links.dart';
 import '../../core/presentation/workspace_activity.dart';
 import '../../core/presentation/page_back_scope.dart';
@@ -170,6 +172,15 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
         controller.isCurrentAccount(state.accountScope, state.sessionEpoch);
     var opened = false;
     try {
+      final course = CourseAddress.parse(uri);
+      if (course != null && isCurrent()) {
+        final router = GoRouter.maybeOf(context);
+        if (router != null) {
+          if (ModalRoute.of(context) is PopupRoute) Navigator.of(context).pop();
+          router.go(course.location);
+          return;
+        }
+      }
       final navigate = ref.read(commentVideoNavigatorProvider);
       if (navigate != null) {
         final video = await ref

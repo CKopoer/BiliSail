@@ -7,11 +7,14 @@ final class LocalPgcResumeRepository implements PgcResumeRepository {
   const LocalPgcResumeRepository({
     required this.resumeEnabled,
     required this.latestEpisode,
+    this.latestCourseEpisode,
   });
 
   final Future<bool> Function() resumeEnabled;
   final Future<String?> Function(String scope, Iterable<String> episodeIds)
   latestEpisode;
+  final Future<String?> Function(String scope, Iterable<String> episodeIds)?
+  latestCourseEpisode;
 
   @override
   Future<PgcEpisodeId?> resumeEpisode(
@@ -21,7 +24,8 @@ final class LocalPgcResumeRepository implements PgcResumeRepository {
   }) async {
     if (cancellation.isCancelled || !await resumeEnabled()) return null;
     if (cancellation.isCancelled) return null;
-    final local = await latestEpisode(
+    final lookup = season.course ? latestCourseEpisode : latestEpisode;
+    final local = await lookup?.call(
       scope,
       season.episodes.map((episode) => episode.episodeId),
     );

@@ -8,6 +8,7 @@ import '../../playback/application/recommendation_playback_registry.dart';
 import '../../../core/presentation/workspace_activity.dart';
 import '../../../shared/ui/app_notice.dart';
 import '../../../domain/video.dart';
+import '../../../domain/course_address.dart';
 import '../../../shared/ui/responsive_card_grid.dart';
 import '../../../shared/ui/video_card.dart';
 import '../../../shared/ui/workspace_link.dart';
@@ -145,8 +146,13 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
       );
       return;
     }
-    if (WorkspaceLinkScope.openingInBackground) return;
     final url = target.url;
+    final course = CourseAddress.parse(url);
+    if (course != null) {
+      context.openWorkspaceLink(course.location);
+      return;
+    }
+    if (WorkspaceLinkScope.openingInBackground) return;
     if (url == null) {
       showAppNotice(context, '暂不支持打开此推荐类型');
       return;

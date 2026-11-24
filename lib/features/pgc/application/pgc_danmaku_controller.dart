@@ -66,7 +66,8 @@ final class PgcDanmakuController extends Notifier<PgcDanmakuState> {
       session.media != null &&
       session.danmakuCid == target.cid &&
       switch (session.contentTarget) {
-        PgcPlaybackTarget(:final episodeId) => episodeId == target.episodeId,
+        PgcPlaybackTarget(:final episodeId) ||
+        CoursePlaybackTarget(:final episodeId) => episodeId == target.episodeId,
         _ => false,
       };
 

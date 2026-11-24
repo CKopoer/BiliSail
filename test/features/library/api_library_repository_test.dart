@@ -183,7 +183,7 @@ void main() {
       '/live/12',
       '/article/12',
       '/article/13',
-      'https://www.bilibili.com/cheese/play/ep14',
+      '/course/episode/14',
       '/article-list/12',
     ]);
     expect(result.items.map((e) => e.type), [

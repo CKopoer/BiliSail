@@ -108,6 +108,14 @@ List<ApiDynamicContentCard> _contentCards(
             'www.bilibili.com',
             '/bangumi/play/ss$seasonId',
           ),
+          ApiDynamicCardKind.course when episodeId != null => Uri.https(
+            'www.bilibili.com',
+            '/cheese/play/ep$episodeId',
+          ),
+          ApiDynamicCardKind.course when seasonId != null => Uri.https(
+            'www.bilibili.com',
+            '/cheese/play/ss$seasonId',
+          ),
           ApiDynamicCardKind.article when articleId != null => Uri.https(
             'www.bilibili.com',
             '/read/cv$articleId',

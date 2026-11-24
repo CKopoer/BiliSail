@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../../shared/ui/smooth_scroll_behavior.dart';
 import '../../../shared/ui/scroll_boundary_handoff.dart';
+import '../../../shared/ui/video_card.dart' show durationLabel;
 import '../domain/pgc_repository.dart';
 
 /// A bounded episode viewport keeps long seasons cheap to lay out.
@@ -126,7 +127,7 @@ final class _PgcEpisodePanelState extends State<PgcEpisodePanel> {
               children: [
                 Expanded(
                   child: Text(
-                    '选集 (${currentIndex < 0 ? 0 : currentIndex + 1}/${widget.season.episodes.length})',
+                    '${widget.season.course ? '课程目录' : '选集'} (${currentIndex < 0 ? 0 : currentIndex + 1}/${widget.season.episodes.length})',
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
                 ),
@@ -245,9 +246,9 @@ final class _PgcEpisodePanelState extends State<PgcEpisodePanel> {
                 ),
               ),
             ] else
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 20),
-                child: Text('暂无剧集'),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                child: Text(widget.season.course ? '暂无课时' : '暂无剧集'),
               ),
           ],
         ),
@@ -258,6 +259,7 @@ final class _PgcEpisodePanelState extends State<PgcEpisodePanel> {
   Widget _tile(BuildContext context, PgcEpisode episode, {required bool grid}) {
     final colors = Theme.of(context).colorScheme;
     final selected = episode.id == widget.selected?.id;
+    final duration = episode.duration;
     return Semantics(
       selected: selected,
       child: Material(
@@ -288,6 +290,14 @@ final class _PgcEpisodePanelState extends State<PgcEpisodePanel> {
                     ),
                   ),
                 ),
+                if (!grid && widget.season.course && duration != null) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    durationLabel(duration),
+                    style: Theme.of(context).textTheme.labelSmall
+                        ?.copyWith(color: colors.onSurfaceVariant),
+                  ),
+                ],
                 if (!grid && episode.badge?.isNotEmpty == true) ...[
                   const SizedBox(width: 5),
                   Text(

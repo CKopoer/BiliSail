@@ -45,6 +45,50 @@ final class _Transport implements ApiTransport {
 }
 
 void main() {
+  test('course detail keeps catalogue, seconds and viewing rights', () async {
+    final transport = _Transport(
+      (_) => {
+        'code': 0,
+        'data': {
+          'season_id': 556,
+          'title': '法语',
+          'subtitle': '课程简介',
+          'up_info': {'uname': '讲师'},
+          'ep_catalogue': [
+            {'index': 1, 'title': '第一章'},
+          ],
+          'episodes': [
+            for (final id in [20766, 20767])
+              {
+                'id': id,
+                'aid': 640041584,
+                'cid': 1641007864,
+                'title': '课时$id',
+                'duration': 146,
+                'catalogue_index': 1,
+                'episode_can_view': true,
+                'playable': id == 20766,
+                if (id == 20766) 'label': '全集试看',
+              },
+          ],
+        },
+      },
+    );
+    final client = PgcClient(BiliApiClient(transport: transport));
+    final course = await client.getSeason(course: true, episodeId: '20766');
+    expect(transport.requests.single.path, '/pugv/view/web/season');
+    expect(transport.requests.single.queryParameters, {'ep_id': '20766'});
+    expect(course.course, isTrue);
+    expect(course.instructor, '讲师');
+    final preview = course.episodes.first;
+    expect(preview.sectionTitle, '第一章');
+    expect(preview.bvid, VideoIdentifiers.bvidFromAid('640041584'));
+    expect(preview.duration, const Duration(seconds: 146));
+    expect(preview.badge, '全集试看');
+    expect(preview.playable, isTrue);
+    expect(course.episodes.last.playable, isFalse);
+  });
+
   test(
     'PGC season keeps episode IDs, milliseconds and section title',
     () async {
@@ -213,6 +257,13 @@ void main() {
     expect(play.duration, const Duration(milliseconds: 120500));
     expect(play.dashVideo.single.id, 32);
     expect(play.dashAudio.single.id, 30280);
+
+    final preview = await client.getPlayInfo('20766', courseCid: '1641007864');
+    expect(transport.requests.last.path, '/pugv/player/web/playurl');
+    expect(transport.requests.last.queryParameters['ep_id'], '20766');
+    expect(transport.requests.last.queryParameters['cid'], '1641007864');
+    expect(preview.dashVideo.single.id, 32);
+    expect(preview.dashAudio.single.id, 30280);
 
     final denied = PgcClient(
       BiliApiClient(

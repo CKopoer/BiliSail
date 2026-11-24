@@ -51,7 +51,7 @@ void main() {
         expect(loaded.theme, AppThemePreference.dark);
         expect(loaded.navigationMode, WorkspaceNavigationMode.singlePage);
       }
-      expect(database.schemaVersion, 3);
+      expect(database.schemaVersion, 4);
     },
   );
 

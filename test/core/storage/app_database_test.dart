@@ -29,6 +29,28 @@ void main() {
     expect(await history.latestPgcEpisode(scope, ['1', '2']), isNull);
     await save('1', 20);
     await save('2', 40);
+    await history.saveProgress(
+      scope: scope,
+      video: video,
+      part: const VideoPart(
+        cid: '404',
+        courseEpisodeId: '1',
+        page: 1,
+        title: '课时',
+        duration: Duration(minutes: 2),
+      ),
+      position: const Duration(seconds: 32),
+      duration: const Duration(minutes: 2),
+    );
+    final course = (await history.loadHistory(
+      cancellation: RequestCancellation(),
+    )).singleWhere((entry) => entry.part?.courseEpisodeId == '1');
+    expect(course.location.toString(), '/course/episode/1');
+    expect(course.position.inSeconds, 32);
+    expect(
+      await history.latestPgcEpisode(scope, ['1', '2'], course: true),
+      '1',
+    );
     await save('3', 50); // Another season must not choose its episode.
     expect(await history.latestPgcEpisode(scope, ['1', '2']), '2');
     // Rewatching an earlier episode, including at zero or completion, wins.
@@ -154,7 +176,7 @@ void main() {
       expect(
         (await database.customSelect('PRAGMA user_version').getSingle())
             .read<int>('user_version'),
-        3,
+        4,
       );
     },
   );
@@ -199,74 +221,86 @@ void main() {
       expect(
         (await database.customSelect('PRAGMA user_version').getSingle())
             .read<int>('user_version'),
-        3,
+        4,
       );
       await database.close();
       await directory.delete(recursive: true);
     },
   );
 
-  test(
-    'v2 migration retains settings and history and creates download index',
-    () async {
-      final directory = await Directory.systemTemp.createTemp(
-        'bilisail_v2_migration',
-      );
-      final file = File('${directory.path}/client.sqlite');
-      final database = AppDatabase(
-        NativeDatabase(
-          file,
-          setup: (sqlite) {
-            sqlite.execute(
-              'CREATE TABLE settings(key TEXT NOT NULL PRIMARY KEY,value TEXT NOT NULL)',
-            );
-            sqlite.execute("INSERT INTO settings VALUES ('probe','kept')");
-            sqlite.execute(
-              '''CREATE TABLE playback_progress (
+  for (final version in [2, 3]) {
+    test(
+      'v$version migration retains settings, history and download tasks',
+      () async {
+        final directory = await Directory.systemTemp.createTemp(
+          'bilisail_v${version}_migration',
+        );
+        final file = File('${directory.path}/client.sqlite');
+        final database = AppDatabase(
+          NativeDatabase(
+            file,
+            setup: (sqlite) {
+              sqlite.execute(
+                'CREATE TABLE settings(key TEXT NOT NULL PRIMARY KEY,value TEXT NOT NULL)',
+              );
+              sqlite.execute("INSERT INTO settings VALUES ('probe','kept')");
+              sqlite.execute(
+                '''CREATE TABLE playback_progress (
         scope TEXT NOT NULL,bvid TEXT NOT NULL,cid TEXT NOT NULL,title TEXT NOT NULL,
         cover_url TEXT NOT NULL,author TEXT NOT NULL,duration_ms INTEGER NOT NULL,
         part_title TEXT NOT NULL,part_number INTEGER NOT NULL,position_ms INTEGER NOT NULL,
         updated_at_ms INTEGER NOT NULL,pgc_episode_id TEXT,PRIMARY KEY(scope,bvid,cid))''',
-            );
-            sqlite.execute(
-              'CREATE INDEX progress_scope_time ON playback_progress(scope,updated_at_ms DESC)',
-            );
-            sqlite.execute(
-              "INSERT INTO playback_progress VALUES ('guest','BV1234567890','1','Video','','Author',120000,'Part',1,31000,1,NULL)",
-            );
-            sqlite.execute('PRAGMA user_version = 2');
-          },
-        ),
-      );
-      addTearDown(() async {
-        await database.close();
-        await directory.delete(recursive: true);
-      });
-      expect(await database.readSetting('probe'), 'kept');
-      expect(
-        (await database
-                .customSelect('SELECT COUNT(*) AS count FROM playback_progress')
-                .getSingle())
-            .read<int>('count'),
-        1,
-      );
-      await database.customStatement(
-        "INSERT INTO download_tasks(id,scope,item_key,record_json) VALUES ('id','guest','item','{}')",
-      );
-      expect(
-        (await database
-                .customSelect('SELECT COUNT(*) AS count FROM download_tasks')
-                .getSingle())
-            .read<int>('count'),
-        1,
-      );
-      expect(
-        (await database.customSelect('PRAGMA user_version').getSingle())
-            .read<int>('user_version'),
-        3,
-      );
-    },
-  );
+              );
+              sqlite.execute(
+                'CREATE INDEX progress_scope_time ON playback_progress(scope,updated_at_ms DESC)',
+              );
+              sqlite.execute(
+                "INSERT INTO playback_progress VALUES ('guest','BV1234567890','1','Video','','Author',120000,'Part',1,31000,1,NULL)",
+              );
+              if (version == 3) {
+                sqlite.execute(
+                  'CREATE TABLE download_tasks (id TEXT NOT NULL PRIMARY KEY, scope TEXT NOT NULL, item_key TEXT NOT NULL, record_json TEXT NOT NULL)',
+                );
+                sqlite.execute(
+                  "INSERT INTO download_tasks VALUES ('existing','guest','old-item','{}')",
+                );
+              }
+              sqlite.execute('PRAGMA user_version = $version');
+            },
+          ),
+        );
+        addTearDown(() async {
+          await database.close();
+          await directory.delete(recursive: true);
+        });
+        expect(await database.readSetting('probe'), 'kept');
+        expect(
+          (await database
+                  .customSelect(
+                    'SELECT COUNT(*) AS count FROM playback_progress WHERE course_episode_id IS NULL',
+                  )
+                  .getSingle())
+              .read<int>('count'),
+          1,
+        );
+        await database.customStatement(
+          "INSERT INTO download_tasks(id,scope,item_key,record_json) VALUES ('id','guest','item','{}')",
+        );
+        expect(
+          (await database
+                  .customSelect('SELECT COUNT(*) AS count FROM download_tasks')
+                  .getSingle())
+              .read<int>('count'),
+          version == 3 ? 2 : 1,
+        );
+        expect(
+          (await database.customSelect('PRAGMA user_version').getSingle())
+              .read<int>('user_version'),
+          4,
+        );
+      },
+    );
+  }
 
   test(
     'history isolates accounts and records intentional backward seeks',

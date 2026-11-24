@@ -553,7 +553,7 @@ class _ProfileSectionPageState extends ConsumerState<_ProfileSectionPage> {
   }
 
   Future<void> _openLink(Uri uri) async {
-    if (context.openArticleLink(uri)) return;
+    if (context.openArticleOrCourseLink(uri)) return;
     final query = dynamicSearchQuery(uri);
     if (query != null && widget.onSearchQuery != null) {
       widget.onSearchQuery!(query);

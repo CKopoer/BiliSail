@@ -9,6 +9,8 @@ final class ApiPgcSeason {
     required this.episodes,
     required this.relatedSeasons,
     this.rating,
+    this.course = false,
+    this.instructor,
     this.playCount,
     this.danmakuCount,
     this.followCount,
@@ -23,6 +25,8 @@ final class ApiPgcSeason {
   final String description;
   final int? type;
   final List<ApiPgcEpisode> episodes;
+  final bool course;
+  final String? instructor;
   final double? rating;
   final int? playCount;
   final int? danmakuCount;

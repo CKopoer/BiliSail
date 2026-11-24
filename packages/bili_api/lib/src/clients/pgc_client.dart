@@ -46,6 +46,7 @@ final class PgcClient {
     String? seasonId,
     String? episodeId,
     bool requireEpisodes = false,
+    bool course = false,
     ApiRequestContext? context,
   }) async {
     if (seasonId == null && episodeId == null) {
@@ -54,10 +55,11 @@ final class PgcClient {
     if (seasonId != null) _validateId(seasonId);
     if (episodeId != null) _validateId(episodeId);
     return api.requestPgcSeason(
-      Uri.https('api.bilibili.com', '/pgc/view/web/season', {
-        'season_id': ?seasonId,
-        'ep_id': ?episodeId,
-      }),
+      Uri.https(
+        'api.bilibili.com',
+        course ? '/pugv/view/web/season' : '/pgc/view/web/season',
+        {'season_id': ?seasonId, 'ep_id': ?episodeId},
+      ),
       requireEpisodes: requireEpisodes,
       context: context,
     );
@@ -66,28 +68,38 @@ final class PgcClient {
   Future<ApiPlayInfo> getPlayInfo(
     String episodeId, {
     int qn = 80,
+    String? courseCid,
     ApiRequestContext? context,
   }) async {
     _validateId(episodeId);
     if (qn < 1 || qn > 30000) throw ArgumentError.value(qn, 'qn');
-    const endpoint = 'pgc_playurl';
+    if (courseCid != null) _validateId(courseCid);
+    final endpoint = courseCid == null ? 'pgc_playurl' : 'course_playurl';
     late final Map<String, Object?> data;
     try {
       data = await api.requestJson(
-        Uri.https('api.bilibili.com', '/pgc/player/web/playurl', {
-          'ep_id': episodeId,
-          'qn': '$qn',
-          'fnver': '0',
-          'fnval': '4048',
-          'fourk': '1',
-          'module': 'bangumi',
-          'voice_balance': '1',
-        }),
+        Uri.https(
+          'api.bilibili.com',
+          courseCid == null
+              ? '/pgc/player/web/playurl'
+              : '/pugv/player/web/playurl',
+          {
+            'cid': ?courseCid,
+            'ep_id': episodeId,
+            'qn': '$qn',
+            'fnver': '0',
+            'fnval': '4048',
+            'fourk': '1',
+            if (courseCid == null) 'module': 'bangumi',
+            'voice_balance': '1',
+          },
+        ),
         endpoint,
         context: context,
       );
     } on ApiFailure catch (error) {
-      if (const {-10403, -10404}.contains(error.businessCode)) {
+      if (const {-10403, -10404}.contains(error.businessCode) ||
+          (courseCid != null && error.businessCode == -403)) {
         throw ApiFailure(
           ApiFailureCategory.permission,
           endpoint,
@@ -111,15 +123,18 @@ final class PgcClient {
     }
     final dash = _mapOrEmpty(data['dash']);
     if (dash.isEmpty) {
-      throw const ApiFailure(ApiFailureCategory.unavailable, endpoint);
+      throw ApiFailure(ApiFailureCategory.unavailable, endpoint);
     }
     final videos = _list(
       dash['video'],
       endpoint,
-    ).map((v) => _track(_map(v, endpoint))).toList();
-    final audios = dashAudioEntries(dash, endpoint).map(_track).toList();
+    ).map((v) => _track(_map(v, endpoint), endpoint)).toList();
+    final audios = dashAudioEntries(
+      dash,
+      endpoint,
+    ).map((item) => _track(item, endpoint)).toList();
     if (videos.isEmpty || audios.isEmpty) {
-      throw const ApiFailure(ApiFailureCategory.unavailable, endpoint);
+      throw ApiFailure(ApiFailureCategory.unavailable, endpoint);
     }
     final seconds = _double(dash['duration']);
     final durationMs = seconds == null
@@ -179,16 +194,15 @@ final class PgcClient {
     return List.unmodifiable(result);
   }
 
-  static ApiMediaTrack _track(Map<String, Object?> data) {
-    const endpoint = 'pgc_playurl';
+  static ApiMediaTrack _track(Map<String, Object?> data, String endpoint) {
     final uri = _uri(data['baseUrl'] ?? data['base_url']);
     if (uri == null) {
-      throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
+      throw ApiFailure(ApiFailureCategory.protocol, endpoint);
     }
     return ApiMediaTrack(
       id:
           _int(data['id']) ??
-          (throw const ApiFailure(ApiFailureCategory.protocol, endpoint)),
+          (throw ApiFailure(ApiFailureCategory.protocol, endpoint)),
       url: uri,
       backupUrls: List.unmodifiable(
         _list(

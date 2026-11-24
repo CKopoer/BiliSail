@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../domain/article_address.dart';
+import '../../domain/course_address.dart';
 
 class WorkspaceLinkScope extends InheritedWidget {
   const WorkspaceLinkScope({
@@ -41,8 +42,10 @@ class WorkspaceLinkScope extends InheritedWidget {
 }
 
 extension WorkspaceLinkNavigation on BuildContext {
-  bool openArticleLink(Uri target) {
-    final location = ArticleAddress.workspaceLocation(target);
+  bool openArticleOrCourseLink(Uri target) {
+    final location =
+        CourseAddress.parse(target)?.location ??
+        ArticleAddress.workspaceLocation(target);
     if (location == null) return false;
     openWorkspaceLink(location);
     return true;
