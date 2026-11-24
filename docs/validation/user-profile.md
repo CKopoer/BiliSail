@@ -28,6 +28,12 @@
 
 响应均为 JSON；使用既有单层读重试与每次操作 25 秒 deadline，不在 feature 再套重试循环。被服务端拒绝时保留明确失败，不改走 App token 或其他身份通道。初版仅提供读取，后续关注写操作见下文；不读取或复制 UWP 的凭据。
 
+### 2026-11-24：投稿视频观看进度
+
+投稿列表响应的 `data.list.vlist[].playback_position` 是当前观看账号的可选进度百分比。BiliSail 通过原有 Web Cookie 和 WBI 请求读取，接受大于 0 且不超过 100 的数值，随投稿列表分页、刷新和账号切换更新。参考 PiliPlus 固定提交的 Web 字段语义与「稍后再看」的封面布局，独立实现本项目的映射和显示。[PiliPlus Web 投稿模型](https://github.com/bggRGjQaUbCoE/PiliPlus/blob/217fb54f51f6764176319bbdedab2a7522d75401/lib/models_new/member/search_archive/vlist.dart) [PiliPlus 稍后再看进度](https://github.com/bggRGjQaUbCoE/PiliPlus/blob/217fb54f51f6764176319bbdedab2a7522d75401/lib/models_new/later/list.dart)
+
+投稿封面复用共享视频卡的底部进度条。观看中按投稿总时长换算已播时间，100% 显示「已看完」，进度缺失、为零或无效时只显示原时长。离线测试覆盖字段解析、仓储映射和投稿卡更新。本次游客请求返回 HTTP 412，登录账号的实际字段返回和实机显示留待验证。
+
 ## 验证
 
 环境：Windows x64、Flutter 3.47.6、Dart 3.13.5，沿用既有锁定依赖，没有新增第三方依赖。

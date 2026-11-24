@@ -1,4 +1,6 @@
 import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/features/profile/domain/profile_repository.dart';
+import 'package:bilisail/features/profile/presentation/profile_section_content.dart';
 import 'package:bilisail/features/profile/presentation/profile_video_card.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -42,6 +44,7 @@ void main() {
         );
         expect(tester.takeException(), isNull);
         expect(find.text('12:34'), findsOneWidget);
+        expect(find.byType(LinearProgressIndicator), findsNothing);
         expect(find.text('2.3万'), findsOneWidget);
         expect(find.text('123'), findsOneWidget);
         expect(find.text('发表于 2026-10-05'), findsOneWidget);
@@ -55,4 +58,56 @@ void main() {
       });
     }
   }
+
+  testWidgets('submissions show partial and completed playback on the cover', (
+    tester,
+  ) async {
+    Future<void> render(double? progress) => tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 343,
+              child: CustomScrollView(
+                slivers: [
+                  ProfileSectionContent(
+                    section: ProfileSection.videos,
+                    entries: [
+                      ProfileEntry(
+                        id: video.id.value,
+                        kind: ProfileEntryKind.video,
+                        title: video.title,
+                        video: video,
+                        watchProgress: progress,
+                      ),
+                    ],
+                    onOpenFolder: (_) {},
+                    onOpenLink: (_) {},
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await render(.25);
+    final bar = find.byType(LinearProgressIndicator);
+    final cover = find.byType(ClipRRect);
+    expect(find.text('03:08/12:34'), findsOneWidget);
+    expect(tester.widget<LinearProgressIndicator>(bar).value, .25);
+    expect(tester.getBottomRight(bar), tester.getBottomRight(cover));
+    expect(tester.getSize(bar), Size(tester.getSize(cover).width, 3));
+
+    await render(1);
+    expect(find.text('已看完'), findsOneWidget);
+    expect(tester.widget<LinearProgressIndicator>(bar).value, 1);
+
+    await render(null);
+    expect(find.text('12:34'), findsOneWidget);
+    expect(bar, findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }

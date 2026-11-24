@@ -13,10 +13,16 @@ import '../../../shared/ui/workspace_link.dart';
 
 /// Space submissions keep their cover and metadata side by side.
 class ProfileVideoCard extends StatefulWidget {
-  const ProfileVideoCard({super.key, required this.video, required this.onTap});
+  const ProfileVideoCard({
+    super.key,
+    required this.video,
+    required this.onTap,
+    this.watchProgress,
+  });
 
   final VideoSummary video;
   final VoidCallback onTap;
+  final double? watchProgress;
 
   static double heightFor(double width, TextScaler scaler) {
     final coverHeight = math.min(200.0, width * .4) * .6;
@@ -37,6 +43,14 @@ class _ProfileVideoCardState extends State<ProfileVideoCard> {
     builder: (context, constraints) {
       final theme = Theme.of(context);
       final video = widget.video;
+      final progress = widget.watchProgress;
+      final duration = durationLabel(video.duration);
+      final coverLabel = switch (progress) {
+        1.0 => '已看完',
+        final fraction? when video.duration > Duration.zero =>
+          '${durationLabel(video.duration * fraction)}/$duration',
+        _ => duration,
+      };
       final coverWidth = math.min(200.0, constraints.maxWidth * .4);
       final date = video.publishedAt;
       return ScrollAwareHoverRegion(
@@ -71,6 +85,7 @@ class _ProfileVideoCardState extends State<ProfileVideoCard> {
                     height: coverWidth * .6,
                     child: VideoCardCover(
                       video: video,
+                      progress: progress,
                       hovered: _hovered,
                       borderRadius: 8,
                       child: Stack(
@@ -99,10 +114,10 @@ class _ProfileVideoCardState extends State<ProfileVideoCard> {
                           ),
                           Positioned(
                             right: 7,
-                            bottom: 5,
+                            bottom: progress == null ? 5 : 7,
                             left: 7,
                             child: Text(
-                              durationLabel(video.duration),
+                              coverLabel,
                               textAlign: TextAlign.right,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,

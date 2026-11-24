@@ -337,6 +337,7 @@ final class _VideoCardState extends State<VideoCard> {
                     ),
                     null => VideoCardCover(
                       video: video,
+                      progress: progress,
                       showWatchLaterButton: widget.showWatchLaterButton,
                       focused: _focused,
                       hovered: _hovered,
@@ -395,15 +396,6 @@ final class _VideoCardState extends State<VideoCard> {
                               ),
                             ),
                           ),
-                          if (progress != null)
-                            Align(
-                              alignment: Alignment.bottomLeft,
-                              child: LinearProgressIndicator(
-                                value: progress.clamp(0.0, 1.0),
-                                minHeight: 3,
-                                backgroundColor: Colors.transparent,
-                              ),
-                            ),
                         ],
                       ),
                     ),

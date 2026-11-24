@@ -78,6 +78,7 @@ final class ApiProfileEntry {
     this.subtitle = '',
     this.coverUrl,
     this.video,
+    this.watchProgress,
     this.userMid,
     this.publishedAt,
     this.count,
@@ -91,6 +92,9 @@ final class ApiProfileEntry {
   final ApiProfileEntryKind kind;
   final Uri? coverUrl;
   final ApiVideoSummary? video;
+
+  /// Viewing fraction in (0, 1] from the Web submissions response.
+  final double? watchProgress;
   final String? userMid;
   final DateTime? publishedAt;
   final int? count;

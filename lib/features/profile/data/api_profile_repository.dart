@@ -386,6 +386,7 @@ class ApiProfileRepository
       title: e.title,
       subtitle: e.subtitle,
       coverUrl: e.coverUrl,
+      watchProgress: e.watchProgress,
       userId: e.userMid == null ? null : UserId(e.userMid!),
       publishedAt: e.publishedAt,
       count: e.count,

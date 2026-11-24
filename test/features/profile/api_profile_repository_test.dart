@@ -16,6 +16,59 @@ import 'package:flutter_test/flutter_test.dart';
 const id = UserId('9007199254740993123');
 
 void main() {
+  test('submissions retain viewing progress in the profile entries', () async {
+    final requests = ApiRequests();
+    final api = BiliApiClient(
+      sessionProvider: requests,
+      transport: _Transport((uri) {
+        if (uri.path == '/x/web-interface/nav') {
+          return {
+            'code': 0,
+            'data': {
+              'wbi_img': {
+                'img_url': 'https://i0.hdslb.com/bfs/wbi/7cd084941338484aae1ad9425b84077c.png',
+                'sub_url': 'https://i0.hdslb.com/bfs/wbi/4932caff0ff746eab6f01bf08b70ac45.png',
+              },
+            },
+          };
+        }
+        expect(uri.path, '/x/space/wbi/arc/search');
+        expect(uri.queryParameters['mid'], id.value);
+        return {
+          'code': 0,
+          'data': {
+            'list': {
+              'vlist': [
+                {
+                  'bvid': 'BV1234567890',
+                  'title': 'Video',
+                  'length': '05:00',
+                  'playback_position': 25,
+                },
+              ],
+            },
+            'page': {'count': 1},
+          },
+        };
+      }),
+    );
+    addTearDown(api.close);
+    final repository = ApiProfileRepository(
+      ProfileClient(api),
+      requests,
+      accountScope: () => 'user:1',
+    );
+
+    final page = await repository.loadEntries(
+      id,
+      ProfileSection.videos,
+      page: 1,
+      cancellation: RequestCancellation(),
+    );
+    expect(page.items.single.watchProgress, .25);
+    expect(page.items.single.video?.duration, const Duration(minutes: 5));
+  });
+
   test(
     'profile report maps all content and reason codes through ApiRequests',
     () async {
