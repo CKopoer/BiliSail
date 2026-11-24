@@ -479,8 +479,15 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.byType(PrivateMessageImage), findsOneWidget);
-      final text = tester.widget<SelectableText>(find.byType(SelectableText));
-      final spans = text.textSpan!.children!;
+      final text = tester.widget<Text>(
+        find.descendant(
+          of: find.byType(MessageRichText),
+          matching: find.byWidgetPredicate(
+            (widget) => widget is Text && widget.textSpan != null,
+          ),
+        ),
+      );
+      final spans = (text.textSpan as TextSpan).children!;
       expect(
         spans.whereType<TextSpan>().where(
           (span) => span.recognizer is TapGestureRecognizer,

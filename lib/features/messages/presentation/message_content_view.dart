@@ -29,7 +29,9 @@ class MessageContentView extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (message.title.isNotEmpty) ...[
-          SelectableText(message.title, style: theme.textTheme.titleSmall),
+          SelectionArea(
+            child: Text(message.title, style: theme.textTheme.titleSmall),
+          ),
           const SizedBox(height: 8),
         ],
         if ((!imageOnly || message.imageUrl == null) && message.text.isNotEmpty)
@@ -83,7 +85,7 @@ class MessageContentView extends StatelessWidget {
               runSpacing: 3,
               children: [
                 Text(detail.label, style: theme.textTheme.bodySmall),
-                SelectableText(detail.value),
+                SelectionArea(child: Text(detail.value)),
               ],
             ),
           ),

@@ -6,6 +6,7 @@ import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/messages/application/messages_controller.dart';
 import 'package:bilisail/features/messages/domain/message_repository.dart';
+import 'package:bilisail/features/messages/presentation/message_rich_text.dart';
 import 'package:bilisail/features/messages/presentation/messages_screen.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/foundation.dart';
@@ -40,7 +41,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.byType(ListView), findsNWidgets(2));
-    expect(find.byType(SelectableText), findsWidgets);
+    expect(find.byType(MessageRichText), findsWidgets);
 
     final lists = tester
         .stateList<ScrollableState>(find.byType(Scrollable))
@@ -58,7 +59,7 @@ void main() {
         final widget = element.widget;
         if (widget is ListView) counts['lists'] = counts['lists']! + 1;
         if (widget is ListTile) counts['inboxRows'] = counts['inboxRows']! + 1;
-        if (widget is SelectableText) {
+        if (widget is MessageRichText) {
           counts['bodyRows'] = counts['bodyRows']! + 1;
         }
       };
@@ -117,7 +118,7 @@ void main() {
     var listBuilds = 0, rowBuilds = 0;
     debugOnRebuildDirtyWidget = (element, _) {
       if (element.widget is ListView) listBuilds++;
-      if (element.widget is ListTile || element.widget is SelectableText) {
+      if (element.widget is ListTile || element.widget is MessageRichText) {
         rowBuilds++;
       }
     };
@@ -164,13 +165,16 @@ void main() {
         await tester.pumpAndSettle();
         controller.replaceBody(withTarget: true);
         await tester.pumpAndSettle();
-        final originalBody = tester.element(find.byType(SelectableText));
+        final originalBody = tester.element(find.byType(MessageRichText));
         await tester.tap(find.widgetWithText(TextButton, '会话 0'));
         await tester.tap(find.text('查看分享内容'));
         expect(calls, ['user:0:2', 'target:0:/share']);
         host.currentState!.nextVersion();
         await tester.pumpAndSettle();
-        expect(tester.element(find.byType(SelectableText)), same(originalBody));
+        expect(
+          tester.element(find.byType(MessageRichText)),
+          same(originalBody),
+        );
         await tester.tap(find.widgetWithText(TextButton, '会话 0'));
         await tester.tap(find.text('查看分享内容'));
         expect(calls, [
