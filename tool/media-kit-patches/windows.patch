@@ -472,7 +472,7 @@
  }
  
  void VideoOutput::NotifyRender() {
-@@ -177,24 +176,33 @@ void VideoOutput::Render() {
+@@ -177,24 +176,38 @@ void VideoOutput::Render() {
        // Publish the slot only if mpv actually rendered into it.
        if (mpv_render_context_render(render_context_, params) >= 0) {
          mpv_render_context_report_swap(render_context_);
@@ -483,7 +483,12 @@
 +        mpv_get_property(handle_, "pause", MPV_FORMAT_FLAG, &paused);
 +        d3d11_renderer_->ProducerCommit(paused != 0);
 +        if (pending_frame_ && pending_frame_->mailbox->HasCompletedFrame()) {
++          const auto width = pending_frame_->width;
++          const auto height = pending_frame_->height;
 +          std::atomic_store(&hardware_output_->visible, std::move(pending_frame_));
++          // The Dart surface treats the announced size as a presentable frame.
++          // Publish it only after the new mailbox has a completed GPU texture.
++          texture_update_callback_(texture_id_, width, height);
 +        }
        }
      }
@@ -512,7 +517,7 @@
      }
      try {
        // Notify Flutter that a new frame is available.
-@@ -207,8 +215,10 @@ void VideoOutput::Render() {
+@@ -207,8 +220,16 @@ void VideoOutput::Render() {
  
  void VideoOutput::SetTextureUpdateCallback(
      std::function<void(int64_t, int64_t, int64_t)> callback) {
@@ -520,12 +525,18 @@
 -  texture_update_callback_(texture_id_, GetVideoWidth(), GetVideoHeight());
 +  thread_pool_ref_->Post([this, callback = std::move(callback)] {
 +    texture_update_callback_ = callback;
-+    texture_update_callback_(texture_id_, width(), height());
++    const auto visible = std::atomic_load(&hardware_output_->visible);
++    if (d3d11_renderer_ && !visible) {
++      texture_update_callback_(texture_id_, 1, 1);
++    } else {
++      texture_update_callback_(texture_id_, visible ? visible->width : width(),
++                               visible ? visible->height : height());
++    }
 +  }).get();
  }
  
  void VideoOutput::SetSize(std::optional<int64_t> width,
-@@ -242,6 +252,10 @@ void VideoOutput::SetSize(std::optional<int64_t> width,
+@@ -242,6 +263,10 @@ void VideoOutput::SetSize(std::optional<int64_t> width,
      } else {
        height_ = std::nullopt;
      }
@@ -536,7 +547,7 @@
    });
  }
  
-@@ -258,8 +272,8 @@ void VideoOutput::CheckAndResize() {
+@@ -258,8 +283,8 @@ void VideoOutput::CheckAndResize() {
      current_height = d3d11_renderer_->height();
    }
    if (pixel_buffer_ != nullptr) {
@@ -547,7 +558,7 @@
    }
    // Currently rendered video output dimensions.
    // Either H/W or S/W rendered.
-@@ -273,108 +287,53 @@ void VideoOutput::CheckAndResize() {
+@@ -273,110 +298,57 @@ void VideoOutput::CheckAndResize() {
  }
  
  void VideoOutput::Resize(int64_t required_width, int64_t required_height) {
@@ -681,24 +692,27 @@
 -    texture_variants_.emplace(
 -        std::make_pair(texture_id_, std::move(texture_variant)));
 -    // Notify public texture update callback.
--    texture_update_callback_(texture_id_, required_width, required_height);
-   }
++  }
 +  }
 +  if (!texture_id_) {
 +    texture_id_ = registrar_->texture_registrar()->RegisterTexture(texture_.get());
 +  }
-+  texture_update_callback_(texture_id_, required_width, required_height);
-+}
-+
++  if (!d3d11_renderer_) {
+     texture_update_callback_(texture_id_, required_width, required_height);
+   }
+ }
+ 
 +void VideoOutput::UnregisterTexture() {
 +  if (!texture_) return;
 +  registrar_->texture_registrar()->UnregisterTexture(
 +      texture_id_, [texture = std::move(texture_)] {});
 +  texture_id_ = 0;
- }
- 
++}
++
  int64_t VideoOutput::GetVideoWidth() {
-@@ -392,7 +351,7 @@ int64_t VideoOutput::GetVideoWidth() {
+   // Fixed width.
+   if (width_) {
+@@ -392,7 +364,7 @@ int64_t VideoOutput::GetVideoWidth() {
        return SW_RENDERING_MAX_WIDTH;
      }
      if (height >= SW_RENDERING_MAX_HEIGHT) {
@@ -707,7 +721,7 @@
      }
    }
  
-@@ -414,7 +373,7 @@ int64_t VideoOutput::GetVideoHeight() {
+@@ -414,7 +386,7 @@ int64_t VideoOutput::GetVideoHeight() {
        return SW_RENDERING_MAX_HEIGHT;
      }
      if (width >= SW_RENDERING_MAX_WIDTH) {
