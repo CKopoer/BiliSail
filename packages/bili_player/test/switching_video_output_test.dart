@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:bili_player/bili_player.dart';
 import 'package:bili_player/src/switching_video_output.dart';
 import 'package:flutter/foundation.dart';
@@ -26,6 +28,26 @@ final class _Output implements FlutterVideoOutput, VideoFrameReadiness {
 }
 
 void main() {
+  testWidgets(
+    'native plane pixels bridge a replacement without capturing the Flutter hole',
+    (tester) async {
+      final picture = ui.PictureRecorder();
+      ui.Canvas(picture).drawColor(const Color(0xffabcdef), ui.BlendMode.src);
+      final recording = picture.endRecording();
+      final image = recording.toImageSync(2, 2);
+      recording.dispose();
+      final output = SwitchingVideoOutput()..bind(_NativeOutput(image));
+      await tester.pumpWidget(VideoSurface.output(output: output));
+      await tester.runAsync(output.retainFrame);
+      output.bind(null);
+      await tester.pump();
+      expect(tester.widget<RawImage>(find.byType(RawImage)).image, same(image));
+      await tester.pumpWidget(const SizedBox.shrink());
+      output.dispose();
+      await tester.pump();
+      expect(image.debugDisposed, true);
+    },
+  );
   testWidgets(
     'runtime replacement shares retained pixels through child disposal',
     (tester) async {
@@ -110,4 +132,11 @@ void main() {
       if (!dispose) output.dispose();
     }
   });
+}
+
+final class _NativeOutput extends _Output implements NativeVideoFrameCapture {
+  _NativeOutput(this.image) : super(const Color(0xff000000));
+  final ui.Image image;
+  @override
+  Future<ui.Image?> captureNativeFrame() async => image;
 }

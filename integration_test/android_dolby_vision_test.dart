@@ -9,6 +9,8 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
+import 'support/native_hdr_display.dart';
+
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized()
     ..framePolicy = LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
@@ -26,6 +28,7 @@ void main() {
     }
 
     final engine = MediaKitEngine();
+    simulateSdrDisplay(tester);
     final boundaryKey = GlobalKey();
     final mode = ValueNotifier('starting');
     final results = <Map<String, Object?>>[];
@@ -189,6 +192,12 @@ void main() {
         results.every((r) => r['colorCorrect'] == true),
         isTrue,
         reason: 'Profile 5 must match the Dolby-aware SDR reference in both decode modes',
+      );
+      await checkNativeHdrDisplay(
+        tester,
+        engine,
+        source('video.mp4'),
+        withFrames,
       );
     } finally {
       await tester.pumpWidget(const SizedBox.shrink());

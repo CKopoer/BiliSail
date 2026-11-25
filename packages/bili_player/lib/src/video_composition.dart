@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
@@ -6,6 +8,12 @@ import 'video_output.dart';
 /// A video output whose pixels can be presented as a Flutter widget.
 abstract interface class FlutterVideoOutput implements VideoOutput {
   Widget buildVideoSurface();
+}
+
+/// Native display planes are absent from Flutter's repaint boundary readback.
+abstract interface class NativeVideoFrameCapture {
+  /// Null selects normal Flutter capture. A future resolves to an owned frame.
+  Future<ui.Image?>? captureNativeFrame();
 }
 
 /// An optional signal that a video surface can present its current source.

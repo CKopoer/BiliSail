@@ -69,6 +69,7 @@ final class MediaKitBackend
   bool _disposed = false;
   bool _requiresVideoColorMapping = false;
   bool _embeddedGpuNext = false;
+  bool _hdrHint = false;
   OpenOptions? _lastOptions;
   int _generation = 0;
   int _seekRevision = 0;
@@ -300,11 +301,13 @@ final class MediaKitBackend
     }
 
     String? identifier(String? text) =>
-        text != null && RegExp(r'^[A-Za-z0-9_-]{1,32}$').hasMatch(text)
+        text != null && RegExp(r'^[A-Za-z0-9_.-]{1,32}$').hasMatch(text)
         ? text
         : null;
     final ao = identifier(await read('current-ao'));
     final vo = identifier(await read('current-vo'));
+    final targetTransfer = identifier(await read('video-target-params/gamma'));
+    final outputMatrix = identifier(await read('video-out-params/colormatrix'));
     final buffer = double.tryParse(await read('audio-buffer') ?? '');
     final autosync = int.tryParse(await read('autosync') ?? '');
     final version = await read('mpv-version');
@@ -317,6 +320,9 @@ final class MediaKitBackend
     return {
       'audioOutput': ao,
       'videoOutput': vo,
+      'nativeHdrSurface': _videoOutput.hasHdrOutput,
+      'targetTransfer': targetTransfer,
+      'videoOutputMatrix': outputMatrix,
       'requestedAudioBufferSeconds': buffer?.isFinite == true ? buffer : null,
       'autosync': autosync,
       'androidSurfaceSize':
@@ -451,6 +457,7 @@ final class MediaKitBackend
     };
     final options = plan.options;
     final video = plan.media;
+    _hdrHint = video.isHdr;
     final audio = plan.audio;
     _lastOptions = options;
     final watch = Stopwatch()..start();
@@ -667,7 +674,7 @@ final class MediaKitBackend
           read: player.getProperty,
           write: player.setProperty,
           isAndroid: Platform.isAndroid,
-          onAndroidDolbyVision: _videoOutput.enableAndroidDolbyVision,
+          onAndroidDolbyVision: _videoOutput.enableAndroidGpuNext,
           codecHint: video.codec,
         );
         await operation.wait(
@@ -800,6 +807,7 @@ final class MediaKitBackend
     }
 
     _colorDeadline?.cancel();
+    _videoOutput.identifyHdrSource(hinted: _hdrHint);
     _videoOutput.confirmSourceFrame();
     _readinessStage = null;
     return videoDisplayDimensions(player.state.videoParams);
@@ -809,8 +817,11 @@ final class MediaKitBackend
   Future<void> confirmAudio(PlaybackOperation operation) =>
       _waitForDecodedAudio(_player!, _generation, operation);
   @override
-  Future<void> confirmPresentation(PlaybackOperation operation) =>
-      operation.wait(_videoOutput.videoFramePresented);
+  Future<void> confirmPresentation(PlaybackOperation operation) async {
+    await operation.wait(_videoOutput.videoFramePresented);
+    await operation.wait(_videoOutput.presentHdrIfSupported());
+  }
+
   Future<void> _waitForDecodedAudio(
     mk.Player player,
     int generation,
@@ -1060,9 +1071,12 @@ final class MediaKitBackend
       // stop is dispatched outside media_kit's synchronous property path so
       // a blocked network load can be cancelled before release is queued.
       unawaited(
-        player.native
-            .command(['stop'])
-            .then<void>((_) {}, onError: (Object _, StackTrace _) {}),
+        () async {
+          // Keep mpv and its published DXGI swapchain alive until the native
+          // compositor has taken its own reference.
+          if (_videoOutput.hasHdrSource) await _videoOutput.retireHdr();
+          if (!player.native.disposed) await player.native.command(['stop']);
+        }().catchError((Object _) {}),
       );
     }
   }
@@ -1070,6 +1084,7 @@ final class MediaKitBackend
   @override
   bool canReuse(ValidatedSource plan) =>
       !_disposed &&
+      !_videoOutput.hasHdrSource &&
       _player != null &&
       !_requiresVideoColorMapping &&
       _lastOptions?.videoDecoding == plan.options.videoDecoding &&
@@ -1106,6 +1121,7 @@ final class MediaKitBackend
     interrupt();
     _disposed = true;
     _colorDeadline?.cancel();
+    await _videoOutput.retireHdr();
     _videoOutput.clearPlayer();
     final creating = _creating;
     if (creating != null) {
@@ -1128,6 +1144,7 @@ final class MediaKitBackend
     final player = _player;
     // Keep the player and leases when native release is uncertain.
     if (player != null) await player.dispose();
+    await _videoOutput.releaseHdrOutput();
     _player = null;
     await _mediaLeases.close();
     _videoOutput.dispose();

@@ -7,6 +7,8 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
+import 'support/native_hdr_display.dart';
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
       LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
@@ -25,6 +27,7 @@ void main() {
       },
     );
     final boundaryKey = GlobalKey();
+    simulateSdrDisplay(tester);
     final policy = MediaRequestPolicy();
     final audio = File('test/fixtures/media/audio.m4a').absolute.uri;
     try {
@@ -143,6 +146,18 @@ void main() {
       );
       expect(await engine.inspectHardwareDecoder(), sdrDecoder);
       debugPrint('DOVI_SDR_RESTORED decoder=$sdrDecoder');
+      await checkNativeHdrDisplay(
+        tester,
+        engine,
+        DashPairSource(
+          video: MediaTrack(
+            uri: File('$fixtures/video.mp4').uri,
+            requestPolicy: policy,
+          ),
+          audio: MediaTrack(uri: audio, requestPolicy: policy),
+        ),
+        _withFrames,
+      );
       expect(tester.takeException(), isNull);
     } finally {
       await tester.pumpWidget(const SizedBox.shrink());
