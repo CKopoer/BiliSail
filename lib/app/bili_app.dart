@@ -49,6 +49,7 @@ import '../shared/ui/smooth_scroll_behavior.dart';
 import '../core/presentation/app_input_host.dart';
 import '../core/presentation/android_system_ui.dart';
 import '../core/presentation/window_orientation_host.dart';
+import '../features/feed/application/recommendation_reporter.dart';
 import 'shortcut_coordinator.dart';
 import 'image_cache_binding.dart';
 import 'interface_scale.dart';
@@ -453,6 +454,8 @@ class _BiliAppState extends ConsumerState<BiliApp> {
 
   @override
   Widget build(BuildContext context) {
+    // Keep consent and source changes observed while a card opens another tab.
+    ref.listen(recommendationReporterProvider, (_, _) {});
     ref.listen(authControllerProvider, (previous, next) {
       // Session epoch may change while the visible MID and name stay the same.
       ref.invalidate(watchLaterQueueRegistryProvider);

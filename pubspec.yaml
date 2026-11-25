@@ -15,6 +15,7 @@ dependencies:
   flutter_markdown_plus:
     path: third_party/flutter_markdown_plus
     version: 1.0.12+bilisail.1
+  visibility_detector: 0.4.0+2
   scroll_animator: 0.3.0
   smooth_scroll_multiplatform:
     path: third_party/smooth_scroll_multiplatform

@@ -10,6 +10,7 @@ import 'package:bilisail/core/storage/app_database.dart';
 import 'package:bilisail/core/storage/credential_store.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/domain/recommendation_source.dart';
 import 'package:bilisail/features/auth/domain/app_session_credentials.dart';
 import 'package:bilisail/features/auth/domain/auth_repository.dart';
 import 'package:bilisail/features/feed/data/api_feed_repository.dart';
@@ -71,7 +72,13 @@ void main() {
     'App card attribution preserves the URI track, target and account epoch',
     () async {
       transport.entries = [
-        _entry('av', uri: 'bilibili://video/170001?trackid=av%252Ftrack'),
+        {'can_play': 0},
+        {
+          ..._entry('av', uri: 'bilibili://video/170001?trackid=av%252Ftrack'),
+          'track_id': 'card-track',
+          'args': {'track_id': 'click-track'},
+        },
+
         _entry(
           'bangumi',
           param: '7',
@@ -82,6 +89,13 @@ void main() {
         request: const AppRecommendationRequest(),
         cancellation: RequestCancellation(),
       );
+      final card = page.items[0].recommendationCard!;
+      expect(card.trackId, 'card-track');
+      expect(card.clickTrackId, 'click-track');
+      expect(card.responsePosition, 2);
+      expect(card.source, RecommendationSource.app);
+      expect(card.identityRevision, identity.revision);
+      expect(page.items[1].recommendationCard?.id, '7');
       expect(page.items[0].recommendationPlayback?.trackId, 'av%2Ftrack');
       expect(
         page.items[0].recommendationPlayback?.matches(
@@ -109,6 +123,34 @@ void main() {
     },
   );
 
+  test('Web and desktop cards retain their own response profile', () async {
+    transport.webEntries = [
+      {
+        'bvid': 'BV17x411w7KC',
+        'id': 42,
+        'goto': 'av',
+        'cid': 19,
+        'track_id': 'sample',
+        'title': '推荐',
+      },
+    ];
+    final web = await repository.loadFeed(
+      page: 1,
+      categoryId: null,
+      cancellation: RequestCancellation(),
+    );
+    final desktop = await repository.loadDesktopRecommendations(
+      page: 1,
+      cancellation: RequestCancellation(),
+    );
+    final card = web.items.single.recommendationCard!;
+    expect(
+      (card.source, card.freshType, card.id, card.cid, card.trackId),
+      (RecommendationSource.web, 4, '42', '19', 'sample'),
+    );
+    final pc = desktop.items.single.recommendationCard!;
+    expect((pc.source, pc.freshType), (RecommendationSource.desktop, 0));
+  });
   test(
     'Web and App recommendation mappings preserve publication timestamps',
     () async {
@@ -358,6 +400,7 @@ final class _Transport implements ApiTransport {
                   'sub_url': 'https://i0.hdslb.com/bfs/wbi/${'b' * 32}.png',
                 },
               },
+              '/x/web-interface/wbi/index/top/feed/rcmd' ||
               '/x/web-interface/index/top/feed/rcmd' => {'item': webEntries},
               _ => null,
             },

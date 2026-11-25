@@ -1,4 +1,5 @@
 import 'user.dart';
+import 'recommendation_card.dart';
 import 'recommendation_source.dart';
 import 'video_access.dart';
 import 'recommendation_playback_context.dart';
@@ -38,6 +39,7 @@ final class VideoSummary {
     this.authorId,
     this.recommendationReason,
     this.recommendationFeedback,
+    this.recommendationCard,
     this.recommendationTarget,
     this.recommendationPlayback,
     this.previewCid,
@@ -59,6 +61,7 @@ final class VideoSummary {
   final UserId? authorId;
   final String? recommendationReason;
   final RecommendationFeedback? recommendationFeedback;
+  final RecommendationCard? recommendationCard;
   final RecommendationTarget? recommendationTarget;
   final RecommendationPlaybackContext? recommendationPlayback;
 

@@ -1,3 +1,4 @@
+import '../../../domain/recommendation_card.dart';
 import '../../../domain/page_result.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
@@ -88,6 +89,13 @@ abstract interface class DesktopRecommendationFeedRepository {
 abstract interface class RecommendationPublicationTimeRepository {
   Future<DateTime?> loadPublicationTime(
     VideoId id, {
+    required RequestCancellation cancellation,
+  });
+}
+
+abstract interface class RecommendationReportingRepository {
+  Future<void> reportRecommendations(
+    List<RecommendationEvent> events, {
     required RequestCancellation cancellation,
   });
 }

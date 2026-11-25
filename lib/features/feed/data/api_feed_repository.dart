@@ -1,4 +1,5 @@
 import '../../../domain/user.dart';
+import '../../../domain/recommendation_card.dart';
 import '../../../domain/recommendation_playback_context.dart';
 
 import 'package:bili_api/bili_api.dart';
@@ -24,6 +25,7 @@ class ApiFeedRepository
         RecommendationPublicationTimeRepository,
         AppRecommendationFeedRepository,
         DesktopRecommendationFeedRepository,
+        RecommendationReportingRepository,
         RecommendationFeedbackRepository {
   ApiFeedRepository(this.api, this.requests, {this.appIdentity});
   final AppRecommendationIdentityStore? appIdentity;
@@ -37,6 +39,56 @@ class ApiFeedRepository
   final _desktopRecommendationPulls = Expando<_RecommendationPull>();
   int _desktopRecommendationIndex = 0;
   int? _desktopRecommendationEpoch;
+
+  @override
+  Future<void> reportRecommendations(
+    List<RecommendationEvent> events, {
+    required RequestCancellation cancellation,
+  }) => requests.run((context) async {
+    if (events.isEmpty) return;
+    final card = events.first.card;
+    if (events.any(
+      (e) =>
+          e.card.epoch != context.sessionEpoch ||
+          e.card.source != card.source ||
+          e.card.identityRevision != card.identityRevision,
+    )) {
+      return;
+    }
+    final store = appIdentity;
+    final mobile = card.source == RecommendationSource.app;
+    if (mobile && store?.revision != card.identityRevision) return;
+    final identity = mobile ? await store?.requestIdentity() : null;
+    if (mobile &&
+        (identity == null || identity.revision != card.identityRevision)) {
+      return;
+    }
+    await api.recommendationReports.send(
+      [
+        for (final e in events)
+          ApiRecommendationEvent(
+            click: e.interaction == RecommendationInteraction.click,
+            id: e.card.id,
+            goto: e.card.goto,
+            trackId: e.interaction == RecommendationInteraction.click
+                ? e.card.clickTrackId ?? e.card.trackId
+                : e.card.trackId,
+            cid: e.card.cid,
+            cardType: e.card.cardType,
+            cardGoto: e.card.cardGoto,
+            freshType: e.card.freshType,
+            position: e.card.responsePosition ?? e.position,
+            row: e.row,
+            column: e.column,
+            timestamp: e.timestamp,
+          ),
+      ],
+      desktop: card.source == RecommendationSource.desktop,
+      appBuvid: identity?.buvid,
+      appMid: identity?.accountMid,
+      context: context,
+    );
+  }, cancellation: cancellation);
 
   @override
   String get feedbackScope => 'session:${requests.sessionEpoch}';
@@ -132,6 +184,7 @@ class ApiFeedRepository
     required AppRecommendationRequest request,
     required RequestCancellation cancellation,
   }) => requests.run((context) async {
+    final epoch = requests.sessionEpoch;
     final store = appIdentity;
     if (store == null) {
       throw const ApiFailure(ApiFailureCategory.unavailable, 'app_recommended');
@@ -192,6 +245,19 @@ class ApiFeedRepository
               item.cardGoto == 'av'
                   ? video.bvid
                   : 'app:${item.cardGoto}:${item.param}',
+            ),
+            recommendationCard: RecommendationCard(
+              source: RecommendationSource.app,
+              epoch: epoch,
+              identityRevision: identity.revision,
+              id: item.param,
+              goto: item.goto ?? item.cardGoto,
+              cardGoto: item.cardGoto,
+              cardType: item.cardType,
+              trackId: item.cardTrackId ?? trackId ?? '',
+              clickTrackId: item.clickTrackId,
+              responsePosition: item.responsePosition,
+              cid: video.previewCid,
             ),
             recommendationTarget: target,
             recommendationPlayback:
@@ -435,6 +501,13 @@ class ApiFeedRepository
               context: context,
             )
           : await api.getRecommended(page: pull.index, context: context),
+      source: desktop ? RecommendationSource.desktop : RecommendationSource.web,
+      epoch: epoch,
+      freshType: desktop && pull.index == 0
+          ? 0
+          : desktop && page == 1
+          ? 3
+          : 4,
     );
     // An empty success also consumes its sample. A late old response must not
     // clear the retry index of a newer page or account session.
@@ -499,41 +572,60 @@ class ApiFeedRepository
     cancellation: cancellation,
   );
 
-  PageResult<VideoSummary> _mapPage(ApiPage<ApiVideoSummary> result) =>
-      PageResult(
-        items: result.items
-            .map(
-              (item) => VideoSummary(
-                id: VideoId(item.bvid),
-                access: mapVideoAccess(item.access),
-                previewCid: item.previewCid,
-                title: item.title,
-                coverUrl: item.coverUrl?.toString() ?? '',
-                author: item.ownerName,
-                authorAvatarUrl: item.ownerAvatarUrl,
-                authorId: UserId.tryParse(item.ownerMid),
-                duration: item.duration,
-                playCount: item.playCount,
-                likeCount: item.likeCount,
-                categoryName: item.categoryName,
-                isFollowed: item.isFollowed,
-                danmakuCount: item.danmakuCount,
-                publishedAt: item.publishedAt,
-                recommendationReason: item.recommendationReason,
-                recommendationFeedback: switch (item.recommendationFeedback) {
-                  final feedback? => RecommendationFeedback(
-                    aid: feedback.aid,
-                    goto: feedback.goto,
-                    trackId: feedback.trackId,
-                    ownerMid: feedback.ownerMid,
-                  ),
-                  null => null,
-                },
+  PageResult<VideoSummary> _mapPage(
+    ApiPage<ApiVideoSummary> result, {
+    RecommendationSource? source,
+    int? epoch,
+    int? freshType,
+  }) => PageResult(
+    items: result.items
+        .map(
+          (item) => VideoSummary(
+            id: VideoId(item.bvid),
+            access: mapVideoAccess(item.access),
+            previewCid: item.previewCid,
+            title: item.title,
+            coverUrl: item.coverUrl?.toString() ?? '',
+            author: item.ownerName,
+            authorAvatarUrl: item.ownerAvatarUrl,
+            authorId: UserId.tryParse(item.ownerMid),
+            duration: item.duration,
+            playCount: item.playCount,
+            likeCount: item.likeCount,
+            categoryName: item.categoryName,
+            isFollowed: item.isFollowed,
+            danmakuCount: item.danmakuCount,
+            publishedAt: item.publishedAt,
+            recommendationReason: item.recommendationReason,
+            recommendationCard: switch (item.recommendationFeedback) {
+              final feedback? when source != null && epoch != null =>
+                RecommendationCard(
+                  source: source,
+                  epoch: epoch,
+                  id: feedback.aid,
+                  goto: feedback.goto,
+                  trackId: feedback.trackId.length <= 2048
+                      ? feedback.trackId
+                      : '',
+                  cid: item.previewCid,
+                  freshType: freshType,
+                ),
+              _ => null,
+            },
+            recommendationFeedback: switch (item.recommendationFeedback) {
+              final feedback? => RecommendationFeedback(
+                aid: feedback.aid,
+                goto: feedback.goto,
+                trackId: feedback.trackId,
+                ownerMid: feedback.ownerMid,
               ),
-            )
-            .toList(growable: false),
-        hasMore: result.hasMore,
-      );
+              null => null,
+            },
+          ),
+        )
+        .toList(growable: false),
+    hasMore: result.hasMore,
+  );
 }
 
 final class _RecommendationPull {

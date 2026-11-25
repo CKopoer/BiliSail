@@ -95,6 +95,7 @@ void main() {
         const RecommendationSettings.defaults().toJson(),
       );
       final selected = RecommendationSettings(
+        reportInteractions: true,
         keepPrevious: true,
         minimumLikeRatio: 3,
         minimumDurationSeconds: 90,
@@ -159,6 +160,12 @@ void main() {
           repository.value.recommendations.source,
           failSave ? RecommendationSource.web : RecommendationSource.desktop,
         );
+        final reporting = find.widgetWithText(SwitchListTile, '上报推荐卡片曝光和点击');
+        expect(tester.widget<SwitchListTile>(reporting).value, isFalse);
+        await tester.tap(reporting);
+        await tester.pumpAndSettle();
+        expect(repository.value.recommendations.reportInteractions, !failSave);
+        expect(tester.widget<SwitchListTile>(reporting).value, !failSave);
         final toggle = find.widgetWithText(SwitchListTile, '保留首页推荐刷新');
         expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
         final marker = find.widgetWithText(SwitchListTile, '显示上次看到位置提示');

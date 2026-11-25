@@ -104,10 +104,20 @@ final class SliverResponsiveCardGrid extends StatefulWidget {
   const SliverResponsiveCardGrid({
     super.key,
     required this.itemCount,
-    required this.itemBuilder,
-  });
+    required IndexedWidgetBuilder this.itemBuilder,
+  }) : positionedBuilder = null;
+
+  const SliverResponsiveCardGrid.withColumns({
+    super.key,
+    required this.itemCount,
+    required Widget Function(BuildContext, int index, int columns)
+    this.positionedBuilder,
+  }) : itemBuilder = null;
+
   final int itemCount;
-  final IndexedWidgetBuilder itemBuilder;
+  final IndexedWidgetBuilder? itemBuilder;
+  final Widget Function(BuildContext, int index, int columns)?
+  positionedBuilder;
 
   @override
   State<SliverResponsiveCardGrid> createState() =>
@@ -141,7 +151,8 @@ final class _SliverResponsiveCardGridState
   void didUpdateWidget(SliverResponsiveCardGrid oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.itemCount != widget.itemCount ||
-        oldWidget.itemBuilder != widget.itemBuilder) {
+        oldWidget.itemBuilder != widget.itemBuilder ||
+        oldWidget.positionedBuilder != widget.positionedBuilder) {
       _rows = null;
     }
   }
@@ -186,10 +197,16 @@ final class _SliverResponsiveCardGridState
                         // Hover/preview changes on one card must not repaint the
                         // other cards in this row's sliver repaint boundary.
                         child: RepaintBoundary(
-                          child: widget.itemBuilder(
-                            context,
-                            row * layout.columns + column,
-                          ),
+                          child:
+                              widget.positionedBuilder?.call(
+                                context,
+                                row * layout.columns + column,
+                                layout.columns,
+                              ) ??
+                              widget.itemBuilder!(
+                                context,
+                                row * layout.columns + column,
+                              ),
                         ),
                       ),
                 ],

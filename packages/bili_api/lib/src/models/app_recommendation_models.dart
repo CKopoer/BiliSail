@@ -34,12 +34,18 @@ final class ApiAppRecommendation {
     required this.param,
     this.navigationUri,
     this.trackId,
+    this.responsePosition,
+    this.cardTrackId,
+    this.clickTrackId,
+    this.goto,
+    this.cardType,
   });
   final ApiVideoSummary video;
   final String? aid;
   final String cardGoto, param;
   final Uri? navigationUri;
-  final String? trackId;
+  final String? trackId, goto, cardType, cardTrackId, clickTrackId;
+  final int? responsePosition;
   final List<ApiAppFeedbackReason> reasons;
 }
 

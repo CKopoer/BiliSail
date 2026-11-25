@@ -7,6 +7,7 @@ enum RecommendationSurface { recommended, discovery, related }
 final class RecommendationSettings {
   RecommendationSettings({
     this.source = RecommendationSource.web,
+    this.reportInteractions = false,
     this.keepPrevious = false,
     this.showPreviousMarker = true,
     int minimumLikeRatio = 0,
@@ -34,6 +35,7 @@ final class RecommendationSettings {
 
   const RecommendationSettings.defaults()
     : source = RecommendationSource.web,
+      reportInteractions = false,
       keepPrevious = false,
       showPreviousMarker = true,
       minimumLikeRatio = 0,
@@ -53,6 +55,7 @@ final class RecommendationSettings {
   static const maximumDurationSeconds = 604800;
   static const maximumPlayCount = 2147483647;
 
+  final bool reportInteractions;
   final bool keepPrevious, showPreviousMarker, exemptFollowed, filterRelated;
   final RecommendationSource source;
   final int minimumLikeRatio, minimumDurationSeconds, minimumPlayCount;
@@ -100,6 +103,7 @@ final class RecommendationSettings {
               .where((item) => item.name == value['source'])
               .firstOrNull ??
           RecommendationSource.web,
+      reportInteractions: flag('reportInteractions', false),
       keepPrevious: flag('keepPrevious', false),
       showPreviousMarker: flag('showPreviousMarker', true),
       minimumLikeRatio: number('minimumLikeRatio'),
@@ -114,6 +118,7 @@ final class RecommendationSettings {
 
   Map<String, Object?> toJson() => {
     'source': source.name,
+    'reportInteractions': reportInteractions,
     'keepPrevious': keepPrevious,
     'showPreviousMarker': showPreviousMarker,
     'minimumLikeRatio': minimumLikeRatio,
@@ -127,6 +132,7 @@ final class RecommendationSettings {
 
   RecommendationSettings copyWith({
     RecommendationSource? source,
+    bool? reportInteractions,
     bool? keepPrevious,
     bool? showPreviousMarker,
     int? minimumLikeRatio,
@@ -138,6 +144,7 @@ final class RecommendationSettings {
     bool? filterRelated,
   }) => RecommendationSettings(
     source: source ?? this.source,
+    reportInteractions: reportInteractions ?? this.reportInteractions,
     keepPrevious: keepPrevious ?? this.keepPrevious,
     showPreviousMarker: showPreviousMarker ?? this.showPreviousMarker,
     minimumLikeRatio: minimumLikeRatio ?? this.minimumLikeRatio,

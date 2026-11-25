@@ -68,7 +68,7 @@ final class AppRecommendationClient {
     }
     final items = <ApiAppRecommendation>[];
     String? anchor;
-    for (final entry in entries) {
+    for (final (index, entry) in entries.indexed) {
       // Capture server context before card support, ads and user filtering.
       if (anchor == null && entry is Map<String, Object?>) {
         final value = entry['idx'];
@@ -88,7 +88,7 @@ final class AppRecommendationClient {
           entry['can_play'] != 1) {
         continue;
       }
-      final item = _parse(entry);
+      final item = _parse(entry, index + 1);
       if (item != null) items.add(item);
     }
     return ApiPage(
@@ -132,7 +132,10 @@ final class AppRecommendationClient {
     );
   }
 
-  static ApiAppRecommendation? _parse(Map<String, Object?> entry) {
+  static ApiAppRecommendation? _parse(
+    Map<String, Object?> entry,
+    int position,
+  ) {
     final player = _map(entry['player_args']);
     final args = _map(entry['args']);
     final cardGoto = entry['card_goto'];
@@ -203,10 +206,17 @@ final class AppRecommendationClient {
             !RegExp(r'[\x00-\x1f\x7f]').hasMatch(value)
         ? value
         : null;
+    String? label(Object? value) =>
+        value is String && value.length <= 64 ? track(value) : null;
     final trackValues = navigation?.queryParametersAll['trackid'];
     return ApiAppRecommendation(
       aid: aid,
       cardGoto: cardGoto,
+      goto: label(entry['goto']),
+      cardType: label(entry['card_type']),
+      responsePosition: position,
+      cardTrackId: track(entry['track_id']),
+      clickTrackId: track(args['track_id']),
       param: param,
       navigationUri: navigation,
       trackId:

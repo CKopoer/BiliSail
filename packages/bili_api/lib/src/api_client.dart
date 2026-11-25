@@ -5,6 +5,7 @@ import 'dart:isolate';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'clients/recommendation_report_client.dart';
 import 'cookies.dart';
 import 'decoding/pgc_season_decoder.dart';
 import 'models.dart';
@@ -61,6 +62,11 @@ final class BiliApiClient {
        _pgcSeasonDecoder = pgcSeasonDecoder ?? _decodePgcInIsolate;
 
   final ApiTransport _transport;
+  late final recommendationReports = RecommendationReportClient(
+    _transport,
+    cookieJar,
+    _clock,
+  );
   final bool _ownsTransport;
   final ApiSessionProvider? _sessionProvider;
   final ApiCookieJar cookieJar;

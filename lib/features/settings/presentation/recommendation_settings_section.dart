@@ -142,6 +142,12 @@ final class _RecommendationSettingsSectionState
           ],
         ),
         _toggle(
+          '上报推荐卡片曝光和点击',
+          '向哔哩哔哩发送首页推荐中实际看到和点击的卡片，用于推荐反馈。',
+          s.reportInteractions,
+          (current, value) => current.copyWith(reportInteractions: value),
+        ),
+        _toggle(
           '保留首页推荐刷新',
           '刷新后新内容在前，保留最多 200 条上次内容。',
           s.keepPrevious,

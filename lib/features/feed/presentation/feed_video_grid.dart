@@ -1,6 +1,10 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
+import 'package:visibility_detector/visibility_detector.dart';
+
+import '../../../domain/recommendation_card.dart';
+import '../application/recommendation_reporter.dart';
 
 import '../../../core/platform/external_links.dart';
 import '../../../core/network/api_requests.dart';
@@ -17,7 +21,7 @@ import '../application/recommendation_publication_time.dart';
 import '../domain/home_channel.dart';
 
 /// The grid observes list membership; each mounted card owns its feedback view.
-final class FeedVideoGrid extends StatelessWidget {
+final class FeedVideoGrid extends ConsumerWidget {
   const FeedVideoGrid({
     super.key,
     required this.items,
@@ -33,29 +37,42 @@ final class FeedVideoGrid extends StatelessWidget {
   final ValueChanged<VideoId> onUndo;
   final int? previousStartIndex;
 
-  Widget _grid(int start, int end) => SliverResponsiveCardGrid(
-    itemCount: end - start,
-    itemBuilder: (context, offset) {
-      final index = start + offset;
-      return _FeedVideoCard(
-        key: ValueKey((items[index].id, index)),
-        video: items[index],
-        recommended: channel == HomeChannel.recommended,
-        onReject: onReject,
-        onUndo: onUndo,
+  Widget _grid(int start, int end, RecommendationReporter? reporter) =>
+      SliverResponsiveCardGrid.withColumns(
+        itemCount: end - start,
+        positionedBuilder: (context, offset, columns) {
+          final index = start + offset;
+          return _FeedVideoCard(
+            key: ValueKey((items[index].id, index)),
+            video: items[index],
+            reporter: reporter,
+            position: index + 1,
+            row: (start + columns - 1) ~/ columns + offset ~/ columns + 1,
+            column: offset % columns + 1,
+            recommended: channel == HomeChannel.recommended,
+            onReject: onReject,
+            onUndo: onUndo,
+          );
+        },
       );
-    },
-  );
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final reporter =
+        channel == HomeChannel.recommended &&
+            WorkspaceActivity.isActive(context) &&
+            ModalRoute.isCurrentOf(context) != false
+        ? ref.watch(recommendationReporterProvider)
+        : null;
+    final active = reporter != null && ref.watch(_foregroundProvider);
+    final reporting = active ? reporter : null;
     final boundary = previousStartIndex;
     if (boundary == null || boundary < 0 || boundary >= items.length) {
-      return _grid(0, items.length);
+      return _grid(0, items.length, reporting);
     }
     return SliverMainAxisGroup(
       slivers: [
-        if (boundary > 0) _grid(0, boundary),
+        if (boundary > 0) _grid(0, boundary, reporting),
         const SliverToBoxAdapter(
           child: Padding(
             padding: EdgeInsets.symmetric(vertical: 16),
@@ -71,9 +88,27 @@ final class FeedVideoGrid extends StatelessWidget {
             ),
           ),
         ),
-        _grid(boundary, items.length),
+        _grid(boundary, items.length, reporting),
       ],
     );
+  }
+}
+
+final _foregroundProvider = NotifierProvider.autoDispose<_Foreground, bool>(
+  _Foreground.new,
+);
+
+final class _Foreground extends Notifier<bool> {
+  @override
+  bool build() {
+    final listener = AppLifecycleListener(
+      onStateChange: (value) {
+        state = value == AppLifecycleState.resumed;
+      },
+    );
+    ref.onDispose(listener.dispose);
+    final current = WidgetsBinding.instance.lifecycleState;
+    return current == null || current == AppLifecycleState.resumed;
   }
 }
 
@@ -83,12 +118,18 @@ final class _FeedVideoCard extends ConsumerStatefulWidget {
   const _FeedVideoCard({
     super.key,
     required this.video,
+    required this.reporter,
+    required this.position,
+    required this.row,
+    required this.column,
     required this.recommended,
     required this.onReject,
     required this.onUndo,
   });
 
   final VideoSummary video;
+  final RecommendationReporter? reporter;
+  final int position, row, column;
   final bool recommended;
   final ValueChanged<VideoSummary> onReject;
   final ValueChanged<VideoId> onUndo;
@@ -102,7 +143,25 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
   _FeedbackState? _feedback;
   DateTime? _publicationTime;
 
+  void _report(RecommendationInteraction interaction) {
+    final card = widget.video.recommendationCard;
+    if (card != null) {
+      widget.reporter?.record(
+        card,
+        interaction,
+        position: widget.position,
+        row: widget.row,
+        column: widget.column,
+      );
+    }
+  }
+
   Future<void> _open() async {
+    if (widget.reporter != null) {
+      // A tap may precede the next coalesced visibility callback.
+      _report(RecommendationInteraction.exposure);
+      _report(RecommendationInteraction.click);
+    }
     final target = widget.video.recommendationTarget;
     String attributedRoute(String route, {String? episode}) {
       final attribution = widget.video.recommendationPlayback;
@@ -215,7 +274,7 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
     // Sliver delegates update when a page is appended. Reuse the heavy card
     // only for unchanged immutable data; cache lifetime is the mounted tile,
     // not the entire loaded feed. Inherited theme/activity still reach it.
-    return _card ??= VideoCard(
+    final child = _card ??= VideoCard(
       key: ValueKey(widget.video.id),
       video: widget.video,
       onTap: _open,
@@ -246,6 +305,27 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
               },
             )
           : null,
+    );
+    final card = widget.video.recommendationCard;
+    final reporter = widget.reporter;
+    if (card == null || !widget.recommended) return child;
+    final observe =
+        reporter != null && !feedback.rejected && !reporter.seen(card);
+    return VisibilityDetector(
+      key: ValueKey((this, card)),
+      onVisibilityChanged: observe
+          ? (info) {
+              if (mounted &&
+                  identical(widget.video.recommendationCard, card) &&
+                  identical(widget.reporter, reporter) &&
+                  info.visibleFraction >= 0.5) {
+                _report(RecommendationInteraction.exposure);
+                // Stop observing this response card for its remaining lifetime.
+                if (reporter.seen(card)) setState(() {});
+              }
+            }
+          : null,
+      child: child,
     );
   }
 }

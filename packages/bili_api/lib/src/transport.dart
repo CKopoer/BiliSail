@@ -53,6 +53,17 @@ abstract interface class ApiFormTransport {
   });
 }
 
+abstract interface class ApiBytesTransport {
+  Future<ApiHttpResponse> postBytes(
+    Uri uri, {
+    required Uint8List bytes,
+    required String contentType,
+    required Map<String, String> headers,
+    required Duration timeout,
+    ApiCancellation? cancellation,
+  });
+}
+
 abstract interface class ApiJsonTransport {
   Future<ApiHttpResponse> postJson(
     Uri uri, {
@@ -80,6 +91,7 @@ final class DioApiTransport
         ApiTransport,
         ApiHeadTransport,
         ApiFormTransport,
+        ApiBytesTransport,
         ApiJsonTransport,
         ApiMultipartTransport,
         ApiBoundedTransport {
@@ -197,6 +209,23 @@ final class DioApiTransport
     timeout: timeout,
     cancellation: cancellation,
     body: Uri(queryParameters: fields).query,
+  );
+
+  @override
+  Future<ApiHttpResponse> postBytes(
+    Uri uri, {
+    required Uint8List bytes,
+    required String contentType,
+    required Map<String, String> headers,
+    required Duration timeout,
+    ApiCancellation? cancellation,
+  }) => _send(
+    uri,
+    headers: headers,
+    body: bytes,
+    contentType: contentType,
+    timeout: timeout,
+    cancellation: cancellation,
   );
 
   Future<ApiHttpResponse> _send(
