@@ -50,15 +50,15 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
             .where((item) => item.isValid && item.key == widget.initialKey)
             .map((item) => item.key)
             .toSet();
-  late int? _quality = widget.initialSelection?.quality;
-  late VideoCodecPreference _codec =
+  late int? _preferredQuality = widget.initialSelection?.quality;
+  late VideoCodecPreference _preferredCodec =
       widget.initialSelection?.codec ?? VideoCodecPreference.h264;
   late bool _danmaku = widget.initialSelection?.includeDanmaku ?? true;
   late bool _subtitles = widget.initialSelection?.includeSubtitles ?? true;
   late DownloadOutput _output = ref.read(downloadControllerProvider).canMerge
       ? (widget.initialSelection?.output ?? DownloadOutput.mp4)
       : DownloadOutput.separate;
-  List<int> _qualities = const [];
+  Set<DownloadVideoOption> _options = const {};
   bool _loading = false;
   bool _submitting = false;
   String? _error;
@@ -66,7 +66,7 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
   int _generation = 0;
   late final String _openedScope;
   late final int _openedEpoch;
-  final Map<String, List<int>> _qualityCache = {};
+  final Map<String, Set<DownloadVideoOption>> _optionCache = {};
 
   String _cacheKey(DownloadItem item) =>
       '$_openedScope:$_openedEpoch:${item.key}';
@@ -84,7 +84,7 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
     _openedScope = source.accountScope;
     _openedEpoch = source.sessionEpoch;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _loadQualities();
+      if (mounted) _loadOptions();
     });
   }
 
@@ -94,7 +94,7 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
     super.dispose();
   }
 
-  Future<void> _loadQualities() async {
+  Future<void> _loadOptions() async {
     _cancellation?.cancel();
     final cancellation = RequestCancellation();
     _cancellation = cancellation;
@@ -103,7 +103,7 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
     if (_accountChanged) {
       setState(() {
         _loading = false;
-        _qualities = const [];
+        _options = const {};
         _error = '账号已变化，请重新打开下载窗口';
       });
       return;
@@ -113,13 +113,12 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
         .toList();
     setState(() {
       _loading = chosen.isNotEmpty;
-      _qualities = const [];
+      _options = const {};
       _error = null;
     });
     if (chosen.isEmpty) return;
     try {
-      final responses = <List<int>>[];
-      final newlyLoaded = <String, List<int>>{};
+      final loaded = <String, Set<DownloadVideoOption>>{};
       // Keep source reads bounded. A cancelled selection never commits its
       // new results to the per-dialog cache.
       for (var start = 0; start < chosen.length; start += 3) {
@@ -127,17 +126,16 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
         final batch = chosen.skip(start).take(3).toList();
         final values = await Future.wait([
           for (final item in batch)
-            if (_qualityCache[_cacheKey(item)] case final cached?)
+            if (_optionCache[_cacheKey(item)] case final cached?)
               Future.value(cached)
             else
               ref
                   .read(downloadControllerProvider.notifier)
-                  .qualities(item, cancellation: cancellation),
+                  .videoOptions(item, cancellation: cancellation),
         ]);
         if (cancellation.isCancelled || _accountChanged) return;
         for (var index = 0; index < batch.length; index++) {
-          responses.add(values[index]);
-          newlyLoaded[_cacheKey(batch[index])] = values[index];
+          loaded[_cacheKey(batch[index])] = values[index];
         }
       }
       if (!mounted ||
@@ -147,20 +145,14 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
           source.accountScope != _openedScope) {
         return;
       }
-      _qualityCache.addAll(newlyLoaded);
-      final common = responses.first.toSet();
-      for (final response in responses.skip(1)) {
-        common.removeWhere((quality) => !response.contains(quality));
-      }
-      final available = common.where((quality) => quality > 0).toList()
-        ..sort((a, b) => b.compareTo(a));
+      _optionCache.addAll(loaded);
+      final common = loaded.values.reduce((a, b) => a.intersection(b));
       setState(() {
-        _qualities = available;
-        if (!available.contains(_quality)) {
-          _quality = available.isEmpty ? null : available.first;
-        }
-        if (available.isEmpty) {
-          _error = '所选分集没有共同可用画质，请调整选择';
+        _options = common;
+        if (common.isEmpty) {
+          _error = chosen.length == 1
+              ? '当前分集没有可下载的视频轨道'
+              : '所选分集没有共同可用的画质和编码，请调整选择';
         }
         _loading = false;
       });
@@ -189,14 +181,13 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
         _selected.remove(key);
       }
     });
-    _loadQualities();
+    _loadOptions();
   }
 
-  Future<void> _submit() async {
-    final quality = _quality;
+  Future<void> _submit(DownloadVideoOption option) async {
     if (_loading ||
         _submitting ||
-        quality == null ||
+        !_options.contains(option) ||
         _selected.isEmpty ||
         _accountChanged) {
       if (_accountChanged) {
@@ -222,8 +213,8 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
           .enqueue(
             selected,
             DownloadSelection(
-              quality: quality,
-              codec: _codec,
+              quality: option.quality,
+              codec: option.codec,
               includeDanmaku: _danmaku,
               includeSubtitles: _subtitles,
               output: _output,
@@ -258,6 +249,20 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
     ref.watch(downloadSourceRepositoryProvider);
     final accountChanged = _accountChanged;
     final validCount = widget.items.where((item) => item.isValid).length;
+    final qualities = _options.map((option) => option.quality).toSet().toList()
+      ..sort((a, b) => b.compareTo(a));
+    final quality = qualities.contains(_preferredQuality)
+        ? _preferredQuality
+        : qualities.firstOrNull;
+    final codecs =
+        _options
+            .where((option) => option.quality == quality)
+            .map((option) => option.codec)
+            .toList()
+          ..sort((a, b) => a.index.compareTo(b.index));
+    final codec = codecs.contains(_preferredCodec)
+        ? _preferredCodec
+        : codecs.firstOrNull;
     return AlertDialog(
       title: const Text('下载视频'),
       content: SizedBox(
@@ -288,7 +293,7 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
                                       .map((item) => item.key),
                                 ),
                               );
-                              _loadQualities();
+                              _loadOptions();
                             },
                       child: const Text('全选'),
                     ),
@@ -297,7 +302,7 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
                           ? null
                           : () {
                               setState(_selected.clear);
-                              _loadQualities();
+                              _loadOptions();
                             },
                       child: const Text('清空'),
                     ),
@@ -344,13 +349,10 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
                   const Text('正在读取实际可用画质…'),
                 ] else ...[
                   DropdownButtonFormField<int>(
-                    key: ValueKey(_qualities.join(',')),
-                    initialValue: _qualities.contains(_quality)
-                        ? _quality
-                        : null,
+                    initialValue: quality,
                     decoration: const InputDecoration(labelText: '画质'),
                     items: [
-                      for (final quality in _qualities)
+                      for (final quality in qualities)
                         DropdownMenuItem(
                           value: quality,
                           child: Text(downloadQualityText(quality)),
@@ -358,31 +360,28 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
                     ],
                     onChanged: _submitting
                         ? null
-                        : (value) => setState(() => _quality = value),
+                        : (value) => setState(() => _preferredQuality = value),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<VideoCodecPreference>(
+                    initialValue: codec,
+                    decoration: const InputDecoration(labelText: '视频编码'),
+                    items: [
+                      for (final codec in codecs)
+                        DropdownMenuItem(
+                          value: codec,
+                          child: Text(downloadCodecText(codec)),
+                        ),
+                    ],
+                    onChanged: _submitting
+                        ? null
+                        : (value) {
+                            if (value != null) {
+                              setState(() => _preferredCodec = value);
+                            }
+                          },
                   ),
                 ],
-                const SizedBox(height: 12),
-                DropdownButtonFormField<VideoCodecPreference>(
-                  initialValue: _codec,
-                  decoration: const InputDecoration(labelText: '视频编码'),
-                  items: [
-                    for (final codec in VideoCodecPreference.values)
-                      DropdownMenuItem(
-                        value: codec,
-                        child: Text(downloadCodecText(codec)),
-                      ),
-                  ],
-                  onChanged: _submitting
-                      ? null
-                      : (value) {
-                          if (value != null) setState(() => _codec = value);
-                        },
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  '若所选编码没有对应轨道，任务会明确失败。',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<DownloadOutput>(
                   initialValue: _output,
@@ -438,9 +437,12 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
                       color: Theme.of(context).colorScheme.error,
                     ),
                   ),
-                  if (!_loading && _selected.isNotEmpty && _qualities.isEmpty)
+                  if (!_loading && _selected.isNotEmpty && _options.isEmpty)
                     TextButton(
-                      onPressed: _loadQualities,
+                      onPressed: () {
+                        _optionCache.clear();
+                        _loadOptions();
+                      },
                       child: const Text('重新读取画质'),
                     ),
                 ],
@@ -460,8 +462,9 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
                   !_loading &&
                   !_submitting &&
                   _selected.isNotEmpty &&
-                  _quality != null
-              ? _submit
+                  quality != null &&
+                  codec != null
+              ? () => _submit((quality: quality, codec: codec))
               : null,
           child: Text(_submitting ? '添加中…' : '开始下载'),
         ),

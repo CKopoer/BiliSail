@@ -6,6 +6,7 @@ import 'package:bilisail/core/storage/app_database.dart';
 import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/domain/video_codec.dart';
 import 'package:bilisail/features/downloads/data/sqlite_download_repository.dart';
 import 'package:bilisail/features/downloads/data/download_file_store.dart';
 import 'package:bilisail/features/downloads/domain/download_repository.dart';
@@ -1167,10 +1168,10 @@ final class _Sources implements DownloadSourceRepository {
   @override
   int get sessionEpoch => epoch;
   @override
-  Future<List<int>> qualities(
+  Future<Set<DownloadVideoOption>> videoOptions(
     DownloadItem item, {
     required RequestCancellation cancellation,
-  }) async => [80];
+  }) async => {(quality: 80, codec: VideoCodecPreference.h264)};
   @override
   Future<DownloadResolvedSource> resolve(
     DownloadItem item,

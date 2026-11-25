@@ -35,11 +35,14 @@ void main() {
   test(
     'queries deliverable qualities and resolves exact codec with highest AAC',
     () async {
-      final qualities = await repository.qualities(
+      final options = await repository.videoOptions(
         _item(),
         cancellation: RequestCancellation(),
       );
-      expect(qualities, [80]);
+      expect(options, {
+        (quality: 80, codec: VideoCodecPreference.h264),
+        (quality: 80, codec: VideoCodecPreference.hevc),
+      });
       expect(transport.playRequestCount, 1);
       final selection = const DownloadSelection(
         quality: 80,
@@ -84,12 +87,57 @@ void main() {
 
   test('advertised 1080p is hidden when DASH only contains 480p', () async {
     transport.forcedQuality = 32;
-    final qualities = await repository.qualities(
+    final options = await repository.videoOptions(
       _item(),
       cancellation: RequestCancellation(),
     );
-    expect(qualities, [32]);
+    expect(options, {(quality: 32, codec: VideoCodecPreference.h264)});
     expect(transport.playRequestCount, 1);
+  });
+
+  test(
+    'Dolby Vision variants yield one downloadable option for the episode',
+    () async {
+      transport.extraVideo = [
+        for (final codec in ['dvh1.05.06', 'dvhe.08.06', 'unknown'])
+          {
+            'id': 126,
+            'codecs': codec,
+            'base_url': 'https://cdn.example/dv.m4s',
+          },
+        {'id': 127, 'codecs': 'av01', 'base_url': 'https://cdn.example/'},
+      ];
+      final item = _item(episodeId: '42', bvid: '');
+      final options = await repository.videoOptions(
+        item,
+        cancellation: RequestCancellation(),
+      );
+      expect(options, {
+        (quality: 80, codec: VideoCodecPreference.h264),
+        (quality: 80, codec: VideoCodecPreference.hevc),
+        (quality: 126, codec: VideoCodecPreference.dolbyVision),
+      });
+      final resolved = await repository.resolve(
+        item,
+        const DownloadSelection(
+          quality: 126,
+          codec: VideoCodecPreference.dolbyVision,
+        ),
+        cancellation: RequestCancellation(),
+      );
+      expect(resolved.quality, 126);
+      expect(resolved.video.codec, startsWith('dv'));
+    },
+  );
+
+  test('an unusable AAC track cannot enable a video option', () async {
+    transport.audioUrl = 'https://cdn.example/';
+    await expectLater(
+      repository.videoOptions(_item(), cancellation: RequestCancellation()),
+      throwsA(
+        isA<AppFailure>().having((e) => e.message, 'message', contains('AAC')),
+      ),
+    );
   });
 
   test('PGC preview is rejected as a complete episode', () async {
@@ -197,6 +245,8 @@ final class _Transport implements ApiTransport {
   String cdnHost = 'i0.hdslb.com';
   bool preview = false;
   int? forcedQuality;
+  List<Map<String, Object?>> extraVideo = const [];
+  String? audioUrl;
   int playRequestCount = 0;
   int videoDetailRequestCount = 0;
   int subtitleTracks = 0;
@@ -229,6 +279,7 @@ final class _Transport implements ApiTransport {
           'dash': {
             'duration': 180,
             'video': [
+              ...extraVideo,
               {
                 'id': quality,
                 'base_url': trackUrl,
@@ -252,13 +303,13 @@ final class _Transport implements ApiTransport {
             'audio': [
               {
                 'id': 30280,
-                'base_url': trackUrl,
+                'base_url': audioUrl ?? trackUrl,
                 'codecs': 'mp4a.40.2',
                 'bandwidth': 128000,
               },
               {
                 'id': 30280,
-                'base_url': trackUrl,
+                'base_url': audioUrl ?? trackUrl,
                 'codecs': 'mp4a.40.2',
                 'bandwidth': 192000,
               },

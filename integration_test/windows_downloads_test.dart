@@ -292,10 +292,10 @@ final class _FixtureSources implements DownloadSourceRepository {
   @override
   int get sessionEpoch => 0;
   @override
-  Future<List<int>> qualities(
+  Future<Set<DownloadVideoOption>> videoOptions(
     DownloadItem item, {
     required RequestCancellation cancellation,
-  }) async => [80];
+  }) async => {(quality: 80, codec: VideoCodecPreference.h264)};
   @override
   Future<DownloadResolvedSource> resolve(
     DownloadItem item,

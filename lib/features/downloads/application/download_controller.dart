@@ -221,12 +221,12 @@ final class DownloadController extends Notifier<DownloadQueueState> {
     return repository.current;
   }
 
-  Future<List<int>> qualities(
+  Future<Set<DownloadVideoOption>> videoOptions(
     DownloadItem item, {
     required RequestCancellation cancellation,
   }) => ref
       .read(downloadSourceRepositoryProvider)
-      .qualities(item, cancellation: cancellation);
+      .videoOptions(item, cancellation: cancellation);
 
   Future<bool> hasDestination() async =>
       await ref.read(publicDownloadStorageProvider)?.hasDestination() ?? true;

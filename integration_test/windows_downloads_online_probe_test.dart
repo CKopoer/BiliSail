@@ -54,13 +54,15 @@ void main() {
           cancellation: RequestCancellation(),
         );
         final item = DownloadItem.fromVideo(detail).first;
-        final qualities = await sources.qualities(
+        final options = await sources.videoOptions(
           item,
           cancellation: RequestCancellation(),
         );
-        expect(qualities, isNotEmpty);
-        final quality = qualities.reduce((a, b) => a < b ? a : b);
-        await downloads.enqueue([item], DownloadSelection(quality: quality));
+        expect(options, isNotEmpty);
+        final option = options.reduce((a, b) => a.quality <= b.quality ? a : b);
+        await downloads.enqueue([
+          item,
+        ], DownloadSelection(quality: option.quality, codec: option.codec));
         final deadline = DateTime.now().add(const Duration(minutes: 3));
         while (!downloads.current.tasks.any(
           (task) =>
@@ -80,7 +82,7 @@ void main() {
         expect(verified.tracks.every((track) => track.complete), isTrue);
         // Only non-sensitive aggregate facts are emitted from this probe.
         debugPrint(
-          'DOWNLOAD_GUEST quality=$quality bytes=${verified.downloadedBytes} '
+          'DOWNLOAD_GUEST quality=${option.quality} bytes=${verified.downloadedBytes} '
           'warnings=${verified.warnings.length}',
         );
         expect(tester.takeException(), isNull);

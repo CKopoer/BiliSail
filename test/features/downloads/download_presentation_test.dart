@@ -7,6 +7,7 @@ import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/domain/video_codec.dart';
 import 'package:bilisail/features/downloads/application/download_controller.dart';
 import 'package:bilisail/features/downloads/domain/download_repository.dart';
 import 'package:bilisail/features/downloads/presentation/download_dialog.dart';
@@ -218,12 +219,114 @@ void main() {
     expect(notice, findsNothing);
   });
 
-  testWidgets('unavailable quality prevents enqueue', (tester) async {
+  testWidgets(
+    'codec choices follow the quality and enqueue the displayed track',
+    (tester) async {
+      final repository = _DownloadRepository();
+      addTearDown(repository.close);
+      final source = _SourceRepository()
+        ..optionsByCid = {
+          '1': {
+            (quality: 126, codec: VideoCodecPreference.dolbyVision),
+            (quality: 80, codec: VideoCodecPreference.hevc),
+            (quality: 80, codec: VideoCodecPreference.av1),
+          },
+        };
+      await _pump(
+        tester,
+        DownloadDialog(
+          items: [_item(1)],
+          initialSelection: const DownloadSelection(quality: 80),
+        ),
+        repository,
+        source,
+      );
+      final codecField = find.byType(DropdownButton<VideoCodecPreference>);
+      DropdownButton<VideoCodecPreference> codecs() =>
+          tester.widget(codecField);
+      expect(codecs().items!.map((item) => item.value), [
+        VideoCodecPreference.hevc,
+        VideoCodecPreference.av1,
+      ]);
+      expect(codecs().value, VideoCodecPreference.hevc);
+      await tester.tap(find.byType(DropdownButton<int>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('杜比视界').last);
+      await tester.pumpAndSettle();
+      expect(codecs().items!.map((item) => item.value), [
+        VideoCodecPreference.dolbyVision,
+      ]);
+      expect(codecs().value, VideoCodecPreference.dolbyVision);
+      expect(source.qualityCalls, 1);
+      await tester.tap(find.text('开始下载'));
+      await tester.pumpAndSettle();
+      expect(repository.selection?.quality, 126);
+      expect(repository.selection?.codec, VideoCodecPreference.dolbyVision);
+    },
+  );
+
+  testWidgets(
+    'selecting all episodes keeps only shared quality and codec pairs',
+    (tester) async {
+      final repository = _DownloadRepository();
+      addTearDown(repository.close);
+      final source = _SourceRepository()
+        ..optionsByCid = {
+          '1': {
+            (quality: 126, codec: VideoCodecPreference.dolbyVision),
+            (quality: 80, codec: VideoCodecPreference.av1),
+            (quality: 80, codec: VideoCodecPreference.h264),
+          },
+          '2': {
+            (quality: 80, codec: VideoCodecPreference.h264),
+            (quality: 64, codec: VideoCodecPreference.av1),
+          },
+        };
+      await _pump(
+        tester,
+        DownloadDialog(
+          items: [_item(1), _item(2)],
+          initialKey: _item(1).key,
+          initialSelection: const DownloadSelection(
+            quality: 80,
+            codec: VideoCodecPreference.av1,
+          ),
+        ),
+        repository,
+        source,
+      );
+      final codecField = find.byType(DropdownButton<VideoCodecPreference>);
+      expect(
+        tester.widget<DropdownButton<VideoCodecPreference>>(codecField).value,
+        VideoCodecPreference.av1,
+      );
+      await tester.tap(find.text('全选'));
+      await tester.pumpAndSettle();
+      final qualities = tester.widget<DropdownButton<int>>(
+        find.byType(DropdownButton<int>),
+      );
+      final codecs = tester.widget<DropdownButton<VideoCodecPreference>>(
+        codecField,
+      );
+      expect(qualities.items!.map((item) => item.value), [80]);
+      expect(codecs.items!.map((item) => item.value), [
+        VideoCodecPreference.h264,
+      ]);
+      expect(codecs.value, VideoCodecPreference.h264);
+      await tester.tap(find.text('开始下载'));
+      await tester.pumpAndSettle();
+      expect(repository.selection?.codec, VideoCodecPreference.h264);
+    },
+  );
+
+  testWidgets('a shared quality with no shared codec prevents enqueue', (
+    tester,
+  ) async {
     final repository = _DownloadRepository();
     final source = _SourceRepository()
-      ..qualitiesByCid = {
-        '1': [80],
-        '2': [64],
+      ..optionsByCid = {
+        '1': {(quality: 80, codec: VideoCodecPreference.h264)},
+        '2': {(quality: 80, codec: VideoCodecPreference.hevc)},
       };
     await _pump(
       tester,
@@ -231,7 +334,7 @@ void main() {
       repository,
       source,
     );
-    expect(find.text('所选分集没有共同可用画质，请调整选择'), findsOneWidget);
+    expect(find.text('所选分集没有共同可用的画质和编码，请调整选择'), findsOneWidget);
     expect(
       tester
           .widget<FilledButton>(find.widgetWithText(FilledButton, '开始下载'))
@@ -674,7 +777,7 @@ void main() {
 }
 
 final class _SourceRepository implements DownloadSourceRepository {
-  Map<String, List<int>> qualitiesByCid = {};
+  Map<String, Set<DownloadVideoOption>> optionsByCid = {};
   String scope = 'user:1';
   int epoch = 1;
   int qualityCalls = 0;
@@ -683,12 +786,16 @@ final class _SourceRepository implements DownloadSourceRepository {
   @override
   int get sessionEpoch => epoch;
   @override
-  Future<List<int>> qualities(
+  Future<Set<DownloadVideoOption>> videoOptions(
     DownloadItem item, {
     required RequestCancellation cancellation,
   }) async {
     qualityCalls++;
-    return qualitiesByCid[item.part.cid] ?? [80, 64];
+    return optionsByCid[item.part.cid] ??
+        {
+          (quality: 80, codec: VideoCodecPreference.h264),
+          (quality: 64, codec: VideoCodecPreference.h264),
+        };
   }
 
   @override

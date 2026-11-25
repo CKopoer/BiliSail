@@ -167,6 +167,8 @@ final class DownloadWork {
   final String? collectionId, collectionTitle;
 }
 
+typedef DownloadVideoOption = ({int quality, VideoCodecPreference codec});
+
 final class DownloadSelection {
   const DownloadSelection({
     this.quality = 80,

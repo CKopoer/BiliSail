@@ -732,7 +732,7 @@ final class _Source implements DownloadSourceRepository {
   @override
   int get sessionEpoch => 1;
   @override
-  Future<List<int>> qualities(
+  Future<Set<DownloadVideoOption>> videoOptions(
     DownloadItem item, {
     required RequestCancellation cancellation,
   }) => throw UnimplementedError();

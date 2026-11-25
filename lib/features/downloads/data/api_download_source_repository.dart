@@ -93,34 +93,45 @@ final class ApiDownloadSourceRepository implements DownloadSourceRepository {
     return info;
   }
 
+  static Iterable<Uri> _downloadUrls(ApiMediaTrack track) => [
+    track.url,
+    ...track.backupUrls,
+  ].where((url) => url.scheme == 'https' && url.host.isNotEmpty);
+
+  static bool _hasDownloadSource(ApiMediaTrack track) =>
+      (track.url.pathSegments.lastOrNull ?? '').isNotEmpty &&
+      _downloadUrls(track).isNotEmpty;
+
+  static DownloadVideoOption? _videoOption(ApiMediaTrack track) {
+    final codec = VideoCodecPreference.fromCodec(track.codecs);
+    if (codec == null || track.id <= 0 || !_hasDownloadSource(track)) {
+      return null;
+    }
+    return (quality: track.id, codec: codec);
+  }
+
+  static Iterable<ApiMediaTrack> _aacTracks(ApiPlayInfo info) =>
+      info.dashAudio.where(
+        (track) =>
+            track.codecs.toLowerCase().startsWith('mp4a') &&
+            _hasDownloadSource(track),
+      );
+
   @override
-  Future<List<int>> qualities(
+  Future<Set<DownloadVideoOption>> videoOptions(
     DownloadItem item, {
     required RequestCancellation cancellation,
   }) async {
     final scope = _accountScope();
     final epoch = requests.sessionEpoch;
     final first = await _playInfo(item, 127, cancellation, scope, epoch);
-    if (!first.dashAudio.any(
-      (track) => track.codecs.toLowerCase().startsWith('mp4a'),
-    )) {
+    if (_aacTracks(first).isEmpty) {
       throw const AppFailure(AppFailureKind.playback, '当前没有可下载的 AAC 音频轨道');
     }
     // acceptQuality advertises possible tiers, including ones this account
     // cannot currently obtain. Only returned DASH tracks are selectable.
-    final available =
-        first.dashVideo
-            .where(
-              (track) =>
-                  track.id > 0 &&
-                  VideoCodecPreference.fromCodec(track.codecs) != null,
-            )
-            .map((track) => track.id)
-            .toSet()
-            .toList()
-          ..sort((a, b) => b.compareTo(a));
     _check(cancellation, scope, epoch);
-    return List.unmodifiable(available);
+    return Set.unmodifiable(first.dashVideo.map(_videoOption).nonNulls);
   }
 
   @override
@@ -138,21 +149,12 @@ final class ApiDownloadSourceRepository implements DownloadSourceRepository {
       scope,
       epoch,
     );
+    final option = (quality: selection.quality, codec: selection.codec);
     final videos =
-        info.dashVideo
-            .where(
-              (track) =>
-                  track.id == selection.quality &&
-                  VideoCodecPreference.fromCodec(track.codecs) ==
-                      selection.codec,
-            )
-            .toList()
+        info.dashVideo.where((track) => _videoOption(track) == option).toList()
           ..sort((a, b) => b.bandwidth.compareTo(a.bandwidth));
-    final audios =
-        info.dashAudio
-            .where((track) => track.codecs.toLowerCase().startsWith('mp4a'))
-            .toList()
-          ..sort((a, b) => b.bandwidth.compareTo(a.bandwidth));
+    final audios = _aacTracks(info).toList()
+      ..sort((a, b) => b.bandwidth.compareTo(a.bandwidth));
     if (videos.isEmpty) {
       throw const AppFailure(AppFailureKind.playback, '所选画质或视频编码当前不可用');
     }
@@ -163,21 +165,9 @@ final class ApiDownloadSourceRepository implements DownloadSourceRepository {
         await cdnPreference?.call() ?? MediaCdnPreference.automatic;
     _check(cancellation, scope, epoch);
     DownloadTrackSource track(ApiMediaTrack media, DownloadTrackKind kind) {
-      final urls = orderMediaCdnUrls(
-        [
-          media.url,
-          ...media.backupUrls,
-        ].where((url) => url.scheme == 'https' && url.host.isNotEmpty),
-        preference,
-      );
-      if (urls.isEmpty) {
-        throw const AppFailure(AppFailureKind.protocol, '播放源没有安全的下载地址');
-      }
+      final urls = orderMediaCdnUrls(_downloadUrls(media), preference);
       // The final media filename survives CDN host and signature renewal.
-      final file = media.url.pathSegments.lastOrNull ?? '';
-      if (file.isEmpty) {
-        throw const AppFailure(AppFailureKind.protocol, '播放源缺少媒体文件标识');
-      }
+      final file = media.url.pathSegments.last;
       return DownloadTrackSource(
         identity: sha256
             .convert(
