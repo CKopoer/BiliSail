@@ -19,6 +19,10 @@ class MainActivity : AudioServiceActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        if (android.os.Build.VERSION.SDK_INT >= 29 &&
+            !flutterEngine.plugins.has(HdrVideoSurfaces::class.java)) {
+            flutterEngine.plugins.add(HdrVideoSurfaces())
+        }
         if (!flutterEngine.plugins.has(DownloadExecutionPlugin::class.java)) {
             flutterEngine.plugins.add(DownloadExecutionPlugin())
         }

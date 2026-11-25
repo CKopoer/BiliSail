@@ -1,7 +1,53 @@
 import 'package:bili_player/src/native_video_color.dart';
+import 'package:bili_player/src/native_hdr_output.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'only a signaled HDR-compatible Profile 8 base survives missing RPU',
+    () {
+      bool accepts(
+        String profile,
+        String matrix,
+        String primaries,
+        String trc,
+      ) => hasCompatibleHdrBase(
+        profile: profile,
+        matrix: matrix,
+        primaries: primaries,
+        transfer: trc,
+      );
+      expect(accepts('8', 'bt.2020-ncl', 'bt.2020', 'hlg'), isTrue);
+      expect(accepts('8', 'bt.2020-ncl', 'bt.2020', 'pq'), isTrue);
+      expect(accepts('8', 'bt.709', 'bt.709', 'bt.1886'), isFalse);
+      expect(accepts('5', 'bt.2020-ncl', 'bt.2020', 'pq'), isFalse);
+    },
+  );
+  test(
+    'selects HDR from decoded tracks, including offline Dolby without a hint',
+    () {
+      bool hdr({
+        String profile = '',
+        String gamma = '',
+        String matrix = '',
+        bool hint = false,
+      }) => isNativeHdrSource(
+        profile: profile,
+        transfer: gamma,
+        matrix: matrix,
+        hdrHint: hint,
+      );
+      expect(hdr(profile: '5'), isTrue);
+      expect(hdr(profile: '8'), isTrue);
+      expect(hdr(matrix: 'dolbyvision'), isTrue);
+      expect(hdr(gamma: 'pq'), isTrue);
+      expect(hdr(gamma: 'hlg'), isTrue);
+      expect(hdr(hint: true), isTrue);
+      expect(hdr(gamma: 'bt.1886', hint: true), isFalse);
+      expect(hdr(), isFalse);
+    },
+  );
+
   Map<String, String> properties(
     List<int?> profiles, {
     String hwdec = 'auto',

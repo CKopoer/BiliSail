@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
@@ -13,13 +14,17 @@ import 'player_contract.dart';
 import 'android_video_viewport.dart';
 import 'background_playback_frame.dart';
 import 'native_video_surface.dart';
+import 'native_hdr_output.dart';
 import 'native_player_properties.dart';
 import 'video_composition.dart';
 import 'video_decoder_configuration.dart';
 
 /// Owns the current media-kit output without issuing playback commands.
 final class MediaKitVideoOutput
-    implements FlutterVideoOutput, VideoFrameReadiness {
+    implements
+        FlutterVideoOutput,
+        VideoFrameReadiness,
+        NativeVideoFrameCapture {
   MediaKitVideoOutput({bool? limitAndroidOutputToViewport})
     : limitAndroidOutputToViewport =
           limitAndroidOutputToViewport ??
@@ -36,6 +41,8 @@ final class MediaKitVideoOutput
   int _readinessRevision = 0;
   Future<void>? _presentation;
   Completer<void>? _sourceFrame;
+  VoidCallback? _refreshReadiness;
+  bool _selectingHdr = false;
 
   Future<void> get videoFramePresented =>
       _presentation ?? Future.error(StateError('No video output is bound.'));
@@ -50,6 +57,7 @@ final class MediaKitVideoOutput
     }
     _readinessCleanup.clear();
     _presentation = null;
+    _refreshReadiness = null;
     _frameReady.value = false;
     final controller = _controller.value;
     if (controller == null || _disposed) return;
@@ -61,6 +69,7 @@ final class MediaKitVideoOutput
       final state = controller.player.state;
       // Match Video's visibility gate and its mask over the initial 1px texture.
       return rendered &&
+          !_selectingHdr &&
           controller.id.value != null &&
           rect != null &&
           rect.width > 0 &&
@@ -91,6 +100,7 @@ final class MediaKitVideoOutput
       WidgetsBinding.instance.ensureVisualUpdate();
     }
 
+    _refreshReadiness = update;
     controller.id.addListener(update);
     controller.rect.addListener(update);
     final width = controller.player.stream.width.listen((_) => update());
@@ -140,7 +150,167 @@ final class MediaKitVideoOutput
   int _sourceGeneration = 0;
   bool _disposed = false;
   VideoDimensions? _videoDimensions;
-  bool _androidDolbyVision = false;
+  bool _androidGpuNext = false;
+  final _hdr = ValueNotifier<NativeHdrOutput?>(null);
+  Future<void>? _hdrAttempt;
+  Timer? _hdrDisplayTimer;
+  bool _hdrRetired = false;
+  bool _hdrDolby = false;
+  String _hdrProfile = '';
+  bool _hdrSource = false;
+  ({int view, String? transfer})? _hdrDisplay;
+  int? _viewId;
+
+  bool get hasHdrOutput => _hdr.value != null;
+  bool get hasHdrSource => _hdrSource;
+
+  @override
+  Future<ui.Image?>? captureNativeFrame() {
+    final hdr = _hdr.value;
+    final player = _player;
+    if (hdr == null || player == null) return null;
+    return _captureHdrFrame(player, hdr.dimensions);
+  }
+
+  Future<ui.Image?> _captureHdrFrame(
+    mk.Player player,
+    VideoDimensions size,
+  ) async {
+    // The SDK captures the decoded image before resizing. Bound that transient
+    // allocation as well as the 1080p frame retained across the source change.
+    if (size.width * size.height > 4096 * 2304) return null;
+    final bytes = await player.screenshot();
+    if (bytes == null || _disposed) return null;
+    final scale = math.min(
+      1.0,
+      math.min(1920 / size.width, 1080 / size.height),
+    );
+    final codec = await ui.instantiateImageCodec(
+      bytes,
+      targetWidth: math.max(1, (size.width * scale).round()),
+      targetHeight: math.max(1, (size.height * scale).round()),
+      allowUpscaling: false,
+    );
+    try {
+      return (await codec.getNextFrame()).image;
+    } finally {
+      codec.dispose();
+    }
+  }
+
+  void identifyHdrSource({required bool hinted}) {
+    final player = _player;
+    if ((!Platform.isAndroid && !Platform.isWindows) ||
+        player == null ||
+        _hdrRetired ||
+        _disposed) {
+      return;
+    }
+    final profile = player.getProperty(
+      'current-tracks/video/dolby-vision-profile',
+    );
+    final matrix = player.getProperty('video-params/colormatrix');
+    _hdrProfile = profile;
+    _hdrSource = isNativeHdrSource(
+      profile: profile,
+      matrix: matrix,
+      transfer: player.getProperty('video-params/gamma'),
+      hdrHint: hinted,
+    );
+    _selectingHdr = _hdrSource && _hdrDisplay == null;
+    _hdrDolby = profile == '5' || profile == '8' || matrix == 'dolbyvision';
+    if (Platform.isAndroid &&
+        _hdrSource &&
+        player.getProperty('vo') == 'mediacodec_embed') {
+      // Offline sources can lack the HDR hint which normally selects a
+      // color-managed texture before opening. Establish the SDR fallback now.
+      enableAndroidGpuNext();
+      player.setProperty('target-prim', 'bt.709');
+      player.setProperty('target-trc', 'srgb');
+      player.setProperty('vo', 'gpu-next');
+    }
+  }
+
+  Future<void> presentHdrIfSupported() async {
+    if (!_hdrSource || _hdrRetired) return;
+    _watchHdrDisplay();
+    try {
+      await _refreshHdrDisplay();
+    } finally {
+      _selectingHdr = false;
+      if (!_hdrRetired) _refreshReadiness?.call();
+    }
+  }
+
+  void _watchHdrDisplay() {
+    if (!_hdrSource || _viewportOwner == null || _hdrRetired) return;
+    // Moving a window to a display with the same scale, or changing Windows
+    // HDR while paused, need not generate a Flutter layout/metrics change.
+    _hdrDisplayTimer ??= Timer.periodic(const Duration(seconds: 2), (_) {
+      unawaited(
+        _refreshHdrDisplay().catchError((Object e) {
+          debugPrint('Could not refresh HDR display: ${e.runtimeType}');
+        }),
+      );
+    });
+  }
+
+  Future<void> _refreshHdrDisplay() {
+    final running = _hdrAttempt;
+    if (running != null) return running;
+    return _hdrAttempt = _selectHdrDisplay().whenComplete(
+      () => _hdrAttempt = null,
+    );
+  }
+
+  Future<void> _selectHdrDisplay() async {
+    final player = _player;
+    final views = WidgetsBinding.instance.platformDispatcher.views;
+    final view = _viewId ?? (views.length == 1 ? views.first.viewId : null);
+    if (player == null || view == null || _hdrRetired || _disposed) return;
+    final transfer = await NativeHdrOutput.supportedTransfer(view);
+    if (_hdrRetired || _disposed || !identical(player, _player)) return;
+    final display = (view: view, transfer: transfer);
+    if (display == _hdrDisplay) return;
+    final size = nativeVideoSurfaceDimensions(player.getProperty) ?? dimensions;
+    if (size == null || size.width < 2 || size.height < 2) return;
+    _hdrDisplay = display;
+    final old = _hdr.value;
+    if (old != null) {
+      try {
+        await old.restore(player);
+      } finally {
+        _hdr.value = null;
+      }
+    }
+    if (transfer != null && !_hdrRetired) {
+      _hdr.value = await NativeHdrOutput.tryOpen(
+        player,
+        size,
+        view,
+        transfer,
+        dolby: _hdrDolby,
+        profile: _hdrProfile,
+      );
+    }
+  }
+
+  Future<void> retireHdr() async {
+    _hdrRetired = true;
+    _hdrDisplayTimer?.cancel();
+    try {
+      await _hdrAttempt;
+    } on Object {
+      // A failed promotion must not prevent releasing the native player.
+    }
+  }
+
+  Future<void> releaseHdrOutput() async {
+    final output = _hdr.value;
+    _hdr.value = null;
+    if (output != null) await output.release();
+  }
+
   Future<void> _androidSurfaceSize = Future.value();
   bool _androidSurfaceSizeFailed = false;
   int _androidSurfaceRevision = 0;
@@ -149,7 +319,8 @@ final class MediaKitVideoOutput
   bool get _usesAndroidViewport =>
       Platform.isAndroid &&
       limitAndroidOutputToViewport &&
-      !_androidDolbyVision;
+      _hdr.value == null &&
+      !_androidGpuNext;
 
   VideoDimensions _androidTarget(VideoDimensions source) {
     if (!_usesAndroidViewport) return source;
@@ -187,8 +358,8 @@ final class MediaKitVideoOutput
     });
   }
 
-  void enableAndroidDolbyVision() {
-    _androidDolbyVision = true;
+  void enableAndroidGpuNext() {
+    _androidGpuNext = true;
     _androidViewportSizer?.invalidate();
     _androidViewportSizer = null;
   }
@@ -322,7 +493,7 @@ final class MediaKitVideoOutput
             isAndroid: Platform.isAndroid,
             decoding: decoding,
             androidOutput: androidOutput,
-            usesDolbyVisionRenderer: () => _androidDolbyVision,
+            usesDolbyVisionRenderer: () => _androidGpuNext,
           ),
         );
     WidgetsBinding.instance.ensureVisualUpdate();
@@ -403,7 +574,7 @@ final class MediaKitVideoOutput
     _updateAndroidViewport();
     final controller = _controller.value;
     final dimensions = _videoDimensions;
-    if (Platform.isAndroid && _androidDolbyVision && dimensions != null) {
+    if (Platform.isAndroid && _androidGpuNext && dimensions != null) {
       final player = _player;
       if (player == null) return;
       final revision = _bindingRevision;
@@ -453,6 +624,9 @@ final class MediaKitVideoOutput
   }
 
   void resetSource() {
+    _hdrSource = false;
+    _selectingHdr = false;
+    _hdrDisplay = null;
     _sourceFrame = Completer<void>();
     _videoDimensions = null;
     _frameReady.value = false;
@@ -472,7 +646,7 @@ final class MediaKitVideoOutput
     _sourceFrame = null;
     _player = null;
     _videoDimensions = null;
-    _androidDolbyVision = false;
+    _androidGpuNext = false;
     _androidSurfaceSize = Future.value();
     _androidSurfaceSizeFailed = false;
     _androidSurfaceRevision++;
@@ -483,46 +657,73 @@ final class MediaKitVideoOutput
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    _hdrDisplayTimer?.cancel();
     cancelPendingViewport();
     clearPlayer();
     _frameReady.dispose();
+    _hdr.dispose();
     _controller.dispose();
   }
 
   @override
   Widget buildVideoSurface() => ValueListenableBuilder<mkv.VideoController?>(
     valueListenable: _controller,
-    builder: (context, controller, _) => controller == null
-        ? const ColoredBox(color: Color(0xFF000000))
-        // The backend is a visual layer. Its built-in InteractiveViewer must
-        // not consume wheel signals or gestures owned by the host controls.
-        : ValueListenableBuilder<bool>(
-            valueListenable: _frameReady,
-            child: IgnorePointer(
-              child: mkv.Video(
-                // VideoState subscribes to its initial player's dimensions. A
-                // same-frame clear/rebind must not retain the old subscriptions.
-                key: ObjectKey(controller),
-                controller: controller,
-                controls: mkv.NoVideoControls,
-                // PlaybackSession owns lifecycle and the user's pause intent.
-                // The old surface may still be mounted while switching to audio.
-                pauseUponEnteringBackgroundMode: false,
-                resumeUponEnteringForegroundMode: false,
+    builder: (context, controller, _) {
+      final view = View.of(context).viewId;
+      if (view != _viewId) {
+        _viewId = view;
+        if (_hdrSource && !_selectingHdr && !_hdrRetired) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_viewId == view && !_hdrRetired && !_disposed) {
+              unawaited(presentHdrIfSupported());
+            }
+          });
+        }
+      }
+      return controller == null
+          ? const ColoredBox(color: Color(0xFF000000))
+          // The backend is a visual layer. Its built-in InteractiveViewer must
+          // not consume wheel signals or gestures owned by the host controls.
+          : ValueListenableBuilder<bool>(
+              valueListenable: _frameReady,
+              child: ValueListenableBuilder<NativeHdrOutput?>(
+                valueListenable: _hdr,
+                builder: (_, hdr, texture) {
+                  if (hdr == null) return texture!;
+                  // A new window may be built before its native plane is bound.
+                  if (hdr.viewId != view) {
+                    return const ColoredBox(color: Color(0xff000000));
+                  }
+                  return hdr.build();
+                },
+                child: IgnorePointer(
+                  child: mkv.Video(
+                    // VideoState subscribes to its initial player's dimensions. A
+                    // same-frame clear/rebind must not retain the old subscriptions.
+                    key: ObjectKey(controller),
+                    controller: controller,
+                    controls: mkv.NoVideoControls,
+                    // PlaybackSession owns lifecycle and the user's pause intent.
+                    // The old surface may still be mounted while switching to audio.
+                    pauseUponEnteringBackgroundMode: false,
+                    resumeUponEnteringForegroundMode: false,
+                  ),
+                ),
               ),
-            ),
-            builder: (_, ready, child) => _VideoFrameMask(
-              key: const ValueKey('video-first-frame-mask'),
-              ready: ready,
-              child: child,
-            ),
-          ),
+              builder: (_, ready, child) => _VideoFrameMask(
+                key: const ValueKey('video-first-frame-mask'),
+                ready: ready,
+                child: child,
+              ),
+            );
+    },
   );
 
   @override
   void attach(Object owner) {
     if ((!Platform.isWindows && !Platform.isAndroid) || _disposed) return;
     _viewportOwner = owner;
+    _watchHdrDisplay();
     _viewportLayout = null;
     _viewportShrinkTimer?.cancel();
     _androidViewportSizer?.invalidate();
@@ -563,6 +764,8 @@ final class MediaKitVideoOutput
   void detach(Object owner) {
     if (!identical(_viewportOwner, owner)) return;
     _viewportOwner = null;
+    _hdrDisplayTimer?.cancel();
+    _hdrDisplayTimer = null;
     _viewportLayout = null;
     _viewportShrinkTimer?.cancel();
     _androidViewportSizer?.invalidate();

@@ -11,12 +11,21 @@ import 'video_output.dart';
 
 /// Keeps the surface identity stable while a source selects a new backend.
 final class SwitchingVideoOutput
-    implements FlutterVideoOutput, VideoFrameReadiness {
+    implements
+        FlutterVideoOutput,
+        VideoFrameReadiness,
+        NativeVideoFrameCapture {
   final _output = ValueNotifier<VideoOutput?>(null);
   final _ready = ValueNotifier(false);
   final _retainedFrame = ValueNotifier<ui.Image?>(null);
   final _surfaces = <_SwitchingSurfaceState>{};
   int _captureRevision = 0;
+
+  @override
+  Future<ui.Image?>? captureNativeFrame() => switch (_output.value) {
+    NativeVideoFrameCapture output => output.captureNativeFrame(),
+    _ => null,
+  };
 
   /// One bounded, in-memory frame bridges native release and track preparation.
   /// Normal buffering keeps the native texture and never copies video frames.
@@ -35,17 +44,24 @@ final class SwitchingVideoOutput
       }
     }
     final capture = () async {
-      for (final surface in _surfaces.toList().reversed) {
-        final image = await surface.capture();
-        if (image == null) continue;
-        if (revision != _captureRevision) {
-          image.dispose();
-          return;
+      if (_surfaces.isEmpty) return;
+      ui.Image? image;
+      final native = captureNativeFrame();
+      if (native != null) {
+        image = await native;
+      } else {
+        for (final surface in _surfaces.toList().reversed) {
+          image = await surface.capture();
+          if (image != null) break;
         }
-        _retainedFrame.value = image;
-        _updateReady();
+      }
+      if (image == null) return;
+      if (revision != _captureRevision) {
+        image.dispose();
         return;
       }
+      _retainedFrame.value = image;
+      _updateReady();
     }();
     try {
       await capture.timeout(const Duration(milliseconds: 250));
