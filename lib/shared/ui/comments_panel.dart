@@ -1585,7 +1585,7 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
                       ),
                     ),
                   ),
-                const SizedBox(height: 14),
+                SizedBox(height: widget.preview ? 14 : 4),
                 Divider(
                   height: 1,
                   color: theme.dividerColor.withValues(alpha: .35),
