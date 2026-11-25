@@ -35,6 +35,8 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  audio_passthrough_channel_ =
+      RegisterAudioPassthrough(flutter_controller_->engine()->messenger());
   app_icon_channel_ = std::make_unique<AppIconChannel>(
       flutter_controller_->engine()->messenger());
   system_media_channel_ = std::make_unique<SystemMediaControlsChannel>(
@@ -104,6 +106,7 @@ void FlutterWindow::OnDestroy() {
   system_media_channel_.reset();
   image_picker_channel_.reset();
   hdr_video_channel_.reset();
+  audio_passthrough_channel_.reset();
   image_export_channel_.reset();
   desktop_window_channel_.reset();
   app_icon_channel_.reset();

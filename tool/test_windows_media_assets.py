@@ -12,15 +12,15 @@ class WindowsVideoAssetsTests(unittest.TestCase):
     def test_both_architectures_use_the_reviewed_render_api_build(self):
         catalog = json.loads((package_source("media_kit") / "hook/native_bundles.json").read_text())
         archives = {
-            "windows_x64": ("7z", "bb6ce9e53c083002fad640011632aef96167cb1d4fffcfe4ed79acbc153bb497"),
-            "windows_arm64": ("zip", "0a9067375c6517b93549fa421a4ab16b301a93b4d91e653117e8b053e1490d83"),
+            "windows_x64": ("zip", "9468eb761f58e6f9397f5962f05c0712c643f7584e019e95181caf785192725a"),
+            "windows_arm64": ("zip", "dc7dd1e8505f18d47d7f5373a980603e1ff7eb231ee78a9d16559e69e51a328c"),
         }
         for target, (archive_format, digest) in archives.items():
             bundle = catalog["bundles"][target]
             self.assertEqual(bundle["format"], archive_format)
             self.assertEqual(bundle["sha256"], digest)
             self.assertEqual(bundle["library"], "libmpv-2.dll")
-            self.assertIn("/Predidit/libmpv-win32-video-cmake/releases/download/202611230430/", bundle["url"])
+            self.assertIn("/CKopoer/libmpv-win32-video-cmake/releases/download/windows-ddp-2026-11-25/", bundle["url"])
 
     def test_patched_renderer_keeps_upstream_d3d11_and_owns_retired_textures(self):
         with tempfile.TemporaryDirectory() as directory:

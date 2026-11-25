@@ -12,6 +12,7 @@ import android.view.SurfaceView
 import android.view.View
 import androidx.annotation.RequiresApi
 import com.alexmercerind.mediakitandroidhelper.MediaKitAndroidHelper
+import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -22,10 +23,11 @@ import io.flutter.plugin.platform.PlatformViewFactory
 
 /** Keeps mpv's producer Surface alive while inline/fullscreen views exchange parents. */
 @RequiresApi(29)
-internal class HdrVideoSurfaces : FlutterPlugin, ActivityAware {
+internal class HdrVideoSurfaces : FlutterPlugin, ActivityAware, FlutterEngine.EngineLifecycleListener {
     private var activity: Activity? = null
     private val outputs = mutableMapOf<Long, Output>()
     private lateinit var channel: MethodChannel
+    private lateinit var dolbyPlayers: AndroidDolbyPlayers
 
     private fun transfer(): String? {
         val modes = activity?.window?.decorView?.display?.hdrCapabilities?.supportedHdrTypes
@@ -38,6 +40,11 @@ internal class HdrVideoSurfaces : FlutterPlugin, ActivityAware {
     }
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        dolbyPlayers = AndroidDolbyPlayers(binding.applicationContext, binding.binaryMessenger,
+            createOutput = { width, height -> Output(width, height, decoder = true).also { outputs[it.reference] = it } },
+            releaseOutput = { id -> outputs.remove(id)?.close() },
+            supportsVideoHdr = { activity?.window?.decorView?.display?.hdrCapabilities?.supportedHdrTypes ?: intArrayOf() })
+        binding.flutterEngine.addEngineLifecycleListener(this)
         channel = MethodChannel(binding.binaryMessenger, "bilisail/hdr_video")
         binding.platformViewRegistry.registerViewFactory("bilisail/hdr_video",
             object : PlatformViewFactory(StandardMessageCodec.INSTANCE) {
@@ -72,9 +79,10 @@ internal class HdrVideoSurfaces : FlutterPlugin, ActivityAware {
         }
     }
 
-    private class Output(val width: Int, val height: Int) {
-        val layer = SurfaceControl.Builder().setName("BiliSail HDR video")
-            .setFormat(PixelFormat.RGBA_1010102).setBufferSize(width, height).build()
+    internal class Output(val width: Int, val height: Int, decoder: Boolean = false) {
+        val layer = SurfaceControl.Builder().setName(if (decoder) "BiliSail codec video" else "BiliSail HDR video")
+            .setFormat(if (decoder) PixelFormat.OPAQUE else PixelFormat.RGBA_1010102)
+            .setBufferSize(width, height).build()
         val surface = try { Surface(layer) } catch (error: RuntimeException) {
             layer.release()
             throw error
@@ -134,8 +142,12 @@ internal class HdrVideoSurfaces : FlutterPlugin, ActivityAware {
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) = onAttachedToActivity(binding)
     override fun onDetachedFromActivity() { activity = null }
     override fun onDetachedFromActivityForConfigChanges() = onDetachedFromActivity()
+    override fun onPreEngineRestart() = dolbyPlayers.releaseSessions()
+    override fun onEngineWillDestroy() = Unit
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        binding.flutterEngine.removeEngineLifecycleListener(this)
         channel.setMethodCallHandler(null)
+        dolbyPlayers.close()
         for (output in outputs.values) output.close()
         outputs.clear()
     }

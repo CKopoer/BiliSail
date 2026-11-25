@@ -1,6 +1,6 @@
 # BiliSail（哔帆）设计文档
 
-2026-11-12：已移除 fvp／MDK，当前仅使用 media_kit。历史文档中的双后端实现、SDK、命令及测试记录保留当时事实，不再作为现行入口；清理与设置兼容见[移除记录](validation/fvp-removal-2026-11-12.md)。
+常规播放使用 media_kit。Android 10 及以上可为带 JOC 的 Dolby Digital Plus 节目选用系统杜比播放链路。五端能力及设备验证见[杜比全景声播放方案](dolby-atmos-playback.md)。早期 fvp／MDK 的清理与设置兼容见[移除记录](validation/fvp-removal-2026-11-12.md)。
 
 设计与实现日期：2026-10-05。状态：已创建 0.1.0 Windows 预览工程；完整设计仍是后续路线，当前能力与验证边界见 [M0 实测记录](validation/m0-results.md) 和 [根 README](../README.md)。
 
@@ -91,6 +91,7 @@
 | [两后端统一缓冲窗口](validation/unified-buffer-window-2026-11-07.md) | 普通播放最多 2 分钟、预览 5 秒、相同素材的原生对照验证 |
 | [Predidit 播放链路](validation/predidit-playback-2026-11-23.md) | 当前依赖、每源加载和跨平台生命周期修复 |
 | [Windows 与 Android 原生 HDR 输出](validation/windows-android-native-hdr.md) | 杜比视界 RPU、10 位视频面、SDR 回退与实机合成层验证 |
+| [杜比全景声播放方案](dolby-atmos-playback.md) | Windows、Android 首期及 Linux、iOS、macOS 路线，片源与设备验收条件 |
 | [个人媒体 fork 统一维护](validation/media-kit-personal-fork-2026-11-07.md) | 官方基线、八个固定 Git 包、libmpv 源码／资产、平台修复和验证边界 |
 | [整体架构](architecture.md) | 产品范围、技术栈、模块依赖、目录、状态管理、存储和平台适配 |
 | [设置页日志压缩导出](validation/log-export-2026-11-06.md) | 核心与播放日志、脱敏和容量限制、各平台默认保存位置及验证边界 |

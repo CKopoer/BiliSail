@@ -1,8 +1,10 @@
 # 第三方来源与分发检查
 
+Android 的杜比音轨使用 Google AndroidX Media3 ExoPlayer 1.9.2（Apache License 2.0）调用系统媒体组件。播放所需的杜比解码器由设备提供。[AndroidX Media3 源码和许可](https://github.com/androidx/media/tree/1.9.2)
+
 ## 2026-11-23 播放组件
 
-当前使用 MIT 许可的 Predidit/media-kit，并移植原维护分支中的设备生命周期修复。各平台由同一提交的 Native Assets 清单选择 libmpv。下文的旧 SDK 构建选项和许可描述对应各自日期的历史二进制。[迁移记录](docs/validation/predidit-playback-2026-11-23.md) · [Windows 归档与构建来源](windows/native/PREDIDIT_SOURCE.md)
+当前使用 MIT 许可的 Predidit/media-kit 基线，CKopoer 分支更新 Windows 两个目标的 Native Assets 归档，应用在构建副本中应用设备生命周期修复。Windows 分发目录随附对应版本的构建配置、源码标识和子依赖声明。下文的旧 SDK 构建选项和许可描述对应各自日期的历史二进制。[固定资产清单](https://github.com/CKopoer/media-kit/blob/3493e859fe70dff908ba2fb4070162962f449ef2/media_kit/hook/native_bundles.json) · [Windows 归档与构建来源](windows/native/PREDIDIT_SOURCE.md)
 
 ## 2026-11-20 专栏正文解析
 

@@ -20,6 +20,7 @@ class SharedPlayerEngine
         PlayerInformationSource {
   SharedPlayerEngine({
     required this.createBackend,
+    this.createSourceBackend,
     this.schemes = const {'http', 'https', 'file'},
     this.onDiagnostic,
     this.seekCoalescingDelay = Duration.zero,
@@ -29,6 +30,8 @@ class SharedPlayerEngine
   }
 
   final FutureOr<PlaybackBackend> Function() createBackend;
+  final Future<PlaybackBackend?> Function(ValidatedSource, PlaybackOperation)?
+  createSourceBackend;
   final Set<String> schemes;
   final void Function(PlayerDiagnosticEvent)? onDiagnostic;
   final Duration seekCoalescingDelay;
@@ -376,7 +379,15 @@ class SharedPlayerEngine
           await _release();
           operation.check();
           final creating = _allocation =
-              Future<PlaybackBackend>.sync(createBackend).then((value) {
+              Future<PlaybackBackend>.sync(() async {
+                final preferred = await createSourceBackend?.call(
+                  plan,
+                  operation,
+                );
+                if (preferred != null) return preferred;
+                operation.check();
+                return createBackend();
+              }).then((value) {
                 _backend = value;
                 return value;
               });

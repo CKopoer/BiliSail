@@ -13,6 +13,7 @@ final class MediaTrack {
     required this.uri,
     required this.requestPolicy,
     this.codec,
+    this.embeddedAudioCodec,
     this.bandwidth,
     this.isHdr = false,
   });
@@ -20,6 +21,9 @@ final class MediaTrack {
   final Uri uri;
   final MediaRequestPolicy requestPolicy;
   final String? codec;
+
+  /// Audio stream in a combined local container, when known by the resolver.
+  final String? embeddedAudioCodec;
   final int? bandwidth;
 
   /// Resolver hint available before decoding. HDR requires GPU tone mapping

@@ -216,7 +216,18 @@ class _PlayerInformationTabState extends State<PlayerInformationTab>
               ('声道数', diagnostics?.audioChannels?.toString() ?? '—'),
               ('均衡增益', _number(native?.audioGainDb, ' dB')),
               ('音频输出', native?.audioOutput ?? '—'),
-              ('音频已解码', _optionalYes(diagnostics?.hasDecodedAudio)),
+              if (native case PlayerPlaybackInformation(
+                audioDecoder: final decoder?,
+              ))
+                (native.encodedAudioOutput ? '音频处理器' : '音频解码器', decoder),
+              if (native?.atmosSource == true)
+                ('音轨格式', 'Dolby Atmos（Dolby Digital Plus）'),
+              if (native?.audioOutputFormat case final format?)
+                ('音频输出格式', format),
+              if (native?.encodedAudioOutput == true)
+                ('音频传输', '压缩码流透传')
+              else
+                ('音频已解码', _optionalYes(diagnostics?.hasDecodedAudio)),
             ],
           ),
           (

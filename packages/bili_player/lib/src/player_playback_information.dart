@@ -15,6 +15,9 @@ final class PlayerPlaybackInformation {
     this.hardwareDecoder,
     this.videoCodec,
     this.audioCodec,
+    this.atmosSource = false,
+    this.audioOutputFormat,
+    this.audioDecoder,
     this.sourceFps,
     this.outputFps,
     this.videoBitrate,
@@ -44,6 +47,13 @@ final class PlayerPlaybackInformation {
   final String backend;
   final PlayerDiagnostics? diagnostics;
   final String? hardwareDecoder, videoCodec, audioCodec;
+  final bool atmosSource;
+  final String? audioOutputFormat;
+  bool get encodedAudioOutput =>
+      audioOutputFormat?.startsWith('spdif-') == true ||
+      audioOutputFormat == 'E-AC-3 JOC' ||
+      audioOutputFormat == 'E-AC-3';
+  final String? audioDecoder;
   final double? sourceFps, outputFps;
   final double? videoBitrate, audioBitrate;
 
@@ -87,6 +97,9 @@ final class PlayerPlaybackInformation {
         hardwareDecoder: hardwareDecoder,
         videoCodec: videoCodec,
         audioCodec: audioCodec,
+        atmosSource: atmosSource,
+        audioOutputFormat: audioOutputFormat,
+        audioDecoder: audioDecoder,
         sourceFps: sourceFps,
         outputFps: outputFps,
         videoBitrate: videoBitrate,

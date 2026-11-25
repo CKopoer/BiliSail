@@ -11,28 +11,28 @@ dependencies:
   ffi: 2.2.0
   media_kit:
     git:
-      url: https://github.com/Predidit/media-kit.git
+      url: https://github.com/CKopoer/media-kit.git
       path: media_kit
-      ref: 484639aca5ffc754a65876c22f01dbb070225732
+      ref: 3493e859fe70dff908ba2fb4070162962f449ef2
   media_kit_video:
     git:
-      url: https://github.com/Predidit/media-kit.git
+      url: https://github.com/CKopoer/media-kit.git
       path: media_kit_video
-      ref: 484639aca5ffc754a65876c22f01dbb070225732
+      ref: 3493e859fe70dff908ba2fb4070162962f449ef2
 
 # Pub ignores overrides from transitive packages; repeat these in the app.
 dependency_overrides:
   wakelock_plus: 1.8.1
   media_kit:
     git:
-      url: https://github.com/Predidit/media-kit.git
+      url: https://github.com/CKopoer/media-kit.git
       path: media_kit
-      ref: 484639aca5ffc754a65876c22f01dbb070225732
+      ref: 3493e859fe70dff908ba2fb4070162962f449ef2
   media_kit_video:
     git:
-      url: https://github.com/Predidit/media-kit.git
+      url: https://github.com/CKopoer/media-kit.git
       path: media_kit_video
-      ref: 484639aca5ffc754a65876c22f01dbb070225732
+      ref: 3493e859fe70dff908ba2fb4070162962f449ef2
 
 dev_dependencies:
   material_ui: 1.11.0

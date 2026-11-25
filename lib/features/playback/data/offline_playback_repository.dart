@@ -169,6 +169,7 @@ final class OfflinePlaybackRepository
                     : File(path.join(task.directory, merged.fileName)).uri,
               ],
               codec: video.codec,
+              embeddedAudioCodec: audio.codec,
               bandwidth: video.bandwidth + audio.bandwidth,
             )
           : localTrack(video),

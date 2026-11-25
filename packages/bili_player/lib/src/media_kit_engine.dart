@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:media_kit/media_kit.dart' as mk;
 
 import 'media_kit_backend.dart';
+import 'android_dolby_backend.dart';
 import 'media_kit_video_output.dart';
 import 'native_video_frame_queue.dart';
 import 'player_diagnostics.dart';
@@ -55,6 +56,9 @@ final class MediaKitEngine extends SharedPlayerEngine {
     }
 
     engine = MediaKitEngine._(
+      createSourceBackend: Platform.isAndroid
+          ? AndroidDolbyBackend.tryOpen
+          : null,
       idleVideoOutput: MediaKitVideoOutput(
         limitAndroidOutputToViewport: experimentalAndroidViewport,
       ),
@@ -73,6 +77,7 @@ final class MediaKitEngine extends SharedPlayerEngine {
   }
   MediaKitEngine._({
     required super.createBackend,
+    required super.createSourceBackend,
     super.onDiagnostic,
     required this.experimentalVideoFrameQueue,
     this.experimentalAudioAutosync,
@@ -87,7 +92,10 @@ final class MediaKitEngine extends SharedPlayerEngine {
   final int? experimentalAudioAutosync;
   final MediaKitVideoOutput _idleOutput;
   Future<void>? _idleDisposal;
-  MediaKitBackend? get _native => activeBackend as MediaKitBackend?;
+  MediaKitBackend? get _native => switch (activeBackend) {
+    MediaKitBackend backend => backend,
+    _ => null,
+  };
   bool get videoFrameQueueActive => _native?.videoFrameQueueActive ?? false;
   double get appliedAudioGainDb => _native?.appliedAudioGainDb ?? 0;
   ({int? width, int? height})? get debugRequestedVideoViewport =>
@@ -98,6 +106,9 @@ final class MediaKitEngine extends SharedPlayerEngine {
       _idleDisposal ??= super.dispose().whenComplete(_idleOutput.dispose);
   PlayerDiagnostics inspectDiagnostics() =>
       _native?.inspectDiagnostics() ??
+      (activeBackend is AndroidDolbyBackend
+          ? (activeBackend as AndroidDolbyBackend).diagnostics
+          : null) ??
       PlayerDiagnostics(
         generation: currentSnapshot.generation,
         position: currentSnapshot.position,

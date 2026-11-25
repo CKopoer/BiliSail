@@ -37,6 +37,7 @@ final class AndroidMediaLeases {
         uri: Uri.parse('fd://$fd'),
         requestPolicy: MediaRequestPolicy(),
         codec: track.codec,
+        embeddedAudioCodec: track.embeddedAudioCodec,
         bandwidth: track.bandwidth,
         isHdr: track.isHdr,
       );

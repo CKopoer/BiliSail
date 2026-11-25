@@ -125,6 +125,20 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/native/PREDIDIT_SOURCE.md"
   DESTINATION "${INSTALL_BUNDLE_DATA_DIR}/licenses/mpv"
   COMPONENT Runtime)
 
+# The hook verifies the entire SDK archive and hashes its extracted files.
+# Include the configuration and third-party notices from the same build.
+if(FLUTTER_TARGET_PLATFORM STREQUAL "windows-arm64")
+  set(BILISAIL_MPV_TARGET windows_arm64)
+else()
+  set(BILISAIL_MPV_TARGET windows_x64)
+endif()
+file(READ "${BILISAIL_NATIVE_BUNDLE_CATALOG}" BILISAIL_MPV_CATALOG)
+string(JSON BILISAIL_MPV_DIGEST GET "${BILISAIL_MPV_CATALOG}" bundles "${BILISAIL_MPV_TARGET}" sha256)
+set(BILISAIL_MPV_CACHE "${CMAKE_CURRENT_SOURCE_DIR}/../.dart_tool/hooks_runner/shared/media_kit/build/prebuilt")
+install(DIRECTORY "${BILISAIL_MPV_CACHE}/${BILISAIL_MPV_DIGEST}/files/provenance/"
+  DESTINATION "${INSTALL_BUNDLE_DATA_DIR}/licenses/mpv/provenance"
+  COMPONENT Runtime)
+
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../THIRD_PARTY_NOTICES.md"
   DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)

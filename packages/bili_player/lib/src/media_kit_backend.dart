@@ -16,6 +16,8 @@ import 'native_player_properties.dart';
 import 'native_buffering_diagnostics.dart';
 import 'native_load_observer.dart';
 import 'native_audio_gain.dart';
+import 'dolby_audio_output.dart';
+import 'android_dolby_backend.dart';
 import 'native_video_frame_queue.dart';
 import 'native_video_color.dart';
 import 'video_dimensions.dart';
@@ -62,6 +64,7 @@ final class MediaKitBackend
   NativeLoadObserver? _nativeLoad;
   Future<NativeLoadObserver>? _attachingLoad;
   NativeAudioGain? _audioGain;
+  WindowsDolbyOutput? _dolbyOutput;
   Future<mk.Player>? _creating;
   Future<void>? _disposal;
   PlaybackOperation? _preparation;
@@ -661,6 +664,30 @@ final class MediaKitBackend
         'DASH audio track did not become ready.',
       );
     }
+    if (Platform.isWindows &&
+        !plan.silent &&
+        !plan.live &&
+        isDolbyDigitalPlus(player.getProperty('current-tracks/audio/codec'))) {
+      final output = _dolbyOutput = WindowsDolbyOutput(
+        write: (name, value) {
+          final position = player.getProperty('time-pos');
+          final restore =
+              player.getProperty('seekable') == 'yes' &&
+              player.getProperty('seeking') != 'yes' &&
+              double.tryParse(position)?.isFinite == true;
+          // Reinitializing a decoder drops its prefetched audio. Refill at the
+          // presentation clock without overriding a pending user seek.
+          player.setProperty('file-local-options/$name', value);
+          if (restore) player.setProperty('time-pos', position);
+        },
+        isCurrent: () =>
+            !_disposed && _generation == generation && !operation.isCancelled,
+        rate: options.rate,
+        volume: options.volume,
+        gain: options.audioGainDb,
+      );
+      await operation.wait(output.start());
+    }
     if (requireVideoOutput) {
       // Track metadata is available through the SDK before presentation is
       // admitted. Configure the output, then verify its converted frame.
@@ -1050,17 +1077,42 @@ final class MediaKitBackend
   }
 
   @override
-  Future<void> setRate(double rate) => _player!.setRate(rate);
+  Future<void> setRate(double rate) async {
+    if (_dolbyOutput case final output?) {
+      output.rate = rate;
+      if (rate != 1) output.apply();
+    }
+    await _player!.setRate(rate);
+    _dolbyOutput?.apply();
+  }
+
   @override
-  Future<void> setVolume(double volume) => _player!.setVolume(volume);
+  Future<void> setVolume(double volume) async {
+    if (_dolbyOutput case final output?) {
+      output.volume = volume;
+      if (volume != 100) output.apply();
+    }
+    await _player!.setVolume(volume);
+    _dolbyOutput?.apply();
+  }
+
   @override
-  Future<void> setGainDb(double gainDb) =>
-      _audioGain!.apply(gainDb, smooth: false);
+  Future<void> setGainDb(double gainDb) async {
+    if (_dolbyOutput case final output?) {
+      output.gain = gainDb;
+      if (gainDb != 0) output.apply();
+    }
+    await _audioGain!.apply(gainDb, smooth: false);
+    _dolbyOutput?.apply();
+  }
+
   @override
   Duration? get buffered => _player?.state.buffer;
   @override
   void interrupt() {
     ++_generation;
+    _dolbyOutput?.stop();
+    _dolbyOutput = null;
     _preparation?.cancel();
     unawaited(cancelSeek().catchError((Object _) {}));
     _generationChanges.add(_generation);
@@ -1084,6 +1136,7 @@ final class MediaKitBackend
   @override
   bool canReuse(ValidatedSource plan) =>
       !_disposed &&
+      !(Platform.isAndroid && AndroidDolbyBackend.candidate(plan)) &&
       !_videoOutput.hasHdrSource &&
       _player != null &&
       !_requiresVideoColorMapping &&
@@ -1092,6 +1145,8 @@ final class MediaKitBackend
 
   @override
   Future<void> resetForNextSource(PlaybackOperation operation) async {
+    _dolbyOutput?.stop();
+    _dolbyOutput = null;
     _bufferDiagnostics?.dispose();
     _bufferDiagnostics = null;
     ++_generation;

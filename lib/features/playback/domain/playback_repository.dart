@@ -17,9 +17,11 @@ final class PlaybackTrack {
     required this.urls,
     required this.codec,
     required this.bandwidth,
+    this.embeddedAudioCodec,
   });
   final List<Uri> urls;
   final String codec;
+  final String? embeddedAudioCodec;
   final int bandwidth;
 }
 

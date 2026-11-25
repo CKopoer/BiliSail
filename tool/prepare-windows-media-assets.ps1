@@ -8,10 +8,12 @@ if ($package.rootUri -notlike 'file:*') { throw 'Resolve the pinned media_kit pa
 $packageRoot = ([uri]$package.rootUri).LocalPath
 $catalog = Get-Content -LiteralPath (Join-Path $packageRoot 'hook/native_bundles.json') -Raw | ConvertFrom-Json
 $bundle = $catalog.bundles.windows_x64
-if ($catalog.schema -ne 1 -or $bundle.format -cne '7z' -or
+if ($catalog.schema -ne 1 -or $bundle.format -cnotin '7z','zip' -or
     $bundle.sha256 -cnotmatch '^[a-f0-9]{64}$' -or ([uri]$bundle.url).Scheme -ne 'https') {
   throw 'Invalid media_kit Windows x64 native bundle catalog.'
 }
+# The Native Assets hook verifies and extracts ZIPs directly on Windows.
+if ($bundle.format -ceq 'zip') { return }
 
 # Use the cache layout of the locked Native Assets hook. Windows process
 # lookup can select System32 tar.exe even when PATH starts with another tar.

@@ -204,34 +204,32 @@ final class NativeHdrOutput {
     child: AspectRatio(
       aspectRatio: dimensions.width / dimensions.height,
       child: Platform.isAndroid
-          ? PlatformViewLink(
-              key: ValueKey(id),
-              viewType: 'bilisail/hdr_video',
-              surfaceFactory: (_, controller) => AndroidViewSurface(
-                controller: controller as AndroidViewController,
-                hitTestBehavior: PlatformViewHitTestBehavior.transparent,
-                gestureRecognizers:
-                    const <Factory<OneSequenceGestureRecognizer>>{},
-              ),
-              onCreatePlatformView: (params) {
-                final controller =
-                    PlatformViewsService.initExpensiveAndroidView(
-                      id: params.id,
-                      viewType: 'bilisail/hdr_video',
-                      layoutDirection: TextDirection.ltr,
-                      creationParams: id,
-                      creationParamsCodec: const StandardMessageCodec(),
-                    )..addOnPlatformViewCreatedListener(
-                      params.onPlatformViewCreated,
-                    );
-                unawaited(controller.create());
-                return controller;
-              },
-            )
+          ? buildAndroidDecoderSurface(id)
           : _WindowsHdrSurface(key: ValueKey(id), target: id),
     ),
   );
 }
+
+Widget buildAndroidDecoderSurface(int id) => PlatformViewLink(
+  key: ValueKey(id),
+  viewType: 'bilisail/hdr_video',
+  surfaceFactory: (_, controller) => AndroidViewSurface(
+    controller: controller as AndroidViewController,
+    hitTestBehavior: PlatformViewHitTestBehavior.transparent,
+    gestureRecognizers: const <Factory<OneSequenceGestureRecognizer>>{},
+  ),
+  onCreatePlatformView: (params) {
+    final controller = PlatformViewsService.initExpensiveAndroidView(
+      id: params.id,
+      viewType: 'bilisail/hdr_video',
+      layoutDirection: TextDirection.ltr,
+      creationParams: id,
+      creationParamsCodec: const StandardMessageCodec(),
+    )..addOnPlatformViewCreatedListener(params.onPlatformViewCreated);
+    unawaited(controller.create());
+    return controller;
+  },
+);
 
 final class _WindowsHdrSurface extends LeafRenderObjectWidget {
   const _WindowsHdrSurface({super.key, required this.target});

@@ -1,6 +1,6 @@
 # 播放器迁移到 Predidit/media-kit
 
-本文保留迁移时的基线。后续 Windows 与 Android 增加了 10 位呈现路径，设备条件和实测结果见 [原生 HDR 输出](windows-android-native-hdr.md)。
+本文保留 2026-11-23 迁移时的基线。后续 Windows 与 Android 增加了 10 位呈现路径。Windows 随后引入含 IEC 61937 封装器的 libmpv，Android 为 JOC 音轨增加 Media3 系统播放路径。设备条件与实测见[原生 HDR 输出](windows-android-native-hdr.md)和[杜比全景声播放方案](../dolby-atmos-playback.md)。
 
 根应用和 bili_player 的 media_kit、media_kit_video 固定在 Predidit 提交 `484639aca5ffc754a65876c22f01dbb070225732`。平台 libmpv 和事件库由 media_kit 的 Native Assets hook 提供。2026-11-23 核对的 Kazumi main 与此提交一致。参考的是 Kazumi 的源解析、播放实例所有权和输出配置，应用层沿用 BiliSail 的媒体会话。 [Kazumi 锁文件](https://github.com/Predidit/Kazumi/blob/635cd58d3ac7731085d0c64846ceefa52bc167bd/pubspec.lock#L1011-L1026) · [原生归档与 SHA-256](https://github.com/Predidit/media-kit/blob/484639aca5ffc754a65876c22f01dbb070225732/media_kit/hook/native_bundles.json)
 

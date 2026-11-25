@@ -11,6 +11,7 @@
 #include "app_icon.h"
 #include "image_export.h"
 #include "hdr_video.h"
+#include "audio_passthrough.h"
 #include "image_picker_channel.h"
 #include "text_input.h"
 #include "desktop_window.h"
@@ -44,6 +45,8 @@ class FlutterWindow : public Win32Window {
   std::unique_ptr<AppIconChannel> app_icon_channel_;
   std::unique_ptr<ImageExportChannel> image_export_channel_;
   std::unique_ptr<HdrVideoChannel> hdr_video_channel_;
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
+      audio_passthrough_channel_;
   std::unique_ptr<ImagePickerChannel> image_picker_channel_;
   std::unique_ptr<DesktopWindowChannel> desktop_window_channel_;
   std::unique_ptr<SystemMediaControlsChannel> system_media_channel_;

@@ -1,5 +1,7 @@
 # Windows 与 Android 的原生 HDR 视频输出
 
+本文记录 media_kit 的视频呈现路径。带全景声音轨的 Android 节目还可选用单个系统音视频播放器，Dolby Vision 与音频同时存在时的实测见[杜比全景声播放方案](../dolby-atmos-playback.md)。
+
 BiliSail 沿用 media_kit、mpv 的播放时钟与独立音轨。Windows 和 Android 在确认视频色彩信息及当前显示设备的输出能力后，由同一播放器切换到专用 HDR 显示面。gpu-next 使用 libplacebo 解释杜比视界 RPU，并将画面映射到系统支持的 HDR 输出。系统或电视收到已经渲染的 HDR 像素；这条路径不向外置显示器发送 Dolby Vision 码流。
 
 | 平台 | 启用条件 | 视频输出 |

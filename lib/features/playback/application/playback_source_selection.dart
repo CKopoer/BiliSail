@@ -51,6 +51,7 @@ import '../domain/playback_repository.dart';
     uri: resolved.video.urls[liveLineIndex],
     requestPolicy: policy,
     codec: resolved.video.codec,
+    embeddedAudioCodec: resolved.video.embeddedAudioCodec,
     bandwidth: resolved.video.bandwidth,
     isHdr: resolved.isHdr,
   );

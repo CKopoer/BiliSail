@@ -1,5 +1,6 @@
 import 'player_diagnostics.dart';
 import 'player_playback_information.dart';
+import 'dolby_audio_output.dart';
 
 /// Fixed property allowlist: never expose raw native text or arbitrary maps.
 Future<PlayerPlaybackInformation> sampleNativePlaybackInformation({
@@ -11,6 +12,9 @@ Future<PlayerPlaybackInformation> sampleNativePlaybackInformation({
     'hwdec-current',
     'video-format',
     'audio-codec-name',
+    'current-tracks/audio/codec-profile',
+    'audio-out-params/format',
+    'current-tracks/audio/decoder',
     'container-fps',
     'estimated-vf-fps',
     'video-bitrate',
@@ -70,6 +74,9 @@ Future<PlayerPlaybackInformation> sampleNativePlaybackInformation({
     hardwareDecoder: identifier('hwdec-current'),
     videoCodec: identifier('video-format'),
     audioCodec: identifier('audio-codec-name'),
+    atmosSource: isAtmosProfile(data['current-tracks/audio/codec-profile']),
+    audioOutputFormat: identifier('audio-out-params/format'),
+    audioDecoder: identifier('current-tracks/audio/decoder'),
     sourceFps: number('container-fps'),
     outputFps: number('estimated-vf-fps'),
     videoBitrate: number('video-bitrate'),
