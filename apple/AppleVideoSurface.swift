@@ -69,7 +69,8 @@ final class AppleVideoSurface: NSObject, FlutterPlatformViewFactory {
         layer.pixelFormat = .bgra8Unorm
         layer.colorspace = CGColorSpace(name: CGColorSpace.sRGB)
         layer.frame = CGRect(x: 0, y: 0, width: width, height: height)
-        layer.drawableSize = layer.bounds.size
+        layer.sourceSize = layer.bounds.size
+        layer.drawableSize = layer.sourceSize
         if #available(iOS 16.0, macOS 10.11, *) {
           layer.wantsExtendedDynamicRangeContent = transfer == "pq"
         }
@@ -124,19 +125,13 @@ private final class PlaybackMetalLayer: CAMetalLayer {
     return presentedTransfer == expected
   }
 
-  override var drawableSize: CGSize {
-    get { super.drawableSize }
-    set {
-      // MoltenVK briefly requests a 1x1 surface while replacing a swapchain.
-      // Reusing that extent for the paused frame loses its real dimensions.
-      if newValue.width > 1 && newValue.height > 1 { super.drawableSize = newValue }
-    }
-  }
+  var sourceSize: CGSize = .zero
 
   override func nextDrawable() -> CAMetalDrawable? {
     let drawable = super.nextDrawable()
-    if let space = transfer, !matchesPresented(space) {
-      drawable?.addPresentedHandler { [weak self] frame in
+    if let drawable = drawable, drawable.texture.width > 1, drawable.texture.height > 1,
+       let space = transfer, !matchesPresented(space) {
+      drawable.addPresentedHandler { [weak self] frame in
         guard let self = self, frame.presentedTime > 0 else { return }
         self.lock.lock()
         self.presentedTransfer = space
@@ -149,8 +144,8 @@ private final class PlaybackMetalLayer: CAMetalLayer {
 
 #if os(macOS)
 private final class MetalHost: NSView {
-  private let target: CAMetalLayer?
-  init(target: CAMetalLayer?) {
+  private let target: PlaybackMetalLayer?
+  init(target: PlaybackMetalLayer?) {
     self.target = target
     super.init(frame: .zero)
     wantsLayer = true
@@ -165,8 +160,8 @@ private final class MetalHost: NSView {
 }
 #else
 private final class MetalHost: UIView, FlutterPlatformView {
-  private let target: CAMetalLayer?
-  init(target: CAMetalLayer?) {
+  private let target: PlaybackMetalLayer?
+  init(target: PlaybackMetalLayer?) {
     self.target = target
     super.init(frame: .zero)
     isUserInteractionEnabled = false
@@ -181,14 +176,13 @@ private final class MetalHost: UIView, FlutterPlatformView {
 }
 #endif
 
-private func fit(_ target: CAMetalLayer, _ bounds: CGRect) {
+private func fit(_ target: PlaybackMetalLayer, _ bounds: CGRect) {
   guard !bounds.isEmpty else { return }
   // Keep the source-sized Vulkan swapchain while Core Animation scales the
   // already color-managed image to the layout bounds.
-  let size = target.drawableSize
   CATransaction.begin()
   CATransaction.setDisableActions(true)
   target.frame = bounds
-  target.drawableSize = size
+  target.drawableSize = target.sourceSize
   CATransaction.commit()
 }
