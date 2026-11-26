@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: CKopoer/libmpv-darwin-build
-          ref: 6943394d8a7df826a8e57d212f93359d063b6004
+          ref: 8c14f3c7e6367ce425667759724a5a20b66b3a8e
       - uses: actions/checkout@v4
         with:
           repository: mpv-player/mpv
@@ -65,7 +65,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: CKopoer/libmpv-darwin-build
-          ref: 6943394d8a7df826a8e57d212f93359d063b6004
+          ref: 8c14f3c7e6367ce425667759724a5a20b66b3a8e
       - uses: actions/checkout@v4
         with:
           repository: mpv-player/mpv
