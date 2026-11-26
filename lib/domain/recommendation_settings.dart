@@ -7,7 +7,7 @@ enum RecommendationSurface { recommended, discovery, related }
 final class RecommendationSettings {
   RecommendationSettings({
     this.source = RecommendationSource.web,
-    this.reportInteractions = false,
+    this.reportInteractions = _defaultReportInteractions,
     this.keepPrevious = false,
     this.showPreviousMarker = true,
     int minimumLikeRatio = 0,
@@ -35,7 +35,7 @@ final class RecommendationSettings {
 
   const RecommendationSettings.defaults()
     : source = RecommendationSource.web,
-      reportInteractions = false,
+      reportInteractions = _defaultReportInteractions,
       keepPrevious = false,
       showPreviousMarker = true,
       minimumLikeRatio = 0,
@@ -46,6 +46,7 @@ final class RecommendationSettings {
       exemptFollowed = true,
       filterRelated = true;
 
+  static const _defaultReportInteractions = true;
   static const likeRatios = [0, 1, 2, 3, 4];
   static const durations = [0, 30, 60, 90, 120];
   static const playCounts = [0, 50, 100, 500, 1000];
@@ -103,7 +104,10 @@ final class RecommendationSettings {
               .where((item) => item.name == value['source'])
               .firstOrNull ??
           RecommendationSource.web,
-      reportInteractions: flag('reportInteractions', false),
+      reportInteractions: flag(
+        'reportInteractions',
+        _defaultReportInteractions,
+      ),
       keepPrevious: flag('keepPrevious', false),
       showPreviousMarker: flag('showPreviousMarker', true),
       minimumLikeRatio: number('minimumLikeRatio'),

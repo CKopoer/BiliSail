@@ -87,15 +87,20 @@ void main() {
       final repository = SqliteSettingsRepository(database);
       await database.writeSetting(
         'preferences.v1',
-        jsonEncode({'theme': 'dark', 'navigationMode': 'singlePage'}),
+        jsonEncode({
+          'theme': 'dark',
+          'navigationMode': 'singlePage',
+          'recommendations': {'keepPrevious': false},
+        }),
       );
       final legacy = await repository.load();
+      expect(legacy.recommendations.reportInteractions, isTrue);
       expect(
         legacy.recommendations.toJson(),
         const RecommendationSettings.defaults().toJson(),
       );
       final selected = RecommendationSettings(
-        reportInteractions: true,
+        reportInteractions: false,
         keepPrevious: true,
         minimumLikeRatio: 3,
         minimumDurationSeconds: 90,
@@ -161,11 +166,11 @@ void main() {
           failSave ? RecommendationSource.web : RecommendationSource.desktop,
         );
         final reporting = find.widgetWithText(SwitchListTile, '上报推荐卡片曝光和点击');
-        expect(tester.widget<SwitchListTile>(reporting).value, isFalse);
+        expect(tester.widget<SwitchListTile>(reporting).value, isTrue);
         await tester.tap(reporting);
         await tester.pumpAndSettle();
-        expect(repository.value.recommendations.reportInteractions, !failSave);
-        expect(tester.widget<SwitchListTile>(reporting).value, !failSave);
+        expect(repository.value.recommendations.reportInteractions, failSave);
+        expect(tester.widget<SwitchListTile>(reporting).value, failSave);
         final toggle = find.widgetWithText(SwitchListTile, '保留首页推荐刷新');
         expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
         final marker = find.widgetWithText(SwitchListTile, '显示上次看到位置提示');

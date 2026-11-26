@@ -5,14 +5,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_requests.dart';
 import '../../../domain/recommendation_card.dart';
 import '../../../domain/request_cancellation.dart';
-import '../../../shared/application/recommendation_filter_provider.dart';
+import '../../settings/application/settings_controller.dart';
 import '../domain/feed_repository.dart';
 import 'app_recommendation_identity.dart';
 import 'feed_controller.dart';
 
 final recommendationReporterProvider = Provider<RecommendationReporter?>((ref) {
+  // Wait for saved preferences before sending any reports.
   if (!ref.watch(
-    recommendationSettingsProvider.select((s) => s.reportInteractions),
+    settingsControllerProvider.select(
+      (settings) =>
+          settings.asData?.value.recommendations.reportInteractions ?? false,
+    ),
   )) {
     return null;
   }

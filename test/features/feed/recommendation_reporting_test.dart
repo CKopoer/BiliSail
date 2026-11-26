@@ -10,13 +10,15 @@ import 'package:bilisail/features/feed/application/recommendation_reporter.dart'
 import 'package:bilisail/features/feed/domain/feed_repository.dart';
 import 'package:bilisail/features/feed/domain/home_channel.dart';
 import 'package:bilisail/features/feed/presentation/feed_video_grid.dart';
-import 'package:bilisail/shared/application/recommendation_filter_provider.dart';
+import 'package:bilisail/features/settings/application/settings_controller.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:visibility_detector/visibility_detector.dart';
+
+import '../../support/memory_settings_repository.dart';
 
 RecommendationCard _card(int id, {int epoch = 0}) => RecommendationCard(
   source: RecommendationSource.web,
@@ -98,7 +100,7 @@ void main() {
   );
 
   testWidgets(
-    'opt-in observes only visible cards and a stalled POST never delays navigation',
+    'default reporting waits for settings, measures visible cards and does not delay navigation',
     (tester) async {
       final detector = VisibilityDetectorController.instance;
       final interval = detector.updateInterval;
@@ -108,18 +110,13 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           feedRepositoryProvider.overrideWithValue(repository),
-          recommendationSettingsProvider.overrideWithValue(
-            const RecommendationSettings.defaults(),
+          settingsRepositoryProvider.overrideWithValue(
+            MemorySettingsRepository(),
           ),
         ],
       );
       addTearDown(container.dispose);
-      void enabled(bool value) => container.updateOverrides([
-        feedRepositoryProvider.overrideWithValue(repository),
-        recommendationSettingsProvider.overrideWithValue(
-          RecommendationSettings(reportInteractions: value),
-        ),
-      ]);
+      expect(container.read(recommendationReporterProvider), isNull);
       final active = ValueNotifier(false);
       final scroll = ScrollController();
       addTearDown(active.dispose);
@@ -173,9 +170,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(container.read(recommendationReporterProvider), isNull);
-      enabled(true);
-      await tester.pumpAndSettle();
+      expect(container.read(recommendationReporterProvider), isNotNull);
       await tester.pump(const Duration(seconds: 1));
       expect(repository.batches, isEmpty);
 
@@ -214,7 +209,11 @@ void main() {
         RecommendationInteraction.click,
       ]);
       expect(tester.takeException(), isNull);
-      enabled(false);
+      await container
+          .read(settingsControllerProvider.notifier)
+          .setRecommendations(
+            RecommendationSettings(reportInteractions: false),
+          );
       expect(container.read(recommendationReporterProvider), isNull);
     },
   );
