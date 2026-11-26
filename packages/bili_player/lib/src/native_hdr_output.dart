@@ -160,8 +160,9 @@ final class NativeHdrOutput {
         var attached = false;
         for (var i = 0; i < 50 && !attached; i++) {
           attached = await _channel.invokeMethod<bool>('attached', id) == true;
-          if (!attached)
+          if (!attached) {
             await Future<void>.delayed(const Duration(milliseconds: 20));
+          }
         }
         if (!attached) throw StateError('The Metal layer has no window');
       }
