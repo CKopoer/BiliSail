@@ -12,6 +12,7 @@ import 'package:bilisail/shared/ui/app_network_image.dart';
 import 'package:bilisail/shared/ui/comment_badge.dart';
 import 'package:bilisail/shared/ui/comment_rich_content.dart';
 import 'package:bilisail/shared/ui/comments_panel.dart';
+import 'package:flutter/rendering.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -20,7 +21,10 @@ const _reply = CommentEntry(
   id: '11',
   author: '作者',
   authorId: UserId('7'),
-  message: '作者回复正文',
+  message:
+      '回复正文会跟在昵称后面，较长的正文会在预览区域内自然换行。'
+      '这里继续添加几句文字来超过两行，打开详情仍然可以读完整内容。'
+      '这是长回复的结尾。',
   isUpAuthor: true,
   nicknameColor: 0x123456,
 );
@@ -174,7 +178,7 @@ void main() {
 
   for (final type in [CommentTargetType.video, CommentTargetType.dynamic]) {
     testWidgets(
-      '${type.name} comments retain markers in preview, detail and return',
+      '${type.name} reply previews keep the author inline and truncate to two lines',
       (tester) async {
         tester.view.devicePixelRatio = 1;
         tester.view.physicalSize = const Size(390, 850);
@@ -202,11 +206,10 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text('置顶'), findsOneWidget);
         expect(find.text('UP'), findsOneWidget);
-        _expectUpAfterAuthor(tester, find.text('作者'));
-        _expectUpBeforeColon(tester);
+        _expectInlinePreview(tester);
         expect(find.text('UP 主觉得很赞'), findsOneWidget);
         expect(find.text('UP 主回复过'), findsOneWidget);
-        await tester.tap(find.text('作者'));
+        await tester.tapOnText(find.textRange.ofSubstring('作者'));
         await tester.pumpAndSettle();
         expect(opened, const UserId('7'));
         expect(find.text('共 1 条回复 ›'), findsOneWidget);
@@ -217,11 +220,21 @@ void main() {
         expect(find.text('UP 主回复过'), findsOneWidget);
         expect(find.text('作者'), findsOneWidget);
         _expectUpAfterAuthor(tester, find.text('作者'));
+        final detail = _replyParagraph(tester);
+        expect(detail.maxLines, isNull);
+        expect(detail.didExceedMaxLines, isFalse);
+        expect(
+          detail.getBoxesForSelection(
+            TextSelection(
+              baseOffset: _reply.message.length - 1,
+              extentOffset: _reply.message.length,
+            ),
+          ),
+          isNotEmpty,
+        );
         await tester.tap(findMaterialTooltip('返回评论'));
         await tester.pumpAndSettle();
-        expect(find.text('作者'), findsOneWidget);
-        _expectUpAfterAuthor(tester, find.text('作者'));
-        _expectUpBeforeColon(tester);
+        _expectInlinePreview(tester);
         expect(find.text('UP'), findsOneWidget);
         expect(find.text('置顶'), findsOneWidget);
         expect(tester.takeException(), isNull);
@@ -242,14 +255,59 @@ void _expectUpAfterAuthor(WidgetTester tester, Finder author) {
   );
 }
 
-void _expectUpBeforeColon(WidgetTester tester) {
-  final badge = tester.getRect(find.text('UP'));
-  final colon = tester.getRect(find.text('：'));
+RenderParagraph _replyParagraph(WidgetTester tester) =>
+    tester.renderObject<RenderParagraph>(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is RichText &&
+            widget.text.toPlainText().contains(_reply.message),
+      ),
+    );
+
+void _expectInlinePreview(WidgetTester tester) {
+  final paragraph = _replyParagraph(tester);
+  final text = paragraph.text.toPlainText();
+  final bodyStart = text.indexOf(_reply.message);
+  final firstBodyGlyph = paragraph
+      .getBoxesForSelection(
+        TextSelection(baseOffset: bodyStart, extentOffset: bodyStart + 1),
+      )
+      .single;
+  final nickname = paragraph
+      .getBoxesForSelection(const TextSelection(baseOffset: 0, extentOffset: 2))
+      .single;
+  final colon = paragraph
+      .getBoxesForSelection(
+        TextSelection(baseOffset: bodyStart - 1, extentOffset: bodyStart),
+      )
+      .single;
+  final origin = paragraph.localToGlobal(Offset.zero);
+  final badge = tester.getRect(find.text('UP')).shift(-origin);
+  expect(nickname.right, lessThanOrEqualTo(badge.left));
   expect(badge.right, lessThanOrEqualTo(colon.left));
-  expect(badge.center.dy, closeTo(colon.center.dy, 1));
+  expect(nickname.top, closeTo(firstBodyGlyph.top, .01));
+  expect(firstBodyGlyph.left, greaterThanOrEqualTo(colon.right));
+  for (final offset in [1, bodyStart - 1]) {
+    final span = paragraph.text.getSpanForPosition(
+      TextPosition(offset: offset),
+    );
+    expect(span?.style?.color, const Color(0xFF123456));
+  }
+  expect(paragraph.maxLines, 2);
+  expect(paragraph.overflow, TextOverflow.ellipsis);
+  expect(paragraph.didExceedMaxLines, isTrue);
+  final visibleLines = paragraph
+      .getBoxesForSelection(
+        TextSelection(baseOffset: bodyStart, extentOffset: text.length),
+      )
+      .map((box) => box.top)
+      .toSet();
+  expect(visibleLines, hasLength(2));
   expect(
-    tester.widget<Text>(find.text('：')).style?.color,
-    tester.widget<Text>(find.text('作者')).style?.color,
+    paragraph.getBoxesForSelection(
+      TextSelection(baseOffset: text.length - 1, extentOffset: text.length),
+    ),
+    isEmpty,
   );
 }
 

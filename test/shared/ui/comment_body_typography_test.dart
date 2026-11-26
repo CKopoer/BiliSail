@@ -27,7 +27,10 @@ void main() {
             final opened = <Uri>[];
             final users = <UserId>[];
             final sought = <Duration>[];
-            const message = '中文评论 Abc 123\n@用户 00:09\nhttps://example.com';
+            final message = compact
+                ? '中文 @用户 00:09\nhttps://example.com'
+                : '中文评论 Abc 123\n@用户 00:09\nhttps://example.com';
+            final text = compact ? '作者：$message' : message;
             await tester.pumpWidget(
               MaterialApp(
                 theme: dark ? BiliTheme.dark() : BiliTheme.light(),
@@ -38,11 +41,11 @@ void main() {
                       width: 320,
                       child: CommentRichContent(
                         compact: compact,
-                        comment: const CommentEntry(
+                        comment: CommentEntry(
                           id: '1',
                           author: '作者',
                           message: message,
-                          mentionedUsers: {'用户': UserId('2')},
+                          mentionedUsers: const {'用户': UserId('2')},
                         ),
                         onOpenLink: opened.add,
                         onOpenUser: users.add,
@@ -69,7 +72,8 @@ void main() {
             expect(style.color, Color(dark ? 0xFFE7E9EB : 0xFF18191C));
             expect(style.letterSpacing, 0);
             expect(style.height, lineHeight / fontSize);
-            expect(paragraph.text.toPlainText(), message);
+            expect(paragraph.text.toPlainText(), text);
+            expect(paragraph.didExceedMaxLines, isFalse);
             expect(find.byType(SelectionArea), findsOneWidget);
 
             // CSS splits the space left over from the natural font metrics
@@ -97,7 +101,10 @@ void main() {
               ),
               closeTo(expectedAscent, .01),
             );
-            expect(paragraph.size.height, lineHeight * scale * 3);
+            expect(
+              paragraph.size.height,
+              lineHeight * scale * (compact ? 2 : 3),
+            );
 
             final spans = (paragraph.text as TextSpan).children!
                 .cast<TextSpan>();

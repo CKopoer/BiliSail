@@ -77,26 +77,18 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: CommentRichContent(
-              prefix: '作者：',
               compact: true,
               comment: CommentEntry(
                 id: '1',
                 author: '作者',
                 message: '回复正文',
                 vipLabel: label,
-                level: 6,
-                verifyType: 1,
-                medalName: '粉丝牌',
-                medalLevel: 10,
               ),
             ),
           ),
         ),
       );
       expect(find.text(label), findsNothing);
-      expect(find.byType(BiliLevelBadge), findsOneWidget);
-      expect(find.byType(BiliVerifyBadge), findsOneWidget);
-      expect(find.text('粉丝牌 10'), findsOneWidget);
       expect(find.text('作者：回复正文'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });

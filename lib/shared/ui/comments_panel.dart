@@ -26,7 +26,6 @@ import 'scroll_collapsing_header.dart';
 import 'measured_list_view.dart';
 import 'bili_icons.dart';
 import 'comment_rich_content.dart';
-import 'comment_badge.dart';
 import 'comment_text_styles.dart';
 import 'comment_actions.dart';
 import 'comment_more_menu.dart';
@@ -1484,70 +1483,6 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
                                           children: [
-                                            Wrap(
-                                              spacing: 5,
-                                              runSpacing: 3,
-                                              crossAxisAlignment:
-                                                  WrapCrossAlignment.center,
-                                              children: [
-                                                InkWell(
-                                                  onTap:
-                                                      r.authorId?.isValid ==
-                                                              true &&
-                                                          onOpenUser != null
-                                                      ? () => onOpenUser(
-                                                          r.authorId!,
-                                                        )
-                                                      : null,
-                                                  child: Text(
-                                                    r.isUpAuthor
-                                                        ? r.author
-                                                        : '${r.author}：',
-                                                    style: styles.previewAuthor
-                                                        .copyWith(
-                                                          color:
-                                                              r.nicknameColor !=
-                                                                  null
-                                                              ? Color(
-                                                                  0xFF000000 |
-                                                                      r.nicknameColor!,
-                                                                )
-                                                              : null,
-                                                        ),
-                                                  ),
-                                                ),
-                                                if (r.isUpAuthor)
-                                                  Row(
-                                                    mainAxisSize:
-                                                        MainAxisSize.min,
-                                                    children: [
-                                                      const CommentBadge(
-                                                        label: 'UP',
-                                                      ),
-                                                      Text(
-                                                        '：',
-                                                        style: styles
-                                                            .previewAuthor
-                                                            .copyWith(
-                                                              color:
-                                                                  r.nicknameColor !=
-                                                                      null
-                                                                  ? Color(
-                                                                      0xFF000000 |
-                                                                          r.nicknameColor!,
-                                                                    )
-                                                                  : null,
-                                                            ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                if (r.isPinned)
-                                                  const CommentBadge(
-                                                    label: '置顶',
-                                                    outlined: true,
-                                                  ),
-                                              ],
-                                            ),
                                             CommentRichContent(
                                               comment: r,
                                               onOpenUser: onOpenUser,

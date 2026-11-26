@@ -34,7 +34,6 @@ class CommentRichContent extends StatefulWidget {
   const CommentRichContent({
     super.key,
     required this.comment,
-    this.prefix = '',
     this.compact = false,
     this.onOpenLink,
     this.onSeek,
@@ -42,7 +41,6 @@ class CommentRichContent extends StatefulWidget {
     this.layoutOnly = false,
   });
   final CommentEntry comment;
-  final String prefix;
   final bool compact;
   // Detached list measurement uses the same text and fixed-size media boxes.
   final bool layoutOnly;
@@ -74,6 +72,9 @@ class _CommentRichContentState extends State<CommentRichContent> {
           widget.comment.mentionedUsers,
         )) {
       _parse();
+    }
+    if (oldWidget.compact && !widget.compact) {
+      _recognizers.remove(0)?.dispose();
     }
   }
 
@@ -112,9 +113,9 @@ class _CommentRichContentState extends State<CommentRichContent> {
 
   @override
   Widget build(BuildContext context) {
-    final comment = widget.comment, prefix = widget.prefix;
+    final comment = widget.comment;
     final styles = CommentTextStyles(Theme.of(context));
-    final spans = <InlineSpan>[if (prefix.isNotEmpty) TextSpan(text: prefix)];
+    final spans = <InlineSpan>[if (widget.compact) ..._previewAuthor(styles)];
     for (var i = 0; i < _parts.length; i++) {
       final part = _parts[i];
       if (part.kind != CommentTextKind.emote) {
@@ -128,7 +129,7 @@ class _CommentRichContentState extends State<CommentRichContent> {
             : userId != null && openUser != null
             ? () => openUser(userId)
             : null;
-        final recognizer = _recognizer(i, widget.layoutOnly ? null : onTap);
+        final recognizer = _recognizer(i + 1, widget.layoutOnly ? null : onTap);
         final video = part.kind == CommentTextKind.videoLink;
         if (video || part.linkTitle != null) {
           final icon = Icon(
@@ -199,42 +200,23 @@ class _CommentRichContentState extends State<CommentRichContent> {
         ),
       );
     }
+    final body = Text.rich(
+      TextSpan(children: spans),
+      style: widget.compact ? styles.previewBody : styles.body,
+      maxLines: widget.compact ? 2 : null,
+      overflow: widget.compact ? TextOverflow.ellipsis : null,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (prefix.isNotEmpty)
-          Wrap(
-            spacing: 4,
-            runSpacing: 2,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              if (comment.level != null &&
-                  comment.level! >= 0 &&
-                  comment.level! <= 6)
-                BiliLevelBadge(level: comment.level!),
-              if (comment.verifyType == 0 || comment.verifyType == 1)
-                BiliVerifyBadge(type: comment.verifyType!),
-              if (comment.medalName != null)
-                Text(
-                  '${comment.medalName} ${comment.medalLevel ?? ''}',
-                  style: styles.badge,
-                ),
-            ],
-          ),
         if (widget.layoutOnly)
-          Text.rich(
-            TextSpan(children: spans),
-            style: widget.compact ? styles.previewBody : styles.body,
-          )
+          body
         else
           SelectionArea(
             // 回复预览外层的 InkWell 会让正文继承按钮光标。
             child: DefaultSelectionStyle.merge(
               mouseCursor: SystemMouseCursors.text,
-              child: Text.rich(
-                TextSpan(children: spans),
-                style: widget.compact ? styles.previewBody : styles.body,
-              ),
+              child: body,
             ),
           ),
         if (comment.pictures.isNotEmpty)
@@ -308,6 +290,50 @@ class _CommentRichContentState extends State<CommentRichContent> {
           ),
       ],
     );
+  }
+
+  List<InlineSpan> _previewAuthor(CommentTextStyles styles) {
+    final comment = widget.comment;
+    final authorId = comment.authorId;
+    final openUser = widget.onOpenUser;
+    final color = comment.nicknameColor;
+    final style = styles.previewAuthor.copyWith(
+      color: color == null ? null : Color(0xFF000000 | color),
+    );
+    final recognizer = _recognizer(
+      0,
+      !widget.layoutOnly &&
+              authorId != null &&
+              authorId.isValid &&
+              openUser != null
+          ? () => openUser(authorId)
+          : null,
+    );
+    return [
+      TextSpan(
+        text: comment.isUpAuthor ? comment.author : '${comment.author}：',
+        style: style,
+        recognizer: recognizer,
+      ),
+      if (comment.isUpAuthor) ...[
+        const WidgetSpan(
+          alignment: PlaceholderAlignment.middle,
+          child: Padding(
+            padding: EdgeInsets.only(left: 5),
+            child: CommentBadge(label: 'UP'),
+          ),
+        ),
+        TextSpan(text: '：', style: style),
+      ],
+      if (comment.isPinned)
+        const WidgetSpan(
+          alignment: PlaceholderAlignment.middle,
+          child: Padding(
+            padding: EdgeInsets.only(right: 5),
+            child: CommentBadge(label: '置顶', outlined: true),
+          ),
+        ),
+    ];
   }
 }
 
