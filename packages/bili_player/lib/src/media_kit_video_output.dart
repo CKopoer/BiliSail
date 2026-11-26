@@ -165,6 +165,7 @@ final class MediaKitVideoOutput
   VideoDimensions? _videoDimensions;
   bool _androidGpuNext = false;
   final _hdr = ValueNotifier<NativeHdrOutput?>(null);
+  final _appleLayerVisible = ValueNotifier(false);
   Future<void>? _hdrAttempt;
   Timer? _hdrDisplayTimer;
   bool _hdrRetired = false;
@@ -309,7 +310,11 @@ final class MediaKitVideoOutput
             targetTransfer,
             dolby: _hdrDolby,
             profile: _hdrProfile,
-            mountAppleLayer: (target) => _hdr.value = target,
+            mountAppleLayer: (target) {
+              _appleLayerVisible.value = false;
+              _hdr.value = target;
+            },
+            showNegotiatedAppleLayer: () => _appleLayerVisible.value = true,
           );
       _hdr.value = await open(transfer);
       if (usesAppleMetalOutput &&
@@ -319,7 +324,10 @@ final class MediaKitVideoOutput
         _hdr.value = await open('srgb');
       }
     }
-    if (usesAppleMetalOutput && !_hdrRetired) _refreshReadiness?.call();
+    if (usesAppleMetalOutput && !_hdrRetired) {
+      if (_hdr.value == null) _appleLayerVisible.value = false;
+      _refreshReadiness?.call();
+    }
   }
 
   Future<void> retireHdr() async {
@@ -695,6 +703,7 @@ final class MediaKitVideoOutput
     cancelPendingViewport();
     clearPlayer();
     _frameReady.dispose();
+    _appleLayerVisible.dispose();
     _hdr.dispose();
     _controller.dispose();
   }
@@ -745,12 +754,17 @@ final class MediaKitVideoOutput
                 ),
               ),
               builder: (_, ready, child) => usesAppleMetalOutput
-                  ? Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        ?child,
-                        if (!ready) const ColoredBox(color: Color(0xff000000)),
-                      ],
+                  ? ValueListenableBuilder<bool>(
+                      valueListenable: _appleLayerVisible,
+                      child: child,
+                      builder: (_, visible, surface) => Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          ?surface,
+                          if (!ready && !visible)
+                            const ColoredBox(color: Color(0xff000000)),
+                        ],
+                      ),
                     )
                   : _VideoFrameMask(
                       key: const ValueKey('video-first-frame-mask'),

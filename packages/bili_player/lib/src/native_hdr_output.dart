@@ -78,6 +78,7 @@ final class NativeHdrOutput {
     required bool dolby,
     required String profile,
     void Function(NativeHdrOutput)? mountAppleLayer,
+    VoidCallback? showNegotiatedAppleLayer,
   }) async {
     int? id;
     try {
@@ -153,11 +154,22 @@ final class NativeHdrOutput {
         set('treat-srgb-as-power22', 'no');
       }
       set('target-colorspace-hint', 'yes');
-      if (usesAppleMetalOutput) mountAppleLayer?.call(target);
+      if (usesAppleMetalOutput) {
+        mountAppleLayer?.call(target);
+        // A paused frame submitted to an unattached layer may never appear.
+        var attached = false;
+        for (var i = 0; i < 50 && !attached; i++) {
+          attached = await _channel.invokeMethod<bool>('attached', id) == true;
+          if (!attached)
+            await Future<void>.delayed(const Duration(milliseconds: 20));
+        }
+        if (!attached) throw StateError('The Metal layer has no window');
+      }
       set('vo', 'gpu-next');
       // A requested PQ target alone does not prove that the presentation
       // surface negotiated PQ. Inspect the actual output before revealing it.
-      for (var i = 0; i < 80; i++) {
+      var exposed = false;
+      for (var i = 0; i < (usesAppleMetalOutput ? 160 : 80); i++) {
         final matrix = player.getProperty('video-out-params/colormatrix');
         final inputTransfer = player.getProperty('video-out-params/gamma');
         // Prefer the full RPU even for Profile 8. After giving software decode
@@ -182,6 +194,28 @@ final class NativeHdrOutput {
                 }) !=
                 true) {
               break;
+            }
+          }
+          // Core Animation can drop a fully occluded drawable. Reveal only
+          // color-verified output, then wait for actual presentation.
+          if (usesAppleMetalOutput && !exposed) {
+            exposed = true;
+            showNegotiatedAppleLayer?.call();
+            await WidgetsBinding.instance.endOfFrame.timeout(
+              const Duration(milliseconds: 300),
+              onTimeout: () {},
+            );
+            if (player.getProperty('pause') == 'yes') {
+              // Updating and removing our empty overlay repaints the paused
+              // image without a seek, a time step, or touching user subtitles.
+              final overlay = id.toString();
+              await player.native.command([
+                'osd-overlay',
+                overlay,
+                'ass-events',
+                '',
+              ]);
+              await player.native.command(['osd-overlay', overlay, 'none', '']);
             }
           }
           if (usesAppleMetalOutput &&

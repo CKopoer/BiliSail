@@ -81,6 +81,8 @@ final class AppleVideoSurface: NSObject, FlutterPlatformViewFactory {
         guard let id = args?["id"] as? NSNumber, let layer = self.layers[id.int64Value],
               let transfer = args?["transfer"] as? String else { result(false); return }
         result(layer.matchesPresented(transfer))
+      case "attached":
+        result((call.arguments as? NSNumber).flatMap { self.layers[$0.int64Value]?.isInWindow } ?? false)
       case "describe":
         result((call.arguments as? NSNumber).flatMap { self.layers[$0.int64Value]?.outputDescription })
       case "release":
@@ -109,6 +111,10 @@ final class AppleVideoSurface: NSObject, FlutterPlatformViewFactory {
 private final class PlaybackMetalLayer: CAMetalLayer {
   private let lock = NSLock()
   private var presentedTransfer: String?
+  private var observedDrawables = 0
+  private var droppedDrawables = 0
+  weak var host: MetalHost?
+  var isInWindow: Bool { host?.window != nil && superlayer != nil }
 
   private var transfer: String? {
     if colorspace?.name == CGColorSpace.sRGB { return "srgb" }
@@ -123,8 +129,9 @@ private final class PlaybackMetalLayer: CAMetalLayer {
   var outputDescription: String {
     lock.lock()
     let presented = presentedTransfer ?? "pending"
+    let counts = "\(observedDrawables)/\(droppedDrawables)"
     lock.unlock()
-    return "attached=\(superlayer != nil) format=\(pixelFormat.rawValue) transfer=\(transfer ?? "unknown") presented=\(presented)"
+    return "attached=\(isInWindow) observed/dropped=\(counts) format=\(pixelFormat.rawValue) transfer=\(transfer ?? "unknown") presented=\(presented)"
   }
 
   func matchesPresented(_ expected: String) -> Bool {
@@ -140,10 +147,13 @@ private final class PlaybackMetalLayer: CAMetalLayer {
     let drawable = super.nextDrawable()
     if let drawable = drawable, drawable.texture.width > 1, drawable.texture.height > 1,
        let space = transfer, !matchesPresented(space) {
+      lock.lock()
+      observedDrawables += 1
+      lock.unlock()
       drawable.addPresentedHandler { [weak self] frame in
-        guard let self = self, frame.presentedTime > 0 else { return }
+        guard let self = self else { return }
         self.lock.lock()
-        self.presentedTransfer = space
+        if frame.presentedTime > 0 { self.presentedTransfer = space } else { self.droppedDrawables += 1 }
         self.lock.unlock()
       }
     }
@@ -158,6 +168,7 @@ private final class MetalHost: NSView {
     self.target = target
     super.init(frame: .zero)
     wantsLayer = true
+    target?.host = self
     if let target = target { layer?.addSublayer(target) }
   }
   required init?(coder: NSCoder) { return nil }
@@ -174,6 +185,7 @@ private final class MetalHost: UIView, FlutterPlatformView {
     self.target = target
     super.init(frame: .zero)
     isUserInteractionEnabled = false
+    target?.host = self
     if let target = target { layer.addSublayer(target) }
   }
   required init?(coder: NSCoder) { return nil }
