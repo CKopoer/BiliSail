@@ -2,7 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'video_card_menu_sheet.dart';
 
-/// Compact overflow action for a card's title row.
+/// Compact overflow action for a card.
 class CardMenuButton extends StatelessWidget {
   const CardMenuButton({
     super.key,
@@ -13,13 +13,14 @@ class CardMenuButton extends StatelessWidget {
     required this.busy,
     required this.onFocusChange,
     required this.onPressed,
+    this.placeholder = false,
     this.tooltip,
   });
 
   final GlobalKey anchorKey;
   final Key buttonKey;
   final double cardWidth;
-  final bool visible, busy;
+  final bool visible, busy, placeholder;
   final ValueChanged<bool> onFocusChange;
   final VoidCallback? onPressed;
   final String? tooltip;
@@ -32,6 +33,7 @@ class CardMenuButton extends StatelessWidget {
       _ => (22.0, 16.0),
     };
     final size = Size(buttonSize, 24);
+    if (placeholder) return SizedBox.fromSize(size: size);
     return Focus(
       skipTraversal: true,
       onFocusChange: onFocusChange,

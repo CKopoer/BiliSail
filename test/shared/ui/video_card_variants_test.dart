@@ -1,8 +1,11 @@
 import '../../support/material_tooltip_finder.dart';
 
 import 'package:bilisail/app/theme.dart';
+import 'package:bilisail/domain/responsive_layout_settings.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/shared/ui/bili_badges.dart';
+import 'package:bilisail/shared/ui/highlighted_text.dart';
+import 'package:bilisail/shared/ui/responsive_layout_scope.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:bilisail/shared/ui/video_card_cover.dart';
 import 'package:flutter/gestures.dart';
@@ -12,6 +15,85 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('4:3 keeps card width, frees the full title and moves the menu', (
+    tester,
+  ) async {
+    var opens = 0;
+    VideoCardMenuAction? selected;
+    Future<void> show(CardCoverRatio ratio) => tester.pumpWidget(
+      _app(
+        width: 140,
+        scale: 2,
+        ratio: ratio,
+        showReason: true,
+        menu: VideoCardMenu(
+          actions: const [VideoCardMenuAction.removeHistory],
+          onSelected: (action) => selected = action,
+        ),
+        onTap: () => opens++,
+      ),
+    );
+    final card = find.byType(VideoCard);
+    final cover = find.byType(AspectRatio);
+    final title = find.byType(HighlightedText);
+    final more = find.byKey(const ValueKey('video-card-title-menu'));
+    final date = find.text('今天投稿');
+    await show(CardCoverRatio.widescreen);
+    final wideCover = tester.getSize(cover);
+    final wideTitle = tester.getRect(title);
+    expect(wideCover.aspectRatio, closeTo(16 / 9, .001));
+    expect(date, findsOneWidget);
+    expect(tester.getTopLeft(more), wideTitle.topRight);
+
+    await show(CardCoverRatio.standard);
+    final standardCover = tester.getRect(cover);
+    final standardTitle = tester.getRect(title);
+    final menu = tester.getRect(more);
+    expect(tester.getSize(card).width, 140);
+    expect(standardCover.width, wideCover.width);
+    expect(standardCover.size.aspectRatio, closeTo(4 / 3, .001));
+    expect(standardTitle.right, standardCover.right);
+    expect(standardTitle.width, greaterThan(wideTitle.width));
+    expect(menu.right, standardCover.right);
+    expect(menu.top, greaterThan(standardTitle.bottom));
+    expect(menu.center.dy, tester.getCenter(find.text('测试UP')).dy);
+    expect(date, findsNothing);
+    expect(find.text('测试UP'), findsOneWidget);
+    expect(find.text('3万点赞'), findsOneWidget);
+    await tester.tap(more);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('删除记录'));
+    await tester.pumpAndSettle();
+    expect(selected, VideoCardMenuAction.removeHistory);
+    expect(opens, 0);
+
+    await show(CardCoverRatio.widescreen);
+    expect(tester.getSize(cover), wideCover);
+    expect(tester.getSize(title).width, wideTitle.width);
+    expect(date, findsOneWidget);
+    expect(tester.takeException(), isNull);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
+  testWidgets('4:3 feedback preserves the card size while hiding the menu', (
+    tester,
+  ) async {
+    const ratio = CardCoverRatio.standard;
+    const menu = VideoCardMenu(actions: [VideoCardMenuAction.notInterested]);
+    await tester.pumpWidget(_app(width: 140, ratio: ratio, menu: menu));
+    final card = find.byType(VideoCard);
+    final size = tester.getSize(card);
+    await tester.pumpWidget(
+      _app(
+        width: 140,
+        ratio: ratio,
+        menu: menu,
+        feedback: const VideoCardFeedback(busy: false),
+      ),
+    );
+    expect(tester.getSize(card), size);
+    expect(find.byKey(const ValueKey('video-card-title-menu')), findsNothing);
+  });
+
   testWidgets('a video cover clips its content only once', (tester) async {
     await tester.pumpWidget(_app());
     expect(
@@ -508,6 +590,7 @@ void main() {
 
 Widget _app({
   double width = 360,
+  CardCoverRatio ratio = CardCoverRatio.widescreen,
   double scale = 1,
   bool dark = false,
   bool showUpBadge = false,
@@ -519,6 +602,7 @@ Widget _app({
   String danmakuCountText = '',
   String publishText = '今天投稿',
   VideoCardMenu? menu,
+  VideoCardFeedback? feedback,
   VoidCallback? onTap,
 }) => MaterialApp(
   theme: dark ? BiliTheme.dark() : BiliTheme.light(),
@@ -529,26 +613,30 @@ Widget _app({
         alignment: Alignment.topLeft,
         child: SizedBox(
           width: width,
-          child: VideoCard(
-            video:
-                video ??
-                VideoSummary(
-                  id: const VideoId('BV1234567890'),
-                  title: '测试视频',
-                  coverUrl: '',
-                  author: '测试UP',
-                  duration: const Duration(minutes: 3),
-                  recommendationReason: reason,
-                ),
-            showUpBadge: showUpBadge,
-            showRecommendationReason: showReason,
-            highlightQuery: query,
-            publishText: publishText,
-            playCountText: playCountText,
-            danmakuCountText: danmakuCountText,
-            progress: .4,
-            menu: menu,
-            onTap: onTap ?? () {},
+          child: ResponsiveLayoutScope(
+            settings: ResponsiveLayoutSettings.defaults(cardCoverRatio: ratio),
+            child: VideoCard(
+              video:
+                  video ??
+                  VideoSummary(
+                    id: const VideoId('BV1234567890'),
+                    title: '测试视频',
+                    coverUrl: '',
+                    author: '测试UP',
+                    duration: const Duration(minutes: 3),
+                    recommendationReason: reason,
+                  ),
+              showUpBadge: showUpBadge,
+              showRecommendationReason: showReason,
+              highlightQuery: query,
+              publishText: publishText,
+              playCountText: playCountText,
+              danmakuCountText: danmakuCountText,
+              progress: .4,
+              menu: menu,
+              feedback: feedback,
+              onTap: onTap ?? () {},
+            ),
           ),
         ),
       ),

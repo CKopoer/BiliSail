@@ -14,6 +14,7 @@ class SqliteSettingsRepository implements SettingsRepository {
   SqliteSettingsRepository(
     this.database, {
     this.defaultNavigationMode = WorkspaceNavigationMode.dualTabs,
+    this.defaultCardCoverRatio = CardCoverRatio.widescreen,
     this.defaultHighEnergyProgressEnabled = false,
     this.defaultDanmakuArea = 0.75,
     this.defaultDanmakuFontScale = 1.0,
@@ -23,6 +24,7 @@ class SqliteSettingsRepository implements SettingsRepository {
   });
   final AppDatabase database;
   final WorkspaceNavigationMode defaultNavigationMode;
+  final CardCoverRatio defaultCardCoverRatio;
   final bool defaultHighEnergyProgressEnabled;
   final double defaultDanmakuArea;
   final double defaultDanmakuFontScale;
@@ -33,6 +35,9 @@ class SqliteSettingsRepository implements SettingsRepository {
   AppSettings get defaults => AppSettings.defaults(
     shortcuts: defaultShortcuts,
     navigationMode: defaultNavigationMode,
+    responsiveLayout: ResponsiveLayoutSettings.defaults(
+      cardCoverRatio: defaultCardCoverRatio,
+    ),
     highEnergyProgressEnabled: defaultHighEnergyProgressEnabled,
     danmakuArea: defaultDanmakuArea,
     danmakuFontScale: defaultDanmakuFontScale,
@@ -322,7 +327,7 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 57,
+        'schemaVersion': 58,
         'appIcon': value.appIcon.name,
         'recommendations': value.recommendations.toJson(),
         'navigationBarMode': value.navigationBarMode.name,
@@ -330,6 +335,7 @@ class SqliteSettingsRepository implements SettingsRepository {
         'sidebarCollapsed': value.sidebarCollapsed,
         'responsiveLayout': {
           'videoGridMinWidths': value.responsiveLayout.videoGridMinWidths,
+          'cardCoverRatio': value.responsiveLayout.cardCoverRatio.name,
           'navigationBarBreakpoint':
               value.responsiveLayout.navigationBarBreakpoint,
           'sidebarExpandedWidth': value.responsiveLayout.sidebarExpandedWidth,
@@ -432,9 +438,11 @@ class SqliteSettingsRepository implements SettingsRepository {
     );
   }
 
-  static ResponsiveLayoutSettings _responsiveLayout(Object? value) {
+  ResponsiveLayoutSettings _responsiveLayout(Object? value) {
     if (value is! Map<String, Object?>) {
-      return const ResponsiveLayoutSettings.defaults();
+      return ResponsiveLayoutSettings.defaults(
+        cardCoverRatio: defaultCardCoverRatio,
+      );
     }
     final widths = value['videoGridMinWidths'];
     final splitStyles = value['playbackSplitStyles'];
@@ -444,6 +452,9 @@ class SqliteSettingsRepository implements SettingsRepository {
       videoGridMinWidths: widths is List && widths.every((item) => item is int)
           ? widths.cast<int>()
           : null,
+      cardCoverRatio:
+          CardCoverRatio.values.asNameMap()[value['cardCoverRatio']] ??
+          defaultCardCoverRatio,
       navigationBarBreakpoint: value['navigationBarBreakpoint'] is int
           ? value['navigationBarBreakpoint'] as int
           : 600,

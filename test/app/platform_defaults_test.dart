@@ -1,10 +1,23 @@
 import 'package:bilisail/app/platform_defaults.dart';
+import 'package:bilisail/domain/responsive_layout_settings.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('only Android and iOS default to 4:3 card covers', () {
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    for (final platform in TargetPlatform.values) {
+      debugDefaultTargetPlatformOverride = platform;
+      final expected =
+          platform == TargetPlatform.android || platform == TargetPlatform.iOS
+          ? CardCoverRatio.standard
+          : CardCoverRatio.widescreen;
+      expect(defaultCardCoverRatio, expected);
+    }
+  });
+
   test(
     'macOS and iOS use Command defaults while other platforms retain Ctrl',
     () {

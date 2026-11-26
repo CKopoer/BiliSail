@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:bilisail/app/platform_defaults.dart';
 import 'package:bilisail/core/storage/app_database.dart';
+import 'package:bilisail/domain/responsive_layout_settings.dart';
 import 'package:bilisail/features/settings/application/settings_controller.dart';
 import 'package:bilisail/features/settings/data/sqlite_settings_repository.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
@@ -24,6 +25,7 @@ void main() {
       final repository = SqliteSettingsRepository(
         database,
         defaultNavigationMode: workspaceNavigationModeForPlatform(platform),
+        defaultCardCoverRatio: cardCoverRatioForPlatform(platform),
         defaultShortcuts: shortcutSettingsForPlatform(platform),
         defaultHighEnergyProgressEnabled: highEnergyProgressEnabledForPlatform(
           platform,
@@ -47,6 +49,13 @@ void main() {
           orientation: AppOrientationPreference.landscape,
           defaultDynamicTab: DynamicPageTab.videoDynamic,
           navigationMode: WorkspaceNavigationMode.multipleTabs,
+          responsiveLayout: defaults.responsiveLayout.copyWith(
+            cardCoverRatio:
+                defaults.responsiveLayout.cardCoverRatio ==
+                    CardCoverRatio.standard
+                ? CardCoverRatio.widescreen
+                : CardCoverRatio.standard,
+          ),
           closeTabOnMiddleClick: true,
           closeTabOnRightClick: true,
           closeTabOnDoubleClick: true,

@@ -104,6 +104,13 @@ final class SettingsController extends AsyncNotifier<AppSettings> {
       update((current) => current.copyWith(sidebarStyle: value));
   Future<void> setSidebarCollapsed(bool value) =>
       update((current) => current.copyWith(sidebarCollapsed: value));
+  Future<void> setCardCoverRatio(CardCoverRatio value) => update(
+    (current) => current.copyWith(
+      responsiveLayout: current.responsiveLayout.copyWith(
+        cardCoverRatio: value,
+      ),
+    ),
+  );
   Future<void> setVideoGridMinWidths(List<int>? value) => update(
     (current) => current.copyWith(
       responsiveLayout: current.responsiveLayout.copyWith(

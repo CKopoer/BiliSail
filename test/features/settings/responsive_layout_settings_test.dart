@@ -79,6 +79,53 @@ void main() {
     });
     tearDown(() => database.close());
 
+    test(
+      'card cover ratios use the platform fallback and persist overrides',
+      () async {
+        final mobile = SqliteSettingsRepository(
+          database,
+          defaultCardCoverRatio: CardCoverRatio.standard,
+        );
+        expect(
+          mobile.defaults.responsiveLayout.cardCoverRatio,
+          CardCoverRatio.standard,
+        );
+        expect(
+          (await mobile.load()).responsiveLayout.cardCoverRatio,
+          CardCoverRatio.standard,
+        );
+        for (final layout in [
+          null,
+          <String, Object?>{},
+          {'cardCoverRatio': 'unsupported'},
+          {'cardCoverRatio': 4 / 3},
+        ]) {
+          await database.writeSetting(
+            'preferences.v1',
+            jsonEncode({'schemaVersion': 57, 'responsiveLayout': layout}),
+          );
+          expect(
+            (await mobile.load()).responsiveLayout.cardCoverRatio,
+            CardCoverRatio.standard,
+          );
+          expect(
+            (await repository.load()).responsiveLayout.cardCoverRatio,
+            CardCoverRatio.widescreen,
+          );
+        }
+        await mobile.save(repository.defaults);
+        expect(
+          (await mobile.load()).responsiveLayout.cardCoverRatio,
+          CardCoverRatio.widescreen,
+        );
+        await repository.save(mobile.defaults);
+        expect(
+          (await repository.load()).responsiveLayout.cardCoverRatio,
+          CardCoverRatio.standard,
+        );
+      },
+    );
+
     test('old sidebar thresholds are retained separately from the new navigation threshold', () async {
       final widths = [...ResponsiveLayoutSettings.defaultVideoGridMinWidths]
         ..[2] = 1000;
@@ -297,7 +344,7 @@ void main() {
           isA<Map<String, Object?>>().having(
             (map) => map['schemaVersion'],
             'schema version',
-            57,
+            58,
           ),
         );
         expect(database.schemaVersion, 4);
@@ -321,6 +368,7 @@ void main() {
       await container.read(settingsControllerProvider.future);
       final controller = container.read(settingsControllerProvider.notifier);
       await Future.wait([
+        controller.setCardCoverRatio(CardCoverRatio.standard),
         controller.setNavigationBreakpoints(800, 1280),
         controller.setPlaybackSideBySideWidth(900),
         controller.setPlaybackSplitStyle(
@@ -344,6 +392,10 @@ void main() {
       expect(repository.value.responsiveLayout.sidebarExpandedWidth, 1280);
       expect(repository.value.responsiveLayout.playbackSideBySideWidth, 900);
       expect(repository.value.responsiveLayout.videoGridMinWidths?[2], 1000);
+      expect(
+        repository.value.responsiveLayout.cardCoverRatio,
+        CardCoverRatio.standard,
+      );
       expect(repository.value.responsiveLayout.articleWidthFraction, .64);
       const savedStyles = {
         PlaybackSplitPage.video: PlaybackSplitStyle.below,
@@ -393,12 +445,20 @@ void main() {
       );
       await controller.setVideoGridMinWidths(null);
       expect(repository.value.responsiveLayout.videoGridMinWidths, isNull);
+      expect(
+        repository.value.responsiveLayout.cardCoverRatio,
+        CardCoverRatio.standard,
+      );
       expect(repository.value.responsiveLayout.playbackSideBySideWidth, 900);
       expect(
         repository.value.responsiveLayout.playbackSplitStyles,
         savedStyles,
       );
       await controller.resetToDefaults();
+      expect(
+        repository.value.responsiveLayout.cardCoverRatio,
+        CardCoverRatio.widescreen,
+      );
       expect(
         splitStyles(repository.value.responsiveLayout),
         everyElement(PlaybackSplitStyle.right),

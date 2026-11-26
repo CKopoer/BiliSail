@@ -430,6 +430,15 @@ final class _SettingsCategoryPageState
                             '使用侧边栏时生效；随窗口宽度模式按下方导航栏阈值展开。可用左上角按钮完全收起或展开，保留当前页面和侧栏样式。',
                             style: TextStyle(fontSize: 12),
                           ),
+                          _choices(
+                            '视频与直播卡片封面比例',
+                            s.responsiveLayout.cardCoverRatio,
+                            const {
+                              CardCoverRatio.widescreen: '16:9',
+                              CardCoverRatio.standard: '4:3',
+                            },
+                            controller.setCardCoverRatio,
+                          ),
                           ResponsiveLayoutSettingsControls(
                             settings: s.responsiveLayout,
                             onVideoGridChanged:

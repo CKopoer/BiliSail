@@ -1,9 +1,11 @@
 import 'package:bilisail/app/theme.dart';
+import 'package:bilisail/domain/responsive_layout_settings.dart';
 import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/features/live/domain/live_room.dart';
 import 'package:bilisail/features/search/domain/search_result.dart';
 import 'package:bilisail/features/search/presentation/search_results.dart';
 import 'package:bilisail/shared/ui/live_room_tile.dart';
+import 'package:bilisail/shared/ui/responsive_layout_scope.dart';
 import 'package:bilisail/features/feed/domain/home_repository.dart';
 import 'package:bilisail/features/feed/presentation/home_feed_cards.dart';
 import 'package:material_ui/material_ui.dart';
@@ -51,7 +53,23 @@ void main() {
         ],
       );
       addTearDown(router.dispose);
-      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      final ratio = ValueNotifier(CardCoverRatio.widescreen);
+      addTearDown(ratio.dispose);
+      await tester.pumpWidget(
+        MaterialApp.router(
+          routerConfig: router,
+          builder: (context, child) => ValueListenableBuilder(
+            valueListenable: ratio,
+            child: child,
+            builder: (context, value, child) => ResponsiveLayoutScope(
+              settings: ResponsiveLayoutSettings.defaults(
+                cardCoverRatio: value,
+              ),
+              child: child ?? const SizedBox.shrink(),
+            ),
+          ),
+        ),
+      );
       await tester.pumpAndSettle();
       final tiles = find.byType(LiveRoomTile);
       final first = tester.getRect(tiles.first);
@@ -66,6 +84,26 @@ void main() {
       expect(find.text('♨ 1.2万'), findsNWidgets(columns + 1));
       expect(find.text('未开播'), findsWidgets);
       expect(find.text('直播中'), findsWidgets);
+      final cover = find.descendant(
+        of: tiles.first,
+        matching: find.byType(AspectRatio),
+      );
+      final wideCover = tester.getSize(cover);
+      expect(wideCover.aspectRatio, closeTo(16 / 9, .001));
+      ratio.value = CardCoverRatio.standard;
+      await tester.pumpAndSettle();
+      final standardCover = tester.getSize(cover);
+      expect(standardCover.aspectRatio, closeTo(4 / 3, .001));
+      expect(standardCover.width, wideCover.width);
+      expect(tester.getSize(tiles.first).width, first.width);
+      expect(
+        tester.getTopRight(tiles.at(columns - 1)),
+        Offset(width, first.top),
+      );
+      expect(
+        tester.getTopLeft(tiles.at(columns)).dy,
+        greaterThan(tester.getBottomLeft(tiles.first).dy),
+      );
       await tester.tap(find.text('主播1'));
       await tester.pumpAndSettle();
       expect(find.text('/user/1'), findsOneWidget);

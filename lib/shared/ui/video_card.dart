@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../../domain/responsive_layout_settings.dart';
 import '../../domain/user.dart';
 import '../../features/comments/domain/comment_time.dart';
 import 'bili_icons.dart';
@@ -10,6 +11,7 @@ import 'video_card_cover.dart';
 import 'video_card_interaction_scope.dart';
 import 'video_card_menu_sheet.dart';
 import 'card_menu.dart';
+import 'responsive_layout_scope.dart';
 import 'scroll_aware_hover_region.dart';
 import 'video_card_feedback.dart';
 import 'text_measurement_cache.dart';
@@ -276,6 +278,12 @@ final class _VideoCardState extends State<VideoCard> {
     final scheme = theme.colorScheme;
     final video = widget.video;
     final menu = _menu;
+    final coverRatio = ResponsiveLayoutScope.of(context).cardCoverRatio;
+    final standardCover = coverRatio == CardCoverRatio.standard;
+    final menuButton =
+        menu != null && (standardCover || widget.feedback == null)
+        ? _menuButton(menu, cardWidth)
+        : null;
     final playLabel = compactCountLabel(video.playCount, widget.playCountText);
     final danmakuLabel = compactCountLabel(
       video.danmakuCount,
@@ -318,7 +326,7 @@ final class _VideoCardState extends State<VideoCard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 AspectRatio(
-                  aspectRatio: 16 / 9,
+                  aspectRatio: coverRatio.aspectRatio,
                   child: switch (widget.feedback) {
                     final feedback? => VideoCardFeedbackCover(
                       feedback: VideoCardFeedback(
@@ -437,9 +445,8 @@ final class _VideoCardState extends State<VideoCard> {
                                 ),
                               ),
                             ),
-                            if (widget.feedback == null)
-                              if (menu case final menu?)
-                                _menuButton(menu, cardWidth),
+                            if (!standardCover && menuButton != null)
+                              menuButton,
                           ],
                         ),
                       ),
@@ -464,6 +471,8 @@ final class _VideoCardState extends State<VideoCard> {
                         publishText: widget.publishText,
                         publishedAt: widget.publishedAt,
                         publishTooltip: widget.publishTooltip,
+                        showPublishTime: !standardCover,
+                        trailing: standardCover ? menuButton : null,
                       ),
                     ],
                   ),
@@ -485,6 +494,8 @@ final class _VideoCardState extends State<VideoCard> {
       anchorKey: _menuAnchor,
       buttonKey: const ValueKey('video-card-title-menu'),
       cardWidth: cardWidth,
+      // Keep the 4:3 metadata row in place while the cover offers undo.
+      placeholder: widget.feedback != null,
       visible:
           _hovered || _focused || _menuFocused || _menuOpen || touchPlatform,
       busy: menu.busy || _addingWatchLater,
@@ -809,6 +820,8 @@ final class _AuthorMetadata extends StatelessWidget {
     required this.publishText,
     required this.publishedAt,
     required this.publishTooltip,
+    required this.showPublishTime,
+    this.trailing,
   });
   final VideoSummary video;
   final ValueChanged<UserId>? onOpenUser;
@@ -820,6 +833,8 @@ final class _AuthorMetadata extends StatelessWidget {
   final String publishText;
   final DateTime? publishedAt;
   final String? publishTooltip;
+  final bool showPublishTime;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -829,7 +844,9 @@ final class _AuthorMetadata extends StatelessWidget {
     final openAuthor = id != null && id.isValid && openUser != null
         ? () => openUser(id)
         : null;
-    final timeLabel = commentTimeLabel(video.publishedAt ?? publishedAt);
+    final timeLabel = showPublishTime
+        ? commentTimeLabel(video.publishedAt ?? publishedAt)
+        : '';
     final dateText = timeLabel.isEmpty ? publishText : timeLabel;
     final metadataStyle = theme.textTheme.bodySmall?.copyWith(
       fontSize: 13,
@@ -916,7 +933,7 @@ final class _AuthorMetadata extends StatelessWidget {
             Expanded(
               child: Align(alignment: Alignment.centerLeft, child: author),
             ),
-            if (dateText.isNotEmpty) ...[
+            if (showPublishTime && dateText.isNotEmpty) ...[
               const SizedBox(width: 6),
               ConstrainedBox(
                 constraints: BoxConstraints(
@@ -927,6 +944,7 @@ final class _AuthorMetadata extends StatelessWidget {
                     : Tooltip(message: publishTooltip, child: published),
               ),
             ],
+            ?trailing,
           ],
         );
       },

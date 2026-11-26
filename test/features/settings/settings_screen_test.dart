@@ -1456,6 +1456,31 @@ void main() {
     }
     expect(tester.takeException(), isNull);
   });
+  testWidgets('appearance saves both card cover ratios', (tester) async {
+    final repository = _SettingsRepository();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [settingsRepositoryProvider.overrideWithValue(repository)],
+        child: const MaterialApp(home: Scaffold(body: SettingsScreen())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final widescreen = find.widgetWithText(ChoiceChip, '16:9');
+    final standard = find.widgetWithText(ChoiceChip, '4:3');
+    expect(tester.widget<ChoiceChip>(widescreen).selected, isTrue);
+    for (final (chip, ratio) in [
+      (standard, CardCoverRatio.standard),
+      (widescreen, CardCoverRatio.widescreen),
+    ]) {
+      await tester.ensureVisible(chip);
+      await tester.pumpAndSettle();
+      await tester.tap(chip);
+      await tester.pumpAndSettle();
+      expect(repository.settings.responsiveLayout.cardCoverRatio, ratio);
+      expect(tester.widget<ChoiceChip>(chip).selected, isTrue);
+    }
+  });
+
   testWidgets('appearance sets each playback page split style independently', (
     tester,
   ) async {

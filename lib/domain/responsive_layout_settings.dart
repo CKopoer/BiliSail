@@ -2,10 +2,20 @@ enum PlaybackSplitStyle { automatic, right, below }
 
 enum PlaybackSplitPage { video, pgc, live, course }
 
+enum CardCoverRatio {
+  widescreen(16 / 9),
+  standard(4 / 3);
+
+  const CardCoverRatio(this.aspectRatio);
+
+  final double aspectRatio;
+}
+
 /// Responsive layout preferences, with width breakpoints in logical pixels.
 final class ResponsiveLayoutSettings {
   ResponsiveLayoutSettings({
     List<int>? videoGridMinWidths,
+    this.cardCoverRatio = CardCoverRatio.widescreen,
     int navigationBarBreakpoint = 600,
     int sidebarExpandedWidth = 1600,
     int playbackSideBySideWidth = 1000,
@@ -36,13 +46,14 @@ final class ResponsiveLayoutSettings {
            ? articleWidthFraction
            : null;
 
-  const ResponsiveLayoutSettings.defaults()
-    : videoGridMinWidths = null,
-      navigationBarBreakpoint = 600,
-      sidebarExpandedWidth = 1600,
-      playbackSideBySideWidth = 1000,
-      playbackSplitStyles = const {},
-      articleWidthFraction = null;
+  const ResponsiveLayoutSettings.defaults({
+    this.cardCoverRatio = CardCoverRatio.widescreen,
+  }) : videoGridMinWidths = null,
+       navigationBarBreakpoint = 600,
+       sidebarExpandedWidth = 1600,
+       playbackSideBySideWidth = 1000,
+       playbackSplitStyles = const {},
+       articleWidthFraction = null;
 
   static const defaultPlaybackSplitStyle = PlaybackSplitStyle.right;
   static const minArticleWidthFraction = .3;
@@ -65,6 +76,7 @@ final class ResponsiveLayoutSettings {
   /// Null retains the original card-width and nonlinear font-scaling rules.
   /// Custom entries are the minimum grid widths for 2 through 12 columns.
   final List<int>? videoGridMinWidths;
+  final CardCoverRatio cardCoverRatio;
   final int navigationBarBreakpoint;
   final int sidebarExpandedWidth;
   final int playbackSideBySideWidth;
@@ -89,6 +101,7 @@ final class ResponsiveLayoutSettings {
   ResponsiveLayoutSettings copyWith({
     List<int>? videoGridMinWidths,
     bool resetVideoGrid = false,
+    CardCoverRatio? cardCoverRatio,
     int? navigationBarBreakpoint,
     int? sidebarExpandedWidth,
     int? playbackSideBySideWidth,
@@ -98,6 +111,7 @@ final class ResponsiveLayoutSettings {
     videoGridMinWidths: resetVideoGrid
         ? null
         : videoGridMinWidths ?? this.videoGridMinWidths,
+    cardCoverRatio: cardCoverRatio ?? this.cardCoverRatio,
     navigationBarBreakpoint:
         navigationBarBreakpoint ?? this.navigationBarBreakpoint,
     sidebarExpandedWidth: sidebarExpandedWidth ?? this.sidebarExpandedWidth,

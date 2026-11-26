@@ -4,6 +4,7 @@ import '../../features/live/domain/live_room.dart';
 import 'catalog_card_cover.dart';
 import 'highlighted_text.dart';
 import 'live_card_cover.dart';
+import 'responsive_layout_scope.dart';
 import 'scroll_aware_hover_region.dart';
 import 'video_card.dart' show compactCountLabel;
 import 'workspace_link.dart';
@@ -68,7 +69,9 @@ final class _LiveRoomTileState extends State<LiveRoomTile> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               AspectRatio(
-                aspectRatio: 16 / 9,
+                aspectRatio: ResponsiveLayoutScope.of(context)
+                    .cardCoverRatio
+                    .aspectRatio,
                 child: LiveCardCover(
                   roomId: widget.roomId,
                   hovered: _hovered,

@@ -5,12 +5,13 @@ import '../../../shared/ui/app_cover_image.dart';
 import '../../../shared/ui/card_menu.dart';
 import '../../../shared/ui/highlighted_text.dart';
 import '../../../shared/ui/live_card_cover.dart';
+import '../../../shared/ui/responsive_layout_scope.dart';
 import '../../../shared/ui/scroll_aware_hover_region.dart';
 import '../../../shared/ui/workspace_link.dart';
 import '../../live/domain/live_room.dart';
 import '../domain/library_repository.dart';
 
-/// Non-video histories share the grid, cover ratio and typography of video cards.
+/// Non-video histories use the shared card grid and title typography.
 final class HistoryContentCard extends StatefulWidget {
   const HistoryContentCard({
     super.key,
@@ -75,7 +76,8 @@ class _HistoryContentCardState extends State<HistoryContentCard> {
       final theme = Theme.of(context);
       final scheme = theme.colorScheme;
       final textScaler = MediaQuery.textScalerOf(context);
-      final label = entry.type == HistoryContentType.live
+      final liveRoom = entry.type == HistoryContentType.live;
+      final label = liveRoom
           ? (entry.isLive ? '直播中' : '未开播')
           : entry.type.label;
       final metadataStyle = theme.textTheme.bodySmall?.copyWith(
@@ -117,8 +119,12 @@ class _HistoryContentCardState extends State<HistoryContentCard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   AspectRatio(
-                    aspectRatio: 16 / 9,
-                    child: entry.type == HistoryContentType.live
+                    aspectRatio: liveRoom
+                        ? ResponsiveLayoutScope.of(context)
+                              .cardCoverRatio
+                              .aspectRatio
+                        : 16 / 9,
+                    child: liveRoom
                         ? LiveCardCover(
                             roomId: RoomId(entry.contentId ?? ''),
                             hovered: _hovered,

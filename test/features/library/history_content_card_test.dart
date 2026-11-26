@@ -1,8 +1,10 @@
 import 'package:bilisail/app/theme.dart';
+import 'package:bilisail/domain/responsive_layout_settings.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/library/domain/library_repository.dart';
 import 'package:bilisail/features/library/presentation/history_content_card.dart';
 import 'package:bilisail/shared/ui/highlighted_text.dart';
+import 'package:bilisail/shared/ui/responsive_layout_scope.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
@@ -58,6 +60,29 @@ void main() {
       );
     }
   }
+
+  testWidgets('4:3 live history changes cover dimensions only', (tester) async {
+    final card = find.byType(HistoryContentCard);
+    final cover = find.descendant(of: card, matching: find.byType(AspectRatio));
+    final title = find.descendant(
+      of: card,
+      matching: find.byType(HighlightedText),
+    );
+    final date = find.descendant(of: card, matching: find.text('昨天'));
+    await tester.pumpWidget(_app());
+    final originalCover = tester.getSize(cover);
+    final originalTitle = tester.getSize(title);
+    final originalMenu = tester.getRect(find.byKey(_liveMenu));
+    final originalDate = tester.getRect(date);
+    await tester.pumpWidget(_app(ratio: CardCoverRatio.standard));
+    final resizedCover = tester.getSize(cover);
+    final offset = Offset(0, resizedCover.height - originalCover.height);
+    expect(resizedCover.aspectRatio, closeTo(4 / 3, .001));
+    expect(resizedCover.width, originalCover.width);
+    expect(tester.getSize(title), originalTitle);
+    expect(tester.getRect(find.byKey(_liveMenu)), originalMenu.shift(offset));
+    expect(tester.getRect(date), originalDate.shift(offset));
+  });
 
   for (final screen in [320.0, 1280.0]) {
     testWidgets('live history menu uses the shared action flow at $screen', (
@@ -131,6 +156,7 @@ void main() {
 Widget _app({
   double width = 220,
   double scale = 1,
+  CardCoverRatio ratio = CardCoverRatio.widescreen,
   TargetPlatform platform = TargetPlatform.android,
   bool busy = false,
   VoidCallback? onDelete,
@@ -139,7 +165,10 @@ Widget _app({
   theme: BiliTheme.light().copyWith(platform: platform),
   builder: (context, child) => MediaQuery(
     data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(scale)),
-    child: child ?? const SizedBox.shrink(),
+    child: ResponsiveLayoutScope(
+      settings: ResponsiveLayoutSettings.defaults(cardCoverRatio: ratio),
+      child: child ?? const SizedBox.shrink(),
+    ),
   ),
   home: Scaffold(
     body: Align(
