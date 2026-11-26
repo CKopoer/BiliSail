@@ -860,7 +860,9 @@ final class MediaKitBackend
 
     _colorDeadline?.cancel();
     _videoOutput.identifyHdrSource(hinted: _hdrHint);
-    _videoOutput.confirmSourceFrame();
+    _videoOutput.confirmSourceFrame(
+      appleTextureMapped: _requiresVideoColorMapping,
+    );
     _readinessStage = null;
     return videoDisplayDimensions(player.state.videoParams);
   }

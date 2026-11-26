@@ -13,12 +13,12 @@ dependencies:
     git:
       url: https://github.com/CKopoer/media-kit.git
       path: media_kit
-      ref: 3493e859fe70dff908ba2fb4070162962f449ef2
+      ref: 4055fd1a0d3dc0d54502c0747c5ca65be704c551
   media_kit_video:
     git:
       url: https://github.com/CKopoer/media-kit.git
       path: media_kit_video
-      ref: 3493e859fe70dff908ba2fb4070162962f449ef2
+      ref: 4055fd1a0d3dc0d54502c0747c5ca65be704c551
 
 # Pub ignores overrides from transitive packages; repeat these in the app.
 dependency_overrides:
@@ -27,12 +27,12 @@ dependency_overrides:
     git:
       url: https://github.com/CKopoer/media-kit.git
       path: media_kit
-      ref: 3493e859fe70dff908ba2fb4070162962f449ef2
+      ref: 4055fd1a0d3dc0d54502c0747c5ca65be704c551
   media_kit_video:
     git:
       url: https://github.com/CKopoer/media-kit.git
       path: media_kit_video
-      ref: 3493e859fe70dff908ba2fb4070162962f449ef2
+      ref: 4055fd1a0d3dc0d54502c0747c5ca65be704c551
 
 dev_dependencies:
   material_ui: 1.11.0

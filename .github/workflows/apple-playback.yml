@@ -6,12 +6,11 @@ on:
     paths:
       - '.github/workflows/apple-playback.yml'
       - 'apple/**'
-      - 'integration_test/apple_native_hdr_test.dart'
+      - 'tool/validation/apple_hdr_probe.dart'
       - 'packages/bili_player/lib/src/native_hdr_output.dart'
       - 'pubspec.lock'
 permissions:
   contents: read
-  actions: read
 concurrency:
   group: apple-media-test-${{ github.ref }}
   cancel-in-progress: true
@@ -46,7 +45,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh run download 45861827586 -n slice-sim-arm -D build/sim
+          gh release download apple-edr-joc-2026-11-27 -R CKopoer/libmpv-darwin-build -p bilisail-edr-ios.tar.gz -D build
+          echo '209fecaa26e5372b12c31c2afff777e2470f351a5eeb036e5a448d2f515e952f  build/bilisail-edr-ios.tar.gz' | shasum -a 256 -c -
+          tar -xzf build/bilisail-edr-ios.tar.gz -C build
+          mkdir build/sim
+          lipo build/Mpv.xcframework/ios-arm64_x86_64-simulator/Mpv.framework/Mpv -thin arm64 -output build/sim/Mpv
           cd build
           xcrun --sdk iphonesimulator clang -target arm64-apple-ios15-simulator -fobjc-arc -I mpv/include darwin/bilisail/joc_probe.m sim/Mpv -framework AVFoundation -framework CoreMedia -framework Foundation -o joc-probe
           install_name_tool -change '@rpath/Mpv.framework/Mpv' "$PWD/sim/Mpv" joc-probe
@@ -56,6 +59,8 @@ jobs:
           xcrun simctl boot "$device"
           xcrun simctl bootstatus "$device" -b
           xcrun simctl spawn "$device" "$PWD/joc-probe" "$PWD/fixtures/p5-joc.mp4"
+      - if: matrix.platform == 'macos'
+        run: echo "DEVELOPER_DIR=/Applications/Xcode_26.2.app/Contents/Developer" >> "$GITHUB_ENV"
       - if: matrix.platform == 'macos'
         uses: ./.github/actions/restore-flutter
       - if: matrix.platform == 'macos'
@@ -69,21 +74,22 @@ jobs:
         run: |
           pwsh -NoProfile -File tool/build-download-mux.ps1 -Target macos-arm64
           flutter pub get --enforce-lockfile
-          gh run download 45861827586 -n darwin-edr -D build/verified
-          echo '0b1923de8538d57c0a67a193b9a6a9c1ac0b00924e1f356b2c8fb753bf7803a2  build/verified/bilisail-edr-macos.tar.gz' | shasum -a 256 -c -
-          mkdir -p build/verified/framework
-          tar -xzf build/verified/bilisail-edr-macos.tar.gz -C build/verified/framework
-          cat >> pubspec.yaml <<'YAML'
-          hooks:
-            user_defines:
-              media_kit:
-                source: local
-                library-directory: build/verified/framework/
-          YAML
+          flutter build macos --release --target tool/validation/apple_hdr_probe.dart --dart-define=APPLE_P5=http://127.0.0.1:18085/p5-joc.mp4
           if ! swift -e 'import Metal; import Darwin; exit(MTLCreateSystemDefaultDevice() == nil ? 1 : 0)'; then
-            echo 'Runner has no Metal device. Compiling the application; EDR output requires a physical display.' >> "$GITHUB_STEP_SUMMARY"
-            flutter build macos --debug --target integration_test/apple_native_hdr_test.dart
+            echo 'No Metal device on this runner. Application compiled, display test skipped.' >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           python3 -m http.server 18085 --bind 127.0.0.1 --directory build/fixtures >/tmp/bilisail-fixture-server.log 2>&1 &
-          flutter test -d macos integration_test/apple_native_hdr_test.dart --dart-define=APPLE_P5=http://127.0.0.1:18085/p5-joc.mp4
+          python3 - <<'PY'
+          import pathlib, subprocess
+          app = next(pathlib.Path("build/macos/Build/Products/Release").glob("*.app"))
+          executable = next((app/"Contents/MacOS").iterdir())
+          result = subprocess.run([str(executable)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=100)
+          print(result.stdout)
+          if result.returncode or "APPLE_MEDIA_PASSED" not in result.stdout:
+              raise SystemExit(f"Apple presentation probe exited with {result.returncode}")
+          PY
+      - name: Apple process diagnostics
+        if: failure()
+        run: |
+          find ~/Library/Logs/DiagnosticReports -maxdepth 1 -iname '*BiliSail*' -print -exec tail -c 18000 {} \; 2>/dev/null || true

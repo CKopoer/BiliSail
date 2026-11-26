@@ -43,28 +43,3 @@ Future<void> checkNativeHdrDisplay(
   await withFrames(tester, engine.seek(const Duration(seconds: 1)));
   expect(engine.currentSnapshot.desiredPlaying, isFalse);
 }
-
-Future<void> withVideoFrames(
-  WidgetTester tester,
-  Future<void> operation,
-) async {
-  var done = false;
-  (Object, StackTrace)? failure;
-  final completion = operation
-      .timeout(const Duration(seconds: 40))
-      .then<void>(
-        (_) => done = true,
-        onError: (Object error, StackTrace stack) {
-          failure = (error, stack);
-          done = true;
-        },
-      );
-  while (!done) {
-    await tester.pump(const Duration(milliseconds: 16));
-    await Future<void>.delayed(const Duration(milliseconds: 5));
-  }
-  await completion;
-  if (failure case final error?) {
-    Error.throwWithStackTrace(error.$1, error.$2);
-  }
-}

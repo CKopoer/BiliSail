@@ -65,14 +65,14 @@ void main() {
         ),
         audio: MediaTrack(uri: audio, requestPolicy: policy),
       );
-      await withVideoFrames(
+      await _withFrames(
         tester,
         engine.open(sdrSource, const OpenOptions(volume: 0)),
       );
       final sdrDecoder = await engine.inspectHardwareDecoder();
 
       for (final decoding in VideoDecodingMode.values) {
-        await withVideoFrames(
+        await _withFrames(
           tester,
           engine.open(
             DashPairSource(
@@ -120,12 +120,12 @@ void main() {
         } finally {
           frame.dispose();
         }
-        await withVideoFrames(tester, engine.play());
+        await _withFrames(tester, engine.play());
         await tester.pump(const Duration(milliseconds: 500));
         expect(engine.inspectDiagnostics().hasDecodedAudio, isTrue);
         expect(engine.currentSnapshot.position, greaterThan(Duration.zero));
-        await withVideoFrames(tester, engine.seek(const Duration(seconds: 2)));
-        await withVideoFrames(tester, engine.pause());
+        await _withFrames(tester, engine.seek(const Duration(seconds: 2)));
+        await _withFrames(tester, engine.pause());
         await tester.pump(const Duration(milliseconds: 300));
         expect(engine.currentSnapshot.desiredPlaying, isFalse);
         // The snapshot can retain buffering=true when paused during a seek.
@@ -140,7 +140,7 @@ void main() {
       }
 
       // A new SDR source must not inherit the conversion or copy decoder.
-      await withVideoFrames(
+      await _withFrames(
         tester,
         engine.open(sdrSource, const OpenOptions(play: true, volume: 0)),
       );
@@ -156,7 +156,7 @@ void main() {
           ),
           audio: MediaTrack(uri: audio, requestPolicy: policy),
         ),
-        withVideoFrames,
+        _withFrames,
       );
       expect(tester.takeException(), isNull);
     } finally {
@@ -164,4 +164,26 @@ void main() {
       await engine.dispose();
     }
   });
+}
+
+Future<void> _withFrames(WidgetTester tester, Future<void> operation) async {
+  var done = false;
+  (Object, StackTrace)? failure;
+  final completion = operation
+      .timeout(const Duration(seconds: 40))
+      .then<void>(
+        (_) => done = true,
+        onError: (Object error, StackTrace stack) {
+          failure = (error, stack);
+          done = true;
+        },
+      );
+  while (!done) {
+    await tester.pump(const Duration(milliseconds: 16));
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+  }
+  await completion;
+  if (failure case final error?) {
+    Error.throwWithStackTrace(error.$1, error.$2);
+  }
 }

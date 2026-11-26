@@ -58,8 +58,9 @@ final class AppleVideoSurface: NSObject, FlutterPlatformViewFactory {
         guard let width = args?["width"] as? Int, let height = args?["height"] as? Int,
               (2...16384).contains(width), (2...16384).contains(height),
               let view = args?["view"] as? NSNumber,
-              let transfer = self.displayTransfer(view.int64Value),
-              transfer == args?["transfer"] as? String,
+              let supported = self.displayTransfer(view.int64Value),
+              let transfer = args?["transfer"] as? String,
+              transfer == "srgb" || transfer == supported,
               let device = MTLCreateSystemDefaultDevice() else { result(nil); return }
         let layer = PlaybackMetalLayer()
         layer.device = device
