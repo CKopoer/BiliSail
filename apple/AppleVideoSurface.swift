@@ -189,15 +189,21 @@ private final class SubmittedDrawable: NSObject, CAMetalDrawable {
 
   var texture: MTLTexture { base.texture }
   var layer: CAMetalLayer { base.layer }
+  #if !targetEnvironment(simulator)
   var drawableID: Int { base.drawableID }
   var presentedTime: CFTimeInterval { base.presentedTime }
   func addPresentedHandler(_ block: @escaping MTLDrawablePresentedHandler) {
     base.addPresentedHandler(block)
   }
+  #endif
   func present() { base.present(); submitted() }
   func present(atTime time: CFTimeInterval) { base.present(atTime: time); submitted() }
   func present(afterMinimumDuration duration: CFTimeInterval) {
+    #if targetEnvironment(simulator)
+    base.present()
+    #else
     base.present(afterMinimumDuration: duration)
+    #endif
     submitted()
   }
 }
