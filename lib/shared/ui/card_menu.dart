@@ -2,7 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'video_card_menu_sheet.dart';
 
-/// Shared compact action button without the default 48px title-row footprint.
+/// Compact overflow action for a card's metadata row.
 class CardMenuButton extends StatelessWidget {
   const CardMenuButton({
     super.key,
@@ -13,6 +13,7 @@ class CardMenuButton extends StatelessWidget {
     required this.busy,
     required this.onFocusChange,
     required this.onPressed,
+    this.placeholder = false,
     this.tooltip,
   });
 
@@ -20,6 +21,7 @@ class CardMenuButton extends StatelessWidget {
   final Key buttonKey;
   final double cardWidth;
   final bool visible, busy;
+  final bool placeholder;
   final ValueChanged<bool> onFocusChange;
   final VoidCallback? onPressed;
   final String? tooltip;
@@ -27,11 +29,12 @@ class CardMenuButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (buttonSize, iconSize) = switch (cardWidth) {
-      < 180 => (20.0, 14.0),
-      < 240 => (24.0, 17.0),
-      _ => (28.0, 20.0),
+      < 180 => (18.0, 14.0),
+      < 240 => (20.0, 15.0),
+      _ => (22.0, 16.0),
     };
-    final size = Size.square(buttonSize);
+    final size = Size(buttonSize, 24);
+    if (placeholder) return SizedBox.fromSize(size: size);
     return Focus(
       skipTraversal: true,
       onFocusChange: onFocusChange,

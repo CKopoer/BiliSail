@@ -24,11 +24,17 @@ void main() {
     expect(tester.takeException(), isNull);
   });
   setUpAll(() async {
-    await (FontLoader('HarmonyOS Sans')..addFont(
-          rootBundle.load(
-            'assets/fonts/harmonyos_sans/HarmonyOS_Sans_SC_Regular.ttf',
-          ),
-        ))
+    await (FontLoader('HarmonyOS Sans')
+          ..addFont(
+            rootBundle.load(
+              'assets/fonts/harmonyos_sans/HarmonyOS_Sans_SC_Regular.ttf',
+            ),
+          )
+          ..addFont(
+            rootBundle.load(
+              'assets/fonts/harmonyos_sans/HarmonyOS_Sans_SC_Medium.ttf',
+            ),
+          ))
         .load();
   });
 
@@ -378,6 +384,59 @@ void main() {
       }
     }
     expect(opened, 8);
+  });
+
+  testWidgets('mixed Chinese and English title uses the full cover width', (
+    tester,
+  ) async {
+    const video = VideoSummary(
+      id: VideoId('BV1234567890'),
+      title: '第一视角装车解说： TREK 5代 Domane SL 首装',
+      coverUrl: '',
+      author: 'HJS单车-黄技师',
+      duration: Duration(minutes: 15, seconds: 57),
+    );
+    const menu = VideoCardMenu(actions: [VideoCardMenuAction.removeHistory]);
+    for (final (width, query, wordFits) in [
+      (260.0, '', false),
+      (270.0, '', true),
+      (270.0, 'Domane', true),
+    ]) {
+      await tester.pumpWidget(
+        _app(width: width, video: video, query: query, menu: menu),
+      );
+
+      final paragraph = tester.renderObject<RenderParagraph>(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is RichText && widget.text.toPlainText() == video.title,
+        ),
+      );
+      Rect wordBox(String word) {
+        final start = video.title.indexOf(word);
+        return paragraph
+            .getBoxesForSelection(
+              TextSelection(
+                baseOffset: start,
+                extentOffset: start + word.length,
+              ),
+            )
+            .single
+            .toRect();
+      }
+
+      final trekTop = wordBox('TREK').top;
+      final domaneTop = wordBox('Domane').top;
+      final slTop = wordBox('SL').top;
+      expect(domaneTop, wordFits ? trekTop : greaterThan(trekTop));
+      expect(slTop, wordFits ? greaterThan(domaneTop) : domaneTop);
+      expect(
+        paragraph.size.width,
+        tester.getSize(find.byType(AspectRatio)).width,
+      );
+      expect(paragraph.didExceedMaxLines, isFalse);
+      expect(findMaterialTooltip(video.title), findsNothing);
+    }
   });
 
   testWidgets('search highlights titles with UP badge and hides feed reasons', (

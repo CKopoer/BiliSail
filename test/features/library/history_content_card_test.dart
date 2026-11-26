@@ -45,13 +45,21 @@ void main() {
             expect(tester.getRect(a).top, tester.getRect(b).top);
             expect(tester.getSize(a), tester.getSize(b));
           }
+          final liveMenu = tester.getRect(find.byKey(_liveMenu));
+          final videoMenu = tester.getRect(find.byKey(_videoMenu));
+          final buttonWidth = switch (width) {
+            < 180 => 18.0,
+            < 240 => 20.0,
+            _ => 22.0,
+          };
+          expect(liveMenu.size, Size(buttonWidth, 24));
+          expect(liveMenu.size, videoMenu.size);
+          expect(liveMenu.right, tester.getRect(cover(live)).right);
+          expect(videoMenu.right, tester.getRect(cover(video)).right);
+          expect(liveMenu.top, videoMenu.top);
           expect(
-            tester.getSize(find.byKey(_liveMenu)),
-            tester.getSize(find.byKey(_videoMenu)),
-          );
-          expect(
-            tester.getRect(find.byKey(_liveMenu)).top,
-            tester.getRect(find.byKey(_videoMenu)).top,
+            liveMenu.center.dy,
+            tester.getCenter(find.text('昨天').first).dy,
           );
           expect(tester.takeException(), isNull);
         },

@@ -136,112 +136,112 @@ class _HistoryContentCardState extends State<HistoryContentCard> {
                           width: double.infinity,
                           // Match video cards' two scaled 22px title lines.
                           height: textScaler.scale(15) * (22 / 15) * 2 + 2,
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: HighlightedText(
-                                  entry.title,
-                                  query: '',
-                                  maxLines: 2,
-                                  showOverflowTooltip: true,
-                                  tooltipTriggerMode: TooltipTriggerMode.manual,
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w500,
-                                    height: 22 / 15,
-                                    color:
-                                        (_hovered || _focused) &&
-                                            !_authorHovered
-                                        ? scheme.primary
-                                        : scheme.onSurface,
-                                  ),
-                                ),
-                              ),
-                              CardMenuButton(
-                                anchorKey: _menuAnchor,
-                                buttonKey: const ValueKey(
-                                  'history-content-title-menu',
-                                ),
-                                cardWidth: constraints.maxWidth,
-                                visible:
-                                    _hovered ||
-                                    _focused ||
-                                    _menuFocused ||
-                                    _menuOpen ||
-                                    touchPlatform,
-                                busy: widget.busy,
-                                onFocusChange: (focused) =>
-                                    setState(() => _menuFocused = focused),
-                                onPressed:
-                                    widget.busy || widget.onDelete == null
-                                    ? null
-                                    : _showMenu,
-                                tooltip: '历史记录操作',
-                              ),
-                            ],
+                          child: HighlightedText(
+                            entry.title,
+                            query: '',
+                            maxLines: 2,
+                            showOverflowTooltip: true,
+                            tooltipTriggerMode: TooltipTriggerMode.manual,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 0,
+                              height: 22 / 15,
+                              color: (_hovered || _focused) && !_authorHovered
+                                  ? scheme.primary
+                                  : scheme.onSurface,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 6),
-                        LayoutBuilder(
-                          builder: (context, constraints) => Row(
-                            children: [
-                              Expanded(
-                                child: Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: ScrollAwareHoverRegion(
-                                    onHover: (hovered) => setState(
-                                      () => _authorHovered = hovered,
-                                    ),
-                                    child: InkWell(
-                                      onTap: widget.onOpenAuthor,
-                                      onTertiaryTapUp:
-                                          WorkspaceLinkScope.middleClick(
-                                            context,
-                                            widget.onOpenAuthor,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: LayoutBuilder(
+                                builder: (context, constraints) => Row(
+                                  children: [
+                                    Expanded(
+                                      child: Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: ScrollAwareHoverRegion(
+                                          onHover: (hovered) => setState(
+                                            () => _authorHovered = hovered,
                                           ),
-                                      hoverColor: Colors.transparent,
-                                      hoverDuration: Duration.zero,
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Flexible(
-                                            child: Text(
-                                              entry.author,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: metadataStyle?.copyWith(
-                                                color: _authorHovered
-                                                    ? scheme.primary
-                                                    : null,
-                                              ),
+                                          child: InkWell(
+                                            onTap: widget.onOpenAuthor,
+                                            onTertiaryTapUp:
+                                                WorkspaceLinkScope.middleClick(
+                                                  context,
+                                                  widget.onOpenAuthor,
+                                                ),
+                                            hoverColor: Colors.transparent,
+                                            hoverDuration: Duration.zero,
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Flexible(
+                                                  child: Text(
+                                                    entry.author,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: metadataStyle
+                                                        ?.copyWith(
+                                                          color: _authorHovered
+                                                              ? scheme.primary
+                                                              : null,
+                                                        ),
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ),
-                                        ],
+                                        ),
                                       ),
                                     ),
-                                  ),
+                                    if (widget.date.isNotEmpty) ...[
+                                      const SizedBox(width: 6),
+                                      ConstrainedBox(
+                                        constraints: BoxConstraints(
+                                          maxWidth: constraints.maxWidth * .4,
+                                        ),
+                                        child: Tooltip(
+                                          message: widget.dateTooltip,
+                                          child: Text(
+                                            widget.date,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: metadataStyle,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               ),
-                              if (widget.date.isNotEmpty) ...[
-                                const SizedBox(width: 6),
-                                ConstrainedBox(
-                                  constraints: BoxConstraints(
-                                    maxWidth: constraints.maxWidth * .4,
-                                  ),
-                                  child: Tooltip(
-                                    message: widget.dateTooltip,
-                                    child: Text(
-                                      widget.date,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: metadataStyle,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
+                            ),
+                            const SizedBox(width: 4),
+                            CardMenuButton(
+                              anchorKey: _menuAnchor,
+                              buttonKey: const ValueKey(
+                                'history-content-title-menu',
+                              ),
+                              cardWidth: constraints.maxWidth,
+                              visible:
+                                  _hovered ||
+                                  _focused ||
+                                  _menuFocused ||
+                                  _menuOpen ||
+                                  touchPlatform,
+                              busy: widget.busy,
+                              onFocusChange: (focused) =>
+                                  setState(() => _menuFocused = focused),
+                              onPressed: widget.busy || widget.onDelete == null
+                                  ? null
+                                  : _showMenu,
+                              tooltip: '历史记录操作',
+                            ),
+                          ],
                         ),
                       ],
                     ),

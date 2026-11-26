@@ -285,6 +285,7 @@ final class _VideoCardState extends State<VideoCard> {
     final titleStyle = theme.textTheme.bodyMedium?.copyWith(
       fontSize: _titleFontSize,
       fontWeight: FontWeight.w500,
+      letterSpacing: 0,
       height: _titleLineHeight / _titleFontSize,
     );
     final highlighted = (_hovered || _focused) && !_authorHovered;
@@ -414,55 +415,54 @@ final class _VideoCardState extends State<VideoCard> {
                                 (_titleLineHeight / _titleFontSize) *
                                 2 +
                             2,
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: HighlightedText(
-                                video.title,
-                                query: widget.highlightQuery,
-                                maxLines: 2,
-                                showOverflowTooltip: true,
-                                // Hover still reveals the full title. Cards
-                                // with actions reserve touch long-press for
-                                // their menu instead of the nested tooltip.
-                                tooltipTriggerMode: menu == null
-                                    ? TooltipTriggerMode.longPress
-                                    : TooltipTriggerMode.manual,
-                                style: titleStyle?.copyWith(
-                                  color: highlighted
-                                      ? scheme.primary
-                                      : scheme.onSurface,
-                                ),
-                              ),
-                            ),
-                            if (widget.feedback == null)
-                              if (menu case final menu?)
-                                _menuButton(menu, cardWidth),
-                          ],
+                        child: HighlightedText(
+                          video.title,
+                          query: widget.highlightQuery,
+                          maxLines: 2,
+                          showOverflowTooltip: true,
+                          // Cards with actions reserve touch long-press for
+                          // their menu. Hover still reveals the full title.
+                          tooltipTriggerMode: menu == null
+                              ? TooltipTriggerMode.longPress
+                              : TooltipTriggerMode.manual,
+                          style: titleStyle?.copyWith(
+                            color: highlighted
+                                ? scheme.primary
+                                : scheme.onSurface,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 6),
-                      _AuthorMetadata(
-                        video: video,
-                        onOpenUser: widget.feedback == null
-                            ? widget.onOpenUser == null
-                                  ? null
-                                  : (id) => widget.onOpenUser?.call(id)
-                            : null,
-                        hovered: _authorHovered,
-                        onHover: (value) =>
-                            _update(() => _authorHovered = value),
-                        showUpBadge: widget.showUpBadge,
-                        reason: widget.showRecommendationReason
-                            ? video.recommendationReason
-                            : null,
-                        showFollowed:
-                            widget.showRecommendationReason &&
-                            video.isFollowed == true,
-                        publishText: widget.publishText,
-                        publishedAt: widget.publishedAt,
-                        publishTooltip: widget.publishTooltip,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _AuthorMetadata(
+                              video: video,
+                              onOpenUser: widget.feedback == null
+                                  ? widget.onOpenUser == null
+                                        ? null
+                                        : (id) => widget.onOpenUser?.call(id)
+                                  : null,
+                              hovered: _authorHovered,
+                              onHover: (value) =>
+                                  _update(() => _authorHovered = value),
+                              showUpBadge: widget.showUpBadge,
+                              reason: widget.showRecommendationReason
+                                  ? video.recommendationReason
+                                  : null,
+                              showFollowed:
+                                  widget.showRecommendationReason &&
+                                  video.isFollowed == true,
+                              publishText: widget.publishText,
+                              publishedAt: widget.publishedAt,
+                              publishTooltip: widget.publishTooltip,
+                            ),
+                          ),
+                          if (menu != null) ...[
+                            const SizedBox(width: 4),
+                            _menuButton(menu, cardWidth),
+                          ],
+                        ],
                       ),
                     ],
                   ),
@@ -484,6 +484,8 @@ final class _VideoCardState extends State<VideoCard> {
       anchorKey: _menuAnchor,
       buttonKey: const ValueKey('video-card-title-menu'),
       cardWidth: cardWidth,
+      // Preserve the footer geometry while feedback offers undo.
+      placeholder: widget.feedback != null,
       visible:
           _hovered || _focused || _menuFocused || _menuOpen || touchPlatform,
       busy: menu.busy || _addingWatchLater,
