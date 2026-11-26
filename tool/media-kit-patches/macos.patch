@@ -5,7 +5,7 @@
  import FlutterMacOS
  import OpenGL.GL
  import OpenGL.GL3
-@@ -15,30 +16,18 @@
+@@ -15,10 +16,8 @@
    private let context: CGLContextObj
    private let textureCache: CVOpenGLTextureCache
    private var renderContext: OpaquePointer?
@@ -16,33 +16,14 @@
 +  private let frames = CompletedFrameStore<CVPixelBuffer>()
 +  private var disposed = false
  
--  init?(
-+  init(
+   init?(
      handle: OpaquePointer,
-     updateCallback: @escaping UpdateCallback
-   ) {
--    guard let pixelFormat = OpenGLHelpers.createPixelFormat() else { return nil }
--    guard let context = OpenGLHelpers.createContext(pixelFormat) else {
--      OpenGLHelpers.deletePixelFormat(pixelFormat)
--      return nil
--    }
--    guard let textureCache = OpenGLHelpers.createTextureCache(context, pixelFormat) else {
--      OpenGLHelpers.deleteContext(context)
--      OpenGLHelpers.deletePixelFormat(pixelFormat)
--      return nil
--    }
-     self.handle = handle
-     self.updateCallback = updateCallback
--    self.pixelFormat = pixelFormat
--    self.context = context
--    self.textureCache = textureCache
-+    self.pixelFormat = OpenGLHelpers.createPixelFormat()
-+    self.context = OpenGLHelpers.createContext(pixelFormat)
-+    self.textureCache = OpenGLHelpers.createTextureCache(context, pixelFormat)
+@@ -42,81 +41,64 @@
  
      super.init()
  
-@@ -46,29 +35,26 @@
+-    self.initMPV()
++    guard initMPV() else { return nil }
    }
  
    deinit {
@@ -85,8 +66,55 @@
 +    }
    }
  
-   private func initMPV() {
-@@ -111,9 +97,7 @@
+-  private func initMPV() {
++  private func initMPV() -> Bool {
+     CGLSetCurrentContext(context)
+     defer {
+       OpenGLHelpers.checkError("initMPV")
+       CGLSetCurrentContext(nil)
+     }
+ 
+-    let api = UnsafeMutableRawPointer(
+-      mutating: (MPV_RENDER_API_TYPE_OPENGL as NSString).utf8String
+-    )
+     var procAddress = mpv_opengl_init_params(
+-      get_proc_address: {
+-        (ctx, name) in
+-        return TextureHW.getProcAddress(ctx, name)
+-      },
++      get_proc_address: { ctx, name in TextureHW.getProcAddress(ctx, name) },
+       get_proc_address_ctx: nil
+     )
+-
+-    var params: [mpv_render_param] = withUnsafeMutableBytes(of: &procAddress) {
+-      procAddress in
+-      return [
+-        mpv_render_param(type: MPV_RENDER_PARAM_API_TYPE, data: api),
+-        mpv_render_param(
+-          type: MPV_RENDER_PARAM_OPENGL_INIT_PARAMS,
+-          data: procAddress.baseAddress.map {
+-            UnsafeMutableRawPointer($0)
+-          }
+-        ),
+-        mpv_render_param(),
+-      ]
++    let status = MPV_RENDER_API_TYPE_OPENGL.withCString { api in
++      withUnsafeMutablePointer(to: &procAddress) { address in
++        var params = [
++          mpv_render_param(type: MPV_RENDER_PARAM_API_TYPE, data: UnsafeMutableRawPointer(mutating: api)),
++          mpv_render_param(type: MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, data: address),
++          mpv_render_param(type: MPV_RENDER_PARAM_INVALID, data: nil),
++        ]
++        return media_kit_mpv_render_context_create(&renderContext, handle, &params)
++      }
+     }
+-
+-    MPVHelpers.checkError(
+-      media_kit_mpv_render_context_create(&renderContext, handle, &params)
+-    )
++    guard status >= 0, let renderContext = renderContext else { return false }
+ 
+     media_kit_mpv_render_context_set_update_callback(
        renderContext,
        { (ctx) in
          let that = unsafeBitCast(ctx, to: TextureHW.self)
@@ -97,7 +125,11 @@
        },
        UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
      )
-@@ -133,78 +117,57 @@
++    return true
+   }
+ 
+   private func disposeMPV() {
+@@ -133,78 +115,57 @@
    }
  
    public func resize(_ size: CGSize) {
@@ -219,66 +251,3 @@
    }
  
    static private func getProcAddress(
---- a/macos/media_kit_video/Sources/media_kit_video/plugin/gl/OpenGLHelpers.swift
-+++ b/macos/media_kit_video/Sources/media_kit_video/plugin/gl/OpenGLHelpers.swift
-@@ -3,7 +3,7 @@
- import OpenGL.GL3
- 
- public class OpenGLHelpers {
--  static public func createPixelFormat() -> CGLPixelFormatObj? {
-+  static public func createPixelFormat() -> CGLPixelFormatObj {
-     // from mpv
-     let attributes: [CGLPixelFormatAttribute] = [
-       kCGLPFAOpenGLProfile,
-@@ -20,30 +20,29 @@
- 
-     var npix: GLint = 0
-     var pixelFormat: CGLPixelFormatObj?
--    guard CGLChoosePixelFormat(attributes, &pixelFormat, &npix) == kCGLNoError else {
--      return nil
--    }
--    return pixelFormat
-+    CGLChoosePixelFormat(attributes, &pixelFormat, &npix)
-+
-+    return pixelFormat!
-   }
- 
-   static public func createContext(
-     _ pixelFormat: CGLPixelFormatObj
--  ) -> CGLContextObj? {
-+  ) -> CGLContextObj {
-     var context: CGLContextObj?
-     let error = CGLCreateContext(pixelFormat, nil, &context)
-     if error != kCGLNoError {
-       let errS = String(cString: CGLErrorString(error))
-       NSLog(errS)
--      return nil
--    }
--
--    return context
-+      exit(1)
-+    }
-+
-+    return context!
-   }
- 
-   static public func createTextureCache(
-     _ context: CGLContextObj,
-     _ pixelFormat: CGLPixelFormatObj
--  ) -> CVOpenGLTextureCache? {
-+  ) -> CVOpenGLTextureCache {
-     var textureCache: CVOpenGLTextureCache?
- 
-     let cvret: CVReturn = CVOpenGLTextureCacheCreate(
-@@ -54,8 +53,9 @@
-       nil,
-       &textureCache
-     )
--    guard cvret == kCVReturnSuccess else { return nil }
--    return textureCache
-+    assert(cvret == kCVReturnSuccess, "CVOpenGLTextureCacheCreate")
-+
-+    return textureCache!
-   }
- 
-   static public func createPixelBuffer(_ size: CGSize) -> CVPixelBuffer {

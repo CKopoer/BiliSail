@@ -149,6 +149,7 @@ final class MacOSApplication {
     // legacy registrar.view (which only looks up implicit view 0).
     ReleaseSmokeNativeStage.pluginsRegister.emit()
     RegisterGeneratedPlugins(registry: engine)
+    AppleVideoSurface.register(engine: engine)
     ReleaseSmokeNativeStage.pluginsReady.emit()
 
     let channel = FlutterMethodChannel(

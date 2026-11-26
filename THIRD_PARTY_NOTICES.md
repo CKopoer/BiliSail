@@ -126,3 +126,7 @@ PiliPlus 应用为 GPLv3，本次仅参考其配置与职责，未复制应用�
 上述 MD5 记录 SDK 默认下载内容的一致性。2026-10-13 Windows x64 的实际 bundle 改用固定 LGPL 构建 `mpv-dev-lgpl-x86_64-20261012-git-88eb9f2e73.7z`，修复旧版 ANGLE 硬解扩展检查并避免回读；ANGLE 默认资产保持。归档 SHA-256 为 `d1a3f57dfb3c7f07e5456e32e9ecc9e406f6457f2560ff5801c9b37a8036f507`，DLL SHA-256 为 `222da57d12a47680df84a8d0ad06f713fbbce4da923784ddeebe9d666135e943`，构建时分别校验。来源、实际 `gpl=false` 配置、对应 mpv 源码/构建记录及 LGPL-2.1-or-later 许可见 [Windows 原生资产](windows/native/mpv/SOURCE.md)，许可和来源说明随 bundle 保留于 `data/licenses/mpv`。公开发行仍需完整归档其子依赖的源码与许可材料。
 
 media_kit 的 Dart 包许可不能替代 mpv、FFmpeg、ANGLE 和其子依赖的分发条件。当前仅生成用户本机可运行预览，尚未对外发布、签名或宣称许可审核完成。Android/macOS 原生来源及预期校验在 [媒体包验证](docs/validation/media-packages.md)；未构建下载的资产不能记为已校验。
+
+## Apple HDR 视频与 JOC 验证依赖
+
+macOS、iOS 应用嵌入固定的 Mpv 动态框架，包含 FFmpeg、libplacebo 和 MoltenVK。发布归档附组件来源、固定摘要和重建配方。许可文本以 `MediaLicenses.txt` 随应用资源分发。[原生媒体依赖](https://github.com/CKopoer/libmpv-darwin-build/releases/tag/apple-edr-joc-2026-11-27) · [组件许可](apple/MediaLicenses.txt)

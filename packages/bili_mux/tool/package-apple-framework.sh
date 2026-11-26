@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
-target="${1:?usage: package-apple-framework.sh ios-arm64|macos-arm64|macos-x64}"
+target="${1:?usage: package-apple-framework.sh ios-arm64|ios-simulator-arm64|macos-arm64|macos-x64}"
 case "$target" in
-  ios-arm64) apple_platform=ios ;;
+  ios-arm64|ios-simulator-arm64) apple_platform=ios ;;
   macos-arm64|macos-x64) apple_platform=macos ;;
   *) echo "Unsupported Apple framework target: $target" >&2; exit 1 ;;
 esac

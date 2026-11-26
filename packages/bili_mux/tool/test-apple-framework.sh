@@ -9,8 +9,8 @@ fixture="$work/package with spaces"
 mkdir -p "$fixture/tool"
 cp "$package_dir/tool/package-apple-framework.sh" "$fixture/tool/"
 
-for target in ios-arm64 macos-arm64 macos-x64; do
-  platform="${target%-*}"
+for target in ios-arm64 ios-simulator-arm64 macos-arm64 macos-x64; do
+  platform="${target%%-*}"
   prebuilt="$fixture/native/prebuilt/$target"
   mkdir -p "$prebuilt/BiliMux.framework"
   printf '%s binary\n' "$target" > "$prebuilt/BiliMux.framework/BiliMux"
@@ -50,4 +50,4 @@ for target in ios-arm64 macos-arm64 macos-x64; do
     [[ "$(find "$framework" -type f | wc -l | tr -d ' ')" == 5 ]]
   done
 done
-echo 'Apple framework packaging checks passed (iOS arm64, macOS arm64/x64, rebuild twice).'
+echo 'Apple framework packaging checks passed (iOS device/simulator arm64, macOS arm64/x64, rebuild twice).'
