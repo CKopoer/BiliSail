@@ -101,6 +101,7 @@ final class ApiVideoSummary {
     required this.coverUrl,
     required this.ownerName,
     required this.duration,
+    this.cover43Url,
     this.playCount,
     this.likeCount,
     this.categoryName,
@@ -117,6 +118,7 @@ final class ApiVideoSummary {
   final String bvid;
   final String title;
   final Uri? coverUrl;
+  final Uri? cover43Url;
   final String ownerName;
   final Duration duration;
   final int? playCount;

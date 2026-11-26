@@ -379,6 +379,7 @@ final class SearchClient {
       bvid: bvid,
       title: _requiredText(item['title']),
       coverUrl: _uri(item['pic']),
+      cover43Url: _uri(item['cover43']),
       ownerName: _clean(item['author']),
       ownerMid: _optionalId(item['mid']),
       ownerAvatarUrl: _uri(item['upic']),

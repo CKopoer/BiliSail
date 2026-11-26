@@ -6,6 +6,35 @@ import 'package:bili_api/bili_api.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('popular keeps the separate 4:3 cover when it is a valid URL', () async {
+    final api = BiliApiClient(
+      transport: _Transport(
+        (_) async => _response({
+          'list': [
+            {..._video, 'cover43': 'http://i0.hdslb.com/cover43.jpg'},
+            _video,
+            {..._video, 'cover43': ''},
+            {..._video, 'cover43': 'https:/broken.jpg'},
+            {..._video, 'cover43': 123},
+          ],
+        }),
+      ),
+    );
+    addTearDown(api.close);
+    final result = await api.getPopular();
+    expect(
+      result.items.map((item) => item.coverUrl),
+      everyElement(Uri.parse('https://i0.hdslb.com/test.jpg')),
+    );
+    expect(result.items.map((item) => item.cover43Url), [
+      Uri.parse('https://i0.hdslb.com/cover43.jpg'),
+      null,
+      null,
+      null,
+      null,
+    ]);
+  });
+
   test('weekly directory preserves order and deduplicates periods', () async {
     final api = BiliApiClient(
       transport: _Transport((uri) async {
@@ -186,7 +215,12 @@ class _Transport implements ApiTransport {
     }
     expect(headers['User-Agent'], startsWith('Mozilla/5.0'));
     expect(headers['Origin'], 'https://www.bilibili.com');
-    expect(headers['Referer'], contains('/v/popular/'));
+    expect(
+      headers['Referer'],
+      uri.path == '/x/web-interface/popular'
+          ? 'https://www.bilibili.com/'
+          : contains('/v/popular/'),
+    );
     return respond(uri);
   }
 }

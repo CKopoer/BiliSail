@@ -98,6 +98,7 @@ class ApiSearchRepository implements SearchRepository {
     previewCid: v.previewCid,
     title: v.title,
     coverUrl: v.coverUrl?.toString() ?? '',
+    cover43Url: v.cover43Url,
     author: v.ownerName,
     authorAvatarUrl: v.ownerAvatarUrl,
     authorId: UserId.tryParse(v.ownerMid),

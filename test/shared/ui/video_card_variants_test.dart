@@ -3,6 +3,7 @@ import '../../support/material_tooltip_finder.dart';
 import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/domain/responsive_layout_settings.dart';
 import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/shared/ui/app_cover_image.dart';
 import 'package:bilisail/shared/ui/bili_badges.dart';
 import 'package:bilisail/shared/ui/highlighted_text.dart';
 import 'package:bilisail/shared/ui/responsive_layout_scope.dart';
@@ -15,6 +16,44 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('uses the separate 4:3 image when the video supplies one', (
+    tester,
+  ) async {
+    const wideUrl = 'https://i0.hdslb.com/pic.jpg';
+    const standardUrl = 'https://i0.hdslb.com/cover43.jpg';
+    for (final (ratio, alternate, expected, feedback) in [
+      (CardCoverRatio.widescreen, standardUrl, wideUrl, null),
+      (CardCoverRatio.standard, standardUrl, standardUrl, null),
+      (CardCoverRatio.standard, null, wideUrl, null),
+      (
+        CardCoverRatio.standard,
+        standardUrl,
+        standardUrl,
+        const VideoCardFeedback(),
+      ),
+    ]) {
+      await tester.pumpWidget(
+        _app(
+          ratio: ratio,
+          feedback: feedback,
+          video: VideoSummary(
+            id: const VideoId('BV1234567890'),
+            title: '测试视频',
+            author: '测试UP',
+            duration: const Duration(minutes: 3),
+            coverUrl: wideUrl,
+            cover43Url: alternate == null ? null : Uri.parse(alternate),
+          ),
+        ),
+      );
+      expect(
+        tester.widget<AppCoverImage>(find.byType(AppCoverImage)).url,
+        expected,
+      );
+      expect(tester.takeException(), isNull);
+    }
+  });
+
   testWidgets('4:3 keeps card width, frees the full title and moves the menu', (
     tester,
   ) async {

@@ -29,6 +29,7 @@ final class VideoSummary {
     required this.coverUrl,
     required this.author,
     required this.duration,
+    this.cover43Url,
     this.playCount,
     this.likeCount,
     this.categoryName,
@@ -49,6 +50,7 @@ final class VideoSummary {
   final VideoId id;
   final String title;
   final String coverUrl;
+  final Uri? cover43Url;
   final String author;
   final Duration duration;
   final int? playCount;

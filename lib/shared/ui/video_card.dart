@@ -136,6 +136,7 @@ final class VideoCard extends StatefulWidget {
     video.id,
     video.title,
     video.coverUrl,
+    video.cover43Url,
     video.author,
     video.duration,
     video.playCount,
@@ -280,6 +281,8 @@ final class _VideoCardState extends State<VideoCard> {
     final menu = _menu;
     final coverRatio = ResponsiveLayoutScope.of(context).cardCoverRatio;
     final standardCover = coverRatio == CardCoverRatio.standard;
+    final coverUrl =
+        (standardCover ? video.cover43Url?.toString() : null) ?? video.coverUrl;
     final menuButton =
         menu != null && (standardCover || widget.feedback == null)
         ? _menuButton(menu, cardWidth)
@@ -335,10 +338,10 @@ final class _VideoCardState extends State<VideoCard> {
                             ? null
                             : () => widget.feedback?.onUndo?.call(),
                       ),
-                      background: video.coverUrl.isEmpty
+                      background: coverUrl.isEmpty
                           ? _coverFallback(context)
                           : AppCoverImage(
-                              url: video.coverUrl,
+                              url: coverUrl,
                               fit: BoxFit.cover,
                               errorBuilder: (_, _, _) =>
                                   _coverFallback(context),
@@ -354,9 +357,9 @@ final class _VideoCardState extends State<VideoCard> {
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
-                          if (video.coverUrl.isNotEmpty)
+                          if (coverUrl.isNotEmpty)
                             AppCoverImage(
-                              url: video.coverUrl,
+                              url: coverUrl,
                               fit: BoxFit.cover,
                               excludeFromSemantics: true,
                               errorBuilder: (_, _, _) =>

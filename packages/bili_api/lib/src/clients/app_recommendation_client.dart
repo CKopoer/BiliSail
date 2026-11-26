@@ -227,6 +227,7 @@ final class AppRecommendationClient {
         bvid: bvid,
         title: title,
         coverUrl: _image(entry['cover']),
+        cover43Url: _image(entry['cover43']),
         ownerName: isVideo
             ? (args['up_name'] is String ? args['up_name'] as String : '')
             : (_map(entry['desc_button'])['text'] is String

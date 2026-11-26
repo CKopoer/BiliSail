@@ -3680,6 +3680,7 @@ final class BiliApiClient {
         _int(data['duration']) ??
         _parseDuration(_string(data['duration']) ?? '');
     final stat = _optionalMap(data['stat']);
+    final cover43 = _uri(data['cover43']);
     return ApiVideoSummary(
       access: parseVideoAccess(data),
       bvid: _requiredString(data['bvid'], endpoint),
@@ -3689,6 +3690,10 @@ final class BiliApiClient {
         endpoint,
       ).replaceAll(RegExp(r'<[^>]*>'), ''),
       coverUrl: _uri(data['pic']),
+      cover43Url:
+          cover43 != null && cover43.host.isNotEmpty && cover43.userInfo.isEmpty
+          ? cover43
+          : null,
       ownerName: _string(owner?['name']) ?? _string(data['author']) ?? '',
       ownerMid: _userMid(owner?['mid'] ?? data['mid']),
       ownerAvatarUrl: _uri(owner?['face'] ?? data['upic']),

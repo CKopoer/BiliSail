@@ -44,6 +44,10 @@ void main() {
         expect(page.hasMore, isFalse);
         expect(page.items.single.title, '榜单$id');
         expect(page.items.single.playCount, 42);
+        expect(
+          page.items.single.cover43Url,
+          Uri.parse('https://i0.hdslb.com/cover43.jpg'),
+        );
       }
       final categories = await repository.loadCategories(
         cancellation: RequestCancellation(),
@@ -116,6 +120,7 @@ final class _Transport implements ApiTransport {
         'bvid': 'BV1234567890',
         'title': '榜单${uri.queryParameters['rid']}',
         'duration': 60,
+        'cover43': '//i0.hdslb.com/cover43.jpg',
         'owner': {'name': 'UP'},
         'stat': {'view': 42, 'danmaku': 2},
       };
