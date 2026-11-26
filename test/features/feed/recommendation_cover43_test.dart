@@ -75,10 +75,11 @@ void main() {
   );
 
   testWidgets(
-    'only 4:3 recommendation cards without a cover query in a batch',
+    '4:3 recommendation cards independently choose a cover after a partial batch result',
     (tester) async {
       final repository = _Repository();
       final ratio = ValueNotifier(CardCoverRatio.widescreen);
+      final embeddedCover = Uri.parse('https://i1.hdslb.com/embedded4x3.jpg');
       addTearDown(ratio.dispose);
       final items = [
         for (var index = 1; index <= 4; index++)
@@ -86,7 +87,7 @@ void main() {
             id: index == 4 ? const VideoId('app:bangumi:1') : _id(index),
             title: '视频$index',
             coverUrl: 'https://i0.hdslb.com/ordinary$index.jpg',
-            cover43Url: index == 3 ? _cover : null,
+            cover43Url: index == 3 ? embeddedCover : null,
             author: 'UP',
             duration: const Duration(minutes: 1),
           ),
@@ -118,29 +119,28 @@ void main() {
           ),
         ),
       );
+      Finder coverImage(int index) => find.descendant(
+        of: find.byKey(ValueKey(items[index].id)),
+        matching: find.byType(AppCoverImage),
+      );
+      String coverUrl(int index) =>
+          tester.widget<AppCoverImage>(coverImage(index)).url;
       await tester.pump();
       expect(repository.calls, isEmpty);
+      expect(coverUrl(0), items[0].coverUrl);
       ratio.value = CardCoverRatio.standard;
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 1));
       expect(repository.calls.single.ids, [_id(1), _id(2)]);
-      repository.calls.single.result.complete({_id(1): _cover});
-      await tester.pump();
-      String coverUrl(int index) => tester
-          .widget<AppCoverImage>(
-            find
-                .descendant(
-                  of: find.byKey(ValueKey(items[index].id)),
-                  matching: find.byType(AppCoverImage),
-                )
-                .first,
-          )
-          .url;
       expect(find.byType(VideoCard), findsNWidgets(4));
+      expect(coverImage(0), findsNothing);
+      expect(coverImage(1), findsNothing);
+      expect(coverUrl(2), embeddedCover.toString());
+      expect(coverUrl(3), items[3].coverUrl);
+      repository.calls.single.result.complete({_id(1): _cover});
+      await tester.pumpAndSettle();
       expect(coverUrl(0), _cover.toString());
       expect(coverUrl(1), items[1].coverUrl);
-      expect(coverUrl(2), _cover.toString());
-      expect(coverUrl(3), items[3].coverUrl);
     },
   );
 }

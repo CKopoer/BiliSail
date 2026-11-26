@@ -46,9 +46,17 @@ void main() {
           ),
         ),
       );
+      final finder = find.byType(AppCoverImage);
+      final image = tester.widget<AppCoverImage>(finder);
+      expect(image.url, expected);
+      expect(image.fit, BoxFit.cover);
       expect(
-        tester.widget<AppCoverImage>(find.byType(AppCoverImage)).url,
-        expected,
+        image.errorBuilder?.call(
+          tester.element(finder),
+          StateError('image load failed'),
+          null,
+        ),
+        isA<ColoredBox>(),
       );
       expect(tester.takeException(), isNull);
     }

@@ -145,7 +145,7 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
   VideoCard? _card;
   _FeedbackState? _feedback;
   DateTime? _publicationTime;
-  Uri? _cover43Url;
+  ({Uri? url, bool pending})? _cover43;
 
   void _report(RecommendationInteraction interaction) {
     final card = widget.video.recommendationCard;
@@ -236,20 +236,19 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
         oldWidget.recommended != widget.recommended) {
       _card = null;
       _publicationTime = null;
-      _cover43Url = null;
+      _cover43 = null;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final visibleRecommendation =
-        widget.recommended &&
-        widget.video.id.isValid &&
-        WorkspaceActivity.isActive(context);
+    final videoRecommendation = widget.recommended && widget.video.id.isValid;
     final standardCover =
-        visibleRecommendation &&
+        videoRecommendation &&
         ResponsiveLayoutScope.of(context).cardCoverRatio ==
             CardCoverRatio.standard;
+    final visibleRecommendation =
+        videoRecommendation && WorkspaceActivity.isActive(context);
     if (visibleRecommendation &&
         !standardCover &&
         widget.video.publishedAt == null) {
@@ -262,23 +261,26 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
         _card = null;
       }
     }
-    final cover43Url =
-        standardCover &&
-            widget.video.cover43Url == null &&
+    final needsCover43 = standardCover && widget.video.cover43Url == null;
+    final lookup =
+        needsCover43 &&
+            visibleRecommendation &&
             ModalRoute.isCurrentOf(context) != false &&
             ref.watch(_foregroundProvider)
-        ? ref
-              .watch(
-                recommendationCover43Provider((
-                  id: widget.video.id,
-                  epoch: ref.read(sessionEpochProvider)(),
-                )),
-              )
-              .asData
-              ?.value
+        ? ref.watch(
+            recommendationCover43Provider((
+              id: widget.video.id,
+              epoch: ref.read(sessionEpochProvider)(),
+            )),
+          )
         : null;
-    if (_cover43Url != cover43Url) {
-      _cover43Url = cover43Url;
+    final cover43 = !needsCover43
+        ? null
+        : lookup == null
+        ? _cover43 ?? (url: null, pending: true)
+        : (url: lookup.asData?.value, pending: lookup.isLoading);
+    if (_cover43 != cover43) {
+      _cover43 = cover43;
       _card = null;
     }
     var feedback = (rejected: false, busy: false, uncertain: false);
@@ -308,7 +310,8 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
     final child = _card ??= VideoCard(
       key: ValueKey(widget.video.id),
       video: widget.video,
-      cover43Url: cover43Url,
+      cover43Url: cover43?.url,
+      cover43Pending: cover43?.pending ?? false,
       onTap: _open,
       onOpenUser: (id) => context.openWorkspaceLink('/user/${id.value}'),
       showRecommendationReason: widget.recommended,
