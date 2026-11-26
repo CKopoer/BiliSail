@@ -8,7 +8,7 @@ if [[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == mingw* ]]; then
   [[ -x "$make_tool" ]] || { echo 'Install the MSYS2 make package in this MSYS root' >&2; exit 1; }
 fi
 
-target="${1:?usage: build.sh windows-x64|windows-arm64|android-arm64|macos-arm64|macos-x64|ios-arm64|linux-x64}"
+target="${1:?usage: build.sh windows-x64|windows-arm64|android-arm64|macos-arm64|macos-x64|ios-arm64|ios-simulator-arm64|linux-x64}"
 mode="${2:-build}"
 case "$mode" in build|identity|archive) ;; *) echo 'Unknown mux build mode' >&2; exit 1 ;; esac
 package_dir="$(cd "$(dirname "$0")/.." && pwd)"
@@ -94,17 +94,23 @@ case "$target" in
     configure_flags+=(--target-os=linux --arch=x86_64)
     link_flags+=("-Wl,--version-script=$package_dir/native/exports.map" -Wl,-Bsymbolic)
     ;;
-  ios-arm64)
+  ios-arm64|ios-simulator-arm64)
     [[ "$(uname -s)" == Darwin ]] || { echo 'iOS requires an Xcode host' >&2; exit 1; }
-    cc="$(xcrun --sdk iphoneos -f clang)"
-    cxx="$(xcrun --sdk iphoneos -f clang++)"
+    ios_sdk_name=iphoneos
+    ios_triple=arm64-apple-ios15
+    if [[ "$target" == ios-simulator-arm64 ]]; then
+      ios_sdk_name=iphonesimulator
+      ios_triple=arm64-apple-ios15-simulator
+    fi
+    cc="$(xcrun --sdk "$ios_sdk_name" -f clang)"
+    cxx="$(xcrun --sdk "$ios_sdk_name" -f clang++)"
     strip_tool="$(xcrun -f strip)"
-    ios_sdk="$(xcrun --sdk iphoneos --show-sdk-path)"
+    ios_sdk="$(xcrun --sdk "$ios_sdk_name" --show-sdk-path)"
     configure_flags+=(--target-os=darwin --arch=aarch64 --enable-cross-compile
       "--cc=$cc" "--sysroot=$ios_sdk"
-      '--extra-cflags=-arch arm64 -miphoneos-version-min=15.0'
-      '--extra-ldflags=-arch arm64 -miphoneos-version-min=15.0')
-    cxx_flags+=(-arch arm64 -miphoneos-version-min=15.0 -isysroot "$ios_sdk")
+      "--extra-cflags=-target $ios_triple"
+      "--extra-ldflags=-target $ios_triple")
+    cxx_flags+=(-target "$ios_triple" -isysroot "$ios_sdk")
     link_flags+=(-Wl,-install_name,@rpath/BiliMux.framework/BiliMux
       "-Wl,-exported_symbols_list,$package_dir/native/exports.macos")
     output_name=BiliMux
@@ -128,8 +134,8 @@ if [[ "$mode" == identity ]]; then
       xcrun --sdk macosx --show-sdk-build-version
       ;;
     ios-*)
-      xcrun --sdk iphoneos --show-sdk-version
-      xcrun --sdk iphoneos --show-sdk-build-version
+      xcrun --sdk "$ios_sdk_name" --show-sdk-version
+      xcrun --sdk "$ios_sdk_name" --show-sdk-build-version
       ;;
     linux-*) ld --version; ldd --version ;;
   esac
@@ -155,7 +161,7 @@ fi
 if [[ "$mode" == archive ]]; then
   # CocoaPods consumes a separate generated framework outside prebuilt/.
   # Recreate its versioned/shallow layout even when no compilation is needed.
-  if [[ "$target" == macos-* || "$target" == ios-arm64 ]]; then
+  if [[ "$target" == macos-* || "$target" == ios-* ]]; then
     bash "$package_dir/tool/package-apple-framework.sh" "$target"
   fi
   exit 0
@@ -187,7 +193,7 @@ run_logged_stage compile build.log "$make_tool" -j"${BILI_MUX_JOBS:-4}"
 
 gc_flag=-Wl,--gc-sections
 shared_flag=-shared
-if [[ "$target" == macos-* || "$target" == ios-arm64 ]]; then
+if [[ "$target" == macos-* || "$target" == ios-* ]]; then
   gc_flag=-Wl,-dead_strip; shared_flag=-dynamiclib
 fi
 run_logged_stage link link.log "$cxx" -std=c++17 -O2 -fvisibility=hidden -ffunction-sections -fdata-sections \
@@ -198,13 +204,16 @@ run_logged_stage link link.log "$cxx" -std=c++17 -O2 -fvisibility=hidden -ffunct
   $(sed -n 's/^EXTRALIBS-avformat=//p;s/^EXTRALIBS-avcodec=//p;s/^EXTRALIBS-avutil=//p' ffbuild/config.mak)
 
 framework_info="$package_dir/native/Info.plist"
-if [[ "$target" == ios-arm64 ]]; then framework_info="$package_dir/native/Info.ios.plist"; fi
-if [[ "$target" == macos-* || "$target" == ios-arm64 ]]; then
+if [[ "$target" == ios-* ]]; then framework_info="$package_dir/native/Info.ios.plist"; fi
+if [[ "$target" == macos-* || "$target" == ios-* ]]; then
   "$strip_tool" -x "$output_name"
   framework="$package_dir/native/prebuilt/$target/BiliMux.framework"
   mkdir -p "$framework"
   cp "$output_name" "$framework/BiliMux"
   cp "$framework_info" "$framework/Info.plist"
+  if [[ "$target" == ios-simulator-arm64 ]]; then
+    /usr/libexec/PlistBuddy -c 'Set CFBundleSupportedPlatforms:0 iPhoneSimulator' "$framework/Info.plist"
+  fi
 else
   "$strip_tool" --strip-unneeded "$output_name"
   cp "$output_name" "$package_dir/native/prebuilt/$target/$output_name"
@@ -217,7 +226,7 @@ if [[ "$target" == windows-* ]]; then
   cp "$package_dir/native/prebuilt/$target/source.txt" "$package_dir/native/prebuilt/$target/bili_mux.source.txt"
   cp "$package_dir/native/prebuilt/$target/configure.log" "$package_dir/native/prebuilt/$target/bili_mux.configuration.txt"
 fi
-if [[ "$target" == macos-* || "$target" == ios-arm64 ]]; then
+if [[ "$target" == macos-* || "$target" == ios-* ]]; then
   bash "$package_dir/tool/package-apple-framework.sh" "$target"
 fi
 echo "Built $target: $output_name"

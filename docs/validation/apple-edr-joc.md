@@ -37,4 +37,4 @@ flutter run --release -d macos -t tool/validation/apple_hdr_probe.dart \
   --dart-define=APPLE_REQUIRE_HDR=true
 ```
 
-可另传 `APPLE_HDR10`、`APPLE_HLG`，或用 `APPLE_COMPANION_AUDIO` 指定独立音轨。要求 HDR 的检查在仅支持 SDR 的屏幕上会失败。测试入口打印实际输出，执行完毕退出。
+可另传 `APPLE_HDR10`、`APPLE_HLG`。Profile 5 样片使用自带音轨，其余样片可用 `APPLE_COMPANION_AUDIO` 指定独立音轨。Apple Silicon 上测试 iPhone 模拟器先运行 `bash packages/bili_mux/tool/build.sh ios-simulator-arm64`，再为模拟器执行 debug 构建。要求 HDR 的检查在仅支持 SDR 的屏幕上会失败。测试入口打印实际输出，执行完毕退出。

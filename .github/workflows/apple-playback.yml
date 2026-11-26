@@ -58,43 +58,67 @@ jobs:
           codesign --force --sign - sim/Mpv
           codesign --force --sign - joc-probe
           device=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; print(next(i["udid"] for runtime, group in reversed(list(json.load(sys.stdin)["devices"].items())) if "iOS" in runtime for i in group if "iPhone" in i["name"]))')
+          echo "APPLE_SIMULATOR=$device" >> "$GITHUB_ENV"
           xcrun simctl boot "$device"
           xcrun simctl bootstatus "$device" -b
-          xcrun simctl spawn "$device" "$PWD/joc-probe" "$PWD/fixtures/p5-joc.mp4"
+          output=$(xcrun simctl spawn "$device" "$PWD/joc-probe" "$PWD/fixtures/p5-joc.mp4")
+          echo "$output"
+          [[ "$output" == *"appleAtmosFormat=1"* && "$output" == *"timelineAdvanced=1"* ]]
       - if: matrix.platform == 'macos'
         run: echo "DEVELOPER_DIR=/Applications/Xcode_26.2.app/Contents/Developer" >> "$GITHUB_ENV"
-      - if: matrix.platform == 'macos'
-        uses: ./.github/actions/restore-flutter
+      - uses: ./.github/actions/restore-flutter
       - if: matrix.platform == 'macos'
         uses: ./.github/actions/restore-mux
         with:
           target: macos-arm64
-      - name: Build and exercise the macOS application surface
-        if: matrix.platform == 'macos'
+      - name: Prepare application dependencies
+        run: |
+          if [[ -n "$APPLE_SIMULATOR" ]]; then
+            bash packages/bili_mux/tool/build.sh ios-simulator-arm64
+          else
+            pwsh -NoProfile -File tool/build-download-mux.ps1 -Target macos-arm64
+          fi
+          flutter pub get --enforce-lockfile
+      - name: Build and exercise the application surface
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          pwsh -NoProfile -File tool/build-download-mux.ps1 -Target macos-arm64
-          flutter pub get --enforce-lockfile
           cp test/fixtures/media/{p84.mp4,hdr10.mp4,hlg.mp4,audio.m4a} build/fixtures/
           base=http://127.0.0.1:18085
-          flutter build macos --release --target tool/validation/apple_hdr_probe.dart \
-            --dart-define=APPLE_P5=$base/p5-joc.mp4 --dart-define=APPLE_P8=$base/p84.mp4 \
-            --dart-define=APPLE_HDR10=$base/hdr10.mp4 --dart-define=APPLE_HLG=$base/hlg.mp4 \
-            --dart-define=APPLE_COMPANION_AUDIO=$base/audio.m4a
+          args=(--target tool/validation/apple_hdr_probe.dart
+                --dart-define=APPLE_P5=$base/p5-joc.mp4 --dart-define=APPLE_P8=$base/p84.mp4
+                --dart-define=APPLE_HDR10=$base/hdr10.mp4 --dart-define=APPLE_HLG=$base/hlg.mp4
+                --dart-define=APPLE_COMPANION_AUDIO=$base/audio.m4a)
+          if [[ -n "$APPLE_SIMULATOR" ]]; then
+            flutter build ios --simulator --debug "${args[@]}"
+          else
+            flutter build macos --release "${args[@]}"
+          fi
           if ! swift -e 'import Metal; import Darwin; exit(MTLCreateSystemDefaultDevice() == nil ? 1 : 0)'; then
             echo 'No Metal device on this runner. Application compiled, display test skipped.' >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           python3 -m http.server 18085 --bind 127.0.0.1 --directory build/fixtures >/tmp/bilisail-fixture-server.log 2>&1 &
           python3 - <<'PY'
-          import pathlib, subprocess
-          app = next(pathlib.Path("build/macos/Build/Products/Release").glob("*.app"))
-          executable = next((app/"Contents/MacOS").iterdir())
-          result = subprocess.run([str(executable)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=100)
+          import os, pathlib, plistlib, subprocess
+          simulator = os.environ.get("APPLE_SIMULATOR")
+          if simulator:
+              app = next(pathlib.Path("build/ios/iphonesimulator").glob("*.app"))
+              bundle = plistlib.loads((app/"Info.plist").read_bytes())["CFBundleIdentifier"]
+              subprocess.run(["xcrun", "simctl", "install", simulator, str(app)], check=True)
+              command = ["xcrun", "simctl", "launch", "--console", simulator, bundle]
+          else:
+              app = next(pathlib.Path("build/macos/Build/Products/Release").glob("*.app"))
+              command = [str(next((app/"Contents/MacOS").iterdir()))]
+          try:
+              result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=150)
+          except subprocess.TimeoutExpired as exc:
+              print((exc.stdout or b"").decode(errors="replace"))
+              raise
           print(result.stdout)
           if result.returncode or "APPLE_MEDIA_PASSED" not in result.stdout:
-              subprocess.run(["xcrun", "lldb", "--batch", "-o", "run", "-k", "thread backtrace all", "--", str(executable)], timeout=120)
+              if not simulator and result.returncode < 0:
+                  subprocess.run(["xcrun", "lldb", "--batch", "-o", "run", "-k", "thread backtrace all", "--", *command], timeout=120)
               raise SystemExit(f"Apple presentation probe exited with {result.returncode}")
           PY
       - name: Apple process diagnostics
