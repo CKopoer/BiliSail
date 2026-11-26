@@ -42,28 +42,14 @@ jobs:
           cd build/fixtures
           curl --fail --retry 2 --silent --show-error -L --range 0-33554431 --max-time 180 'https://media.developer.dolby.com/DolbyVision_Atmos/mp4/iOS_P5_GlassBlowing2_1920x1080%4059.94fps_15200kbps.mp4' -o p5-joc.mp4
           echo '2e1a62c39519ccef267353672aff6c2985b7ef145739fb60b56029fa91ec6fac  p5-joc.mp4' | shasum -a 256 -c -
-      - name: Probe compressed audio on a booted iPhone simulator
+      - name: Boot an iPhone simulator
+        id: boot
         if: matrix.platform == 'ios-simulator'
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download apple-edr-joc-2026-11-27 -R CKopoer/libmpv-darwin-build -p bilisail-edr-ios.tar.gz -D build
-          echo '209fecaa26e5372b12c31c2afff777e2470f351a5eeb036e5a448d2f515e952f  build/bilisail-edr-ios.tar.gz' | shasum -a 256 -c -
-          tar -xzf build/bilisail-edr-ios.tar.gz -C build
-          mkdir build/sim
-          lipo build/Mpv.xcframework/ios-arm64_x86_64-simulator/Mpv.framework/Mpv -thin arm64 -output build/sim/Mpv
-          cd build
-          xcrun --sdk iphonesimulator clang -target arm64-apple-ios15-simulator -fobjc-arc -I mpv/include darwin/bilisail/joc_probe.m sim/Mpv -framework AVFoundation -framework CoreMedia -framework Foundation -o joc-probe
-          install_name_tool -change '@rpath/Mpv.framework/Mpv' "$PWD/sim/Mpv" joc-probe
-          codesign --force --sign - sim/Mpv
-          codesign --force --sign - joc-probe
           device=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; print(next(i["udid"] for runtime, group in reversed(list(json.load(sys.stdin)["devices"].items())) if "iOS" in runtime for i in group if "iPhone" in i["name"]))')
           echo "APPLE_SIMULATOR=$device" >> "$GITHUB_ENV"
           xcrun simctl boot "$device"
           xcrun simctl bootstatus "$device" -b
-          output=$(xcrun simctl spawn "$device" "$PWD/joc-probe" "$PWD/fixtures/p5-joc.mp4")
-          echo "$output"
-          [[ "$output" == *"appleAtmosFormat=1"* && "$output" == *"timelineAdvanced=1"* ]]
       - if: matrix.platform == 'macos'
         run: echo "DEVELOPER_DIR=/Applications/Xcode_26.2.app/Contents/Developer" >> "$GITHUB_ENV"
       - uses: ./.github/actions/restore-flutter
@@ -121,6 +107,25 @@ jobs:
                   subprocess.run(["xcrun", "lldb", "--batch", "-o", "run", "-k", "thread backtrace all", "--", *command], timeout=120)
               raise SystemExit(f"Apple presentation probe exited with {result.returncode}")
           PY
+      - name: Probe compressed audio on a booted iPhone simulator
+        if: ${{ !cancelled() && matrix.platform == 'ios-simulator' && steps.boot.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download apple-edr-joc-2026-11-27 -R CKopoer/libmpv-darwin-build -p bilisail-edr-ios.tar.gz -D build
+          echo '209fecaa26e5372b12c31c2afff777e2470f351a5eeb036e5a448d2f515e952f  build/bilisail-edr-ios.tar.gz' | shasum -a 256 -c -
+          tar -xzf build/bilisail-edr-ios.tar.gz -C build
+          mkdir build/sim
+          lipo build/Mpv.xcframework/ios-arm64_x86_64-simulator/Mpv.framework/Mpv -thin arm64 -output build/sim/Mpv
+          cd build
+          xcrun --sdk iphonesimulator clang -target arm64-apple-ios15-simulator -fobjc-arc -I mpv/include darwin/bilisail/joc_probe.m sim/Mpv -framework AVFoundation -framework CoreMedia -framework Foundation -o joc-probe
+          install_name_tool -change '@rpath/Mpv.framework/Mpv' "$PWD/sim/Mpv" joc-probe
+          codesign --force --sign - sim/Mpv
+          codesign --force --sign - joc-probe
+          set -o pipefail
+          xcrun simctl spawn "$APPLE_SIMULATOR" "$PWD/joc-probe" "$PWD/fixtures/p5-joc.mp4" | tee joc-result.txt
+          grep -q 'appleAtmosFormat=1' joc-result.txt
+          grep -q 'timelineAdvanced=1' joc-result.txt
       - name: Apple process diagnostics
         if: failure()
         run: |
