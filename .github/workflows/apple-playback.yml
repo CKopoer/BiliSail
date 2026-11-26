@@ -9,6 +9,8 @@ on:
       - 'tool/validation/apple_hdr_probe.dart'
       - 'packages/bili_player/lib/src/native_hdr_output.dart'
       - 'pubspec.lock'
+      - 'test/fixtures/media/**'
+      - 'tool/media-kit-patches/**'
 permissions:
   contents: read
 concurrency:
@@ -74,7 +76,12 @@ jobs:
         run: |
           pwsh -NoProfile -File tool/build-download-mux.ps1 -Target macos-arm64
           flutter pub get --enforce-lockfile
-          flutter build macos --release --target tool/validation/apple_hdr_probe.dart --dart-define=APPLE_P5=http://127.0.0.1:18085/p5-joc.mp4
+          cp test/fixtures/media/{p84.mp4,hdr10.mp4,hlg.mp4,audio.m4a} build/fixtures/
+          base=http://127.0.0.1:18085
+          flutter build macos --release --target tool/validation/apple_hdr_probe.dart \
+            --dart-define=APPLE_P5=$base/p5-joc.mp4 --dart-define=APPLE_P8=$base/p84.mp4 \
+            --dart-define=APPLE_HDR10=$base/hdr10.mp4 --dart-define=APPLE_HLG=$base/hlg.mp4 \
+            --dart-define=APPLE_COMPANION_AUDIO=$base/audio.m4a
           if ! swift -e 'import Metal; import Darwin; exit(MTLCreateSystemDefaultDevice() == nil ? 1 : 0)'; then
             echo 'No Metal device on this runner. Application compiled, display test skipped.' >> "$GITHUB_STEP_SUMMARY"
             exit 0

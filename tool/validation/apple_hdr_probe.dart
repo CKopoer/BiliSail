@@ -70,7 +70,7 @@ Future<void> main() async {
         uri: Uri.parse(entry.value),
         requestPolicy: policy,
       );
-      final source = audio.isEmpty
+      final source = audio.isEmpty || entry.key == 'p5'
           ? ProgressiveSource(video)
           : DashPairSource(
               video: video,

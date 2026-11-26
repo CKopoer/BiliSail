@@ -199,7 +199,13 @@ final class NativeHdrOutput {
         }
         await Future<void>.delayed(const Duration(milliseconds: 25));
       }
-      throw StateError('HDR swapchain unavailable');
+      throw StateError(
+        'HDR swapchain unavailable '
+        '(vo=${player.getProperty('current-vo')}, '
+        'matrix=${player.getProperty('video-out-params/colormatrix')}, '
+        'source=${player.getProperty('video-out-params/gamma')}, '
+        'target=${player.getProperty('video-target-params/gamma')})',
+      );
     } on Object catch (error) {
       debugPrint('HDR output unavailable: $error');
       await target.restore(player);

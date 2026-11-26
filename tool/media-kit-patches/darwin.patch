@@ -399,10 +399,11 @@
    private static func disposePixelBuffer(_ pixelBuffer: CVPixelBuffer) {
 --- a/common/darwin/Classes/plugin/VideoOutput.swift
 +++ b/common/darwin/Classes/plugin/VideoOutput.swift
-@@ -7,6 +7,37 @@ import Foundation
+@@ -6,6 +6,37 @@
+ #elseif canImport(FlutterMacOS)
    import FlutterMacOS
  #endif
- 
++
 +// Keep the native renderer alive when the Dart owner exits without Dispose.
 +private final class RenderClient {
 +  private final class Signal {
@@ -433,11 +434,10 @@
 +    media_kit_mpv_destroy(handle)
 +  }
 +}
-+
+ 
  // This class creates and manipulates the different types of FlutterTexture,
  // handles resizing, rendering calls, and notify Flutter when a new frame is
- // available to render.
-@@ -27,7 +58,8 @@ public class VideoOutput: NSObject {
+@@ -27,7 +58,8 @@
      return isSim
    }()
  
@@ -447,11 +447,13 @@
    private let enableHardwareAcceleration: Bool
    private let registry: FlutterTextureRegistry
    private let textureUpdateCallback: TextureUpdateCallback
-@@ -37,18 +69,24 @@ public class VideoOutput: NSObject {
+@@ -37,18 +69,24 @@
    private var texture: ResizableTextureProtocol!
    private var textureId: Int64 = -1
    private var currentSize: CGSize = CGSize.zero
 -  private var disposed: Bool = false
+-
+-  init(
 +  private let stateLock = NSLock()
 +  private var closing = false
 +  private var closed = false
@@ -460,8 +462,7 @@
 +  private var latestSize = CGSize.zero
 +  // Platform-thread only. All rendering dimensions above remain worker-owned.
 +  private var platformSize = CGSize.zero
- 
--  init(
++
 +  init?(
      handle: Int64,
 +    onShutdown: @escaping () -> Void,
@@ -478,7 +479,7 @@
      width = configuration.width
      height = configuration.height
      enableHardwareAcceleration = configuration.enableHardwareAcceleration
-@@ -57,40 +95,32 @@ public class VideoOutput: NSObject {
+@@ -57,40 +95,32 @@
  
      super.init()
  
@@ -494,24 +495,25 @@
 -
 -    disposed = true
 -    disposeTextureId()
--  }
--
--  public func setSize(width: Int64?, height: Int64?) {
--    worker.enqueue {
--      guard !self.disposed else { return }
--      self.width = width
--      self.height = height
 +    // Fallback for a manager/engine being torn down without an explicit close.
 +    let texture = self.texture
 +    let client = self.client
 +    worker.finish {
 +      withExtendedLifetime(client) { texture?.dispose() }
-     }
++    }
 +    let registry = self.registry
 +    let id = textureId
 +    if id >= 0 { DispatchQueue.main.async { registry.unregisterTexture(id) } }
    }
  
+   public func setSize(width: Int64?, height: Int64?) {
+-    worker.enqueue {
+-      guard !self.disposed else { return }
+-      self.width = width
+-      self.height = height
+-    }
+-  }
+-
 -  public func dispose(completion: @escaping () -> Void) {
 -    // Drain rendering on its worker without blocking the platform thread,
 -    // which pending render jobs may still need for texture notifications.
@@ -522,7 +524,6 @@
 -        self.worker.cancel()
 -        completion()
 -      }
-+  public func setSize(width: Int64?, height: Int64?) {
 +    worker.enqueue(key: "size") { [weak self] in
 +      self?.width = width
 +      self?.height = height
@@ -534,49 +535,7 @@
      let enableHardwareAcceleration =
        VideoOutput.isSimulator ? false : enableHardwareAcceleration
  
-@@ -104,31 +134,35 @@ public class VideoOutput: NSObject {
-       )
-     }
- 
--    let update: () -> Void = { [weak self] in
--      self?.updateCallback()
--    }
--    var hardwareTexture: ResizableTextureProtocol?
-     if enableHardwareAcceleration {
--      hardwareTexture = TextureHW(
--        handle: handle,
--        updateCallback: update
-+      texture = SafeResizableTexture(
-+        TextureHW(
-+          handle: handle,
-+          // Use `weak self` to prevent memory leaks
-+          updateCallback: { [weak self]() in
-+            guard let that = self else {
-+              return
-+            }
-+            that.updateCallback()
-+          }
-+        )
-       )
--    }
--    if let hardwareTexture = hardwareTexture {
--      texture = SafeResizableTexture(hardwareTexture)
-     } else {
--      if enableHardwareAcceleration {
--        NSLog("VideoOutput: hardware rendering unavailable; using software rendering")
--      }
-       texture = SafeResizableTexture(
-         TextureSW(
-           handle: handle,
--          updateCallback: update
-+          // Use `weak self` to prevent memory leaks
-+          updateCallback: { [weak self]() in
-+            guard let that = self else {
-+              return
-+            }
-+            that.updateCallback()
-+          }
-         )
+@@ -128,7 +158,7 @@
        )
      }
  
@@ -585,7 +544,7 @@
        guard let that = self else {
          return
        }
-@@ -138,33 +172,53 @@ public class VideoOutput: NSObject {
+@@ -138,33 +168,53 @@
  
    // Must be run on the main thread
    private func registerTextureId() {
@@ -604,6 +563,8 @@
 -      // Textures must be unregistered on the platform thread
 -      if textureId_ >= 0 {
 -        registry_.unregisterTexture(textureId_)
+-      }
+-      completion()
 +  public func dispose(completion: @escaping () -> Void) {
 +    let state = locked { () -> (closed: Bool, start: Bool) in
 +      if closed { return (true, false) }
@@ -631,8 +592,7 @@
 +          }
 +          callbacks.forEach { $0() }
 +        }
-       }
--      completion()
++      }
      }
    }
  
@@ -651,23 +611,16 @@
      let size = videoSize
  
      if size.width == 0 || size.height == 0 {
-@@ -175,25 +229,40 @@ public class VideoOutput: NSObject {
+@@ -175,23 +225,38 @@
        currentSize = size
  
        texture.resize(size)
 -      DispatchQueue.main.sync { [weak self] in
 -        guard let that = self else { return }
 -        // textureUpdateCallback must run on the main thread
--        that.textureUpdateCallback(that.textureId, size)
--      }
--    }
--
--    if disposed {
--      return
-     }
- 
-     texture.render(size)
--    DispatchQueue.main.sync { [weak self] in
++    }
++
++    texture.render(size)
 +    let notify = locked { () -> Bool in
 +      guard !closing else { return false }
 +      latestSize = size
@@ -677,8 +630,7 @@
 +    }
 +    guard notify else { return }
 +    DispatchQueue.main.async { [weak self] in
-       guard let that = self else { return }
--      // Textures must be marked as available from the main thread
++      guard let that = self else { return }
 +      let size = that.locked { () -> CGSize? in
 +        that.notificationPending = false
 +        return that.closing ? nil : that.latestSize
@@ -686,23 +638,31 @@
 +      guard let size = size, that.textureId >= 0 else { return }
 +      if that.platformSize != size {
 +        that.platformSize = size
-+        that.textureUpdateCallback(that.textureId, size)
-+      }
+         that.textureUpdateCallback(that.textureId, size)
+       }
+-    }
+-
+-    if disposed {
+-      return
+-    }
+-
+-    texture.render(size)
+-    DispatchQueue.main.sync { [weak self] in
+-      guard let that = self else { return }
+-      // Textures must be marked as available from the main thread
        that.registry.textureFrameAvailable(that.textureId)
      }
-   }
- 
++  }
++
 +  private var isClosing: Bool { locked { closing } }
 +
 +  private func locked<T>(_ body: () -> T) -> T {
 +    stateLock.lock()
 +    defer { stateLock.unlock() }
 +    return body()
-+  }
-+
+   }
+ 
      private var videoSize: CGSize {
-         // fixed size
-         if width != nil && height != nil {
 --- a/common/darwin/Classes/plugin/VideoOutputManager.swift
 +++ b/common/darwin/Classes/plugin/VideoOutputManager.swift
 @@ -7,6 +7,7 @@

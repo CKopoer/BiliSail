@@ -15,3 +15,13 @@ ffmpeg -f lavfi -i 'testsrc2=size=160x90:rate=24:duration=60' -an -c:v libx264 -
 60 秒无音轨测试图用于检查两后端悬停预览的 5 秒向前缓冲窗口、随进度补充、seek 后窗口及普通打开恢复 2 分钟窗口；使用本地 HTTP，不访问公网或账号。
 
 `./tool/test-windows-buffer.ps1` 在忽略的 `build/validation/player-buffer-fixtures` 下生成 12 分钟的同类分轨素材，检查普通播放的 5 分钟向前窗口、暂停、播放推进、窗口外 seek 和短视频重开。它同样只访问本地 HTTP，不访问账号或公网；由 `test-windows-media.ps1` 一并执行。
+
+Apple 视频回归另外使用三段 256×144、24 fps、3 秒的 10 位 HEVC 渐变。它们由 FFmpeg 的 `gradients` 和 libx265 生成，在回归中搭配同目录的独立 AAC 音轨。
+
+| 文件 | 格式和可检查的元数据 |
+| --- | --- |
+| `hdr10.mp4` | BT.2020/PQ，1000 nit 母版，MaxCLL 1000、MaxFALL 400 |
+| `hlg.mp4` | BT.2020/HLG，Profile 8.4 样片的同源基础层 |
+| `p84.mp4` | 同一 HLG 码流，经 dovi_tool 2.3.1 的 `generate --profile 8.4` 和 `inject-rpu` 添加 72 帧 V2.9 元数据，MP4 的 dvvC 记录标明 profile 8、compatibility ID 4 |
+
+可用 `ffprobe -show_streams -show_frames p84.mp4` 分别检查容器配置和实际帧的 Dolby Vision Metadata。渐变样片验证传输特性、元数据和渲染路径，画面观感另用真实母版验收。
