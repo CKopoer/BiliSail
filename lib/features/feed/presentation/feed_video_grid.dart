@@ -13,10 +13,13 @@ import '../../../core/presentation/workspace_activity.dart';
 import '../../../shared/ui/app_notice.dart';
 import '../../../domain/video.dart';
 import '../../../domain/course_address.dart';
+import '../../../domain/responsive_layout_settings.dart';
 import '../../../shared/ui/responsive_card_grid.dart';
+import '../../../shared/ui/responsive_layout_scope.dart';
 import '../../../shared/ui/video_card.dart';
 import '../../../shared/ui/workspace_link.dart';
 import '../application/feed_controller.dart';
+import '../application/recommendation_cover43.dart';
 import '../application/recommendation_publication_time.dart';
 import '../domain/home_channel.dart';
 
@@ -142,6 +145,7 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
   VideoCard? _card;
   _FeedbackState? _feedback;
   DateTime? _publicationTime;
+  Uri? _cover43Url;
 
   void _report(RecommendationInteraction interaction) {
     final card = widget.video.recommendationCard;
@@ -232,15 +236,23 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
         oldWidget.recommended != widget.recommended) {
       _card = null;
       _publicationTime = null;
+      _cover43Url = null;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (widget.recommended &&
+    final visibleRecommendation =
+        widget.recommended &&
         widget.video.id.isValid &&
-        widget.video.publishedAt == null &&
-        WorkspaceActivity.isActive(context)) {
+        WorkspaceActivity.isActive(context);
+    final standardCover =
+        visibleRecommendation &&
+        ResponsiveLayoutScope.of(context).cardCoverRatio ==
+            CardCoverRatio.standard;
+    if (visibleRecommendation &&
+        !standardCover &&
+        widget.video.publishedAt == null) {
       final date = ref
           .watch(recommendationPublicationTimeProvider(widget.video.id))
           .asData
@@ -249,6 +261,25 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
         _publicationTime = date;
         _card = null;
       }
+    }
+    final cover43Url =
+        standardCover &&
+            widget.video.cover43Url == null &&
+            ModalRoute.isCurrentOf(context) != false &&
+            ref.watch(_foregroundProvider)
+        ? ref
+              .watch(
+                recommendationCover43Provider((
+                  id: widget.video.id,
+                  epoch: ref.read(sessionEpochProvider)(),
+                )),
+              )
+              .asData
+              ?.value
+        : null;
+    if (_cover43Url != cover43Url) {
+      _cover43Url = cover43Url;
+      _card = null;
     }
     var feedback = (rejected: false, busy: false, uncertain: false);
     if (widget.recommended) {
@@ -277,6 +308,7 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
     final child = _card ??= VideoCard(
       key: ValueKey(widget.video.id),
       video: widget.video,
+      cover43Url: cover43Url,
       onTap: _open,
       onOpenUser: (id) => context.openWorkspaceLink('/user/${id.value}'),
       showRecommendationReason: widget.recommended,

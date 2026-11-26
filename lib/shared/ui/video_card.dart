@@ -97,6 +97,7 @@ final class VideoCard extends StatefulWidget {
     super.key,
     required this.video,
     required this.onTap,
+    this.cover43Url,
     this.progress,
     this.onOpenUser,
     this.showUpBadge = false,
@@ -114,6 +115,7 @@ final class VideoCard extends StatefulWidget {
 
   final ValueChanged<UserId>? onOpenUser;
   final VideoSummary video;
+  final Uri? cover43Url;
   final VoidCallback onTap;
   final double? progress;
   final bool showUpBadge;
@@ -137,6 +139,7 @@ final class VideoCard extends StatefulWidget {
     video.title,
     video.coverUrl,
     video.cover43Url,
+    cover43Url,
     video.author,
     video.duration,
     video.playCount,
@@ -281,8 +284,7 @@ final class _VideoCardState extends State<VideoCard> {
     final menu = _menu;
     final coverRatio = ResponsiveLayoutScope.of(context).cardCoverRatio;
     final standardCover = coverRatio == CardCoverRatio.standard;
-    final coverUrl =
-        (standardCover ? video.cover43Url?.toString() : null) ?? video.coverUrl;
+    final coverImage = _buildCoverImage(context, standardCover: standardCover);
     final menuButton =
         menu != null && (standardCover || widget.feedback == null)
         ? _menuButton(menu, cardWidth)
@@ -338,14 +340,7 @@ final class _VideoCardState extends State<VideoCard> {
                             ? null
                             : () => widget.feedback?.onUndo?.call(),
                       ),
-                      background: coverUrl.isEmpty
-                          ? _coverFallback(context)
-                          : AppCoverImage(
-                              url: coverUrl,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) =>
-                                  _coverFallback(context),
-                            ),
+                      background: coverImage,
                     ),
                     null => VideoCardCover(
                       video: video,
@@ -357,20 +352,7 @@ final class _VideoCardState extends State<VideoCard> {
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
-                          if (coverUrl.isNotEmpty)
-                            AppCoverImage(
-                              url: coverUrl,
-                              fit: BoxFit.cover,
-                              excludeFromSemantics: true,
-                              errorBuilder: (_, _, _) =>
-                                  _coverFallback(context),
-                              frameBuilder: (_, child, frame, _) =>
-                                  frame != null
-                                  ? child
-                                  : _coverFallback(context),
-                            )
-                          else
-                            _coverFallback(context),
+                          coverImage,
                           Align(
                             alignment: Alignment.bottomCenter,
                             child: SizedBox(
@@ -609,6 +591,27 @@ final class _VideoCardState extends State<VideoCard> {
     if (message != null && WorkspaceActivity.isActive(context)) {
       scope.onNotice(context, message);
     }
+  }
+
+  Widget _buildCoverImage(BuildContext context, {required bool standardCover}) {
+    final video = widget.video;
+    final alternate = (video.cover43Url ?? widget.cover43Url)?.toString();
+    final placeholder = _coverFallback(context);
+    final normalCard = widget.feedback == null;
+    Widget image(String url, Widget errorFallback) => AppCoverImage(
+      url: url,
+      excludeFromSemantics: normalCard,
+      errorBuilder: (_, _, _) => errorFallback,
+      frameBuilder: normalCard
+          ? (_, child, frame, _) => frame == null ? placeholder : child
+          : null,
+    );
+    final ordinary = video.coverUrl.isEmpty
+        ? placeholder
+        : image(video.coverUrl, placeholder);
+    return standardCover && alternate != null && alternate != video.coverUrl
+        ? image(alternate, ordinary)
+        : ordinary;
   }
 
   Widget _coverFallback(BuildContext context) => ColoredBox(

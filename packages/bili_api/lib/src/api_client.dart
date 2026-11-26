@@ -2215,6 +2215,53 @@ final class BiliApiClient {
     return _recommendedPage(data, page + 1);
   }
 
+  Future<Map<String, Uri>> getVideoCover43Urls(
+    Iterable<String> bvids, {
+    ApiRequestContext? context,
+  }) async {
+    const endpoint = 'video_covers_43';
+    const maxBytes = 512 * 1024;
+    final requested = bvids.toSet();
+    if (requested.isEmpty) return const {};
+    if (requested.length > 30 ||
+        requested.any((id) => !RegExp(r'^BV[0-9A-Za-z]{10}$').hasMatch(id))) {
+      throw ArgumentError('Expected up to 30 valid BV IDs');
+    }
+    final limit = _clock().add(const Duration(seconds: 2));
+    final deadline = context?.deadline;
+    final response = await _request(
+      _api.replace(
+        path: '/x/article/cards',
+        queryParameters: {'ids': requested.join(',')},
+      ),
+      endpoint,
+      ApiRequestContext(
+        cancellation: context?.cancellation,
+        sessionEpoch: context?.sessionEpoch,
+        deadline: deadline != null && deadline.isBefore(limit)
+            ? deadline
+            : limit,
+      ),
+      maxAttempts: 1,
+      maxBytes: maxBytes,
+      includeWebIdentity: false,
+    );
+    if (response.body.length > maxBytes) {
+      throw const ApiFailure(ApiFailureCategory.protocol, endpoint);
+    }
+    final value = _decodeJson(response, endpoint);
+    if (value == null) return const {};
+    final covers = <String, Uri>{};
+    for (final entry in _map(value, endpoint).values) {
+      final card = _optionalMap(entry);
+      final id = _string(card?['bvid']);
+      if (id == null || !requested.contains(id)) continue;
+      final cover = _cover43Uri(card?['cover43']);
+      if (cover != null) covers[id] = cover;
+    }
+    return Map.unmodifiable(covers);
+  }
+
   /// Uses the desktop client's Web profile; [freshIndex] starts at zero.
   /// Later first-page requests refresh, while [loadMore] selects pagination.
   Future<ApiPage<ApiVideoSummary>> getDesktopRecommended({
@@ -3305,6 +3352,7 @@ final class BiliApiClient {
     int? maxBytes,
     _ReadAttemptBudget? attemptBudget,
     bool readOnly = true,
+    bool includeWebIdentity = true,
     String referer = 'https://www.bilibili.com/',
   }) async {
     if (context?.cancellation?.isCancelled ?? false) {
@@ -3316,7 +3364,8 @@ final class BiliApiClient {
     }
     context = boundedReadContext(context);
     _riskControl.check(uri, endpoint, epoch, _clock());
-    if (prepareWebRequests &&
+    if (includeWebIdentity &&
+        prepareWebRequests &&
         uri.host.endsWith('.bilibili.com') &&
         uri.path != '/x/frontend/finger/spi') {
       await _webDevice.ensure(context);
@@ -3346,8 +3395,10 @@ final class BiliApiClient {
           ? 'https://message.bilibili.com'
           : 'https://www.bilibili.com',
     };
-    final cookie = cookieJar.headerFor(uri, now: _clock());
-    if (cookie != null) headers['Cookie'] = cookie;
+    if (includeWebIdentity) {
+      final cookie = cookieJar.headerFor(uri, now: _clock());
+      if (cookie != null) headers['Cookie'] = cookie;
+    }
     final response = await _sendWithRetry(
       uri,
       endpoint,
@@ -3680,7 +3731,6 @@ final class BiliApiClient {
         _int(data['duration']) ??
         _parseDuration(_string(data['duration']) ?? '');
     final stat = _optionalMap(data['stat']);
-    final cover43 = _uri(data['cover43']);
     return ApiVideoSummary(
       access: parseVideoAccess(data),
       bvid: _requiredString(data['bvid'], endpoint),
@@ -3690,10 +3740,7 @@ final class BiliApiClient {
         endpoint,
       ).replaceAll(RegExp(r'<[^>]*>'), ''),
       coverUrl: _uri(data['pic']),
-      cover43Url:
-          cover43 != null && cover43.host.isNotEmpty && cover43.userInfo.isEmpty
-          ? cover43
-          : null,
+      cover43Url: _cover43Uri(data['cover43']),
       ownerName: _string(owner?['name']) ?? _string(data['author']) ?? '',
       ownerMid: _userMid(owner?['mid'] ?? data['mid']),
       ownerAvatarUrl: _uri(owner?['face'] ?? data['upic']),
@@ -3824,6 +3871,13 @@ final class BiliApiClient {
       return uri.replace(scheme: 'https');
     }
     return null;
+  }
+
+  static Uri? _cover43Uri(Object? value) {
+    final url = _uri(value);
+    return url != null && url.host.isNotEmpty && url.userInfo.isEmpty
+        ? url
+        : null;
   }
 
   static int _parseDuration(String value) {

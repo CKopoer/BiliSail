@@ -328,6 +328,12 @@ Protobuf 只引入所需消息及传递依赖，记录源提交、生成器版�
 
 直播进入已激活房间后使用 `api.live.bilibili.com` POST `/xlive/web-room/v1/index/roomEntryAction`，Web Cookie、查询参数 CSRF、JSON `room_id/platform`，单次上报不重放。关注直播使用同域 GET `/xlive/web-ucenter/user/following`，按 `totalPage` 显式分页、只展示在播主播。历史列表与搜索增加直播、专栏、文集和课程，保留真实业务身份与删除键；视频统计仅补齐点播条目。协议字段、PiliPlus 固定来源、账号与生命周期边界及未测项见[直播与多类型历史](validation/live-history-types-2026-11-07.md)。
 
+## 首页推荐 4:3 封面
+
+卡片已进入首页推荐视口布局、4:3 模式开启且列表未返回 `cover43` 时，使用 GET `api.bilibili.com/x/article/cards`。请求用逗号连接去重后的 `ids`（BV 号），每批最多 30 条，同一请求作用域内串行执行。使用 B 站首页 Referer 和访客 GET，无 WBI 签名、Cookie 或 App token。按响应 `data` 的各对象中实际返回的 `bvid` 匹配请求，只取有效的 `cover43` 地址。
+
+每批最多一次，超时 2 秒，JSON 响应上限 512 KiB。视口同一帧内挂载的卡片共享批次，成功结果包含有界的缺项缓存。推荐来源、身份、账号与挂载生命周期隔离请求；列表先加载，补取失败使用现有封面。游客抽查的 30 条请求均取得记录，其中 28 条有独立封面。[公开批量接口样例](https://api.bilibili.com/x/article/cards?ids=BV1YdZtYHE6d,BV1xx411c7mD)
+
 ## 首页推荐卡片曝光与点击
 
 「设置 → 推荐流 → 上报推荐卡片曝光和点击」默认开启，缺少有效开关值的旧设置也使用此默认值。已保存的开关选择在升级时继续生效，恢复默认会重新开启。设置加载完成且开关开启后，按产生卡片的推荐来源选择协议。
