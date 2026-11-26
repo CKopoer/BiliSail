@@ -2,6 +2,18 @@
 
 日期：2026-10-30。
 
+## 移动端音频中断（2026-11-26）
+
+其他应用取得音频焦点后，原生输出可能已经停止，而听视频按钮和媒体卡片仍按会话的播放意图显示暂停。此时第一次点击只会发送暂停，第二次才会重新播放。
+
+Android 和 iOS 现在共用进程内的音频焦点管理。播放会话在起播、手动继续时申请焦点。中断开始时，持有焦点的会话暂停原播放器，听视频按钮和系统媒体卡片随之切到可播放状态。用户点一次即可重新申请焦点并从原位置继续。系统拒绝申请时，会话保持暂停，可以再次尝试。
+
+短暂中断结束且系统允许恢复时，仅恢复仍在等待的原会话。用户暂停、定时暂停、播放权限转移、换源、账号变化或关闭页面会使原恢复请求失效。Android 永久失焦、耳机拔出以及 iOS 未给出恢复提示时保持暂停。系统要求暂时降低音量时，通过临时增益衰减约 6 dB，保留用户选择的音量。多个并发播放标签共享同一系统焦点。
+
+实现独立参考 PiliPlus 提交 `217fb54f51f6764176319bbdedab2a7522d75401` 的中断分类、耳机拔出和用户恢复语义。哔帆沿用已锁定的 pub.dev `audio_session 0.2.4`，接入现有播放会话。[PiliPlus 音频中断处理](https://github.com/bggRGjQaUbCoE/PiliPlus/blob/217fb54f51f6764176319bbdedab2a7522d75401/lib/services/audio_session.dart) · [平台适配](../../lib/core/platform/playback_audio_focus.dart) · [会话及媒体卡片回归](../../test/features/playback/playback_system_media_controller_test.dart)
+
+Android 16（API 36）模拟器运行 arm64 开发 Release 夹具。使用实际听视频控件、media_kit、本地合成音轨和 Android 媒体服务，另一个前台应用申请持久音频焦点并播放 PCM。系统媒体会话变为 `PAUSED`，回到播放应用后点击一次播放三角，原源代次的音频位置继续推进。测试后覆盖恢复普通入口开发 Release。iOS 中断开始、允许／不允许恢复的事件映射有自动回归，iPhone 真机、实体 Android 手机、蓝牙耳机及长时间锁屏仍待设备验收。[平台事件映射测试](../../test/core/platform/playback_audio_focus_test.dart)
+
 ## 行为与边界
 
 - Android 使用媒体通知／锁屏媒体会话；iOS、macOS 使用系统“正在播放”；Windows 使用 SMTC；Linux 使用桌面环境提供的 MPRIS 控制入口。系统决定实际显示的按钮和位置，不保证各系统都有单独的关闭按钮。

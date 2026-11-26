@@ -10,6 +10,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/app_failure.dart';
+import '../../../core/platform/playback_audio_focus.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
 import '../../../domain/recommendation_playback_context.dart';
@@ -42,6 +43,7 @@ class PlaybackSession extends ChangeNotifier {
     required this.repository,
     required this.progress,
     required this.accountScope,
+    this.audioFocus,
     this.cardPreviews,
     this.sponsorRepository,
     this.contentRepository,
@@ -109,6 +111,7 @@ class PlaybackSession extends ChangeNotifier {
         if (_scheduleNetworkRetry(failure.kind, failure.generation, media)) {
           return;
         }
+        unawaited(_releaseAudioFocus());
         error = contentTarget is OfflinePlaybackTarget
             ? '本地视频播放失败，文件可能无法解码或已不可访问'
             : failure.message;
@@ -118,6 +121,71 @@ class PlaybackSession extends ChangeNotifier {
   }
 
   final SponsorRepository? sponsorRepository;
+  final PlaybackAudioFocus? audioFocus;
+  int? _interruptedGeneration;
+  int _audioIntentRevision = 0;
+  bool _ducked = false;
+
+  void _onAudioFocus(PlaybackAudioEvent event) {
+    if (_closing || _disposed || !sourceMatchesAccount) return;
+    switch (event) {
+      case PlaybackAudioEvent.interrupt:
+        if (!_playbackAllowed || !_desiredPlaying) return;
+        _setDucked(false);
+        ++_audioIntentRevision;
+        _interruptedGeneration = _generation;
+        unawaited(_pause());
+      case PlaybackAudioEvent.stop:
+        unawaited(pause());
+      case PlaybackAudioEvent.endWithoutResume:
+        if (_interruptedGeneration == _generation) {
+          unawaited(_releaseAudioFocus());
+        }
+      case PlaybackAudioEvent.resume:
+        final interrupted = _interruptedGeneration;
+        if (interrupted == _generation &&
+            _playbackAllowed &&
+            !sleepTimer.elapsed) {
+          unawaited(play());
+        }
+      case PlaybackAudioEvent.duck:
+      case PlaybackAudioEvent.unduck:
+        _setDucked(event == PlaybackAudioEvent.duck);
+    }
+  }
+
+  void _setDucked(bool ducked) {
+    if (_ducked == ducked) return;
+    _ducked = ducked;
+    unawaited(_applyAudioGain());
+  }
+
+  Future<void> _releaseAudioFocus() async {
+    _interruptedGeneration = null;
+    _setDucked(false);
+    await audioFocus?.release(_onAudioFocus);
+  }
+
+  Future<bool> _requestAudioFocus(int generation) async {
+    final revision = _audioIntentRevision;
+    final granted = await audioFocus!.request(_onAudioFocus);
+    if (_disposed ||
+        _closing ||
+        revision != _audioIntentRevision ||
+        generation != _generation ||
+        !_desiredPlaying ||
+        !_playbackAllowed ||
+        !sourceMatchesAccount) {
+      return false;
+    }
+    if (!granted) {
+      _desiredPlaying = false;
+      await _releaseAudioFocus();
+      _notify();
+    }
+    return granted;
+  }
+
   final PlaybackRateMemory _rateMemory;
   final PlaybackVolumeMemory _volumeMemory;
   final PlaybackListeningMode _listeningMode;
@@ -957,6 +1025,7 @@ class PlaybackSession extends ChangeNotifier {
     }
     final generation = ++_generation;
     _cancelRecovery();
+    if (_interruptedGeneration != null) unawaited(_releaseAudioFocus());
     _reopening = retryMedia != null;
     if (retryMedia == null) _liveReadRetries.clear();
     final openBudget = startupBudget ?? const Duration(seconds: 35);
@@ -1233,13 +1302,22 @@ class PlaybackSession extends ChangeNotifier {
       );
       Future<void> openSource() async {
         if (!isCurrent()) return;
+        var playLive =
+            isLive &&
+            _playbackAllowed &&
+            _desiredPlaying &&
+            !sleepTimer.elapsed;
+        if (playLive && audioFocus != null) {
+          playLive = await _requestAudioFocus(generation);
+          if (!isCurrent()) return;
+        }
         if (isLive) _openingLiveGeneration = generation;
         await engine.open(
           source,
           OpenOptions(
             startPosition: resume,
             play:
-                isLive &&
+                playLive &&
                 _playbackAllowed &&
                 _desiredPlaying &&
                 !sleepTimer.elapsed,
@@ -1412,6 +1490,11 @@ class PlaybackSession extends ChangeNotifier {
       }
     } finally {
       if (_openingLiveGeneration == generation) _openingLiveGeneration = null;
+      if (isCurrent() &&
+          (error != null || !_desiredPlaying) &&
+          _interruptedGeneration == null) {
+        unawaited(_releaseAudioFocus());
+      }
       if (isCurrent() && _reopening) {
         _reopening = false;
         _notify();
@@ -1448,7 +1531,10 @@ class PlaybackSession extends ChangeNotifier {
             media,
             verifyRoom: target,
           );
-      if (!recovering) _desiredPlaying = false;
+      if (!recovering) {
+        _desiredPlaying = false;
+        unawaited(_releaseAudioFocus());
+      }
     }
     if (_ownerVisible &&
         commentsEnabled &&
@@ -2422,6 +2508,9 @@ class PlaybackSession extends ChangeNotifier {
   }
 
   Future<void> togglePlaying() async {
+    ++_audioIntentRevision;
+    final reclaimFocus = audioFocus != null && !_desiredPlaying;
+    _interruptedGeneration = null;
     _automaticRepeat = null;
     if (!_desiredPlaying || snapshots.value.phase == PlaybackPhase.ended) {
       sleepTimer.checkDeadline();
@@ -2460,12 +2549,15 @@ class PlaybackSession extends ChangeNotifier {
       if (_openingLiveGeneration == _generation) await _command(_syncPlayback);
       return;
     }
-    await _command(_syncPlayback);
+    await _command(() => _syncPlayback(forcePlay: reclaimFocus));
     await _saveProgress();
   }
 
   /// Idempotent system play commands must never toggle a playing source off.
   Future<void> play() async {
+    final reclaimFocus = audioFocus != null && !_desiredPlaying;
+    if (!_desiredPlaying) ++_audioIntentRevision;
+    _interruptedGeneration = null;
     _automaticRepeat = null;
     if (_disposed || _closing) return;
     sleepTimer.checkDeadline();
@@ -2485,11 +2577,17 @@ class PlaybackSession extends ChangeNotifier {
       if (_openingLiveGeneration == _generation) await _command(_syncPlayback);
       return;
     }
-    await _command(_syncPlayback);
+    await _command(() => _syncPlayback(forcePlay: reclaimFocus));
     await _saveProgress();
   }
 
   Future<void> pause() async {
+    ++_audioIntentRevision;
+    _interruptedGeneration = null;
+    await _pause();
+  }
+
+  Future<void> _pause() async {
     _automaticRepeat = null;
     _desiredPlaying = false;
     _cancelRecovery();
@@ -2506,6 +2604,7 @@ class PlaybackSession extends ChangeNotifier {
     }
     _playbackAllowed = allowed;
     if (!allowed) {
+      _interruptedGeneration = null;
       _cancelRecovery();
       _notify();
     }
@@ -2522,9 +2621,7 @@ class PlaybackSession extends ChangeNotifier {
       // even before the engine publishes its first snapshot for this source.
       sleepTimer.checkDeadline();
       if (sleepTimer.elapsed) _desiredPlaying = false;
-      return _playbackAllowed && _desiredPlaying && sourceMatchesAccount
-          ? engine.play()
-          : engine.pause();
+      return _syncOpeningLivePlayback(generation);
     }
     final operation = (_playbackCommands ?? Future<void>.value()).then((
       _,
@@ -2542,11 +2639,18 @@ class PlaybackSession extends ChangeNotifier {
         // play even when seeking out of EOF retains the previous play intent.
         if (_desiredPlaying &&
             (forcePlay || !engine.currentSnapshot.desiredPlaying)) {
-          await engine.play();
+          if (audioFocus == null || await _requestAudioFocus(generation)) {
+            await engine.play();
+          }
         } else if (!_desiredPlaying &&
             (forcePause || engine.currentSnapshot.desiredPlaying)) {
           await engine.pause();
         }
+      }
+      if (generation == _generation &&
+          (!_playbackAllowed || !_desiredPlaying) &&
+          _interruptedGeneration == null) {
+        await _releaseAudioFocus();
       }
     });
     final completed = operation.then(
@@ -2560,6 +2664,21 @@ class PlaybackSession extends ChangeNotifier {
       }),
     );
     return operation;
+  }
+
+  Future<void> _syncOpeningLivePlayback(int generation) async {
+    if (_playbackAllowed && _desiredPlaying && sourceMatchesAccount) {
+      if (audioFocus == null || await _requestAudioFocus(generation)) {
+        await engine.play();
+      }
+    } else {
+      await engine.pause();
+      if (generation == _generation &&
+          (!_desiredPlaying || !_playbackAllowed) &&
+          _interruptedGeneration == null) {
+        await _releaseAudioFocus();
+      }
+    }
   }
 
   int _seekRevision = 0;
@@ -2648,7 +2767,10 @@ class PlaybackSession extends ChangeNotifier {
             source == null) {
           return;
         }
-        await (control as AudioGainControl).setAudioGain(_audioGainFor(source));
+        final gain = _audioGainFor(source);
+        await (control as AudioGainControl).setAudioGain(
+          _ducked ? (gain - 6.02).clamp(-60, 30).toDouble() : gain,
+        );
       }),
     );
   }
@@ -3061,6 +3183,8 @@ class PlaybackSession extends ChangeNotifier {
     error = null;
     await engine.stop();
     if (generation != _generation || _disposed) return;
+    await _releaseAudioFocus();
+    if (generation != _generation || _disposed) return;
     danmaku.replaceEvents(const []);
     _notify();
   }
@@ -3081,6 +3205,7 @@ class PlaybackSession extends ChangeNotifier {
     }
 
     await attempt(stop);
+    await attempt(_releaseAudioFocus);
     await attempt(() async => _historyReporter?.close());
     _disposed = true;
     for (final subscription in _subscriptions) {

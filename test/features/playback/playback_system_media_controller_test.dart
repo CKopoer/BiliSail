@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:bilisail/core/platform/playback_audio_focus.dart';
 import 'package:bilisail/core/platform/system_media_controls.dart';
 import 'package:bilisail/features/playback/application/playback_manager.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
@@ -14,7 +17,9 @@ void main() {
   late PlaybackManager manager;
   late List<_Engine> engines;
   late int epoch;
+  PlaybackAudioFocus? focus;
   setUp(() {
+    focus = null;
     controls = _Controls();
     engines = [];
     epoch = 0;
@@ -25,6 +30,7 @@ void main() {
         engines.add(engine);
         final repository = SystemMediaFixtureRepository();
         return PlaybackSession(
+          audioFocus: focus,
           sleepTimer: sleepTimer,
           engine: engine,
           repository: repository,
@@ -47,6 +53,127 @@ void main() {
     await session.open(systemMediaVideo(tab), systemMediaPart);
     return session;
   }
+
+  group('mobile audio interruptions', () {
+    late StreamController<PlaybackAudioEvent> events;
+    late List<bool> activations;
+    late bool allowFocus;
+    setUp(() {
+      events = StreamController.broadcast(sync: true);
+      activations = [];
+      allowFocus = true;
+      focus = PlaybackAudioFocus(
+        events: events.stream,
+        abandonBeforeReclaim: true,
+        setActive: (active) async {
+          activations.add(active);
+          return !active || allowFocus;
+        },
+      );
+      addTearDown(events.close);
+    });
+
+    Future<void> send(PlaybackAudioEvent event) async {
+      events.add(event);
+      await Future<void>.delayed(Duration.zero);
+    }
+
+    test(
+      'external playback pauses listening and one tap reclaims the same source',
+      () async {
+        final session = await open('phone');
+        await session.setAudioOnly(true);
+        final engine = engines.single;
+        final opens = engine.opens;
+        engine.advance(const Duration(seconds: 8));
+        await send(PlaybackAudioEvent.stop);
+        expect(engine.snapshot.desiredPlaying, isFalse);
+        expect(controls.state?.playing, isFalse);
+        await session.togglePlaying();
+        expect(activations.last, isTrue);
+        expect(engine.opens, opens);
+        expect(session.snapshots.value.position, const Duration(seconds: 8));
+        expect(controls.state?.playing, isTrue);
+      },
+    );
+
+    test('resume hint only resumes a still interrupted owner', () async {
+      final one = await open('one');
+      final two = await open('two');
+      expect(activations, [true]);
+      await send(PlaybackAudioEvent.interrupt);
+      expect(engines.every((e) => !e.snapshot.desiredPlaying), isTrue);
+      await one.pause();
+      await send(PlaybackAudioEvent.resume);
+      expect(one.snapshots.value.desiredPlaying, isFalse);
+      expect(two.snapshots.value.desiredPlaying, isTrue);
+      await send(PlaybackAudioEvent.interrupt);
+      await two.togglePlaying();
+      expect(activations.sublist(activations.length - 2), [false, true]);
+      await two.pause();
+      await send(PlaybackAudioEvent.resume);
+      expect(controls.state?.playing, isFalse);
+    });
+
+    test(
+      'an iOS interruption end without resume respects a later manual play',
+      () async {
+        final session = await open('one');
+        await send(PlaybackAudioEvent.interrupt);
+        await send(PlaybackAudioEvent.endWithoutResume);
+        expect(controls.state?.playing, isFalse);
+        await session.togglePlaying();
+        await send(PlaybackAudioEvent.interrupt);
+        await session.togglePlaying();
+        await send(PlaybackAudioEvent.endWithoutResume);
+        expect(controls.state?.playing, isTrue);
+      },
+    );
+
+    test('denied focus stays paused and the next tap can retry', () async {
+      final session = await open('one');
+      await send(PlaybackAudioEvent.stop);
+      allowFocus = false;
+      await session.togglePlaying();
+      expect(controls.state?.playing, isFalse);
+      allowFocus = true;
+      await session.togglePlaying();
+      expect(controls.state?.playing, isTrue);
+    });
+
+    test('ducking changes gain without changing the selected volume', () async {
+      final session = await open('one');
+      await session.setVolume(70);
+      await send(PlaybackAudioEvent.duck);
+      expect(engines.single.gain, closeTo(-6.02, .01));
+      expect(controls.state?.playing, isTrue);
+      await session.setVolume(80);
+      await send(PlaybackAudioEvent.unduck);
+      expect(engines.single.gain, 0);
+      expect(session.snapshots.value.volume, 80);
+    });
+
+    test(
+      'a gain after a source change or account switch cannot start playback',
+      () async {
+        final session = await open('one');
+        await send(PlaybackAudioEvent.interrupt);
+        await session.open(
+          systemMediaVideo('next'),
+          systemMediaPart,
+          force: true,
+          desiredPlaying: false,
+        );
+        await send(PlaybackAudioEvent.resume);
+        expect(session.snapshots.value.desiredPlaying, isFalse);
+        await session.play();
+        await send(PlaybackAudioEvent.interrupt);
+        epoch++;
+        await send(PlaybackAudioEvent.resume);
+        expect(session.snapshots.value.desiredPlaying, isFalse);
+      },
+    );
+  });
 
   test(
     'metadata and commands reuse the same engine; play is idempotent',
@@ -333,7 +460,10 @@ class _Controls extends SystemMediaControls {
   }
 }
 
-class _Engine extends CardFakeEngine {
+class _Engine extends CardFakeEngine implements AudioGainControl {
+  double gain = 0;
+  @override
+  Future<void> setAudioGain(double gainDb) async => gain = gainDb;
   @override
   PlayerCapabilities get capabilities =>
       const PlayerCapabilities(externalAudio: true, externalAudioHeaders: true);
