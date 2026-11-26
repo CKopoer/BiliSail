@@ -386,7 +386,7 @@ void main() {
     expect(opened, 8);
   });
 
-  testWidgets('mixed Chinese and English title uses the full cover width', (
+  testWidgets('mixed Chinese and English title wraps beside the compact menu', (
     tester,
   ) async {
     const video = VideoSummary(
@@ -398,9 +398,9 @@ void main() {
     );
     const menu = VideoCardMenu(actions: [VideoCardMenuAction.removeHistory]);
     for (final (width, query, wordFits) in [
-      (260.0, '', false),
-      (270.0, '', true),
-      (270.0, 'Domane', true),
+      (282.0, '', false),
+      (292.0, '', true),
+      (292.0, 'Domane', true),
     ]) {
       await tester.pumpWidget(
         _app(width: width, video: video, query: query, menu: menu),
@@ -430,8 +430,11 @@ void main() {
       final slTop = wordBox('SL').top;
       expect(domaneTop, wordFits ? trekTop : greaterThan(trekTop));
       expect(slTop, wordFits ? greaterThan(domaneTop) : domaneTop);
+      final menuWidth = tester
+          .getSize(find.byKey(const ValueKey('video-card-title-menu')))
+          .width;
       expect(
-        paragraph.size.width,
+        paragraph.size.width + menuWidth,
         tester.getSize(find.byType(AspectRatio)).width,
       );
       expect(paragraph.didExceedMaxLines, isFalse);

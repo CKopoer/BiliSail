@@ -26,16 +26,11 @@ void main() {
               .first;
           expect(tester.getSize(cover(live)), tester.getSize(cover(video)));
           expect(tester.getSize(cover(live)).width, width - 2);
-          final liveTitle = tester.widget<HighlightedText>(
-            find
-                .descendant(of: live, matching: find.byType(HighlightedText))
-                .first,
-          );
-          final videoTitle = tester.widget<HighlightedText>(
-            find
-                .descendant(of: video, matching: find.byType(HighlightedText))
-                .first,
-          );
+          Finder title(Finder card) => find
+              .descendant(of: card, matching: find.byType(HighlightedText))
+              .first;
+          final liveTitle = tester.widget<HighlightedText>(title(live));
+          final videoTitle = tester.widget<HighlightedText>(title(video));
           expect(liveTitle.style, videoTitle.style);
           expect(liveTitle.maxLines, videoTitle.maxLines);
           for (final text in ['历史作者', '昨天']) {
@@ -56,11 +51,8 @@ void main() {
           expect(liveMenu.size, videoMenu.size);
           expect(liveMenu.right, tester.getRect(cover(live)).right);
           expect(videoMenu.right, tester.getRect(cover(video)).right);
-          expect(liveMenu.top, videoMenu.top);
-          expect(
-            liveMenu.center.dy,
-            tester.getCenter(find.text('昨天').first).dy,
-          );
+          expect(liveMenu.topLeft, tester.getTopRight(title(live)));
+          expect(videoMenu.topLeft, tester.getTopRight(title(video)));
           expect(tester.takeException(), isNull);
         },
       );

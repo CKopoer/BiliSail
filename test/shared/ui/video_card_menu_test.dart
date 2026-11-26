@@ -462,7 +462,7 @@ void main() {
     },
   );
   testWidgets(
-    'desktop card menu stays hidden at narrow widths until hover and remains open outside the card',
+    'desktop title menu stays hidden at narrow widths until hover and remains open outside the card',
     (tester) async {
       _setWindow(tester, const Size(320, 500));
       var opens = 0;
@@ -511,8 +511,7 @@ void main() {
           author: (_) => authors++,
         ),
       );
-      // Card, cover shortcut, author, then menu in reading order.
-      for (var i = 0; i < 4; i++) {
+      for (var i = 0; i < 3; i++) {
         await tester.sendKeyEvent(LogicalKeyboardKey.tab);
         await tester.pump();
       }
@@ -616,7 +615,7 @@ void main() {
     },
   );
   testWidgets(
-    'recommendation alone configures a menu in the ordinary video feed',
+    'recommendation alone configures title menu in the ordinary video feed',
     (tester) async {
       final repository = _Feed();
       await tester.pumpWidget(
