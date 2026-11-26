@@ -197,7 +197,7 @@ private final class SubmittedDrawable: NSObject, CAMetalDrawable {
   }
   #endif
   func present() { base.present(); submitted() }
-  func present(atTime time: CFTimeInterval) { base.present(atTime: time); submitted() }
+  func present(at time: CFTimeInterval) { base.present(at: time); submitted() }
   func present(afterMinimumDuration duration: CFTimeInterval) {
     #if targetEnvironment(simulator)
     base.present()

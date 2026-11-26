@@ -62,53 +62,60 @@ Future<void> main() async {
     }
     final policy = MediaRequestPolicy();
     const audio = String.fromEnvironment('APPLE_COMPANION_AUDIO');
+    success = true;
     for (final entry in samples.entries.where(
       (value) => value.value.isNotEmpty,
     )) {
-      stdout.writeln('APPLE_MEDIA opening=${entry.key} display=$transfer');
-      final video = MediaTrack(
-        uri: Uri.parse(entry.value),
-        requestPolicy: policy,
-      );
-      final source = audio.isEmpty || entry.key == 'p5'
-          ? ProgressiveSource(video)
-          : DashPairSource(
-              video: video,
-              audio: MediaTrack(uri: Uri.parse(audio), requestPolicy: policy),
-            );
-      await engine.open(source, const OpenOptions(play: false, volume: 0));
-      final config = await engine.inspectNativeOutputConfiguration();
-      stdout.writeln('APPLE_MEDIA output=$config');
-      if (config['videoOutput'] != 'gpu-next' ||
-          config['nativeHdrSurface'] != (transfer == 'pq') ||
-          config['targetTransfer'] != transfer) {
-        throw StateError('Unverified Metal output');
+      try {
+        stdout.writeln('APPLE_MEDIA opening=${entry.key} display=$transfer');
+        final video = MediaTrack(
+          uri: Uri.parse(entry.value),
+          requestPolicy: policy,
+        );
+        final source = audio.isEmpty || entry.key == 'p5'
+            ? ProgressiveSource(video)
+            : DashPairSource(
+                video: video,
+                audio: MediaTrack(uri: Uri.parse(audio), requestPolicy: policy),
+              );
+        await engine.open(source, const OpenOptions(play: false, volume: 0));
+        final config = await engine.inspectNativeOutputConfiguration();
+        stdout.writeln('APPLE_MEDIA output=$config');
+        if (config['videoOutput'] != 'gpu-next' ||
+            config['nativeHdrSurface'] != (transfer == 'pq') ||
+            config['targetTransfer'] != transfer) {
+          throw StateError('Unverified Metal output');
+        }
+        if ((entry.key == 'p5' || entry.key == 'p8') &&
+            config['videoOutputMatrix'] != 'dolbyvision') {
+          throw StateError('Missing Dolby Vision renderer input');
+        }
+        await engine.seek(const Duration(seconds: 1));
+        if (engine.currentSnapshot.desiredPlaying) {
+          throw StateError('Seek resumed a paused source');
+        }
+        await engine.play();
+        final position = engine.currentSnapshot.position;
+        for (
+          var i = 0;
+          i < 40 && engine.currentSnapshot.position <= position;
+          i++
+        ) {
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+        }
+        if (engine.currentSnapshot.position <= position ||
+            !engine.inspectDiagnostics().hasDecodedAudio) {
+          throw StateError('Audio or timeline did not resume');
+        }
+        await engine.pause();
+        stdout.writeln('APPLE_MEDIA_SAMPLE_PASSED ${entry.key}');
+      } on Object catch (error, stack) {
+        success = false;
+        stderr.writeln('APPLE_MEDIA_SAMPLE_FAILED ${entry.key} $error\n$stack');
       }
-      if ((entry.key == 'p5' || entry.key == 'p8') &&
-          config['videoOutputMatrix'] != 'dolbyvision') {
-        throw StateError('Missing Dolby Vision renderer input');
-      }
-      await engine.seek(const Duration(seconds: 1));
-      if (engine.currentSnapshot.desiredPlaying) {
-        throw StateError('Seek resumed a paused source');
-      }
-      await engine.play();
-      final position = engine.currentSnapshot.position;
-      for (
-        var i = 0;
-        i < 40 && engine.currentSnapshot.position <= position;
-        i++
-      ) {
-        await Future<void>.delayed(const Duration(milliseconds: 50));
-      }
-      if (engine.currentSnapshot.position <= position ||
-          !engine.inspectDiagnostics().hasDecodedAudio) {
-        throw StateError('Audio or timeline did not resume');
-      }
-      await engine.pause();
     }
-    success = true;
   } on Object catch (error, stack) {
+    success = false;
     stderr.writeln('APPLE_MEDIA_FAILED $error\n$stack');
   } finally {
     await engine.dispose().timeout(const Duration(seconds: 15));
