@@ -81,6 +81,8 @@ final class AppleVideoSurface: NSObject, FlutterPlatformViewFactory {
         guard let id = args?["id"] as? NSNumber, let layer = self.layers[id.int64Value],
               let transfer = args?["transfer"] as? String else { result(false); return }
         result(layer.matchesPresented(transfer))
+      case "describe":
+        result((call.arguments as? NSNumber).flatMap { self.layers[$0.int64Value]?.outputDescription })
       case "release":
         if let id = call.arguments as? NSNumber {
           self.layers.removeValue(forKey: id.int64Value)?.removeFromSuperlayer()
@@ -116,6 +118,13 @@ private final class PlaybackMetalLayer: CAMetalLayer {
       return "pq"
     }
     return nil
+  }
+
+  var outputDescription: String {
+    lock.lock()
+    let presented = presentedTransfer ?? "pending"
+    lock.unlock()
+    return "attached=\(superlayer != nil) format=\(pixelFormat.rawValue) transfer=\(transfer ?? "unknown") presented=\(presented)"
   }
 
   func matchesPresented(_ expected: String) -> Bool {

@@ -148,6 +148,10 @@ final class NativeHdrOutput {
       );
       set('target-prim', transfer == 'srgb' ? 'bt.709' : 'bt.2020');
       set('target-trc', transfer);
+      if (usesAppleMetalOutput && transfer == 'srgb') {
+        // Core Animation consumes the piecewise transfer tagged on the layer.
+        set('treat-srgb-as-power22', 'no');
+      }
       set('target-colorspace-hint', 'yes');
       if (usesAppleMetalOutput) mountAppleLayer?.call(target);
       set('vo', 'gpu-next');
@@ -199,12 +203,15 @@ final class NativeHdrOutput {
         }
         await Future<void>.delayed(const Duration(milliseconds: 25));
       }
+      final surface = usesAppleMetalOutput
+          ? await _channel.invokeMethod<String>('describe', id)
+          : null;
       throw StateError(
         'HDR swapchain unavailable '
         '(vo=${player.getProperty('current-vo')}, '
         'matrix=${player.getProperty('video-out-params/colormatrix')}, '
         'source=${player.getProperty('video-out-params/gamma')}, '
-        'target=${player.getProperty('video-target-params/gamma')})',
+        'target=${player.getProperty('video-target-params/gamma')}, layer=$surface)',
       );
     } on Object catch (error) {
       debugPrint('HDR output unavailable: $error');
