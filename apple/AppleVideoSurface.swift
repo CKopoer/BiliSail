@@ -33,7 +33,9 @@ final class AppleVideoSurface: NSObject, FlutterPlatformViewFactory {
   static func register(registrar: FlutterPluginRegistrar) {
     let factory = AppleVideoSurface { [weak registrar] _ in
       guard let screen = registrar?.viewController?.viewIfLoaded?.window?.windowScene?.screen else { return nil }
+      #if !targetEnvironment(simulator)
       if #available(iOS 16.0, *), screen.potentialEDRHeadroom > 1 { return "pq" }
+      #endif
       return "srgb"
     }
     registrar.register(factory, withId: "bilisail/hdr_video")
@@ -80,7 +82,7 @@ final class AppleVideoSurface: NSObject, FlutterPlatformViewFactory {
       case "matches":
         guard let id = args?["id"] as? NSNumber, let layer = self.layers[id.int64Value],
               let transfer = args?["transfer"] as? String else { result(false); return }
-        result(layer.matchesPresented(transfer))
+        result(layer.isInWindow && layer.matchesPresented(transfer))
       case "attached":
         result((call.arguments as? NSNumber).flatMap { self.layers[$0.int64Value]?.isInWindow } ?? false)
       case "describe":
@@ -111,6 +113,7 @@ final class AppleVideoSurface: NSObject, FlutterPlatformViewFactory {
 private final class PlaybackMetalLayer: CAMetalLayer {
   private let lock = NSLock()
   private var presentedTransfer: String?
+  private var submittedSDR = false
   private var observedDrawables = 0
   private var droppedDrawables = 0
   weak var host: MetalHost?
@@ -129,7 +132,7 @@ private final class PlaybackMetalLayer: CAMetalLayer {
   var outputDescription: String {
     lock.lock()
     let presented = presentedTransfer ?? "pending"
-    let counts = "\(observedDrawables)/\(droppedDrawables)"
+    let counts = "\(observedDrawables)/\(droppedDrawables) submittedSDR=\(submittedSDR)"
     lock.unlock()
     return "attached=\(isInWindow) observed/dropped=\(counts) format=\(pixelFormat.rawValue) transfer=\(transfer ?? "unknown") presented=\(presented)"
   }
@@ -138,7 +141,7 @@ private final class PlaybackMetalLayer: CAMetalLayer {
     guard transfer == expected else { return false }
     lock.lock()
     defer { lock.unlock() }
-    return presentedTransfer == expected
+    return presentedTransfer == expected || (expected == "srgb" && submittedSDR)
   }
 
   var sourceSize: CGSize = .zero
@@ -150,14 +153,52 @@ private final class PlaybackMetalLayer: CAMetalLayer {
       lock.lock()
       observedDrawables += 1
       lock.unlock()
+      if space == "srgb" {
+        // Metal simulators do not implement presentation timestamps. Track the
+        // swapchain's actual present call for SDR, including paused playback.
+        return SubmittedDrawable(drawable) { [weak self] in
+          guard let self = self else { return }
+          self.lock.lock()
+          self.submittedSDR = true
+          self.lock.unlock()
+        }
+      }
+      #if !targetEnvironment(simulator)
       drawable.addPresentedHandler { [weak self] frame in
         guard let self = self else { return }
         self.lock.lock()
         if frame.presentedTime > 0 { self.presentedTransfer = space } else { self.droppedDrawables += 1 }
         self.lock.unlock()
       }
+      #endif
     }
     return drawable
+  }
+}
+
+// MoltenVK presents from its Metal command buffer's scheduled handler. Forward
+// the first SDR drawable to Core Animation and observe precisely that handoff.
+private final class SubmittedDrawable: NSObject, CAMetalDrawable {
+  private let base: CAMetalDrawable
+  private let submitted: () -> Void
+
+  init(_ base: CAMetalDrawable, submitted: @escaping () -> Void) {
+    self.base = base
+    self.submitted = submitted
+  }
+
+  var texture: MTLTexture { base.texture }
+  var layer: CAMetalLayer { base.layer }
+  var drawableID: Int { base.drawableID }
+  var presentedTime: CFTimeInterval { base.presentedTime }
+  func addPresentedHandler(_ block: @escaping MTLDrawablePresentedHandler) {
+    base.addPresentedHandler(block)
+  }
+  func present() { base.present(); submitted() }
+  func present(atTime time: CFTimeInterval) { base.present(atTime: time); submitted() }
+  func present(afterMinimumDuration duration: CFTimeInterval) {
+    base.present(afterMinimumDuration: duration)
+    submitted()
   }
 }
 
