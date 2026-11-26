@@ -11,7 +11,7 @@ import UIKit
 // The player owns the Metal swapchain. Flutter only moves its layer between
 // platform views when the presentation changes.
 final class AppleVideoSurface: NSObject, FlutterPlatformViewFactory {
-  private var layers: [Int64: CAMetalLayer] = [:]
+  private var layers: [Int64: PlaybackMetalLayer] = [:]
   private let displayTransfer: (Int64) -> String?
 
   #if os(macOS)
@@ -61,7 +61,7 @@ final class AppleVideoSurface: NSObject, FlutterPlatformViewFactory {
               let transfer = self.displayTransfer(view.int64Value),
               transfer == args?["transfer"] as? String,
               let device = MTLCreateSystemDefaultDevice() else { result(nil); return }
-        let layer = CAMetalLayer()
+        let layer = PlaybackMetalLayer()
         layer.device = device
         // Start with SDR. Only a successful Vulkan colorspace negotiation can
         // change this to a tagged high precision HDR swapchain.
@@ -77,7 +77,7 @@ final class AppleVideoSurface: NSObject, FlutterPlatformViewFactory {
         result(id)
       case "matches":
         guard let id = args?["id"] as? NSNumber, let layer = self.layers[id.int64Value],
-              let transfer = args?["transfer"] as? String else { result(false); return }
+              let transfer = args?["transfer"] as? String, layer.didPresent else { result(false); return }
         let name = layer.colorspace?.name
         if transfer == "pq", #available(iOS 16.0, macOS 10.15, *) {
           let deep = [.rgb10a2Unorm, .bgr10a2Unorm, .rgba16Float].contains(layer.pixelFormat)
@@ -107,6 +107,38 @@ final class AppleVideoSurface: NSObject, FlutterPlatformViewFactory {
     MetalHost(target: (args as? NSNumber).flatMap { layers[$0.int64Value] })
   }
   #endif
+}
+
+private final class PlaybackMetalLayer: CAMetalLayer {
+  private let lock = NSLock()
+  private var presented = false
+  var didPresent: Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    return presented
+  }
+
+  override var drawableSize: CGSize {
+    get { super.drawableSize }
+    set {
+      // MoltenVK briefly requests a 1x1 surface while replacing a swapchain.
+      // Reusing that extent for the paused frame loses its real dimensions.
+      if newValue.width > 1 && newValue.height > 1 { super.drawableSize = newValue }
+    }
+  }
+
+  override func nextDrawable() -> CAMetalDrawable? {
+    let drawable = super.nextDrawable()
+    if !didPresent {
+      drawable?.addPresentedHandler { [weak self] frame in
+        guard let self = self, frame.presentedTime > 0 else { return }
+        self.lock.lock()
+        self.presented = true
+        self.lock.unlock()
+      }
+    }
+    return drawable
+  }
 }
 
 #if os(macOS)

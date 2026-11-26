@@ -55,6 +55,7 @@ final class NativeHdrOutput {
   final int viewId;
   final VideoDimensions dimensions;
   final String transfer;
+  bool verified = false;
   final Map<String, String> _original;
 
   static Future<String?> supportedTransfer(int viewId) async {
@@ -76,6 +77,7 @@ final class NativeHdrOutput {
     String transfer, {
     required bool dolby,
     required String profile,
+    void Function(NativeHdrOutput)? mountAppleLayer,
   }) async {
     int? id;
     try {
@@ -147,6 +149,7 @@ final class NativeHdrOutput {
       set('target-prim', transfer == 'srgb' ? 'bt.709' : 'bt.2020');
       set('target-trc', transfer);
       set('target-colorspace-hint', 'yes');
+      if (usesAppleMetalOutput) mountAppleLayer?.call(target);
       set('vo', 'gpu-next');
       // A requested PQ target alone does not prove that the presentation
       // surface negotiated PQ. Inspect the actual output before revealing it.
@@ -186,6 +189,7 @@ final class NativeHdrOutput {
             await Future<void>.delayed(const Duration(milliseconds: 25));
             continue;
           }
+          target.verified = true;
           return target;
         }
         // Some Android MediaCodec/Vulkan combinations cannot import HDR frames.

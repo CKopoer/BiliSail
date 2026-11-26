@@ -1,0 +1,89 @@
+name: Apple media playback
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/apple-edr-joc]
+    paths:
+      - '.github/workflows/apple-playback.yml'
+      - 'apple/**'
+      - 'integration_test/apple_native_hdr_test.dart'
+      - 'packages/bili_player/lib/src/native_hdr_output.dart'
+      - 'pubspec.lock'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: apple-media-test-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  exercise:
+    runs-on: macos-15
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos, ios-simulator]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: CKopoer/libmpv-darwin-build
+          ref: 8c14f3c7e6367ce425667759724a5a20b66b3a8e
+          path: build/darwin
+      - uses: actions/checkout@v4
+        with:
+          repository: mpv-player/mpv
+          ref: 41f6a645068483470267271e1d09966ca3b9f413
+          path: build/mpv
+      - name: Fetch the checked Dolby sample
+        run: |
+          mkdir -p build/fixtures
+          cd build/fixtures
+          curl --fail --retry 2 --silent --show-error -L --range 0-33554431 --max-time 180 'https://media.developer.dolby.com/DolbyVision_Atmos/mp4/iOS_P5_GlassBlowing2_1920x1080%4059.94fps_15200kbps.mp4' -o p5-joc.mp4
+          echo '2e1a62c39519ccef267353672aff6c2985b7ef145739fb60b56029fa91ec6fac  p5-joc.mp4' | shasum -a 256 -c -
+      - name: Probe compressed audio on a booted iPhone simulator
+        if: matrix.platform == 'ios-simulator'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 45861827586 -n slice-sim-arm -D build/sim
+          cd build
+          xcrun --sdk iphonesimulator clang -target arm64-apple-ios15-simulator -fobjc-arc -I mpv/include darwin/bilisail/joc_probe.m sim/Mpv -framework AVFoundation -framework CoreMedia -framework Foundation -o joc-probe
+          install_name_tool -change '@rpath/Mpv.framework/Mpv' "$PWD/sim/Mpv" joc-probe
+          codesign --force --sign - sim/Mpv
+          codesign --force --sign - joc-probe
+          device=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; print(next(i["udid"] for runtime, group in reversed(list(json.load(sys.stdin)["devices"].items())) if "iOS" in runtime for i in group if "iPhone" in i["name"]))')
+          xcrun simctl boot "$device"
+          xcrun simctl bootstatus "$device" -b
+          xcrun simctl spawn "$device" "$PWD/joc-probe" "$PWD/fixtures/p5-joc.mp4"
+      - if: matrix.platform == 'macos'
+        uses: ./.github/actions/restore-flutter
+      - if: matrix.platform == 'macos'
+        uses: ./.github/actions/restore-mux
+        with:
+          target: macos-arm64
+      - name: Build and exercise the macOS application surface
+        if: matrix.platform == 'macos'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pwsh -NoProfile -File tool/build-download-mux.ps1 -Target macos-arm64
+          flutter pub get --enforce-lockfile
+          gh run download 45861827586 -n darwin-edr -D build/verified
+          echo '0b1923de8538d57c0a67a193b9a6a9c1ac0b00924e1f356b2c8fb753bf7803a2  build/verified/bilisail-edr-macos.tar.gz' | shasum -a 256 -c -
+          mkdir -p build/verified/framework
+          tar -xzf build/verified/bilisail-edr-macos.tar.gz -C build/verified/framework
+          cat >> pubspec.yaml <<'YAML'
+          hooks:
+            user_defines:
+              media_kit:
+                source: local
+                library-directory: build/verified/framework/
+          YAML
+          if ! swift -e 'import Metal; import Darwin; exit(MTLCreateSystemDefaultDevice() == nil ? 1 : 0)'; then
+            echo 'Runner has no Metal device. Compiling the application; EDR output requires a physical display.' >> "$GITHUB_STEP_SUMMARY"
+            flutter build macos --debug --target integration_test/apple_native_hdr_test.dart
+            exit 0
+          fi
+          python3 -m http.server 18085 --bind 127.0.0.1 --directory build/fixtures >/tmp/bilisail-fixture-server.log 2>&1 &
+          flutter test -d macos integration_test/apple_native_hdr_test.dart --dart-define=APPLE_P5=http://127.0.0.1:18085/p5-joc.mp4

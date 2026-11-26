@@ -166,7 +166,7 @@ final class MediaKitVideoOutput
   ({int view, String? transfer})? _hdrDisplay;
   int? _viewId;
 
-  bool get hasNativeSurface => _hdr.value != null;
+  bool get hasNativeSurface => _hdr.value?.verified == true;
   bool get hasHdrOutput => hasNativeSurface && _hdr.value?.transfer != 'srgb';
   bool get hasHdrSource => _hdrSource;
 
@@ -282,6 +282,9 @@ final class MediaKitVideoOutput
     if (size == null || size.width < 2 || size.height < 2) return;
     _hdrDisplay = display;
     final old = _hdr.value;
+    if (usesAppleMetalOutput && (old != null || transfer != null)) {
+      _frameReady.value = false;
+    }
     if (old != null) {
       try {
         await old.restore(player);
@@ -297,8 +300,10 @@ final class MediaKitVideoOutput
         transfer,
         dolby: _hdrDolby,
         profile: _hdrProfile,
+        mountAppleLayer: (target) => _hdr.value = target,
       );
     }
+    if (usesAppleMetalOutput && !_hdrRetired) _refreshReadiness?.call();
   }
 
   Future<void> retireHdr() async {
@@ -720,11 +725,19 @@ final class MediaKitVideoOutput
                   ),
                 ),
               ),
-              builder: (_, ready, child) => _VideoFrameMask(
-                key: const ValueKey('video-first-frame-mask'),
-                ready: ready,
-                child: child,
-              ),
+              builder: (_, ready, child) => usesAppleMetalOutput
+                  ? Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        ?child,
+                        if (!ready) const ColoredBox(color: Color(0xff000000)),
+                      ],
+                    )
+                  : _VideoFrameMask(
+                      key: const ValueKey('video-first-frame-mask'),
+                      ready: ready,
+                      child: child,
+                    ),
             );
     },
   );
