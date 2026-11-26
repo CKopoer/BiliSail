@@ -45,7 +45,9 @@ final class MediaKitVideoOutput
   bool _selectingHdr = false;
 
   Future<void> get videoFramePresented =>
-      _presentation ?? Future.error(StateError('No video output is bound.'));
+      usesAppleMetalOutput && hasNativeSurface && _sourceFrame != null
+      ? _sourceFrame!.future
+      : _presentation ?? Future.error(StateError('No video output is bound.'));
 
   @override
   ValueListenable<bool> get frameReady => _frameReady;
@@ -68,6 +70,9 @@ final class MediaKitVideoOutput
       final rect = controller.rect.value;
       final state = controller.player.state;
       // Match Video's visibility gate and its mask over the initial 1px texture.
+      if (usesAppleMetalOutput && hasNativeSurface) {
+        return !_selectingHdr && _sourceFrame?.isCompleted == true;
+      }
       return rendered &&
           !_selectingHdr &&
           controller.id.value != null &&
@@ -161,7 +166,8 @@ final class MediaKitVideoOutput
   ({int view, String? transfer})? _hdrDisplay;
   int? _viewId;
 
-  bool get hasHdrOutput => _hdr.value != null;
+  bool get hasNativeSurface => _hdr.value != null;
+  bool get hasHdrOutput => hasNativeSurface && _hdr.value?.transfer != 'srgb';
   bool get hasHdrSource => _hdrSource;
 
   @override
@@ -200,7 +206,7 @@ final class MediaKitVideoOutput
 
   void identifyHdrSource({required bool hinted}) {
     final player = _player;
-    if ((!Platform.isAndroid && !Platform.isWindows) ||
+    if ((!Platform.isAndroid && !Platform.isWindows && !usesAppleMetalOutput) ||
         player == null ||
         _hdrRetired ||
         _disposed) {
@@ -424,6 +430,7 @@ final class MediaKitVideoOutput
         when _usesAndroidViewport) {
       return size;
     }
+    if (_hdr.value case final target?) return target.dimensions;
     final rect = _controller.value?.rect.value;
     return rect == null
         ? null
@@ -449,7 +456,9 @@ final class MediaKitVideoOutput
     // Predidit completes its Android "first frame" on a dimensions change.
     // A SurfaceTexture pre-sized to the decoded dimensions skips that event.
     // Presentation waits separately for this generation's consumed buffer.
-    if (!Platform.isAndroid) await controller.waitUntilFirstFrameRendered;
+    if (!Platform.isAndroid && !(usesAppleMetalOutput && hasNativeSurface)) {
+      await controller.waitUntilFirstFrameRendered;
+    }
     Future<void> pending;
     do {
       pending = _androidSurfaceSize;
@@ -621,6 +630,7 @@ final class MediaKitVideoOutput
   void confirmSourceFrame() {
     final frame = _sourceFrame;
     if (frame != null && !frame.isCompleted) frame.complete();
+    if (usesAppleMetalOutput && hasNativeSurface) _refreshReadiness?.call();
   }
 
   void resetSource() {
@@ -721,7 +731,10 @@ final class MediaKitVideoOutput
 
   @override
   void attach(Object owner) {
-    if ((!Platform.isWindows && !Platform.isAndroid) || _disposed) return;
+    if ((!Platform.isWindows && !Platform.isAndroid && !usesAppleMetalOutput) ||
+        _disposed) {
+      return;
+    }
     _viewportOwner = owner;
     _watchHdrDisplay();
     _viewportLayout = null;

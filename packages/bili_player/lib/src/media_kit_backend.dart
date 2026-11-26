@@ -20,6 +20,7 @@ import 'dolby_audio_output.dart';
 import 'android_dolby_backend.dart';
 import 'native_video_frame_queue.dart';
 import 'native_video_color.dart';
+import 'native_hdr_output.dart';
 import 'video_dimensions.dart';
 import 'media_kit_video_output.dart';
 import 'video_output.dart';
@@ -73,6 +74,7 @@ final class MediaKitBackend
   bool _requiresVideoColorMapping = false;
   bool _embeddedGpuNext = false;
   bool _hdrHint = false;
+  String? _appleCodecHint;
   OpenOptions? _lastOptions;
   int _generation = 0;
   int _seekRevision = 0;
@@ -461,6 +463,7 @@ final class MediaKitBackend
     final options = plan.options;
     final video = plan.media;
     _hdrHint = video.isHdr;
+    _appleCodecHint = video.codec;
     final audio = plan.audio;
     _lastOptions = options;
     final watch = Stopwatch()..start();
@@ -696,14 +699,16 @@ final class MediaKitBackend
         _embeddedGpuNext =
             (Platform.isWindows || Platform.isLinux) &&
             player.getProperty('user-data/bilisail-renderer') == '"gpu-next"';
-        _requiresVideoColorMapping = configureNativeVideoColor(
-          embeddedGpuNext: _embeddedGpuNext,
-          read: player.getProperty,
-          write: player.setProperty,
-          isAndroid: Platform.isAndroid,
-          onAndroidDolbyVision: _videoOutput.enableAndroidGpuNext,
-          codecHint: video.codec,
-        );
+        _requiresVideoColorMapping =
+            !usesAppleMetalOutput &&
+            configureNativeVideoColor(
+              embeddedGpuNext: _embeddedGpuNext,
+              read: player.getProperty,
+              write: player.setProperty,
+              isAndroid: Platform.isAndroid,
+              onAndroidDolbyVision: _videoOutput.enableAndroidGpuNext,
+              codecHint: video.codec,
+            );
         await operation.wait(
           _videoOutput.prepareAndroidSurface(player.getProperty),
         );
@@ -791,6 +796,25 @@ final class MediaKitBackend
     _enterStage(NativeReadinessStage.videoOutput);
     // Decoder metadata alone does not establish a native video output.
     // mpv renders a video frame while paused; no audio probe is needed.
+    if (usesAppleMetalOutput && !_videoOutput.hasNativeSurface) {
+      _videoOutput.identifyHdrSource(hinted: _hdrHint);
+      await operation.wait(_videoOutput.presentHdrIfSupported());
+      if (!_videoOutput.hasNativeSurface) {
+        try {
+          _requiresVideoColorMapping = configureNativeVideoColor(
+            read: player.getProperty,
+            write: player.setProperty,
+            codecHint: _appleCodecHint,
+          );
+        } on Object {
+          throw PlayerFailure(
+            PlayerFailureKind.unsupportedVideoColor,
+            '当前显示面无法正确呈现此杜比视界视频',
+            generation,
+          );
+        }
+      }
+    }
     await operation.wait(_videoOutput.waitForDecodedOutput());
     bool colorReady(String? driver, String? matrix) {
       if (Platform.isAndroid) return driver == 'gpu-next';
@@ -819,6 +843,7 @@ final class MediaKitBackend
     );
     final outputMatrix = player.getProperty('video-out-params/colormatrix');
     final unmappedDolby =
+        !_videoOutput.hasNativeSurface &&
         !_requiresVideoColorMapping &&
         outputMatrix == 'dolbyvision' &&
         (profile.isEmpty || profile == '5');
