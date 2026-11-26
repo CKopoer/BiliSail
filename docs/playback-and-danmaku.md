@@ -2,7 +2,7 @@
 
 当前组合根直接为各播放标签和预览创建 MediaKitEngine。源选择、分轨配置、首帧与渲染生命周期见 [Predidit 播放链路](validation/predidit-playback-2026-11-23.md)。
 
-Windows 和 Android 按当前显示设备选择 HDR 视频面，由播放器处理杜比视界 RPU，详见 [Windows 与 Android 原生 HDR 输出](validation/windows-android-native-hdr.md)。
+Windows 和 Android 按当前显示设备选择 HDR 视频面，由播放器处理杜比视界 RPU，详见 [Windows 与 Android 原生 HDR 输出](validation/windows-android-native-hdr.md)。macOS 和 iOS 使用原生 Metal 图层，显示面协商和压缩音频原型见 [Apple EDR 与 JOC](validation/apple-edr-joc.md)。
 
 2026-11-22 对齐 PiliPlus 的直播启播流程。房间资料和播放地址并行获取。HLS／HTTP-FLV 获得原生加载确认后按当前播放意图开始，随后确认音视频与首帧。默认画质、同画质切流和首帧前暂停规则见[直播选择器与启播](validation/live-stream-audio-preferences-2026-10-30.md#直播启播与默认行为2026-11-22)。
 

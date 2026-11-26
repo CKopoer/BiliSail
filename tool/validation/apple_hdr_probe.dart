@@ -10,6 +10,7 @@ import 'package:flutter/widgets.dart';
 /// window bootstrap. HTTPS fixtures also work on a physical iPhone.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  initializePlayerBackend();
   final engine = MediaKitEngine(
     onDiagnostic: (event) => stdout.writeln('APPLE_MEDIA ${event.toJson()}'),
   );
@@ -26,8 +27,9 @@ Future<void> main() async {
           height: 180,
           child: Builder(
             builder: (context) {
-              if (!mounted.isCompleted)
+              if (!mounted.isCompleted) {
                 mounted.complete(View.of(context).viewId);
+              }
               return VideoSurface(engine: engine);
             },
           ),
@@ -42,8 +44,9 @@ Future<void> main() async {
     final view = await mounted.future.timeout(const Duration(seconds: 15));
     final transfer = await const MethodChannel('bilisail/hdr_video')
         .invokeMethod<String>('supported', {'view': view});
-    if (transfer != 'pq' && transfer != 'srgb')
+    if (transfer != 'pq' && transfer != 'srgb') {
       throw StateError('No Apple display');
+    }
     if (const bool.fromEnvironment('APPLE_REQUIRE_HDR') && transfer != 'pq') {
       throw StateError('This display has no EDR headroom');
     }
@@ -54,8 +57,9 @@ Future<void> main() async {
       'hdr10': String.fromEnvironment('APPLE_HDR10'),
       'hlg': String.fromEnvironment('APPLE_HLG'),
     };
-    if (samples.values.every((uri) => uri.isEmpty))
+    if (samples.values.every((uri) => uri.isEmpty)) {
       throw ArgumentError('No test source');
+    }
     final policy = MediaRequestPolicy();
     const audio = String.fromEnvironment('APPLE_COMPANION_AUDIO');
     for (final entry in samples.entries.where(
@@ -77,15 +81,17 @@ Future<void> main() async {
       stdout.writeln('APPLE_MEDIA output=$config');
       if (config['videoOutput'] != 'gpu-next' ||
           config['nativeHdrSurface'] != (transfer == 'pq') ||
-          config['targetTransfer'] != transfer)
+          config['targetTransfer'] != transfer) {
         throw StateError('Unverified Metal output');
+      }
       if ((entry.key == 'p5' || entry.key == 'p8') &&
           config['videoOutputMatrix'] != 'dolbyvision') {
         throw StateError('Missing Dolby Vision renderer input');
       }
       await engine.seek(const Duration(seconds: 1));
-      if (engine.currentSnapshot.desiredPlaying)
+      if (engine.currentSnapshot.desiredPlaying) {
         throw StateError('Seek resumed a paused source');
+      }
       await engine.play();
       final position = engine.currentSnapshot.position;
       for (

@@ -87,6 +87,7 @@ jobs:
           result = subprocess.run([str(executable)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=100)
           print(result.stdout)
           if result.returncode or "APPLE_MEDIA_PASSED" not in result.stdout:
+              subprocess.run(["xcrun", "lldb", "--batch", "-o", "run", "-k", "thread backtrace all", "--", str(executable)], timeout=120)
               raise SystemExit(f"Apple presentation probe exited with {result.returncode}")
           PY
       - name: Apple process diagnostics

@@ -11,8 +11,8 @@
 | Windows，首期 | media_kit 保持现有视频、时钟和渲染。确认实际 WASAPI 默认播放端点接受 E-AC-3 的 IEC 61937 载波后，启用 mpv 的 E-AC-3 透传。普通 DD+ 子格式亦能承载 JOC。 | HDMI 接 Atmos 功放或回音壁，比对 JOC 与无 JOC 两条音轨的接收端输入格式。拔线、独占失败、静音、调音量和切倍速验证 PCM 回退。 |
 | Android，首期 | 杜比候选源交由单个 Media3 ExoPlayer 准备音视频，分轨合并到同一时间线。系统 MediaCodec 负责本机杜比解码，Media3 的音频接收器负责外接路由协商。无匹配解码器、片源不适配或视频不能正确呈现时回到 media_kit。 | 小米 13 分别记录实际音轨 MIME、系统解码器或编码输出、首帧、暂停及 seek。扬声器、耳机及 HDMI 分别记结果。HDMI 需接收端输入格式，手机渲染需系统或厂商可观测证据。 |
 | Linux，后续 | 复用 mpv 透传策略，按实际 ALSA HDMI 或支持编码格式的音频栈协商。 | 实体 Linux 主机、发行包和 HDMI 功放。检查沙箱中的可用输出与热插拔。 |
-| iOS，后续 | AVPlayer 接手完整 JOC 节目，先验证原始 MP4 和带 JOC 信令的 HLS，再将 B 站分轨的初始化段、分段范围及时间线映射到 AVFoundation 可读的媒体源。 | iPhone 配受支持的扬声器或耳机，核对实际选轨、路由和系统空间音频状态，加入普通 DD+ 对照。 |
-| macOS，后续 | 共享 Apple 的资源适配和 AVPlayer 会话，按 Mac 的实际音频路由确认能力。 | 内建输出、支持的耳机和外接设备分别验证，记录机型、系统及实际输出。 |
+| iOS，原型 | 保留 mpv；在 E-AC-3 解码入口取得压缩包和时间戳，由 Apple 样本渲染器消费。 | iPhone 模拟器已用 JOC 样片验证格式、暂停和跳转。实机对象输出与应用音频接入待验。[Apple 验证记录](validation/apple-edr-joc.md) |
+| macOS，原型 | 使用同一压缩音频探针与播放时钟。 | macOS runner 已验证 Apple 识别 Atmos 和压缩包渲染。内建输出、耳机和 HDMI 路由分别验收。[Apple 验证记录](validation/apple-edr-joc.md) |
 
 Windows 的耳机或内置扬声器需要能够解读 JOC 的解码器，随后才可将对象样本和位置交给系统空间音频。单独调用 `ISpatialAudioClient` 无法从普通 5.1 PCM 重建原对象。后续用同一片源和系统播放器建立基准，再评估可供第三方使用的系统解码路径或授权解码 SDK。Linux 本机对象渲染也需独立的解码器和渲染器。[Microsoft 空间音频](https://learn.microsoft.com/windows/win32/coreaudio/spatial-sound) · [WASAPI 编码格式](https://learn.microsoft.com/windows/win32/coreaudio/representing-formats-for-iec-61937-transmissions)
 

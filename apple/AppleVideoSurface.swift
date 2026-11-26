@@ -78,15 +78,8 @@ final class AppleVideoSurface: NSObject, FlutterPlatformViewFactory {
         result(id)
       case "matches":
         guard let id = args?["id"] as? NSNumber, let layer = self.layers[id.int64Value],
-              let transfer = args?["transfer"] as? String, layer.didPresent else { result(false); return }
-        let name = layer.colorspace?.name
-        if transfer == "pq", #available(iOS 16.0, macOS 10.15, *) {
-          let deep = [.rgb10a2Unorm, .bgr10a2Unorm, .rgba16Float].contains(layer.pixelFormat)
-          result(deep && layer.wantsExtendedDynamicRangeContent &&
-                 (name == CGColorSpace.itur_2100_PQ || name == CGColorSpace.itur_2020_PQ))
-        } else {
-          result(transfer == "srgb" && name == CGColorSpace.sRGB)
-        }
+              let transfer = args?["transfer"] as? String else { result(false); return }
+        result(layer.matchesPresented(transfer))
       case "release":
         if let id = call.arguments as? NSNumber {
           self.layers.removeValue(forKey: id.int64Value)?.removeFromSuperlayer()
@@ -112,11 +105,23 @@ final class AppleVideoSurface: NSObject, FlutterPlatformViewFactory {
 
 private final class PlaybackMetalLayer: CAMetalLayer {
   private let lock = NSLock()
-  private var presented = false
-  var didPresent: Bool {
+  private var presentedTransfer: String?
+
+  private var transfer: String? {
+    if colorspace?.name == CGColorSpace.sRGB { return "srgb" }
+    if #available(iOS 16.0, macOS 10.15, *), wantsExtendedDynamicRangeContent,
+       colorspace?.name == CGColorSpace.itur_2100_PQ,
+       [.rgb10a2Unorm, .bgr10a2Unorm, .rgba16Float].contains(pixelFormat) {
+      return "pq"
+    }
+    return nil
+  }
+
+  func matchesPresented(_ expected: String) -> Bool {
+    guard transfer == expected else { return false }
     lock.lock()
     defer { lock.unlock() }
-    return presented
+    return presentedTransfer == expected
   }
 
   override var drawableSize: CGSize {
@@ -130,11 +135,11 @@ private final class PlaybackMetalLayer: CAMetalLayer {
 
   override func nextDrawable() -> CAMetalDrawable? {
     let drawable = super.nextDrawable()
-    if !didPresent {
+    if let space = transfer, !matchesPresented(space) {
       drawable?.addPresentedHandler { [weak self] frame in
         guard let self = self, frame.presentedTime > 0 else { return }
         self.lock.lock()
-        self.presented = true
+        self.presentedTransfer = space
         self.lock.unlock()
       }
     }
