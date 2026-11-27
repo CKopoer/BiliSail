@@ -77,12 +77,25 @@ class _PlaybackPageLayoutState extends State<PlaybackPageLayout> {
       // layout policy; never subtract the inset a second time.
       final keyboardVisible = View.of(context).viewInsets.bottom > 0;
       final editingInfo = keyboardVisible && widget.showInfo && !widget.wide;
-      final collapsed = editingInfo
-          ? math.min(
-              widget.collapsedHeight,
-              math.max(0.0, bounds.maxHeight - 240),
-            )
-          : widget.collapsedHeight;
+      // In a short keyboard viewport the editor needs the entire player area,
+      // including its toggle, to keep the send action reachable.
+      const editorHeight = 240.0;
+      final showStackedToggle =
+          !editingInfo ||
+          bounds.maxHeight >=
+              editorHeight + PlaybackPlayerArea.toggleStripHeight;
+      final stripHeight = !widget.wide && showStackedToggle
+          ? PlaybackPlayerArea.toggleStripHeight
+          : 0.0;
+      final availableHeight = math.max(0.0, bounds.maxHeight - stripHeight);
+      // Keep the toggle reachable even when a 16:9 player is taller than the
+      // window. Leave extra room for the editor while its keyboard is open.
+      final collapsed = math.min(
+        widget.collapsedHeight,
+        editingInfo
+            ? math.max(0.0, availableHeight - editorHeight)
+            : availableHeight,
+      );
       final dimensions = widget.dimensions;
       var expanded = collapsed;
       if (!widget.wide &&
@@ -92,13 +105,13 @@ class _PlaybackPageLayoutState extends State<PlaybackPageLayout> {
           dimensions.width > 0 &&
           dimensions.height >= dimensions.width &&
           bounds.maxHeight.isFinite) {
-        // Leave at least 240 logical pixels and 35% of the page for the
-        // information tabs. Very short windows simply have no extra height.
+        // Reserve 240 logical pixels for the information tabs and keep the
+        // picture within 65% of the page when expanding a portrait source.
         expanded = math.max(
           collapsed,
           math.min(
             bounds.maxWidth * dimensions.height / dimensions.width,
-            math.min(bounds.maxHeight * .65, bounds.maxHeight - 240),
+            math.min(bounds.maxHeight * .65, availableHeight - 240),
           ),
         );
       }
@@ -109,10 +122,11 @@ class _PlaybackPageLayoutState extends State<PlaybackPageLayout> {
           ? math.max(0.0, bounds.maxWidth - infoWidth)
           : bounds.maxWidth;
       final scrollRange = expanded - collapsed;
+      final infoTop = widget.wide ? 0.0 : collapsed + stripHeight;
       final pageHeight =
           widget.wide || !widget.showInfo || scrollRange > 0 || editingInfo
           ? bounds.maxHeight
-          : math.max(bounds.maxHeight, collapsed + widget.minimumInfoHeight);
+          : math.max(bounds.maxHeight, infoTop + widget.minimumInfoHeight);
       return PlaybackSplitLayout(
         page: widget.splitPage,
         enabled: widget.wide && !widget.listening,
@@ -125,9 +139,9 @@ class _PlaybackPageLayoutState extends State<PlaybackPageLayout> {
           animation: _scroll,
           builder: (context, _) {
             final offset = _scroll.hasClients ? _scroll.offset : 0.0;
-            final playerHeight = widget.wide || !widget.showInfo
+            final playerAreaHeight = widget.wide || !widget.showInfo
                 ? bounds.maxHeight - bottomHeight
-                : expanded - offset.clamp(0.0, scrollRange);
+                : expanded - offset.clamp(0.0, scrollRange) + stripHeight;
             final content = SingleChildScrollView(
               padding: EdgeInsets.zero,
               child: SizedBox(
@@ -137,12 +151,9 @@ class _PlaybackPageLayoutState extends State<PlaybackPageLayout> {
                   children: [
                     Positioned(
                       right: 0,
-                      top: widget.wide ? 0 : collapsed,
+                      top: infoTop,
                       width: infoWidth,
-                      height: math.max(
-                        1.0,
-                        pageHeight - (widget.wide ? 0 : collapsed),
-                      ),
+                      height: math.max(1.0, pageHeight - infoTop),
                       child: ExcludeFocus(
                         excluding: !widget.showInfo,
                         child: Offstage(
@@ -182,25 +193,16 @@ class _PlaybackPageLayoutState extends State<PlaybackPageLayout> {
                       left: 0,
                       top: 0,
                       width: playerWidth,
-                      height: playerHeight,
-                      child: widget.player,
-                    ),
-                    if (widget.wide)
-                      Positioned(
-                        right: widget.showInfo ? infoWidth : 0,
-                        top: math.max(
-                          0,
-                          playerHeight / 2 -
-                              PlaybackSidebarToggle.size.height / 2,
-                        ),
-                        child: PlaybackSidebarToggle(
-                          tooltip: widget.toggleTooltip,
-                          onPressed: widget.toggleInfo,
-                          icon: widget.showInfo
-                              ? Icons.chevron_right
-                              : Icons.chevron_left,
-                        ),
+                      height: playerAreaHeight,
+                      child: PlaybackPlayerArea(
+                        player: widget.player,
+                        wide: widget.wide,
+                        showInfo: widget.showInfo,
+                        showStackedToggle: showStackedToggle,
+                        tooltip: widget.toggleTooltip,
+                        onToggle: widget.toggleInfo,
                       ),
+                    ),
                   ],
                 ),
               ),

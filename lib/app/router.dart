@@ -674,7 +674,7 @@ final class _WorkspacePage extends ConsumerWidget {
           )
         : false;
     final autoCollapseSidebar =
-        (tab.isVideo || tab.isPgc || tab.isCourse || tab.isLive) &&
+        tab.isPlayback &&
         ref.watch(
           settingsControllerProvider.select(
             (settings) => settings.value?.autoCollapsePlaybackSidebar ?? false,

@@ -87,14 +87,13 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
   late PgcLocator _locator;
   int? _tab;
   bool? _infoVisibilityOverride;
-  bool _wide = false;
   ({PgcSeasonId season, bool expanded})? _descriptionOverride;
   ContentLink? _contentLink;
 
   String get _kind => widget.course ? '课程' : '影视';
 
   bool get _infoVisible =>
-      _infoVisibilityOverride ?? !(_wide && widget.autoCollapseSidebar);
+      _infoVisibilityOverride ?? !widget.autoCollapseSidebar;
 
   @override
   void didChangeDependencies() {
@@ -287,7 +286,6 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
           final wide =
               width >=
               ResponsiveLayoutScope.of(context).playbackSideBySideWidth;
-          _wide = wide;
           final showInfo = _infoVisible;
           final info = Material(
             key: _sidebarKey,

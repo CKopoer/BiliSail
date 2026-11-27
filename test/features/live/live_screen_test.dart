@@ -156,15 +156,12 @@ void main() {
     await showPage(tester, width: 390);
     await tester.pumpAndSettle();
     final player = tester.state(find.byType(_PlayerProbe));
-    expect(findMaterialTooltip('收起直播信息'), findsNothing);
+    expect(findMaterialTooltip('收起直播信息'), findsOneWidget);
     expect(find.byKey(const ValueKey('live-chat-list')), findsOneWidget);
     for (final width in [999.0, 1000.0, 1280.0, 390.0, 1000.0]) {
       await tester.binding.setSurfaceSize(Size(width, 800));
       await tester.pumpAndSettle();
-      expect(
-        findMaterialTooltip('收起直播信息'),
-        width >= 1000 ? findsOneWidget : findsNothing,
-      );
+      expect(findMaterialTooltip('收起直播信息'), findsOneWidget);
       expect(find.byKey(const ValueKey('live-chat-list')), findsOneWidget);
       expect(tester.state(find.byType(_PlayerProbe)), same(player));
     }
@@ -173,11 +170,17 @@ void main() {
     expect(find.byKey(const ValueKey('live-chat-list')), findsNothing);
     await tester.binding.setSurfaceSize(const Size(999, 800));
     await tester.pumpAndSettle();
-    expect(findMaterialTooltip('展开直播信息'), findsNothing);
+    expect(findMaterialTooltip('展开直播信息'), findsOneWidget);
+    expect(find.byKey(const ValueKey('live-chat-list')), findsNothing);
+    expect(tester.getSize(find.byType(_PlayerProbe)), const Size(999, 760));
+    await tester.tap(findMaterialTooltip('展开直播信息'));
+    await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('live-chat-list')).hitTestable(),
       findsOneWidget,
     );
+    await tester.tap(findMaterialTooltip('收起直播信息'));
+    await tester.pumpAndSettle();
     await tester.binding.setSurfaceSize(const Size(1000, 800));
     await tester.pumpAndSettle();
     await tester.tap(findMaterialTooltip('展开直播信息'));
@@ -294,7 +297,7 @@ void main() {
 
     layout.value = const ResponsiveLayoutSettings.defaults();
     await tester.pumpAndSettle();
-    expect(findMaterialTooltip('收起直播信息'), findsNothing);
+    expect(findMaterialTooltip('收起直播信息'), findsOneWidget);
     expect(tester.getSize(player).width, 800);
     expect(tester.state(player), same(playerState));
     expect(chatPosition(tester), same(chatScrollPosition));
@@ -343,11 +346,12 @@ void main() {
       final list = tester.widget(chat);
       final pages = tester.widget(pager);
       final height = tester.getSize(chat).height;
+      final headerTop = tester.getTopLeft(find.byType(LiveRoomHeader)).dy;
       expect(
-        tester.getTopLeft(pager).dy -
-            tester.getBottomLeft(find.byType(_PlayerProbe)).dy,
-        45,
+        headerTop - tester.getBottomLeft(find.byType(_PlayerProbe)).dy,
+        40,
       );
+      expect(tester.getTopLeft(pager).dy - headerTop, 45);
       playerBuilds = 0;
       composerBuilds = 0;
       for (var i = 0; i < 3; i++) {

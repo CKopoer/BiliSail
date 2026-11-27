@@ -251,7 +251,7 @@ final class _OfflineScreenState extends ConsumerState<OfflineScreen> {
         final wide =
             bounds.maxWidth >=
             ResponsiveLayoutScope.of(context).playbackSideBySideWidth;
-        final showInfo = _showInfo ?? !(wide && widget.autoCollapseSidebar);
+        final showInfo = _showInfo ?? !widget.autoCollapseSidebar;
         void toggle() => setState(() => _showInfo = !showInfo);
         Widget summary(bool measuring) => OfflineSummary(
           task: selected,

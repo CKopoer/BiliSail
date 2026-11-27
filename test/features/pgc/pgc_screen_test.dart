@@ -156,7 +156,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     final state = tester.state(find.byType(_TrackedPlayer));
-    expect(findMaterialTooltip('收起影视信息'), findsNothing);
+    expect(findMaterialTooltip('收起影视信息'), findsOneWidget);
     layout.value = ResponsiveLayoutSettings(playbackSideBySideWidth: 900);
     await tester.pumpAndSettle();
     expect(findMaterialTooltip('收起影视信息'), findsOneWidget);
@@ -198,12 +198,12 @@ void main() {
     expect(tester.widget<Text>(description).maxLines, isNull);
     tester.view.physicalSize = const Size(899, 800);
     await tester.pumpAndSettle();
-    expect(findMaterialTooltip('收起影视信息'), findsNothing);
+    expect(findMaterialTooltip('收起影视信息'), findsOneWidget);
     expect(tester.widget<Text>(description).maxLines, isNull);
     layout.value = const ResponsiveLayoutSettings.defaults();
     tester.view.physicalSize = const Size(900, 800);
     await tester.pumpAndSettle();
-    expect(findMaterialTooltip('收起影视信息'), findsNothing);
+    expect(findMaterialTooltip('收起影视信息'), findsOneWidget);
     expect(tester.state(find.byType(_TrackedPlayer)), same(state));
     expect(created, 1);
     expect(disposed, 0);
@@ -538,10 +538,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(
-        findMaterialTooltip('收起影视信息'),
-        width >= 1000 ? findsOneWidget : findsNothing,
-      );
+      expect(findMaterialTooltip('收起影视信息'), findsOneWidget);
       final tiles = find.byWidgetPredicate(
         (widget) =>
             widget is InkWell &&
@@ -687,10 +684,7 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(
-          findMaterialTooltip('收起影视信息'),
-          width >= 1000 ? findsOneWidget : findsNothing,
-        );
+        expect(findMaterialTooltip('收起影视信息'), findsOneWidget);
         final player = tester.state(find.byType(_TrackedPlayer));
         final intro = tester
             .widget<CustomScrollView>(find.byKey(const ValueKey('pgc-intro')))
@@ -757,7 +751,7 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(findMaterialTooltip('收起影视信息'), findsNothing);
+        expect(findMaterialTooltip('收起影视信息'), findsOneWidget);
         await tester.tap(find.byKey(const Key('keyboard-editor')));
         await tester.pumpAndSettle();
         final focus = FocusManager.instance.primaryFocus;
@@ -826,10 +820,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(
-        findMaterialTooltip('收起影视信息'),
-        width >= 1000 ? findsOneWidget : findsNothing,
-      );
+      expect(findMaterialTooltip('收起影视信息'), findsOneWidget);
       expect(commentBuilds, 0);
       final pager = find.byKey(const ValueKey('pgc-info-swipe'));
       final player = tester.state(find.byType(_TrackedPlayer));
@@ -1333,17 +1324,14 @@ void main() {
     for (final width in [999.0, 1000.0, 999.0]) {
       tester.view.physicalSize = Size(width, 800);
       await tester.pumpAndSettle();
-      expect(
-        findMaterialTooltip('收起影视信息'),
-        width >= 1000 ? findsOneWidget : findsNothing,
-      );
+      expect(findMaterialTooltip('收起影视信息'), findsOneWidget);
       expect(find.text('评论区已接入'), findsOneWidget);
       expect(created, 1);
       expect(disposed, 0);
     }
     tester.view.physicalSize = const Size(480, 800);
     await tester.pumpAndSettle();
-    expect(findMaterialTooltip('收起影视信息'), findsNothing);
+    expect(findMaterialTooltip('收起影视信息'), findsOneWidget);
     expect(created, 1);
     expect(disposed, 0);
     expect(find.text('评论区已接入'), findsOneWidget);
@@ -1358,7 +1346,7 @@ void main() {
     expect(findMaterialTooltip('展开影视信息'), findsOneWidget);
     tester.view.physicalSize = const Size(999, 450);
     await tester.pumpAndSettle();
-    expect(findMaterialTooltip('展开影视信息'), findsNothing);
+    expect(findMaterialTooltip('展开影视信息'), findsOneWidget);
     tester.view.physicalSize = const Size(1000, 450);
     await tester.pumpAndSettle();
     expect(findMaterialTooltip('展开影视信息'), findsOneWidget);

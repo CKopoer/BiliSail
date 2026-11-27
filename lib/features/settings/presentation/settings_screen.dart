@@ -690,7 +690,7 @@ final class _SettingsCategoryPageState
                             '自动收起播放页侧边栏',
                             s.autoCollapsePlaybackSidebar,
                             controller.setAutoCollapsePlaybackSidebar,
-                            '视频、影视、直播和课程使用分栏布局时默认收起右侧信息，可手动展开',
+                            '进入播放页时默认收起右侧或画面下方的信息，可手动展开',
                           ),
                           _toggle(
                             '自动播放',

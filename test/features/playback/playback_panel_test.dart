@@ -2347,7 +2347,7 @@ void main() {
       await session.pause();
       final generation = session.sourceGeneration;
       final sidebar = find.byType(PlaybackSidebarToggle);
-      expect(sidebar, width >= 1000 ? findsOneWidget : findsNothing);
+      expect(sidebar.hitTestable(), findsOneWidget);
       await _showControls(tester);
       await tester.tap(findMaterialTooltip('全屏（F）'));
       await _pumpFrames(tester);
@@ -2360,7 +2360,7 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await _pumpFrames(tester);
       expect(window.fullScreen, isFalse);
-      expect(sidebar, width >= 1000 ? findsOneWidget : findsNothing);
+      expect(sidebar.hitTestable(), findsOneWidget);
       expect(
         tester.widget<PlaybackInfoTabs>(find.byType(PlaybackInfoTabs)).value,
         1,

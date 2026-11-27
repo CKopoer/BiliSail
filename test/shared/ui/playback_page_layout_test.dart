@@ -207,6 +207,7 @@ void main() {
     VideoDimensions? dimensions = const VideoDimensions(1080, 1920),
     bool listening = false,
     bool showInfo = true,
+    double minimumInfoHeight = 0,
     Object contentKey = 'one',
     int items = 50,
     ScrollController? nested,
@@ -226,6 +227,7 @@ void main() {
             listening: listening,
             dimensions: dimensions,
             collapsedHeight: listening ? size.height / 2 : size.width * 9 / 16,
+            minimumInfoHeight: minimumInfoHeight,
             contentKey: contentKey,
             toggleInfo: () {},
             toggleTooltip: '信息',
@@ -284,13 +286,15 @@ void main() {
       (tester) async {
         await show(tester, dimensions: dimensions);
         expect(height(tester), expandedHeight);
+        final toggle = find.byIcon(Icons.keyboard_arrow_down).hitTestable();
+        expect(tester.getCenter(toggle), Offset(195, expandedHeight + 20));
         expect(
           tester.getTopLeft(find.byKey(const ValueKey('info'))).dy,
-          expandedHeight,
+          expandedHeight + 40,
         );
         expect(
           tester.getSize(find.byKey(const ValueKey('info'))).height,
-          800 - expandedHeight,
+          800 - expandedHeight - 40,
         );
         await tester.tapAt(Offset(100, expandedHeight / 2));
         await tester.pump();
@@ -300,6 +304,7 @@ void main() {
         await gesture.moveBy(const Offset(0, -70));
         await tester.pump();
         final first = height(tester);
+        expect(tester.getCenter(toggle), Offset(195, first + 20));
         expect(first, lessThan(expandedHeight));
         expect(first, greaterThan(390 * 9 / 16));
         expect(scroll.offset, 0);
@@ -397,11 +402,27 @@ void main() {
     tester,
   ) async {
     await show(tester, size: const Size(480, 660));
-    expect(height(tester), 420);
+    expect(height(tester), 380);
     await show(tester, dimensions: const VideoDimensions(1000, 1100));
     expect(height(tester), closeTo(429, .01));
     await show(tester, size: const Size(700, 600));
     expect(height(tester), 700 * 9 / 16);
+  });
+
+  testWidgets('stacked toggle remains reachable in a short window', (
+    tester,
+  ) async {
+    await show(
+      tester,
+      size: const Size(844, 390),
+      dimensions: null,
+      minimumInfoHeight: 480,
+    );
+    expect(height(tester), 350);
+    expect(
+      tester.getCenter(find.byIcon(Icons.keyboard_arrow_down).hitTestable()),
+      const Offset(422, 370),
+    );
   });
 
   testWidgets('square expansion respects available space and player modes', (
@@ -409,13 +430,13 @@ void main() {
   ) async {
     const square = VideoDimensions(1080, 1080);
     await show(tester, size: const Size(480, 660), dimensions: square);
-    expect(height(tester), 420);
+    expect(height(tester), 380);
     await show(tester, size: const Size(700, 600), dimensions: square);
     expect(height(tester), 700 * 9 / 16);
     await show(tester, dimensions: square, listening: true);
     expect(height(tester), 400);
     await show(tester, dimensions: square, showInfo: false);
-    expect(height(tester), 800);
+    expect(height(tester), 760);
   });
 
   testWidgets('wide listening and hidden information keep their own heights', (
@@ -429,7 +450,11 @@ void main() {
     await show(tester, listening: true);
     expect(height(tester), 400);
     await show(tester, showInfo: false);
-    expect(height(tester), 800);
+    expect(height(tester), 760);
+    expect(
+      tester.getCenter(find.byIcon(Icons.keyboard_arrow_up).hitTestable()),
+      const Offset(195, 780),
+    );
     await show(tester);
     expect(height(tester), 520);
     expect(tester.takeException(), isNull);

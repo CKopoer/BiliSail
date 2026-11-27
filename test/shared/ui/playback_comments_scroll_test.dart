@@ -15,6 +15,7 @@ import 'package:bilisail/features/video/application/video_controller.dart';
 import 'package:bilisail/features/video/application/video_extras_controller.dart';
 import 'package:bilisail/features/video/presentation/video_screen.dart';
 import 'package:bilisail/shared/ui/comments_panel.dart';
+import 'package:bilisail/shared/ui/playback_sidebar_toggle.dart';
 import 'package:bilisail/shared/ui/smooth_scroll_behavior.dart';
 import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
@@ -80,6 +81,10 @@ void main() {
             await tester.pump(const Duration(milliseconds: 16));
             final keyboardTop = size.height - inset;
             expect(
+              find.byType(PlaybackSidebarToggle),
+              keyboardTop >= 280 ? findsOneWidget : findsNothing,
+            );
+            expect(
               tester.getRect(field).bottom,
               lessThanOrEqualTo(keyboardTop),
             );
@@ -98,6 +103,7 @@ void main() {
           }
           tester.view.resetViewInsets();
           await tester.pumpAndSettle();
+          expect(find.byType(PlaybackSidebarToggle), findsOneWidget);
           expect(tester.widget<TextField>(field).controller!.text, '保留草稿\n第二行');
           expect(tester.takeException(), isNull);
         },

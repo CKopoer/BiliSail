@@ -651,11 +651,8 @@ void main() {
 
       tester.view.physicalSize = const Size(390, 900);
       await tester.pumpAndSettle();
-      expect(expand, findsNothing);
-      expect(info, findsOneWidget);
-      tester.view.physicalSize = const Size(1440, 900);
-      await tester.pumpAndSettle();
-      expect(expand, findsOneWidget);
+      expect(expand.hitTestable(), findsOneWidget);
+      expect(info, findsNothing);
 
       final controller = ProviderScope.containerOf(tester.element(screen))
           .read(settingsControllerProvider.notifier);
@@ -665,11 +662,18 @@ void main() {
       expect(info, findsOneWidget);
       await controller.setAutoCollapsePlaybackSidebar(true);
       await tester.pumpAndSettle();
+      expect(info, findsNothing);
+      final hiddenHeight = tester.getSize(player).height;
       await tester.tap(expand);
       await tester.pumpAndSettle();
       expect(collapse, findsOneWidget);
       expect(info, findsOneWidget);
-      tester.view.physicalSize = const Size(390, 900);
+      expect(tester.getSize(player).height, lessThan(hiddenHeight));
+      await tester.tap(collapse);
+      await tester.pumpAndSettle();
+      expect(info, findsNothing);
+      expect(tester.getSize(player).height, hiddenHeight);
+      await tester.tap(expand);
       await tester.pumpAndSettle();
       tester.view.physicalSize = const Size(1440, 900);
       await tester.pumpAndSettle();

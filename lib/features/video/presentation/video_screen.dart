@@ -326,7 +326,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
             final wide =
                 width >=
                 ResponsiveLayoutScope.of(context).playbackSideBySideWidth;
-            final defaultShowInfo = !(wide && widget.autoCollapseSidebar);
+            final defaultShowInfo = !widget.autoCollapseSidebar;
             bool showInfo() => _infoVisibilityOverride.value ?? defaultShowInfo;
             void toggleInfo() => _infoVisibilityOverride.value = !showInfo();
             return PlaybackPageCommands(
