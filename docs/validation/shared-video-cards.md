@@ -52,6 +52,28 @@ Web 与桌面签名接口共试 8 组游客参数、88 张卡片，覆盖现有�
 - [BewlyCat 的 Web 请求](https://github.com/keleus/BewlyCat/blob/d5de0d4db16ed0e45785fea6e4794064f43a963e/src/background/messageListeners/api/video.ts#L4-L22)使用 V8、列数和视口参数，[首页卡片](https://github.com/keleus/BewlyCat/blob/d5de0d4db16ed0e45785fea6e4794064f43a963e/src/contentScripts/views/Home/components/ForYou.vue#L769)取 `item.pic`。
 - [Bilibili-Gate 的 PC 请求](https://github.com/magicdawn/Bilibili-Gate/blob/3b84579bc16a768b94ddd64cc35bcea1c8ed57fb/src/modules/rec-services/pc.tsx#L114-L129)使用 V8 和 `fresh_type=8`。游客抽样 30 条均无独立地址，读前 8 张原图有 7 张约 16:9、1 张为 1296×809。[iPad 请求](https://github.com/magicdawn/Bilibili-Gate/blob/3b84579bc16a768b94ddd64cc35bcea1c8ed57fb/src/modules/rec-services/app.tsx#L239-L254)使用 `platform=ios`、`mobi_app=iphone`、`device=pad`。其游客参数返回 15 张 `large_cover_v1` 视频卡，前 8 张原图均约 16:9。
 
+### Windows Release 登录态与游客态对照（2026-11-28）
+
+使用本机 Windows Release 已保存的 Web 会话，由 `/x/web-interface/nav` 确认登录组 `isLogin=true`、游客组 `isLogin=false`。两组使用相同的本机 Web 设备 Cookie。同一推荐源、同一页的两组请求共用完整 URL（含 WBI 签名）和相同的浏览器请求头，仅替换 Cookie。Web 使用项目的 V8 推荐，桌面使用 V1、`plat=1`，分别读取首屏和后续四页。下表只计 `goto=av` 且有 BV 号的视频，每组五页内均无重复。独立封面按 `pic_4_3` 与 `pic` 的文件路径不同计数，忽略 CDN 子域名差异。
+
+| 推荐源 | 游客 `pic_4_3` 非空 | 登录 `pic_4_3` 非空 | 游客独立封面 | 登录独立封面 |
+| --- | ---: | ---: | ---: | ---: |
+| Web | 90/90（100%） | 86/88（97.7%） | 88/90（97.8%） | 82/88（93.2%） |
+| 桌面 | 140/140（100%） | 139/140（99.3%） | 139/140（99.3%） | 133/140（95.0%） |
+
+两组收到的推荐视频不同。这次抽样中，登录组的字段返回率没有提高。另用上文 Goooler 示例的五个查询参数各取一页，游客 11/12、登录 12/12 有独立封面。
+
+为复核此前游客样本大量空字段的现象，另外对两个推荐源各取两页，每页共用相同 URL，改变是否携带本机 Web 设备 Cookie（`buvid3`、`buvid4`、`b_nut`）。登录组移除这三项时保留原会话其余 Cookie，仍通过 nav 登录校验。
+
+| 会话 | Web `pic_4_3` 非空 | 桌面 `pic_4_3` 非空 |
+| --- | ---: | ---: |
+| 游客，无 Cookie | 0/40 | 0/60 |
+| 游客，带本机设备 Cookie | 36/36 | 56/56 |
+| 登录，移除上述设备 Cookie | 36/36 | 56/56 |
+| 登录，带本机设备 Cookie | 35/35 | 56/56 |
+
+从带设备信息的 Web、桌面游客与登录组各取前三张非空 `pic_4_3`，读取原图尺寸。12/12 张在 4:3 的 1% 误差内，包括 1440×1080、1920×1440 和 840×633。本次结果适用于一个账号和一组本机设备信息，无法据此确认单个 Cookie 或服务端分组规则。现有客户端已在组合根启用 [Web 设备上下文](../../lib/app/dependencies.dart)，推荐列表解析会读取 [`pic_4_3`](../../packages/bili_api/lib/src/api_client.dart)。
+
 ## 2026-11-26：16:9 视频卡更多按钮与标题排版
 
 更多按钮放在标题行右侧，按卡宽占 18／20／22 个逻辑像素。标题使用剩余宽度和字体原生字距，按 Flutter 的文字规则折行，最多显示两行并在溢出时显示省略号。普通视频卡和非视频历史卡沿用相同布局。
