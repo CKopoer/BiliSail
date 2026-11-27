@@ -105,6 +105,21 @@ Future<void> verifyAppleJoc(MediaKitEngine engine, Uri base) async {
           !engine.inspectDiagnostics().hasDecodedVideo) {
         throw StateError('Video or timeline did not resume for $label');
       }
+      if (label == 'offline MP4') {
+        // The 48 kHz fixture contains 1,536 samples per JOC access unit.
+        // Observe several queue refills after seek, beyond the native preroll.
+        final first = await output(true);
+        final start = engine.currentSnapshot.position;
+        await Future<void>.delayed(const Duration(seconds: 3));
+        final last = await output(true);
+        final packets =
+            last.appleJocRenderedPackets! - first.appleJocRenderedPackets!;
+        final elapsed = engine.currentSnapshot.position - start;
+        if (packets < 60 || elapsed < const Duration(seconds: 2)) {
+          throw StateError('JOC stopped advancing: $packets packets, $elapsed');
+        }
+        stdout.writeln('APPLE_JOC_CONTINUITY packets=$packets media=$elapsed');
+      }
       if (label == 'offline MKV') {
         await engine.setVolume(0);
         await output(true);

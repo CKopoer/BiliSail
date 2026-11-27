@@ -7,6 +7,7 @@ on:
       - '.github/workflows/apple-playback.yml'
       - 'apple/**'
       - 'tool/validation/apple_*'
+      - 'tool/native_tests/apple_joc_continuity.m'
       - 'packages/bili_player/lib/src/*dolby*'
       - 'packages/bili_player/lib/src/native_hdr_output.dart'
       - 'pubspec.lock'
@@ -108,3 +109,37 @@ jobs:
         if: failure()
         run: |
           find ~/Library/Logs/DiagnosticReports -maxdepth 1 -iname '*BiliSail*' -print -exec tail -c 18000 {} \; 2>/dev/null || true
+      - name: Compare JOC and PCM at the macOS audio output
+        if: matrix.platform == 'macos'
+        run: |
+          brew install switchaudio-osx
+          brew install --cask blackhole-2ch
+          sudo killall coreaudiod || true
+          for n in {1..30}; do SwitchAudioSource -a | grep -q 'BlackHole 2ch' && break; sleep 1; done
+          SwitchAudioSource -s 'BlackHole 2ch' -t output
+          frameworks="$PWD/build/macos/Build/Products/Release/BiliSail.app/Contents/Frameworks"
+          clang -I build/apple-plugins/macos/media_kit_video/common/mpv/include \
+            tool/native_tests/apple_joc_continuity.m -F "$frameworks" -framework Mpv \
+            -framework AVFoundation -framework Foundation -framework CoreMedia \
+            -Wl,-rpath,"$frameworks" -o build/joc-loopback
+          python3 -m venv build/wave-tools
+          build/wave-tools/bin/pip -q install numpy scipy sounddevice
+          # Match the stereo route with a conventional Lo/Ro downmix of the 5.1 fixture.
+          ffmpeg -v error -i build/fixtures/joc.m4a \
+            -af 'pan=stereo|FL<FL+0.70710678*FC+0.70710678*SL|FR<FR+0.70710678*FC+0.70710678*SR' \
+            -ar 48000 -c:a pcm_s16le build/reference.wav
+          captures=$(mktemp -d)
+          for mode in joc pressure; do
+            output="$captures/$mode.wav"
+            build/wave-tools/bin/python tool/validation/apple_joc_waveform.py --record "$output" &
+            recorder=$!
+            for attempt in {1..100}; do test -f "$output.ready" && break; sleep 0.1; done
+            test -f "$output.ready"
+            sleep 1
+            build/joc-loopback build/fixtures/joc.m4a "$mode"
+            wait "$recorder"
+          done
+          for mode in joc pressure; do
+            echo "$mode"
+            build/wave-tools/bin/python tool/validation/apple_joc_waveform.py build/reference.wav "$captures/$mode.wav"
+          done

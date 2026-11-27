@@ -129,4 +129,4 @@ media_kit 的 Dart 包许可不能替代 mpv、FFmpeg、ANGLE 和其子依赖的
 
 ## Apple HDR 视频与 JOC 验证依赖
 
-macOS、iOS 应用嵌入固定的 Mpv 动态框架，包含 FFmpeg、libplacebo 和 MoltenVK。发布归档附组件来源、固定摘要和重建配方。许可文本以 `MediaLicenses.txt` 随应用资源分发。[原生媒体依赖](https://github.com/CKopoer/libmpv-darwin-build/releases/tag/apple-joc-output-2026-11-27) · [组件许可](apple/MediaLicenses.txt)
+macOS、iOS 应用嵌入固定的 Mpv 动态框架，包含 FFmpeg、libplacebo 和 MoltenVK。发布归档附组件来源、固定摘要和重建配方。许可文本以 `MediaLicenses.txt` 随应用资源分发。[原生媒体依赖](https://github.com/CKopoer/libmpv-darwin-build/releases/tag/apple-joc-continuity-2026-11-27-r2) · [组件许可](apple/MediaLicenses.txt)
