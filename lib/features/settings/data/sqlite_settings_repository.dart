@@ -15,6 +15,7 @@ class SqliteSettingsRepository implements SettingsRepository {
     this.database, {
     this.defaultNavigationMode = WorkspaceNavigationMode.dualTabs,
     this.defaultCardCoverRatio = CardCoverRatio.widescreen,
+    this.defaultRecommendationSource = RecommendationSource.web,
     this.defaultHighEnergyProgressEnabled = false,
     this.defaultDanmakuArea = 0.75,
     this.defaultDanmakuFontScale = 1.0,
@@ -25,6 +26,7 @@ class SqliteSettingsRepository implements SettingsRepository {
   final AppDatabase database;
   final WorkspaceNavigationMode defaultNavigationMode;
   final CardCoverRatio defaultCardCoverRatio;
+  final RecommendationSource defaultRecommendationSource;
   final bool defaultHighEnergyProgressEnabled;
   final double defaultDanmakuArea;
   final double defaultDanmakuFontScale;
@@ -34,6 +36,9 @@ class SqliteSettingsRepository implements SettingsRepository {
 
   AppSettings get defaults => AppSettings.defaults(
     shortcuts: defaultShortcuts,
+    recommendations: RecommendationSettings.defaults(
+      source: defaultRecommendationSource,
+    ),
     navigationMode: defaultNavigationMode,
     responsiveLayout: ResponsiveLayoutSettings.defaults(
       cardCoverRatio: defaultCardCoverRatio,
@@ -75,6 +80,7 @@ class SqliteSettingsRepository implements SettingsRepository {
     return AppSettings(
       recommendations: RecommendationSettings.fromJson(
         decoded['recommendations'],
+        defaultSource: defaultRecommendationSource,
       ),
       navigationMode:
           WorkspaceNavigationMode.values

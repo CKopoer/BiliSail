@@ -294,6 +294,7 @@ class AppDependencies {
       database,
       defaultNavigationMode: defaultWorkspaceNavigationMode,
       defaultCardCoverRatio: defaultCardCoverRatio,
+      defaultRecommendationSource: defaultRecommendationSource,
       defaultShortcuts: defaultShortcuts,
       defaultHighEnergyProgressEnabled: defaultHighEnergyProgressEnabled,
       defaultDanmakuArea: defaultDanmakuArea,

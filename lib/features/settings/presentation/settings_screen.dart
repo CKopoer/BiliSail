@@ -612,6 +612,9 @@ final class _SettingsCategoryPageState
                         _section('推荐流设置', [
                           RecommendationSettingsSection(
                             settings: s.recommendations,
+                            defaultSettings: ref
+                                .watch(settingsDefaultsProvider)
+                                .recommendations,
                             save: (change) => controller.update(
                               (current) => current.copyWith(
                                 recommendations: change(

@@ -9,10 +9,12 @@ final class RecommendationSettingsSection extends StatefulWidget {
   const RecommendationSettingsSection({
     super.key,
     required this.settings,
+    required this.defaultSettings,
     required this.save,
   });
 
   final RecommendationSettings settings;
+  final RecommendationSettings defaultSettings;
   final Future<void> Function(
     RecommendationSettings Function(RecommendationSettings) change,
   )
@@ -235,8 +237,7 @@ final class _RecommendationSettingsSectionState
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton(
-            onPressed: () =>
-                _save((_) => const RecommendationSettings.defaults()),
+            onPressed: () => _save((_) => widget.defaultSettings),
             child: const Text('恢复推荐流默认设置'),
           ),
         ),

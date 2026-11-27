@@ -15,30 +15,54 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test(
-    'all recommendation sources persist and unknown values use Web',
-    () async {
-      final database = AppDatabase(NativeDatabase.memory());
-      addTearDown(database.close);
-      final repository = SqliteSettingsRepository(database);
-      for (final source in RecommendationSource.values) {
-        await repository.save(
-          AppSettings(recommendations: RecommendationSettings(source: source)),
-        );
-        expect((await repository.load()).recommendations.source, source);
-      }
-      for (final source in <Object?>[null, 'unknown', 2]) {
-        expect(
-          RecommendationSettings.fromJson({'source': source}).source,
-          RecommendationSource.web,
-        );
-      }
+  test('saved recommendation sources persist and missing values use platform defaults', () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = SqliteSettingsRepository(database);
+    final mobile = SqliteSettingsRepository(
+      database,
+      defaultRecommendationSource: RecommendationSource.app,
+    );
+    expect(
+      (await repository.load()).recommendations.source,
+      RecommendationSource.web,
+    );
+    expect(
+      (await mobile.load()).recommendations.source,
+      RecommendationSource.app,
+    );
+    for (final source in RecommendationSource.values) {
+      await repository.save(
+        AppSettings(recommendations: RecommendationSettings(source: source)),
+      );
+      expect((await repository.load()).recommendations.source, source);
+      expect((await mobile.load()).recommendations.source, source);
+    }
+    for (final recommendations in <Object?>[
+      null,
+      {'source': 'unknown'},
+      {'source': 2},
+      {'keepPrevious': true},
+    ]) {
+      await database.writeSetting(
+        'preferences.v1',
+        jsonEncode({'recommendations': recommendations}),
+      );
       expect(
-        const RecommendationSettings.defaults().source,
+        (await repository.load()).recommendations.source,
         RecommendationSource.web,
       );
-    },
-  );
+      expect(
+        (await mobile.load()).recommendations.source,
+        RecommendationSource.app,
+      );
+    }
+    expect((await mobile.load()).recommendations.keepPrevious, isTrue);
+    expect(
+      const RecommendationSettings.defaults().source,
+      RecommendationSource.web,
+    );
+  });
 
   testWidgets('custom threshold validates, saves and remains selectable', (
     tester,
@@ -146,6 +170,13 @@ void main() {
           ProviderScope(
             overrides: [
               settingsRepositoryProvider.overrideWithValue(repository),
+              settingsDefaultsProvider.overrideWithValue(
+                const AppSettings.defaults(
+                  recommendations: RecommendationSettings.defaults(
+                    source: RecommendationSource.app,
+                  ),
+                ),
+              ),
             ],
             child: MaterialApp(
               builder: AppNoticeHost.builder,
@@ -180,7 +211,21 @@ void main() {
         expect(repository.value.recommendations.keepPrevious, !failSave);
         expect(tester.widget<SwitchListTile>(toggle).value, !failSave);
         expect(repository.value.theme, AppThemePreference.dark);
-        if (failSave) expect(find.text('设置保存失败，请重试'), findsOneWidget);
+        if (failSave) {
+          expect(find.text('设置保存失败，请重试'), findsOneWidget);
+        } else {
+          final reset = find.text('恢复推荐流默认设置');
+          await tester.ensureVisible(reset);
+          await tester.pumpAndSettle();
+          await tester.tap(reset);
+          await tester.pumpAndSettle();
+          expect(
+            repository.value.recommendations.source,
+            RecommendationSource.app,
+          );
+          expect(repository.value.recommendations.keepPrevious, isFalse);
+          expect(repository.value.theme, AppThemePreference.dark);
+        }
         expect(tester.takeException(), isNull);
       },
     );

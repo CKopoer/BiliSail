@@ -33,18 +33,18 @@ final class RecommendationSettings {
        titleKeywords = _keywords(titleKeywords),
        categoryKeywords = _keywords(categoryKeywords);
 
-  const RecommendationSettings.defaults()
-    : source = RecommendationSource.web,
-      reportInteractions = _defaultReportInteractions,
-      keepPrevious = false,
-      showPreviousMarker = true,
-      minimumLikeRatio = 0,
-      minimumDurationSeconds = 0,
-      minimumPlayCount = 0,
-      titleKeywords = const [],
-      categoryKeywords = const [],
-      exemptFollowed = true,
-      filterRelated = true;
+  const RecommendationSettings.defaults({
+    this.source = RecommendationSource.web,
+  }) : reportInteractions = _defaultReportInteractions,
+       keepPrevious = false,
+       showPreviousMarker = true,
+       minimumLikeRatio = 0,
+       minimumDurationSeconds = 0,
+       minimumPlayCount = 0,
+       titleKeywords = const [],
+       categoryKeywords = const [],
+       exemptFollowed = true,
+       filterRelated = true;
 
   static const _defaultReportInteractions = true;
   static const likeRatios = [0, 1, 2, 3, 4];
@@ -85,9 +85,12 @@ final class RecommendationSettings {
         .toSet(),
   );
 
-  factory RecommendationSettings.fromJson(Object? value) {
+  factory RecommendationSettings.fromJson(
+    Object? value, {
+    RecommendationSource defaultSource = RecommendationSource.web,
+  }) {
     if (value is! Map<String, Object?>) {
-      return const RecommendationSettings.defaults();
+      return RecommendationSettings.defaults(source: defaultSource);
     }
     bool flag(String key, bool fallback) =>
         value[key] is bool ? value[key] as bool : fallback;
@@ -103,7 +106,7 @@ final class RecommendationSettings {
           RecommendationSource.values
               .where((item) => item.name == value['source'])
               .firstOrNull ??
-          RecommendationSource.web,
+          defaultSource,
       reportInteractions: flag(
         'reportInteractions',
         _defaultReportInteractions,

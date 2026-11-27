@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:bilisail/app/platform_defaults.dart';
 import 'package:bilisail/core/storage/app_database.dart';
+import 'package:bilisail/domain/recommendation_source.dart';
 import 'package:bilisail/domain/responsive_layout_settings.dart';
 import 'package:bilisail/features/settings/application/settings_controller.dart';
 import 'package:bilisail/features/settings/data/sqlite_settings_repository.dart';
@@ -26,6 +27,7 @@ void main() {
         database,
         defaultNavigationMode: workspaceNavigationModeForPlatform(platform),
         defaultCardCoverRatio: cardCoverRatioForPlatform(platform),
+        defaultRecommendationSource: recommendationSourceForPlatform(platform),
         defaultShortcuts: shortcutSettingsForPlatform(platform),
         defaultHighEnergyProgressEnabled: highEnergyProgressEnabledForPlatform(
           platform,
@@ -49,6 +51,9 @@ void main() {
           orientation: AppOrientationPreference.landscape,
           defaultDynamicTab: DynamicPageTab.videoDynamic,
           navigationMode: WorkspaceNavigationMode.multipleTabs,
+          recommendations: defaults.recommendations.copyWith(
+            source: RecommendationSource.desktop,
+          ),
           responsiveLayout: defaults.responsiveLayout.copyWith(
             cardCoverRatio:
                 defaults.responsiveLayout.cardCoverRatio ==
@@ -131,6 +136,14 @@ void main() {
         expect(settings.defaultDynamicTab, DynamicPageTab.dynamic);
         expect(settings.checkPrereleaseUpdates, isFalse);
         expect(settings.navigationMode, defaults.navigationMode);
+        expect(
+          settings.recommendations.source,
+          defaults.recommendations.source,
+        );
+        expect(
+          settings.responsiveLayout.cardCoverRatio,
+          defaults.responsiveLayout.cardCoverRatio,
+        );
         expect(settings.closeTabOnMiddleClick, isFalse);
         expect(settings.closeTabOnRightClick, isFalse);
         expect(settings.closeTabOnDoubleClick, isFalse);

@@ -4,13 +4,13 @@ import '../../domain/recommendation_settings.dart';
 import '../../features/settings/application/settings_controller.dart';
 
 final recommendationSettingsProvider = Provider<RecommendationSettings>(
-  (ref) => ref.watch(
-    settingsControllerProvider.select(
-      (value) =>
-          value.asData?.value.recommendations ??
-          const RecommendationSettings.defaults(),
-    ),
-  ),
+  (ref) =>
+      ref.watch(
+        settingsControllerProvider.select(
+          (value) => value.value?.recommendations,
+        ),
+      ) ??
+      ref.watch(settingsDefaultsProvider).recommendations,
 );
 
 final recommendationFilterProvider = Provider<RecommendationFilter>(
