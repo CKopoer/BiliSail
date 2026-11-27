@@ -199,34 +199,38 @@ void main() {
       expect(ids(), ['new-device']);
     },
   );
-  test(
-    'cover ratio changes keep the App feed and its pending pagination',
-    () async {
-      await source(RecommendationSource.app);
-      complete('first', cursor: '123');
-      await container.pump();
-      final more = controller.loadMore();
-      final pending = feed.calls.last;
-      final count = feed.calls.length;
-      expect(feed.appRequests.last.cursor, '123');
 
+  test(
+    'changing cover ratio reloads App only and discards the old cursor',
+    () async {
       final settings = container.read(settingsControllerProvider.notifier);
+      final first = controller.refresh();
+      complete('web');
+      await first;
       await settings.setCardCoverRatio(CardCoverRatio.standard);
       await container.pump();
-      expect(feed.calls, hasLength(count));
-      expect(pending.cancellation.isCancelled, isFalse);
-      expect(ids(), ['first']);
+      expect(feed.calls, hasLength(1));
 
-      complete('second', cursor: '456');
-      await more;
-      expect(ids(), ['first', 'second']);
+      await source(RecommendationSource.app);
+      expect(feed.appRequests.last.coverRatio, CardCoverRatio.standard);
+      complete('standard', cursor: '123');
+      await container.pump();
+      final more = controller.loadMore();
+      final stale = feed.calls.last;
+      expect(feed.appRequests.last.cursor, '123');
+      expect(feed.appRequests.last.coverRatio, CardCoverRatio.standard);
+
       await settings.setCardCoverRatio(CardCoverRatio.widescreen);
       await container.pump();
-      expect(feed.calls, hasLength(count));
-      final next = controller.loadMore();
-      expect(feed.appRequests.last.cursor, '123');
-      complete('third');
-      await next;
+      expect(stale.cancellation.isCancelled, isTrue);
+      expect(feed.appRequests.last.coverRatio, CardCoverRatio.widescreen);
+      expect(feed.appRequests.last.cursor, '0');
+      expect(feed.appRequests.last.reason, AppRecommendationLoadReason.initial);
+      complete('wide');
+      await container.pump();
+      stale.result.complete(const PageResult(items: [], hasMore: false));
+      await more;
+      expect(ids(), ['wide']);
     },
   );
 }

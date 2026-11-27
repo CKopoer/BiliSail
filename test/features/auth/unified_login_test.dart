@@ -368,7 +368,7 @@ void main() {
     },
   );
 
-  test('one HD scan commits Cookie and token together and immediately enables App recommendation', () async {
+  test('one Android phone scan commits Cookie and token together and immediately enables App recommendation', () async {
     await session.signIn();
     expect(session.current.isSignedIn, isTrue);
     expect(session.current.appSessionAvailable, isTrue);
@@ -457,7 +457,7 @@ void main() {
     expect(secure.value, isNull);
     expect(session.appCredentials, isNull);
   });
-  test('missing HD Cookies cannot become a token-only login', () async {
+  test('missing QR Cookies cannot become a token-only login', () async {
     transport.includeCookies = false;
     await session.signIn();
     expect(session.current.status, AuthStatus.failed);
@@ -617,6 +617,7 @@ final class _Transport implements ApiTransport, ApiFormTransport {
     }
     if (uri.path == '/x/v2/feed/index') {
       expect(uri.host, 'app.bilibili.com');
+      expect(uri.queryParameters['appkey'], '1d8b6e7d45233436');
       expect(headers.containsKey('Cookie'), isFalse);
       expect(uri.queryParameters['access_key'], feedAccessToken);
       expect(headers['x-bili-mid'], feedAccountMid);
@@ -675,6 +676,11 @@ final class _Transport implements ApiTransport, ApiFormTransport {
       });
     }
     expect(fields['sign'], isNotEmpty);
+    if (uri.path.startsWith('/x/passport-tv-login/qrcode/')) {
+      expect(fields['appkey'], '783bbb7264451d82');
+      expect(fields['mobi_app'], 'android');
+      expect(headers['app-key'], 'android64');
+    }
     lastRecaptchaToken = fields['recaptcha_token'];
     const captchaUrl =
         'https://www.bilibili.com/h5/project-msg-auth/verify?recaptcha_token=old-token&gee_gt=old-gt&gee_challenge=old-challenge';

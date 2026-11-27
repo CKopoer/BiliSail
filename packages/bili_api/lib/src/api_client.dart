@@ -360,19 +360,21 @@ final class BiliApiClient {
     check();
     final device = deviceInfo ?? await appDeviceInfo(context: active);
     check();
-    final signed = AppProfile.sign({
-      ...parameters,
-      if (accessToken != null && accessToken.isNotEmpty)
-        'access_key': accessToken,
-    }, _clock());
+    final signed = passport
+        ? AndroidPhoneProfile.signQr(parameters, _clock())
+        : AndroidPhoneProfile.sign({
+            ...parameters,
+            if (accessToken != null && accessToken.isNotEmpty)
+              'access_key': accessToken,
+          }, _clock());
     final headers = {
       'Accept': 'application/json',
-      'User-Agent': AppProfile.userAgentFor(device),
+      'User-Agent': AndroidPhoneProfile.userAgentFor(device),
       'buvid': buvid,
-      'app-key': 'android_hd',
+      'app-key': 'android64',
       'env': 'prod',
       if (path == '/x/v2/feed/index')
-        ...AppProfile.recommendationHeaders(
+        ...AndroidPhoneProfile.recommendationHeaders(
           appAccountMid,
           sessionId: _appSessionId,
           traceId: '${_appRandomHex(16)}:${_appRandomHex(8)}:0:0',

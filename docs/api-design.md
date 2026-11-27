@@ -1,6 +1,6 @@
 # API、鉴权与数据边界
 
-2026-11-27 App 首页推荐 GET `app.bilibili.com/x/v2/feed/index` 恢复 Android HD 2.0.1 的 profile。请求使用 `mobi_app=android_hd`、`device=pad`、`build=2001100`、`column=2`、HD UA、`app-key=android_hd` 和 HD MD5 签名。同账号 App token 随 `access_key` 发送，无 App 凭据时以游客身份请求。沿用 JSON `data.items`、服务端首卡游标、刷新场景、取消、账号 epoch、25 秒总期限和每次 2 秒的有界读重试。封面比例由同一列表中的每张卡选择。详见[视频卡片封面](validation/shared-video-cards.md#2026-11-27app-hd-推荐封面)。
+2026-11-28 App 首页推荐、统一扫码登录和推荐上报使用 Android 手机版 9.21.0（build 9210300）。GET `app.bilibili.com/x/v2/feed/index` 发送 `mobi_app=android`、`device=phone`，4:3 请求双列，16:9 请求单列。翻页沿用当前比例与服务端首卡游标，切换比例从新列表开始。详见[手机版推荐封面实测](validation/shared-video-cards.md#android-手机版推荐封面)。
 
 2026-11-24 课程（PUGV）以 Web Cookie 读取 `api.bilibili.com` 的 JSON 接口。`GET /pugv/view/web/season` 接受 `ep_id` 或 `season_id`，返回课程、章节及课时目录；`GET /pugv/player/web/playurl` 使用 `ep_id/cid/qn/fnver/fnval/fourk` 获取可播放的 DASH 音视频分轨。两者无 WBI、CSRF 或客户端翻页，沿用 25 秒总期限、账号 epoch、取消与有界读重试。课时时长以秒计，目录保留不可播项。每一课时的评论用 `oid=课时 ID, type=33`。登录账号沿用原有心跳设置和单次 CSRF POST，课程使用 `type=10, aid, cid, epid, sid`。课程与影视详情分开缓存，本地 SQLite v4 为课时新增可空列。
 
@@ -139,7 +139,7 @@ ApiPage<T> { items, nextCursor, hasMore }
 | --- | --- | --- | --- |
 | 扫码登录 M0/M2 | `/x/passport-login/web/qrcode/generate`、`/poll` | U `Models/Requests/Api/AccountApi.cs` | AuthClient；Web 二维码与 Set-Cookie，取消/过期/确认 |
 | 密码/短信登录（提前实现） | 内嵌 `https://passport.bilibili.com/login`；应用调用 `/x/web-interface/nav` 验证 | U AccountApi、LoginVM、LoginDialog；dart_simple_live Web 登录页 | Platform WebView → 会话控制器；保留 Cookie 作用域、账号校验和安全存储；不在 API 包维护官网表单 POST；见 [登录验证](validation/password-sms-login.md) |
-| 统一 Web/App 扫码登录 | `passport.bilibili.com` POST `/x/passport-tv-login/qrcode/auth_code`、`/poll` | PiliPlus `lib/http/login.dart` | HD profile/签名，不带 Cookie；用户点击后有界轮询，成功同时返回 token 和 Cookie，经 nav 验证后一起保存 |
+| 统一 Web/App 扫码登录 | `passport.bilibili.com` POST `/x/passport-tv-login/qrcode/auth_code`、`/poll` | [扫码端点和 Android 密钥配对](https://github.com/Goooler/bilibili-API-collect/blob/c8bb8c9df0992e0db9e2ba2f26b3ec45e96795db/docs/login/login_action/QR.md#appkey-可用列表) | 申请与轮询均用手机版扫码签名和同一 buvid。确认后校验 token 的 MID 与 Web Cookie 的 nav 身份，一起保存。 |
 | 会话与 WBI M0/M2 | `/x/web-interface/nav`、cookie info/refresh/confirm | K `BiliKernel.Abstractions/Bili/BiliApis.cs`、Core Authenticator；U AccountApi | SessionStore；刷新要取得所需 refresh 数据，缺失则重新登录 |
 | 推荐 | Web `/x/web-interface/index/top/feed/rcmd`；桌面端 `/x/web-interface/wbi/index/top/feed/rcmd`；App `app.bilibili.com` GET `/x/v2/feed/index` | K VideoDiscoveryClient；PiliPlus `lib/http/video.dart`、[PR #3463](https://github.com/bggRGjQaUbCoE/PiliPlus/pull/3463) | Web/桌面端为 `api.bilibili.com` GET、可选 Web Cookie、WBI 签名；桌面端 `plat=1`、`feed_version=V1`、`ps=30`、`fresh_type=0/3/4`，从 0 开始的独立采样序号；App 签名、稳定 buvid、可选 access_key，idx 从 0 开始、首请求 pull=true；25 秒总 deadline、读最多三次、2 MiB/100 卡片、双空页预算；失败页显式重试复用采样序号，不重放反馈写入 |
 | App 推荐反馈/撤销 | `app.bilibili.com` GET `/x/feed/dislike`、`/x/feed/dislike/cancel` | PiliPlus `lib/http/video.dart`、`video_popup_menu.dart` | token 必需；使用服务端 three_point_v2 的 reason_id/feedback_id，撤销携带 aid/goto；虽为 GET，仍按单次写入处理，未知结果不重放 |
@@ -280,7 +280,7 @@ Cookie 由 domain/path/secure/expiry 规则的 CookieStore 维护，持久化整
 - WBI key 更新与会话刷新是不同流程，各自合并并发请求。外部时钟可注入测试，生产使用 UTC 时间戳。
 - CSRF 从当前 Cookie 会话取得，按端点规定放 query/body；Web CSRF 与 App 签名不是替代关系。
 - buvid 等设备上下文由协议模块按需要获取和持久化，保持同一安装内一致；不能每次请求随机生成或全局伪造设备参数。
-- App 首页推荐和 HD 授权通过 `AppProfile` 声明客户端 app key 和签名。App host 不加入 Web Cookie 目的地白名单；token 仅保存在独立系统安全槽，普通数据库只保存设备标识与撤销标记。
+- `AndroidPhoneProfile` 为扫码和推荐分别选择对应的手机版 appkey。推荐与反馈使用同一推荐签名，App 推荐登录态通过 `access_key` 和对应账号标识传递。App token 保存在系统安全存储。
 
 ## 6. 重试、降级和错误
 
@@ -332,6 +332,8 @@ Protobuf 只引入所需消息及传递依赖，记录源提交、生成器版�
 
 ## 视频卡 4:3 封面
 
+App 推荐双列（`column=2`）优先读取显式 `cover43`，普通双列小卡 `small_cover_v2` 可直接用响应的 `cover`。其他卡型缺少 4:3 地址时进入共享补查。16:9 使用手机版单列（`column=1`）本次响应的 `cover`。
+
 在 4:3 模式下，共享视频卡直接采用列表给出的有效 4:3 封面。Web 和桌面推荐沿用现有设备 Cookie 和分页参数，优先读 `cover43`，其次读 `pic_4_3`。即使它与普通 `pic` 指向同一地址，也直接加载。缺少有效地址、拥有有效 BV 号的卡片在活动页面挂载后使用 GET `api.bilibili.com/x/article/cards`。请求用逗号连接去重后的 `ids`，每批最多 30 条，同一请求作用域内串行执行。使用 B 站首页 Referer 和访客 GET，无 WBI 签名、Cookie 或 App token。按响应 `data` 的各对象中实际返回的 `bvid` 匹配请求，只取有效的 `cover43` 地址。
 
 每批最多一次，超时 2 秒，JSON 响应上限 512 KiB。同帧挂载且需要补取的卡片共享批次，按 BV 去重，成功结果包含有界的缺项缓存。账号会话变化或批次失去全部订阅时取消旧请求。需要补取的卡片等待批量结果后选择封面地址，缺少独立地址时使用普通封面。游客抽查的 30 条请求均取得记录，其中 28 条有独立封面。[公开批量接口样例](https://api.bilibili.com/x/article/cards?ids=BV1YdZtYHE6d,BV1xx411c7mD)
@@ -345,7 +347,7 @@ Protobuf 只引入所需消息及传递依赖，记录源提交、生成器版�
 | 推荐来源 | HTTPS POST | 事件与身份 |
 | --- | --- | --- |
 | Web、桌面端 / PC | `data.bilibili.com/v2/log/web?content_type=pbrequest&logid=021436&disable_compression=true` | 官网 reporter-pb 的二进制请求。曝光合并为 `333.1007.tianma.feed-card.show` 的 `showlist`，每次点击保留独立的 `333.1007.tianma.feed-card.click`。沿用卡片的内容 ID、CID、track_id、对应来源的 feed_version 和 fresh_type，记录实际展示位置。Web 设备标识和用户 ID 取自适用于目标域的 Cookie。 |
-| App | `dataflow.biliapi.com/log/pbmobile/unrealtime?android` | Neuron 异步批量通道，`Neuron-Events` 指明帧数，每个 RDIO 帧包含元数据和一个 AppEvent Protobuf。曝光为 `tm.recommend.feed-card.0.show`，点击为 `tm.recommend.main-card.0.click`。使用拉取推荐的 Android HD 协议身份、设备标识、可用的 MID 和原始响应内序号。 |
+| App | `dataflow.biliapi.com/log/pbmobile/unrealtime?android` | 曝光为 `tm.recommend.feed-card.0.show`，点击为 `tm.recommend.main-card.0.click`。Neuron 的 RDIO 帧头和 AppEvent 均使用手机版 appId 1、平台 3 与相同 build。事件携带推荐设备 buvid、可用的 MID、相应 track ID 和原始响应内序号。 |
 
 两种 POST 都只发送一次，超时上限 3 秒。账号凭据不随请求转发。应用前台、推荐页可见且卡片可见面积达到一半时计一次曝光。点击早于可见性采样时同时记曝光。同一响应的卡片滚回或在刷新后保留时沿用曝光记录。点击、悬停预览和卡片菜单各自独立。
 

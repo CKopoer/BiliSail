@@ -7,6 +7,7 @@ import '../../../domain/page_result.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
 import '../../../domain/recommendation_settings.dart';
+import '../../../domain/responsive_layout_settings.dart';
 import '../../../shared/application/recommendation_filter_provider.dart';
 import '../../video/domain/video_actions_repository.dart';
 import '../domain/feed_repository.dart';
@@ -137,7 +138,12 @@ final class FeedController extends Notifier<FeedState> {
   final _rejected = <VideoId, RecommendationFeedback>{};
   final _uncertainRejections = <VideoId>{};
   final _uncertainRestorations = <VideoId>{};
-  ({RecommendationSource source, int identity})? _recommendationKey;
+  late ({
+    RecommendationSource source,
+    int identity,
+    CardCoverRatio? appCoverRatio,
+  })
+  _recommendationKey;
   String _appRecommendationCursor = '0';
   AppRecommendationRequest? _failedAppRefresh;
 
@@ -235,28 +241,30 @@ final class FeedController extends Notifier<FeedState> {
     _recommendationKey = ref.read(recommendationQueryKeyProvider);
     ref.listen(recommendationQueryKeyProvider, (_, next) {
       if (_recommendationKey == next) return;
+      final sourceChanged = _recommendationKey.source != next.source;
       final identityChanged =
-          next.source == RecommendationSource.app &&
-          _recommendationKey?.source == next.source;
+          !sourceChanged && _recommendationKey.identity != next.identity;
       _recommendationKey = next;
       _appRecommendationCursor = '0';
       _failedAppRefresh = null;
       _savedChannels.remove(HomeChannel.recommended);
       _unloadedChannels.remove(HomeChannel.recommended);
       _itemIndices.remove(HomeChannel.recommended);
-      for (final token in _rejectWrites.values) {
-        token.cancel();
+      if (sourceChanged || identityChanged) {
+        for (final token in _rejectWrites.values) {
+          token.cancel();
+        }
+        _rejectWrites.clear();
+        _rejected.clear();
+        _uncertainRejections.clear();
+        _uncertainRestorations.clear();
       }
-      _rejectWrites.clear();
-      _rejected.clear();
-      _uncertainRejections.clear();
-      _uncertainRestorations.clear();
       if (state.channel == HomeChannel.recommended) {
         _generation++;
         _cancellation?.cancel();
         _page = 0;
         _pagesWithoutNewItems = 0;
-        state = const FeedState();
+        state = _withFeedback(const FeedState());
         unawaited(
           refresh(
             appReason: identityChanged
@@ -558,6 +566,8 @@ final class FeedController extends Notifier<FeedState> {
         ? failedAppRefresh
         : AppRecommendationRequest(
             cursor: _appRecommendationCursor,
+            coverRatio:
+                _recommendationKey.appCoverRatio ?? CardCoverRatio.standard,
             reason:
                 appReason ??
                 (_page == 0
@@ -756,6 +766,9 @@ final class FeedController extends Notifier<FeedState> {
                 AppRecommendationRequest(
                   cursor: _appRecommendationCursor,
                   reason: AppRecommendationLoadReason.loadMore,
+                  coverRatio:
+                      _recommendationKey.appCoverRatio ??
+                      CardCoverRatio.standard,
                 ),
             cancellation: cancellation,
           );

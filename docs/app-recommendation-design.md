@@ -2,6 +2,8 @@
 
 日期：2026-10-27。承接[推荐流设置](recommendation-settings-design.md)，本轮接入 App 来源、独立 buvid、可选 App 授权和服务端反馈，保留原 Web 来源及已保存设置。
 
+2026-11-28 推荐请求、扫码和 Neuron 曝光／点击统一使用 Android 手机版。4:3 读取双列小卡封面，16:9 读取单列封面。切换比例会重置 App 推荐游标，显示与当前比例匹配的列表。[封面实测](validation/shared-video-cards.md#android-手机版推荐封面) · [统一登录](unified-login-design.md)
+
 2026-11-16 后续实施：flush 与官方首卡锚点一起传递，统一与 HD 凭据匹配的 profile；Android 读取公开设备事实，其他平台使用固定参考。推荐 trackid 经有界内存引用和播放会话传到既有 Web 心跳，无新增曝光上报。见[请求与播放归因修正](validation/app-recommendation-alignment-2026-11-16.md)。
 
 2026-11-16：对官网当前 Android 9.19.0 APK 做 JADX 分析，确认固定 `flush=8` 和 `idx=page-1` 与官方场景／响应游标不一致；当前 profile 与 PiliPlus 一致不等于与官方 App 同步。本轮仅调查并完成游客只读抽样，未修改协议或验证账号个性化，见[官方 App 对照](validation/app-recommendation-official-audit-2026-11-16.md)。

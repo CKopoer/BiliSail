@@ -2,9 +2,11 @@
 
 日期：2026-10-28。取代 App 推荐的独立扫码授权，由既有 SessionRepository 统一拥有 Cookie、App token 和登录提交。
 
+2026-11-28 普通扫码的申请和轮询都发送 `platform=android`、`mobi_app=android` 和同一 buvid，使用手机版扫码 appkey。确认后取得的 token 可用于手机版推荐签名。SessionRepository 核对 Cookie 和 token 的账号后继续成对保存。密码和短信仍使用各自的 Passport 流程。[扫码端点与 appkey 配对说明](https://github.com/Goooler/bilibili-API-collect/blob/c8bb8c9df0992e0db9e2ba2f26b3ec45e96795db/docs/login/login_action/QR.md#appkey-可用列表)
+
 2026-11-15：按用户后续要求，密码／短信入口已改为 App Passport 流程，与扫码一样取得并校验双凭据，包含极验和绑定手机号验证。明确的“官网登录”入口仍支持仅 Cookie 会话；不自动转换已有会话。推荐设置的来源说明和身份摘要已移除。当前实现及验证见[密码／短信 App 登录](validation/password-sms-app-login-2026-11-15.md)。以下 2026-10-28 的“密码／短信继续使用官网”等内容保留当时事实。
 
-## 协议与职责
+## 2026-10-28 的协议与职责
 
 - 只读参考 PiliPlus `936072449e82e3d90c28c728c0087bf5136fa441` 的 `http/login.dart`、`pages/login/controller.dart` 和账号拦截器，独立实现。HD 扫码成功结果是顶层 token 字段与 `cookie_info.cookies`，兼容有明确 token_info 的响应；不能仅使用之前测试虚构的嵌套结构。
 - 普通扫码使用 HD auth_code / poll，一次扫码同时取得 Cookie 和 App token。密码/短信继续复用内嵌官网，在隔离 Cookie/nav 校验后保存 Web 会话，不发起 App 授权、确认或轮询请求。2026-10-28 经真实旧会话探测失败后，按用户要求删除 Cookie 换取 App token 的实现。

@@ -22,7 +22,11 @@ final recommendationReporterProvider = Provider<RecommendationReporter?>((ref) {
   }
   final repository = ref.watch(feedRepositoryProvider);
   if (repository is! RecommendationReportingRepository) return null;
-  final key = ref.watch(recommendationQueryKeyProvider);
+  final key = ref.watch(
+    recommendationQueryKeyProvider.select(
+      (key) => (source: key.source, identity: key.identity),
+    ),
+  );
   final epoch = ref.watch(sessionEpochProvider);
   final reporter = RecommendationReporter(
     repository as RecommendationReportingRepository,

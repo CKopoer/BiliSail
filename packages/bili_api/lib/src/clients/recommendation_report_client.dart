@@ -57,6 +57,7 @@ final class RecommendationReportClient {
     bool desktop = false,
     String? appBuvid,
     String? appMid,
+    AppDeviceInfo appDevice = const AppDeviceInfo(),
     required ApiRequestContext context,
   }) async {
     const endpoint = 'recommendation_report';
@@ -107,7 +108,7 @@ final class RecommendationReportClient {
       headers: mobile
           ? {
               'Neuron-Events': '${events.length}',
-              'User-Agent': AppProfile.userAgent,
+              'User-Agent': AndroidPhoneProfile.userAgentFor(appDevice),
             }
           : {
               'Origin': 'https://www.bilibili.com',
@@ -201,13 +202,13 @@ final class RecommendationReportClient {
   ) {
     const logId = '001538';
     final app = _Message()
-      ..number(1, 5)
-      ..number(2, 3)
+      ..number(1, AndroidPhoneProfile.appId)
+      ..number(2, AndroidPhoneProfile.platformId)
       ..string(3, buvid)
       ..string(4, 'master');
     final runtime = _Message()
-      ..string(5, '2.0.1')
-      ..string(6, AppProfile.build);
+      ..string(5, AndroidPhoneProfile.version)
+      ..string(6, AndroidPhoneProfile.build);
     final batch = BytesBuilder(copy: false);
     for (final e in events) {
       final name = e.click
@@ -241,9 +242,9 @@ final class RecommendationReportClient {
       _writeNeuronFrame(batch, body.bytes.takeBytes(), {
         'logId': logId,
         'eventId': name,
-        'appId': '5',
-        'appVersionCode': AppProfile.build,
-        'platform': '3',
+        'appId': '${AndroidPhoneProfile.appId}',
+        'appVersionCode': AndroidPhoneProfile.build,
+        'platform': '${AndroidPhoneProfile.platformId}',
       });
     }
     return batch.takeBytes();

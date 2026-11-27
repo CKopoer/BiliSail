@@ -1,4 +1,5 @@
 import '../api_client.dart';
+import '../app_profile.dart';
 import '../models.dart';
 import '../models/app_recommendation_models.dart';
 
@@ -7,6 +8,11 @@ final class AppPassportClient {
     : _clock = clock ?? DateTime.now;
   final BiliApiClient api;
   final DateTime Function() _clock;
+  static const _qrParameters = {
+    'local_id': '0',
+    'platform': 'android',
+    'mobi_app': AndroidPhoneProfile.mobiApp,
+  };
 
   Future<ApiAppQrCode> generate({
     required String buvid,
@@ -14,7 +20,7 @@ final class AppPassportClient {
   }) async {
     final data = await api.requestAppJson(
       '/x/passport-tv-login/qrcode/auth_code',
-      {'local_id': '0', 'platform': 'android', 'mobi_app': 'android_hd'},
+      _qrParameters,
       endpoint: 'app_qr_generate',
       buvid: buvid,
       context: context,
@@ -41,7 +47,7 @@ final class AppPassportClient {
   }) async {
     final data = await api.requestAppJson(
       '/x/passport-tv-login/qrcode/poll',
-      {'auth_code': authCode, 'local_id': '0'},
+      {..._qrParameters, 'auth_code': authCode},
       endpoint: 'app_qr_poll',
       buvid: buvid,
       context: context,

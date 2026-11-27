@@ -135,12 +135,13 @@ void main() {
   }
 
   test(
-    'Android posts two individually framed AppEvents under the HD feed identity',
+    'Android posts exposure and click under the same phone identity as the feed',
     () async {
       await api.recommendationReports.send(
         [_show, _click],
         appBuvid: 'app-device',
         appMid: '13',
+        appDevice: const AppDeviceInfo(model: 'Pixel 9', network: 'mobile'),
         context: const ApiRequestContext(),
       );
       expect(
@@ -149,6 +150,11 @@ void main() {
       );
       expect(transport.contentType, 'application/octet-stream');
       expect(transport.headers['Neuron-Events'], '2');
+      expect(
+        transport.headers['User-Agent'],
+        contains('model/Pixel 9 mobi_app/android build/9210300'),
+      );
+      expect(transport.headers['User-Agent'], endsWith('network/1'));
       final bytes = transport.body;
       final data = ByteData.sublistView(bytes);
       var offset = 0;
@@ -158,7 +164,7 @@ void main() {
         final end = offset + 9 + (length & 0x7fffffff);
         expect(length >> 31, 1);
         // Check bytes from the reference Android RDIO length-checksum table.
-        expect(bytes[offset + 8], click ? 18 : 89);
+        expect(bytes[offset + 8], click ? 176 : 28);
         offset += 9;
         final metadata = <String, String>{};
         int valueLength;
@@ -178,13 +184,19 @@ void main() {
         expect(metadata, {
           'logId': '001538',
           'eventId': name,
-          'appId': '5',
-          'appVersionCode': '2001100',
+          'appId': '1',
+          'appVersionCode': '9210300',
           'platform': '3',
         });
         final event = _fields(bytes.sublist(offset, end));
         expect(_text(event, 1), name);
-        expect(_text(_nested(event, 2), 3), 'app-device');
+        final app = _nested(event, 2);
+        expect(app[1], [1]);
+        expect(app[2], [3]);
+        expect(_text(app, 3), 'app-device');
+        final runtime = _nested(event, 3);
+        expect(_text(runtime, 5), '9.21.0');
+        expect(_text(runtime, 6), '9210300');
         expect(_text(event, 4), '13');
         expect(event[9], [click ? 2 : 3]);
         expect(_nested(event, click ? 11 : 12), isEmpty);

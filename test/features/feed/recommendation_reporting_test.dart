@@ -4,6 +4,7 @@ import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/domain/recommendation_card.dart';
 import 'package:bilisail/domain/recommendation_settings.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/domain/responsive_layout_settings.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/feed/application/feed_controller.dart';
 import 'package:bilisail/features/feed/application/recommendation_reporter.dart';
@@ -45,6 +46,46 @@ class _Repository extends Fake
 }
 
 void main() {
+  testWidgets('App cover layout changes preserve queued card clicks', (
+    tester,
+  ) async {
+    final repository = _Repository();
+    final container = ProviderContainer(
+      overrides: [
+        feedRepositoryProvider.overrideWithValue(repository),
+        settingsRepositoryProvider.overrideWithValue(
+          MemorySettingsRepository(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    await container.read(settingsControllerProvider.future);
+    final settings = container.read(settingsControllerProvider.notifier);
+    await settings.setRecommendations(
+      RecommendationSettings(source: RecommendationSource.app),
+    );
+    final reporter = container.read(recommendationReporterProvider)!;
+    const card = RecommendationCard(
+      source: RecommendationSource.app,
+      epoch: 0,
+      id: '42',
+      goto: 'av',
+      trackId: 'phone-click',
+    );
+    reporter.record(
+      card,
+      RecommendationInteraction.click,
+      position: 1,
+      row: 1,
+      column: 1,
+    );
+    await settings.setCardCoverRatio(CardCoverRatio.standard);
+    expect(container.read(recommendationReporterProvider), same(reporter));
+    await tester.pump(const Duration(seconds: 1));
+    expect(repository.batches.single.single.card, same(card));
+    repository.response.complete();
+  });
+
   testWidgets(
     'slow delivery is bounded; stale impressions and failed batches are discarded',
     (tester) async {
