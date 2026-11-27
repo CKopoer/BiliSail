@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/ui/app_dialog.dart';
 import '../../../domain/app_failure.dart';
+import '../../../domain/audio_quality.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/video_codec.dart';
 import '../application/download_controller.dart';
@@ -53,12 +54,14 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
   late int? _preferredQuality = widget.initialSelection?.quality;
   late VideoCodecPreference _preferredCodec =
       widget.initialSelection?.codec ?? VideoCodecPreference.h264;
+  late AudioQualityPreference _preferredAudioQuality =
+      widget.initialSelection?.audioQuality ?? AudioQualityPreference.aac192;
   late bool _danmaku = widget.initialSelection?.includeDanmaku ?? true;
   late bool _subtitles = widget.initialSelection?.includeSubtitles ?? true;
   late DownloadOutput _output = ref.read(downloadControllerProvider).canMerge
       ? (widget.initialSelection?.output ?? DownloadOutput.mp4)
       : DownloadOutput.separate;
-  Set<DownloadVideoOption> _options = const {};
+  DownloadOptions? _options;
   bool _loading = false;
   bool _submitting = false;
   String? _error;
@@ -66,7 +69,7 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
   int _generation = 0;
   late final String _openedScope;
   late final int _openedEpoch;
-  final Map<String, Set<DownloadVideoOption>> _optionCache = {};
+  final Map<String, DownloadOptions> _optionCache = {};
 
   String _cacheKey(DownloadItem item) =>
       '$_openedScope:$_openedEpoch:${item.key}';
@@ -103,7 +106,7 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
     if (_accountChanged) {
       setState(() {
         _loading = false;
-        _options = const {};
+        _options = null;
         _error = '账号已变化，请重新打开下载窗口';
       });
       return;
@@ -113,12 +116,12 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
         .toList();
     setState(() {
       _loading = chosen.isNotEmpty;
-      _options = const {};
+      _options = null;
       _error = null;
     });
     if (chosen.isEmpty) return;
     try {
-      final loaded = <String, Set<DownloadVideoOption>>{};
+      final loaded = <String, DownloadOptions>{};
       // Keep source reads bounded. A cancelled selection never commits its
       // new results to the per-dialog cache.
       for (var start = 0; start < chosen.length; start += 3) {
@@ -131,7 +134,7 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
             else
               ref
                   .read(downloadControllerProvider.notifier)
-                  .videoOptions(item, cancellation: cancellation),
+                  .options(item, cancellation: cancellation),
         ]);
         if (cancellation.isCancelled || _accountChanged) return;
         for (var index = 0; index < batch.length; index++) {
@@ -146,13 +149,20 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
         return;
       }
       _optionCache.addAll(loaded);
-      final common = loaded.values.reduce((a, b) => a.intersection(b));
+      final common = loaded.values.reduce(
+        (a, b) => (
+          video: a.video.intersection(b.video),
+          audio: a.audio.intersection(b.audio),
+        ),
+      );
       setState(() {
         _options = common;
-        if (common.isEmpty) {
+        if (common.video.isEmpty) {
           _error = chosen.length == 1
               ? '当前分集没有可下载的视频轨道'
               : '所选分集没有共同可用的画质和编码，请调整选择';
+        } else if (common.audio.isEmpty) {
+          _error = '所选分集没有共同可用的音质，请调整选择';
         }
         _loading = false;
       });
@@ -167,7 +177,7 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
       if (mounted && !cancellation.isCancelled && generation == _generation) {
         setState(() {
           _loading = false;
-          _error = '读取画质失败，请重试';
+          _error = '读取下载选项失败，请重试';
         });
       }
     }
@@ -184,10 +194,12 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
     _loadOptions();
   }
 
-  Future<void> _submit(DownloadVideoOption option) async {
+  Future<void> _submit(DownloadSelection selection) async {
+    final option = (quality: selection.quality, codec: selection.codec);
     if (_loading ||
         _submitting ||
-        !_options.contains(option) ||
+        _options?.video.contains(option) != true ||
+        _options?.audio.contains(selection.audioQuality) != true ||
         _selected.isEmpty ||
         _accountChanged) {
       if (_accountChanged) {
@@ -210,16 +222,7 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
       if (!mounted || _accountChanged) return;
       await ref
           .read(downloadControllerProvider.notifier)
-          .enqueue(
-            selected,
-            DownloadSelection(
-              quality: option.quality,
-              codec: option.codec,
-              includeDanmaku: _danmaku,
-              includeSubtitles: _subtitles,
-              output: _output,
-            ),
-          );
+          .enqueue(selected, selection);
       if (!mounted) return;
       if (source.sessionEpoch != _openedEpoch ||
           source.accountScope != _openedScope) {
@@ -249,13 +252,16 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
     ref.watch(downloadSourceRepositoryProvider);
     final accountChanged = _accountChanged;
     final validCount = widget.items.where((item) => item.isValid).length;
-    final qualities = _options.map((option) => option.quality).toSet().toList()
-      ..sort((a, b) => b.compareTo(a));
+    final options = accountChanged ? null : _options;
+    final videoOptions = options?.video ?? const <DownloadVideoOption>{};
+    final qualities =
+        videoOptions.map((option) => option.quality).toSet().toList()
+          ..sort((a, b) => b.compareTo(a));
     final quality = qualities.contains(_preferredQuality)
         ? _preferredQuality
         : qualities.firstOrNull;
     final codecs =
-        _options
+        videoOptions
             .where((option) => option.quality == quality)
             .map((option) => option.codec)
             .toList()
@@ -263,6 +269,13 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
     final codec = codecs.contains(_preferredCodec)
         ? _preferredCodec
         : codecs.firstOrNull;
+    final audioOptions = options?.audio ?? const <AudioQualityPreference>{};
+    final audioQuality = _preferredAudioQuality.fallbackOrder
+        .where(audioOptions.contains)
+        .firstOrNull;
+    final canMergeAudio = audioQuality?.isAac ?? true;
+    final canMergeSelection = canMerge && canMergeAudio;
+    final output = canMergeSelection ? _output : DownloadOutput.separate;
     return AlertDialog(
       title: const Text('下载视频'),
       content: SizedBox(
@@ -343,10 +356,10 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
                   ),
                 ),
                 const SizedBox(height: 14),
-                if (_loading) ...[
+                if (_loading && !accountChanged) ...[
                   const LinearProgressIndicator(),
                   const SizedBox(height: 8),
-                  const Text('正在读取实际可用画质…'),
+                  const Text('正在读取可用画质和音质…'),
                 ] else ...[
                   DropdownButtonFormField<int>(
                     initialValue: quality,
@@ -381,16 +394,40 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
                             }
                           },
                   ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<AudioQualityPreference>(
+                    initialValue: audioQuality,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: '音质'),
+                    items: [
+                      for (final option in AudioQualityPreference.values)
+                        if (audioOptions.contains(option))
+                          DropdownMenuItem(
+                            value: option,
+                            child: Text(
+                              option.displayLabel,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                    ],
+                    onChanged: _submitting || accountChanged
+                        ? null
+                        : (value) {
+                            if (value != null) {
+                              setState(() => _preferredAudioQuality = value);
+                            }
+                          },
+                  ),
                 ],
                 const SizedBox(height: 12),
                 DropdownButtonFormField<DownloadOutput>(
-                  initialValue: _output,
+                  initialValue: output,
                   decoration: const InputDecoration(labelText: '保存格式'),
                   items: [
                     for (final output in DownloadOutput.values)
                       DropdownMenuItem(
                         value: output,
-                        enabled: !output.isMerged || canMerge,
+                        enabled: !output.isMerged || canMergeSelection,
                         child: Text(output.label),
                       ),
                   ],
@@ -402,7 +439,11 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
                 ),
                 const SizedBox(height: 5),
                 Text(
-                  canMerge ? '保留原画质，字幕和弹幕单独保存' : '当前无法合并，可分轨保存',
+                  !canMergeAudio
+                      ? '当前音质仅支持分轨保存'
+                      : canMerge
+                      ? '保留原画质，字幕和弹幕单独保存'
+                      : '当前无法合并，可分轨保存',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 CheckboxListTile(
@@ -437,13 +478,15 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
                       color: Theme.of(context).colorScheme.error,
                     ),
                   ),
-                  if (!_loading && _selected.isNotEmpty && _options.isEmpty)
+                  if (!_loading &&
+                      _selected.isNotEmpty &&
+                      (quality == null || audioQuality == null))
                     TextButton(
                       onPressed: () {
                         _optionCache.clear();
                         _loadOptions();
                       },
-                      child: const Text('重新读取画质'),
+                      child: const Text('重新读取下载选项'),
                     ),
                 ],
               ],
@@ -463,8 +506,18 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
                   !_submitting &&
                   _selected.isNotEmpty &&
                   quality != null &&
-                  codec != null
-              ? () => _submit((quality: quality, codec: codec))
+                  codec != null &&
+                  audioQuality != null
+              ? () => _submit(
+                  DownloadSelection(
+                    quality: quality,
+                    codec: codec,
+                    audioQuality: audioQuality,
+                    includeDanmaku: _danmaku,
+                    includeSubtitles: _subtitles,
+                    output: output,
+                  ),
+                )
               : null,
           child: Text(_submitting ? '添加中…' : '开始下载'),
         ),

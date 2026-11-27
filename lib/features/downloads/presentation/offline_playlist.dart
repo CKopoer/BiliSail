@@ -10,7 +10,8 @@ import '../../../shared/ui/video_card.dart' show durationLabel;
 import '../domain/download_models.dart';
 import '../domain/offline_library.dart';
 import 'download_local_cover.dart';
-import 'downloads_screen.dart' show downloadQualityText, downloadCodecText;
+import 'downloads_screen.dart'
+    show downloadQualityText, downloadCodecText, downloadFormatText;
 
 class OfflineSummary extends StatelessWidget {
   const OfflineSummary({
@@ -49,6 +50,8 @@ class OfflineSummary extends StatelessWidget {
                   item.video.author,
                 '本地',
                 downloadQualityText(task.selection.quality),
+                if (task.selection.audioQuality case final audioQuality?)
+                  audioQuality.displayLabel,
                 if (duration > Duration.zero) durationLabel(duration),
               ].join(' · '),
               style: theme.textTheme.bodySmall,
@@ -416,7 +419,7 @@ class _OfflinePlaylistState extends State<OfflinePlaylist> {
                               value: version,
                               checked: version.id == current?.id,
                               child: Text(
-                                '${downloadQualityText(version.selection.quality)} · ${downloadCodecText(version.selection.codec)} · ${version.selection.output.label}',
+                                downloadFormatText(version.selection),
                               ),
                             ),
                         ],

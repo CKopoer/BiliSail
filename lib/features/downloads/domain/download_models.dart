@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import '../../../domain/app_failure.dart';
+import '../../../domain/audio_quality.dart';
 import '../../../domain/video.dart';
 import '../../pgc/domain/pgc_repository.dart';
 import '../../playback/domain/playback_repository.dart';
@@ -169,16 +170,25 @@ final class DownloadWork {
 
 typedef DownloadVideoOption = ({int quality, VideoCodecPreference codec});
 
+typedef DownloadOptions = ({
+  Set<DownloadVideoOption> video,
+  Set<AudioQualityPreference> audio,
+});
+
 final class DownloadSelection {
   const DownloadSelection({
     this.quality = 80,
     this.codec = VideoCodecPreference.h264,
+    this.audioQuality,
     this.includeDanmaku = true,
     this.includeSubtitles = true,
     this.output = DownloadOutput.separate,
   });
   final int quality;
   final VideoCodecPreference codec;
+
+  /// Older tasks used the highest available AAC bitrate.
+  final AudioQualityPreference? audioQuality;
   final bool includeDanmaku, includeSubtitles;
   final DownloadOutput output;
 }

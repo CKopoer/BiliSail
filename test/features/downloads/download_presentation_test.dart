@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/domain/app_failure.dart';
+import 'package:bilisail/domain/audio_quality.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/domain/video_codec.dart';
@@ -345,6 +346,85 @@ void main() {
     );
     expect(repository.enqueued, isEmpty);
     await repository.close();
+  });
+
+  testWidgets('batch audio choices follow the selected episodes', (
+    tester,
+  ) async {
+    final repository = _DownloadRepository(canMerge: true);
+    addTearDown(repository.close);
+    final source = _SourceRepository()
+      ..audioByCid = {
+        '1': {AudioQualityPreference.aac64, AudioQualityPreference.aac192},
+        '2': {AudioQualityPreference.aac64, AudioQualityPreference.dolby},
+        '3': {AudioQualityPreference.lossless},
+      };
+    await _pump(
+      tester,
+      DownloadDialog(items: [_item(1), _item(2), _item(3)]),
+      repository,
+      source,
+    );
+    final start = find.widgetWithText(FilledButton, '开始下载');
+    expect(find.text('所选分集没有共同可用的音质，请调整选择'), findsOneWidget);
+    expect(tester.widget<FilledButton>(start).onPressed, isNull);
+    await tester.tap(find.text('第 3 集').last);
+    await tester.pumpAndSettle();
+    final audio = tester.widget<DropdownButton<AudioQualityPreference>>(
+      find.byType(DropdownButton<AudioQualityPreference>),
+    );
+    expect(audio.items!.map((option) => option.value), [
+      AudioQualityPreference.aac64,
+    ]);
+    expect(audio.value, AudioQualityPreference.aac64);
+    expect(source.qualityCalls, 3);
+    await tester.tap(start);
+    await tester.pumpAndSettle();
+    expect(repository.enqueued.single.map((item) => item.part.cid), ['1', '2']);
+    expect(repository.selection?.audioQuality, AudioQualityPreference.aac64);
+    expect(repository.selection?.output, DownloadOutput.mp4);
+  });
+
+  testWidgets('FLAC is selectable and can only be saved as separate tracks', (
+    tester,
+  ) async {
+    final repository = _DownloadRepository(canMerge: true);
+    addTearDown(repository.close);
+    await _pump(
+      tester,
+      DownloadDialog(items: [_item(1)]),
+      repository,
+      _SourceRepository()
+        ..audioByCid = {
+          '1': {AudioQualityPreference.aac192, AudioQualityPreference.lossless},
+        },
+      size: const Size(320, 680),
+      textScale: 1.5,
+    );
+    final audio = find.byType(DropdownButton<AudioQualityPreference>);
+    final output = find.byType(DropdownButton<DownloadOutput>);
+    expect(
+      tester.widget<DropdownButton<DownloadOutput>>(output).value,
+      DownloadOutput.mp4,
+    );
+    await tester.ensureVisible(audio);
+    await tester.tap(audio);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.text(AudioQualityPreference.lossless.displayLabel).last,
+    );
+    await tester.pumpAndSettle();
+    final formats = tester.widget<DropdownButton<DownloadOutput>>(output);
+    expect(formats.value, DownloadOutput.separate);
+    expect(
+      formats.items!.where((item) => item.enabled).map((item) => item.value),
+      [DownloadOutput.separate],
+    );
+    await tester.tap(find.text('开始下载'));
+    await tester.pumpAndSettle();
+    expect(repository.selection?.audioQuality, AudioQualityPreference.lossless);
+    expect(repository.selection?.output, DownloadOutput.separate);
+    expect(tester.takeException(), isNull);
   });
 
   for (final output in [DownloadOutput.separate, DownloadOutput.mkv]) {
@@ -785,6 +865,7 @@ void main() {
 
 final class _SourceRepository implements DownloadSourceRepository {
   Map<String, Set<DownloadVideoOption>> optionsByCid = {};
+  Map<String, Set<AudioQualityPreference>> audioByCid = {};
   String scope = 'user:1';
   int epoch = 1;
   int qualityCalls = 0;
@@ -793,16 +874,20 @@ final class _SourceRepository implements DownloadSourceRepository {
   @override
   int get sessionEpoch => epoch;
   @override
-  Future<Set<DownloadVideoOption>> videoOptions(
+  Future<DownloadOptions> options(
     DownloadItem item, {
     required RequestCancellation cancellation,
   }) async {
     qualityCalls++;
-    return optionsByCid[item.part.cid] ??
-        {
-          (quality: 80, codec: VideoCodecPreference.h264),
-          (quality: 64, codec: VideoCodecPreference.h264),
-        };
+    return (
+      video:
+          optionsByCid[item.part.cid] ??
+          {
+            (quality: 80, codec: VideoCodecPreference.h264),
+            (quality: 64, codec: VideoCodecPreference.h264),
+          },
+      audio: audioByCid[item.part.cid] ?? {AudioQualityPreference.aac192},
+    );
   }
 
   @override

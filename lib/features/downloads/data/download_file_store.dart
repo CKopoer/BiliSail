@@ -192,6 +192,8 @@ final class DownloadFileStore {
           'itemKey': task.item.key,
           'quality': task.selection.quality,
           'codec': task.selection.codec.name,
+          if (task.selection.audioQuality case final audioQuality?)
+            'audioQuality': audioQuality.name,
           if (task.selection.output.isMerged)
             'merged': {
               'fileName': task.mergedMedia?.fileName,

@@ -6,7 +6,7 @@ export 'download_models.dart';
 abstract interface class DownloadSourceRepository {
   String get accountScope;
   int get sessionEpoch;
-  Future<Set<DownloadVideoOption>> videoOptions(
+  Future<DownloadOptions> options(
     DownloadItem item, {
     required RequestCancellation cancellation,
   });

@@ -105,6 +105,7 @@ final class DownloadTaskEntry {
             previous.createdAt == task.createdAt &&
             previous.selection.quality == task.selection.quality &&
             previous.selection.codec == task.selection.codec &&
+            previous.selection.audioQuality == task.selection.audioQuality &&
             previous.selection.output == task.selection.output &&
             previous.downloadedBytes == task.downloadedBytes &&
             previous.totalBytes == task.totalBytes &&
@@ -221,12 +222,12 @@ final class DownloadController extends Notifier<DownloadQueueState> {
     return repository.current;
   }
 
-  Future<Set<DownloadVideoOption>> videoOptions(
+  Future<DownloadOptions> options(
     DownloadItem item, {
     required RequestCancellation cancellation,
   }) => ref
       .read(downloadSourceRepositoryProvider)
-      .videoOptions(item, cancellation: cancellation);
+      .options(item, cancellation: cancellation);
 
   Future<bool> hasDestination() async =>
       await ref.read(publicDownloadStorageProvider)?.hasDestination() ?? true;

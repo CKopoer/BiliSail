@@ -165,9 +165,10 @@ final class OfflineEntry {
       if (candidate.id == current.id) return candidate;
       final selection = candidate.selection, previous = current.selection;
       final match =
-          (selection.quality == previous.quality ? 4 : 0) +
-          (selection.codec == previous.codec ? 2 : 0) +
-          (selection.output == previous.output ? 1 : 0);
+          (selection.quality == previous.quality ? 8 : 0) +
+          (selection.codec == previous.codec ? 4 : 0) +
+          (selection.output == previous.output ? 2 : 0) +
+          (selection.audioQuality == previous.audioQuality ? 1 : 0);
       if (match > score) {
         best = candidate;
         score = match;

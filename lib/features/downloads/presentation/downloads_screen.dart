@@ -52,6 +52,14 @@ String downloadCodecText(VideoCodecPreference codec) => switch (codec) {
   VideoCodecPreference.dolbyVision => '杜比视界',
 };
 
+String downloadFormatText(DownloadSelection selection) => [
+  downloadQualityText(selection.quality),
+  downloadCodecText(selection.codec),
+  if (selection.audioQuality case final audioQuality?)
+    audioQuality.displayLabel,
+  selection.output.label,
+].join(' · ');
+
 final class DownloadsScreen extends StatelessWidget {
   const DownloadsScreen({
     super.key,
@@ -923,7 +931,7 @@ final class _DownloadFormatLabels extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Text(
-    '${downloadQualityText(task.selection.quality)} · ${downloadCodecText(task.selection.codec)} · ${task.selection.output.label}',
+    downloadFormatText(task.selection),
     style: Theme.of(context).textTheme.bodySmall,
   );
 }

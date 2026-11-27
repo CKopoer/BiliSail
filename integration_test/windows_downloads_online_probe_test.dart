@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:bili_api/bili_api.dart';
 import 'package:bilisail/core/network/api_requests.dart';
 import 'package:bilisail/core/storage/app_database.dart';
+import 'package:bilisail/domain/audio_quality.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/downloads/data/api_download_source_repository.dart';
@@ -54,15 +55,24 @@ void main() {
           cancellation: RequestCancellation(),
         );
         final item = DownloadItem.fromVideo(detail).first;
-        final options = await sources.videoOptions(
+        final options = await sources.options(
           item,
           cancellation: RequestCancellation(),
         );
-        expect(options, isNotEmpty);
-        final option = options.reduce((a, b) => a.quality <= b.quality ? a : b);
-        await downloads.enqueue([
-          item,
-        ], DownloadSelection(quality: option.quality, codec: option.codec));
+        expect(options.video, isNotEmpty);
+        final option = options.video.reduce(
+          (a, b) => a.quality <= b.quality ? a : b,
+        );
+        final audioQuality = AudioQualityPreference.aac192.fallbackOrder
+            .firstWhere(options.audio.contains);
+        await downloads.enqueue(
+          [item],
+          DownloadSelection(
+            quality: option.quality,
+            codec: option.codec,
+            audioQuality: audioQuality,
+          ),
+        );
         final deadline = DateTime.now().add(const Duration(minutes: 3));
         while (!downloads.current.tasks.any(
           (task) =>

@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:bilisail/core/storage/app_database.dart';
 import 'package:bilisail/domain/app_failure.dart';
+import 'package:bilisail/domain/audio_quality.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/domain/video_codec.dart';
@@ -726,6 +727,47 @@ void main() {
     return value;
   }
 
+  test('audio quality differentiates versions and survives restart', () async {
+    const low = DownloadSelection(audioQuality: AudioQualityPreference.aac64);
+    await repository.enqueue([item], const DownloadSelection());
+    await _waitFor(repository, DownloadStatus.completed);
+    await repository.enqueue([item], low);
+    await repository.enqueue([item], low);
+    await repository.enqueue([
+      item,
+    ], const DownloadSelection(audioQuality: AudioQualityPreference.lossless));
+    await repository.close();
+    await db.close();
+    await openRepository();
+    expect(
+      repository.current.tasks.map((task) => task.selection.audioQuality),
+      unorderedEquals([
+        null,
+        AudioQualityPreference.aac64,
+        AudioQualityPreference.lossless,
+      ]),
+    );
+    await repository.enqueue([item], low);
+    expect(repository.current.tasks, hasLength(3));
+  });
+
+  test('queue rejects merging a non-AAC audio selection', () async {
+    await useMuxer();
+    await expectLater(
+      repository.enqueue(
+        [item],
+        const DownloadSelection(
+          audioQuality: AudioQualityPreference.dolby,
+          output: DownloadOutput.mp4,
+        ),
+      ),
+      throwsA(
+        isA<AppFailure>().having((e) => e.message, 'message', contains('分轨')),
+      ),
+    );
+    expect(repository.current.tasks, isEmpty);
+  });
+
   test('separate downloads bypass permission and Photos import', () async {
     await repository.close();
     await db.close();
@@ -1168,10 +1210,13 @@ final class _Sources implements DownloadSourceRepository {
   @override
   int get sessionEpoch => epoch;
   @override
-  Future<Set<DownloadVideoOption>> videoOptions(
+  Future<DownloadOptions> options(
     DownloadItem item, {
     required RequestCancellation cancellation,
-  }) async => {(quality: 80, codec: VideoCodecPreference.h264)};
+  }) async => (
+    video: {(quality: 80, codec: VideoCodecPreference.h264)},
+    audio: {AudioQualityPreference.aac192},
+  );
   @override
   Future<DownloadResolvedSource> resolve(
     DownloadItem item,

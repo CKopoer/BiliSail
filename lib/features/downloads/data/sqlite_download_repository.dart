@@ -11,6 +11,7 @@ import 'package:path/path.dart' as p;
 
 import '../../../core/storage/app_database.dart';
 import '../../../domain/app_failure.dart';
+import '../../../domain/audio_quality.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
 import '../../../domain/video_codec.dart';
@@ -321,6 +322,9 @@ final class SqliteDownloadRepository implements DownloadRepository {
     if (selection.output.isMerged && !_muxer.available) {
       throw const AppFailure(AppFailureKind.storage, '当前无法合并音视频，请选择分轨保存');
     }
+    if (selection.output.isMerged && selection.audioQuality?.isAac == false) {
+      throw const AppFailure(AppFailureKind.storage, '当前音质仅支持分轨保存');
+    }
     final unique = <String, DownloadItem>{};
     for (final item in items) {
       if (!item.isValid) throw ArgumentError.value(item.key, 'item');
@@ -334,6 +338,7 @@ final class SqliteDownloadRepository implements DownloadRepository {
                 task.item.key == item.key &&
                 task.selection.quality == selection.quality &&
                 task.selection.codec == selection.codec &&
+                task.selection.audioQuality == selection.audioQuality &&
                 task.selection.output == selection.output,
           ),
         )
@@ -1256,6 +1261,8 @@ String _encodeTask(DownloadTask task) => jsonEncode({
   'selection': {
     'quality': task.selection.quality,
     'codec': task.selection.codec.name,
+    if (task.selection.audioQuality case final audioQuality?)
+      'audioQuality': audioQuality.name,
     'includeDanmaku': task.selection.includeDanmaku,
     'includeSubtitles': task.selection.includeSubtitles,
     'output': task.selection.output.name,
@@ -1376,6 +1383,9 @@ DownloadTask _decodeTask(String text, Map<String, DownloadWork> works) {
       selection: DownloadSelection(
         quality: selection['quality'] as int,
         codec: VideoCodecPreference.values.byName(selection['codec'] as String),
+        audioQuality: AudioQualityPreference.values
+            .where((quality) => quality.name == selection['audioQuality'])
+            .firstOrNull,
         includeDanmaku: selection['includeDanmaku'] as bool,
         includeSubtitles: selection['includeSubtitles'] as bool,
         output: output,

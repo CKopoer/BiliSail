@@ -7,6 +7,7 @@ import 'package:crypto/crypto.dart';
 
 import '../../../core/network/api_requests.dart';
 import '../../../domain/app_failure.dart';
+import '../../../domain/audio_quality.dart';
 import '../../../domain/media_cdn.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../playback/domain/playback_repository.dart';
@@ -110,28 +111,31 @@ final class ApiDownloadSourceRepository implements DownloadSourceRepository {
     return (quality: track.id, codec: codec);
   }
 
-  static Iterable<ApiMediaTrack> _aacTracks(ApiPlayInfo info) =>
-      info.dashAudio.where(
-        (track) =>
-            track.codecs.toLowerCase().startsWith('mp4a') &&
-            _hasDownloadSource(track),
-      );
+  static bool _isAac(ApiMediaTrack track) =>
+      track.codecs.toLowerCase().startsWith('mp4a');
 
   @override
-  Future<Set<DownloadVideoOption>> videoOptions(
+  Future<DownloadOptions> options(
     DownloadItem item, {
     required RequestCancellation cancellation,
   }) async {
     final scope = _accountScope();
     final epoch = requests.sessionEpoch;
     final first = await _playInfo(item, 127, cancellation, scope, epoch);
-    if (_aacTracks(first).isEmpty) {
-      throw const AppFailure(AppFailureKind.playback, '当前没有可下载的 AAC 音频轨道');
+    final audio = first.dashAudio
+        .where(_hasDownloadSource)
+        .map((track) => AudioQualityPreference.identify(track.id, track.codecs))
+        .nonNulls;
+    if (audio.isEmpty) {
+      throw const AppFailure(AppFailureKind.playback, '当前没有可下载的音频轨道');
     }
     // acceptQuality advertises possible tiers, including ones this account
     // cannot currently obtain. Only returned DASH tracks are selectable.
     _check(cancellation, scope, epoch);
-    return Set.unmodifiable(first.dashVideo.map(_videoOption).nonNulls);
+    return (
+      video: Set.unmodifiable(first.dashVideo.map(_videoOption).nonNulls),
+      audio: Set.unmodifiable(audio),
+    );
   }
 
   @override
@@ -153,13 +157,24 @@ final class ApiDownloadSourceRepository implements DownloadSourceRepository {
     final videos =
         info.dashVideo.where((track) => _videoOption(track) == option).toList()
           ..sort((a, b) => b.bandwidth.compareTo(a.bandwidth));
-    final audios = _aacTracks(info).toList()
-      ..sort((a, b) => b.bandwidth.compareTo(a.bandwidth));
+    final audioQuality = selection.audioQuality;
+    final audios = info.dashAudio.where((track) {
+      if (!_hasDownloadSource(track)) return false;
+      if (audioQuality == null) return _isAac(track);
+      if (selection.output.isMerged && !_isAac(track)) return false;
+      return AudioQualityPreference.identify(track.id, track.codecs) ==
+          audioQuality;
+    }).toList()..sort((a, b) => b.bandwidth.compareTo(a.bandwidth));
     if (videos.isEmpty) {
       throw const AppFailure(AppFailureKind.playback, '所选画质或视频编码当前不可用');
     }
     if (audios.isEmpty) {
-      throw const AppFailure(AppFailureKind.playback, '当前没有可下载的 AAC 音频轨道');
+      throw AppFailure(
+        AppFailureKind.playback,
+        audioQuality == null
+            ? '当前没有可下载的 AAC 音频轨道'
+            : '所选音质当前不可用：${audioQuality.displayLabel}',
+      );
     }
     final preference =
         await cdnPreference?.call() ?? MediaCdnPreference.automatic;

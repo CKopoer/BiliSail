@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:bili_api/bili_api.dart';
 import 'package:bilisail/core/network/api_requests.dart';
 import 'package:bilisail/domain/app_failure.dart';
+import 'package:bilisail/domain/audio_quality.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/domain/video_codec.dart';
@@ -35,14 +36,15 @@ void main() {
   test(
     'queries deliverable qualities and resolves exact codec with highest AAC',
     () async {
-      final options = await repository.videoOptions(
+      final options = await repository.options(
         _item(),
         cancellation: RequestCancellation(),
       );
-      expect(options, {
+      expect(options.video, {
         (quality: 80, codec: VideoCodecPreference.h264),
         (quality: 80, codec: VideoCodecPreference.hevc),
       });
+      expect(options.audio, {AudioQualityPreference.aac192});
       expect(transport.playRequestCount, 1);
       final selection = const DownloadSelection(
         quality: 80,
@@ -65,6 +67,7 @@ void main() {
         cancellation: RequestCancellation(),
       );
       expect(renewed.video.identity, first.video.identity);
+      expect(renewed.audio.identity, first.audio.identity);
       expect(renewed.video.urls.first, isNot(first.video.urls.first));
       expect(first.video.identity, isNot(contains('signature')));
       expect(first.video.identity, isNot(contains('?')));
@@ -87,11 +90,11 @@ void main() {
 
   test('advertised 1080p is hidden when DASH only contains 480p', () async {
     transport.forcedQuality = 32;
-    final options = await repository.videoOptions(
+    final options = await repository.options(
       _item(),
       cancellation: RequestCancellation(),
     );
-    expect(options, {(quality: 32, codec: VideoCodecPreference.h264)});
+    expect(options.video, {(quality: 32, codec: VideoCodecPreference.h264)});
     expect(transport.playRequestCount, 1);
   });
 
@@ -108,11 +111,11 @@ void main() {
         {'id': 127, 'codecs': 'av01', 'base_url': 'https://cdn.example/'},
       ];
       final item = _item(episodeId: '42', bvid: '');
-      final options = await repository.videoOptions(
+      final options = await repository.options(
         item,
         cancellation: RequestCancellation(),
       );
-      expect(options, {
+      expect(options.video, {
         (quality: 80, codec: VideoCodecPreference.h264),
         (quality: 80, codec: VideoCodecPreference.hevc),
         (quality: 126, codec: VideoCodecPreference.dolbyVision),
@@ -130,15 +133,62 @@ void main() {
     },
   );
 
-  test('an unusable AAC track cannot enable a video option', () async {
+  test('an unusable audio track cannot enable a video option', () async {
     transport.audioUrl = 'https://cdn.example/';
     await expectLater(
-      repository.videoOptions(_item(), cancellation: RequestCancellation()),
+      repository.options(_item(), cancellation: RequestCancellation()),
       throwsA(
-        isA<AppFailure>().having((e) => e.message, 'message', contains('AAC')),
+        isA<AppFailure>().having((e) => e.message, 'message', contains('音频')),
       ),
     );
   });
+
+  for (final item in [_item(), _item(episodeId: '42', bvid: '')]) {
+    test(
+      'returns and resolves only deliverable audio tiers for ${item.key}',
+      () async {
+        transport.extendedAudio = true;
+        final options = await repository.options(
+          item,
+          cancellation: RequestCancellation(),
+        );
+        expect(options.audio, {
+          AudioQualityPreference.aac192,
+          AudioQualityPreference.aac64,
+          AudioQualityPreference.lossless,
+          AudioQualityPreference.dolby,
+        });
+        for (final (quality, codec, bandwidth) in [
+          (AudioQualityPreference.aac64, 'mp4a.40.2', 64000),
+          (AudioQualityPreference.lossless, 'fLaC', 450000),
+          (AudioQualityPreference.dolby, 'ec-3', 300000),
+        ]) {
+          final resolved = await repository.resolve(
+            item,
+            DownloadSelection(audioQuality: quality),
+            cancellation: RequestCancellation(),
+          );
+          expect(resolved.audio.codec, codec);
+          expect(resolved.audio.bandwidth, bandwidth);
+        }
+        transport.extendedAudio = false;
+        await expectLater(
+          repository.resolve(
+            item,
+            const DownloadSelection(audioQuality: AudioQualityPreference.aac64),
+            cancellation: RequestCancellation(),
+          ),
+          throwsA(
+            isA<AppFailure>().having(
+              (e) => e.message,
+              'message',
+              contains('64K'),
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   test('PGC preview is rejected as a complete episode', () async {
     transport.preview = true;
@@ -246,6 +296,7 @@ final class _Transport implements ApiTransport {
   bool preview = false;
   int? forcedQuality;
   List<Map<String, Object?>> extraVideo = const [];
+  bool extendedAudio = false;
   String? audioUrl;
   int playRequestCount = 0;
   int videoDetailRequestCount = 0;
@@ -313,7 +364,41 @@ final class _Transport implements ApiTransport {
                 'codecs': 'mp4a.40.2',
                 'bandwidth': 192000,
               },
+              if (extendedAudio) ...[
+                {
+                  'id': 30216,
+                  'base_url': trackUrl,
+                  'codecs': 'mp4a.40.2',
+                  'bandwidth': 64000,
+                },
+                {
+                  'id': 30232,
+                  'base_url': 'https://cdn.example/',
+                  'codecs': 'mp4a.40.2',
+                  'bandwidth': 132000,
+                },
+              ],
             ],
+            if (extendedAudio) ...{
+              'flac': {
+                'audio': {
+                  'id': 30251,
+                  'base_url': trackUrl,
+                  'codecs': 'fLaC',
+                  'bandwidth': 450000,
+                },
+              },
+              'dolby': {
+                'audio': [
+                  {
+                    'id': 30250,
+                    'base_url': trackUrl,
+                    'codecs': 'ec-3',
+                    'bandwidth': 300000,
+                  },
+                ],
+              },
+            },
           },
         },
       });

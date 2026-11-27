@@ -1,12 +1,19 @@
 enum AudioQualityPreference {
   aac64('AAC · 64K'),
   aac132('AAC · 132K'),
-  aac192('AAC · 192K（默认）'),
+  aac192('AAC · 192K'),
   lossless('Hi-Res / FLAC 无损'),
   dolby('杜比音频');
 
-  const AudioQualityPreference(this.label);
-  final String label;
+  const AudioQualityPreference(this.displayLabel);
+  final String displayLabel;
+
+  String get label => this == aac192 ? '$displayLabel（默认）' : displayLabel;
+
+  bool get isAac => switch (this) {
+    aac64 || aac132 || aac192 => true,
+    lossless || dolby => false,
+  };
 
   static AudioQualityPreference? identify(int id, String codec) {
     final name = codec.toLowerCase();
