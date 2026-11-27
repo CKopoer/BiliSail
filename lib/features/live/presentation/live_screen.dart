@@ -346,13 +346,14 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Expanded(
-                          child: PlaybackInfoScope(
+                          child: PlaybackInfoScope.player(
+                            wide: wide,
                             showInfo: _infoVisible,
                             tooltip: _infoVisible ? '收起直播信息' : '展开直播信息',
                             onToggle: () => setState(
                               () => _infoVisibilityOverride = !_infoVisible,
                             ),
-                            child: player,
+                            player: player,
                           ),
                         ),
                         if (bottomSummary != null)

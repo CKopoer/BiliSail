@@ -10,6 +10,30 @@ class PlaybackInfoScope extends InheritedWidget {
     required super.child,
   });
 
+  PlaybackInfoScope.player({
+    super.key,
+    required this.showInfo,
+    required this.tooltip,
+    required this.onToggle,
+    required bool wide,
+    required Widget player,
+  }) : super(
+         child: Stack(
+           fit: StackFit.expand,
+           children: [
+             player,
+             if (wide)
+               Align(
+                 alignment: Alignment.centerRight,
+                 child: _SidebarEdgeToggle(
+                   showInfo: showInfo,
+                   onToggle: onToggle,
+                 ),
+               ),
+           ],
+         ),
+       );
+
   final bool showInfo;
   final String tooltip;
   final VoidCallback onToggle;
@@ -25,6 +49,36 @@ class PlaybackInfoScope extends InheritedWidget {
       showInfo != oldWidget.showInfo ||
       tooltip != oldWidget.tooltip ||
       onToggle != oldWidget.onToggle;
+}
+
+class _SidebarEdgeToggle extends StatelessWidget {
+  const _SidebarEdgeToggle({required this.showInfo, required this.onToggle});
+
+  final bool showInfo;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    expanded: showInfo,
+    child: Material(
+      type: MaterialType.transparency,
+      child: IconButton(
+        tooltip: showInfo ? '收起右侧信息栏' : '展开右侧信息栏',
+        onPressed: onToggle,
+        style: IconButton.styleFrom(
+          foregroundColor: Colors.white,
+          backgroundColor: Colors.black45,
+          fixedSize: const Size(36, 56),
+          minimumSize: Size.zero,
+          padding: EdgeInsets.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          visualDensity: VisualDensity.standard,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        ),
+        icon: Icon(showInfo ? Icons.chevron_right : Icons.chevron_left),
+      ),
+    ),
+  );
 }
 
 class PlaybackSidebarToggle extends StatelessWidget {

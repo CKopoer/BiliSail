@@ -157,20 +157,28 @@ void main() {
     await showPage(tester, width: 390);
     await tester.pumpAndSettle();
     final player = tester.state(find.byType(_PlayerProbe));
+    final collapseEdge = findMaterialTooltip('收起右侧信息栏');
+    final expandEdge = findMaterialTooltip('展开右侧信息栏');
+    expect(collapseEdge, findsNothing);
     expect(findPlaybackInfo('收起直播信息'), findsOneWidget);
     expect(find.byKey(const ValueKey('live-chat-list')), findsOneWidget);
     for (final width in [999.0, 1000.0, 1280.0, 390.0, 1000.0]) {
       await tester.binding.setSurfaceSize(Size(width, 800));
       await tester.pumpAndSettle();
+      expect(
+        collapseEdge.hitTestable(),
+        width >= 1000 ? findsOneWidget : findsNothing,
+      );
       expect(findPlaybackInfo('收起直播信息'), findsOneWidget);
       expect(find.byKey(const ValueKey('live-chat-list')), findsOneWidget);
       expect(tester.state(find.byType(_PlayerProbe)), same(player));
     }
-    togglePlaybackInfo(tester, findPlaybackInfo('收起直播信息'));
+    await tester.tap(collapseEdge);
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('live-chat-list')), findsNothing);
     await tester.binding.setSurfaceSize(const Size(999, 800));
     await tester.pumpAndSettle();
+    expect(expandEdge, findsNothing);
     expect(findPlaybackInfo('展开直播信息'), findsOneWidget);
     expect(find.byKey(const ValueKey('live-chat-list')), findsNothing);
     expect(tester.getSize(find.byType(_PlayerProbe)), const Size(999, 800));
@@ -184,7 +192,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.binding.setSurfaceSize(const Size(1000, 800));
     await tester.pumpAndSettle();
-    togglePlaybackInfo(tester, findPlaybackInfo('展开直播信息'));
+    await tester.tap(expandEdge);
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('live-chat-list')), findsOneWidget);
     expect(tester.state(find.byType(_PlayerProbe)), same(player));

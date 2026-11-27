@@ -2354,6 +2354,8 @@ void main() {
       final generation = session.sourceGeneration;
       final sidebar = find.byType(PlaybackSidebarToggle);
       final fullscreen = findMaterialTooltip('全屏（F）');
+      final collapseEdge = findMaterialTooltip('收起右侧信息栏');
+      final expandEdge = findMaterialTooltip('展开右侧信息栏');
       void expectAdjacent(Finder button) {
         expect(sidebar.hitTestable(), findsOneWidget);
         expect(tester.getCenter(sidebar).dy, tester.getCenter(button).dy);
@@ -2362,6 +2364,13 @@ void main() {
 
       await _showControls(tester);
       expectAdjacent(fullscreen);
+      if (width >= 1000) {
+        final player = tester.getRect(find.byType(PlaybackPanel));
+        expect(tester.getRect(collapseEdge).centerRight, player.centerRight);
+        expect(tester.getSize(collapseEdge), const Size(36, 56));
+      } else {
+        expect(collapseEdge, findsNothing);
+      }
       expect(
         find.descendant(
           of: sidebar,
@@ -2372,6 +2381,21 @@ void main() {
       await tester.tap(findMaterialTooltip('收起视频信息'));
       await _pumpFrames(tester);
       expect(find.byType(PlaybackInfoTabs), findsNothing);
+      if (width >= 1000) {
+        await _showControls(tester);
+        await tester.tapAt(_surfacePoint(tester));
+        await _pumpSurfaceTap(tester);
+        expect(sidebar.hitTestable(), findsNothing);
+        await tester.tap(expandEdge);
+        await _pumpFrames(tester);
+        expect(find.byType(PlaybackInfoTabs), findsOneWidget);
+        await _showControls(tester);
+        expect(findMaterialTooltip('收起视频信息').hitTestable(), findsOneWidget);
+        await tester.tap(collapseEdge);
+        await _pumpFrames(tester);
+      } else {
+        expect(expandEdge, findsNothing);
+      }
       await _showControls(tester);
       expectAdjacent(fullscreen);
       expect(
@@ -2385,6 +2409,7 @@ void main() {
       await _pumpFrames(tester);
       expect(window.fullScreen, isTrue);
       await _showControls(tester);
+      expect(expandEdge.hitTestable(), findsNothing);
       expectAdjacent(find.widgetWithIcon(IconButton, Icons.fullscreen_exit));
       await tester.tap(findMaterialTooltip('返回播放页并展开信息'));
       await _pumpFrames(tester);
