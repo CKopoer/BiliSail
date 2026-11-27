@@ -673,6 +673,9 @@ final class _VideoCardCoverLookupState
       final lookup = ref.watch(videoCover43Provider(widget.id));
       if (!lookup.isLoading) {
         _resolved = (epoch: epoch, url: lookup.asData?.value);
+      } else if (_resolved?.url == null) {
+        // A previous miss cannot select the ordinary image for a new lookup.
+        _resolved = null;
       }
     }
     // Retained pages can keep showing a resolved cover while unsubscribed.

@@ -82,13 +82,24 @@ final class ApiRiskControl {
   int? _epoch;
   final _cooldowns = <String, ({DateTime until, ApiFailure failure})>{};
 
-  void check(Uri uri, String endpoint, int? epoch, DateTime now) {
+  ({DateTime until, ApiFailure failure})? _active(
+    Uri uri,
+    int? epoch,
+    DateTime now,
+  ) {
     if (_epoch != epoch) {
       _epoch = epoch;
       _cooldowns.clear();
     }
     _cooldowns.removeWhere((_, value) => !value.until.isAfter(now));
-    final value = _cooldowns['${uri.host}${uri.path}'];
+    return _cooldowns['${uri.host}${uri.path}'];
+  }
+
+  Duration remaining(Uri uri, int? epoch, DateTime now) =>
+      _active(uri, epoch, now)?.until.difference(now) ?? Duration.zero;
+
+  void check(Uri uri, String endpoint, int? epoch, DateTime now) {
+    final value = _active(uri, epoch, now);
     if (value == null) return;
     throw ApiFailure(
       ApiFailureCategory.rateLimited,

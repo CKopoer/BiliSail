@@ -29,7 +29,7 @@ final videoCover43Provider = FutureProvider.autoDispose.family<Uri?, VideoId>((
   ref,
   id,
 ) {
-  return ref.watch(_coverBatchesProvider)?.load(id);
+  return ref.watch(_coverBatchesProvider)?.load(id, ref);
 }, retry: (_, _) => null);
 
 final class _CoverBatches {
@@ -44,29 +44,64 @@ final class _CoverBatches {
   final _cache = <VideoId, Uri?>{};
   Timer? _scheduled;
   RequestCancellation? _inFlight;
+  final _waitingForCapacity = <Completer<void>>{};
+  bool _disposed = false;
 
-  Future<Uri?> load(VideoId id) {
+  Future<Uri?> load(VideoId id, Ref ref) async {
+    if (!id.isValid) return null;
+    // Capacity is temporary. Only a completed lookup can report a missing URL.
+    while (_pending.length >= _maximumPending &&
+        !_pending.containsKey(id) &&
+        !_cache.containsKey(id)) {
+      final slot = Completer<void>();
+      _waitingForCapacity.add(slot);
+      final unregister = ref.onDispose(() {
+        if (_waitingForCapacity.remove(slot)) slot.complete();
+      });
+      await slot.future;
+      unregister();
+      if (_disposed || !ref.mounted) return null;
+    }
     if (_cache.containsKey(id)) {
       final value = _cache.remove(id);
       _cache[id] = value;
-      return Future.value(value);
+      return value;
     }
     if (_pending[id] case final existing?) return existing.future;
-    if (!id.isValid || _pending.length >= _maximumPending) {
-      return Future.value(null);
-    }
     final completer = _pending[id] = Completer<Uri?>();
+    ref.onDispose(() {
+      // Rows scrolled out of the grid no longer need a place in the queue.
+      if (_pending[id] != completer) return;
+      _pending.remove(id);
+      completer.complete(null);
+      _notifyCapacity();
+    });
     _schedule();
     return completer.future;
+  }
+
+  void _notifyCapacity() {
+    for (final slot in _waitingForCapacity) {
+      slot.complete();
+    }
+    _waitingForCapacity.clear();
   }
 
   void _schedule() {
     if (_scheduled != null || _inFlight != null || _pending.isEmpty) return;
     // Let the current frame finish mounting its cards before taking the batch.
-    _scheduled = Timer(Duration.zero, () {
-      _scheduled = null;
-      unawaited(_loadBatch());
-    });
+    _scheduled = Timer(Duration.zero, _dispatch);
+  }
+
+  void _dispatch() {
+    _scheduled = null;
+    if (_pending.isEmpty) return;
+    final cooldown = repository.cover43Cooldown;
+    if (cooldown > Duration.zero) {
+      _scheduled = Timer(cooldown, _dispatch);
+      return;
+    }
+    unawaited(_loadBatch());
   }
 
   Future<void> _loadBatch() async {
@@ -96,11 +131,13 @@ final class _CoverBatches {
       }
     } finally {
       _inFlight = null;
+      _notifyCapacity();
       _schedule();
     }
   }
 
   void dispose() {
+    _disposed = true;
     _scheduled?.cancel();
     _inFlight?.cancel();
     for (final completer in _pending.values) {
@@ -108,5 +145,6 @@ final class _CoverBatches {
     }
     _pending.clear();
     _cache.clear();
+    _notifyCapacity();
   }
 }

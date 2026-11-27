@@ -2215,6 +2215,14 @@ final class BiliApiClient {
     return _recommendedPage(data, page + 1);
   }
 
+  Uri get _videoCoverCardsUri => _api.replace(path: '/x/article/cards');
+
+  Duration get videoCover43Cooldown => _riskControl.remaining(
+    _videoCoverCardsUri,
+    _sessionProvider?.sessionEpoch,
+    _clock(),
+  );
+
   Future<Map<String, Uri>> getVideoCover43Urls(
     Iterable<String> bvids, {
     ApiRequestContext? context,
@@ -2230,8 +2238,7 @@ final class BiliApiClient {
     final limit = _clock().add(const Duration(seconds: 2));
     final deadline = context?.deadline;
     final response = await _request(
-      _api.replace(
-        path: '/x/article/cards',
+      _videoCoverCardsUri.replace(
         queryParameters: {'ids': requested.join(',')},
       ),
       endpoint,

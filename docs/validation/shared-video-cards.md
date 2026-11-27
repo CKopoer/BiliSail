@@ -16,6 +16,8 @@
 
 共享视频卡在 4:3 模式下为活动页面中已挂载、缺少独立封面且具有有效 BV 号的视频合并查询。首页推荐、搜索、收藏、稍后再看、视频动态和历史等入口复用这套选图逻辑。每张卡已有 4:3 地址就立即加载，需要查询时暂显示占位。批量结果有地址就加载，缺项或查询失败时用普通封面等比填充。图片错误沿用共享封面的重试和占位逻辑。此前用游客请求抽查，Web、桌面和 App HD 推荐单页分别补到 19／20、28／30 和 18／19 张独立封面。批量接口、认证与超时见[API 方案](../api-design.md#视频卡-43-封面)。
 
+2026-11-28 修正推荐和稍后再看连续滚动时的提前回退。补查队列的 60 个位置用满后，新卡保持占位，等有空位再按 BV 号查询。已卸载的卡片释放排队位置。卡片重新补查时，上次查询缺项所用的普通封面也会让位给占位图，直到本次查询结束。游客 Web 推荐第二页一次抽样中，20 条均缺少列表 4:3 地址，批量补查为全部 20 条返回了与普通封面不同的地址。另一次补查收到了 `-352`。已发出且被拒绝的批次按查询失败回退，后续批次等待该接口的冷却期结束再发起。
+
 ## 2026-11-27：App HD 推荐封面
 
 App 来源恢复 Android HD 2.0.1，固定发送 `column=2`。用同一临时游客设备分别发送 `column=1/2/3/4`，每组均得到 19 张可播放普通视频小卡，响应未提供独立 `cover43`。每组原始 URL 读取前 10 张图片尺寸，40 张全部在 16:9 的 1% 误差内。切换封面比例沿用当前列表及翻页游标。16:9 直接显示普通封面，4:3 按卡使用列表或批量接口给出的独立封面，缺项时裁切普通封面。
@@ -27,6 +29,28 @@ App 来源恢复 Android HD 2.0.1，固定发送 `column=2`。用同一临时游
 手机版请求曾继续附带应用内扫码、密码或短信登录取得的 HD token，但以手机 profile 签名。离线测试验证了身份字段和签名参数的发送，真实账号在该组合下的鉴权与个性化未做在线验证。对照游客请求，附加随机无效 `access_key` 后，HD 和手机版都仍返回业务码 0 和推荐列表，因此接口成功不能证明已应用账号身份。恢复 HD 后，请求 profile 与现有 App 凭据的签发端一致。[HD 请求和登录凭据](app-recommendation-alignment-2026-11-16.md)
 
 Web 与桌面签名接口共试 8 组游客参数、88 张卡片，覆盖现有调用、Web 首页布局、缩为两列、`feed_version` 的 V1／V8 及桌面 `plat` 变化。服务端响应包含 `pic_4_3` 字段，样本中未获得独立的 4:3 地址。[官方 Web 首页脚本](https://s1.hdslb.com/bfs/static/shanks/laputa-home/assets/index-a5f8e5ab.js)在解析响应时保留该字段，卡片通用封面仍取 `pic`。客户端优先采用列表已经提供的有效独立地址，其余卡片仍按需批量补取。
+
+2026-11-28 用游客身份复核。只计普通视频卡，读取推荐响应原始 `pic` 或 `cover` 指向的图片文件头，以宽高比相对误差 1% 判定。三个现有推荐源使用当前工程的请求，手机版对照使用历史提交 `e5e6e264` 中的请求实现，App 各组使用同一临时游客标识。
+
+| 推荐请求 | 视频卡数 | 列表另给 4:3 地址 | 抽查普通封面原图 |
+| --- | ---: | ---: | --- |
+| Web | 20 | 0 | 10／10 约 16:9 |
+| 桌面 | 30 | 0 | 10／10 约 16:9 |
+| Android HD 双列 | 20 | 0 | 10／10 约 16:9 |
+| Android 手机版双列 | 8 | 0 | 8／8 约 4:3 |
+| Android 手机版单列 | 9 | 0 | 9／9 约 16:9 |
+
+另外按官方 Web 首页的参数传入双列和 1024×768 窗口，桌面端也传入双列和相同分辨率。两组分别返回 12 张视频卡，独立地址均为 0，各抽查 6 张原图均接近 16:9。
+
+本次手机版双列的小卡直接返回 1200×900、1448×1086 等原图，同为 `small_cover_v2` 的 HD 小卡则返回 1920×1080 等宽图。仅凭卡片类型不能确定图片比例。此轮未验证登录个性化或不同账号的实验分组。
+
+### GitHub 客户端与接口样例复核
+
+[Goooler 的首页推荐接口记录](https://github.com/Goooler/bilibili-API-collect/blob/c8bb8c9df0992e0db9e2ba2f26b3ec45e96795db/docs/video/recommend.md#L299-L326)列出 `y_num`、`last_y_num`、`feed_version`、`screen` 等布局参数。[历史响应](https://github.com/Goooler/bilibili-API-collect/blob/c8bb8c9df0992e0db9e2ba2f26b3ec45e96795db/docs/video/recommend.md#L405-L471)中的 11 条普通视频均有 `pic_4_3`，其中 9 条指向与 `pic` 不同的文件路径。逐张读取两组原图，BV1DJ4m1u7Mp 对应 1485×835 和 750×562，BV1jH4y1w7A6 对应 1920×1080 和 1440×1080。另两条两字段的文件路径相同。用文档示例的五个查询参数重新游客请求，接口返回业务码 0，12 条普通视频的 `pic_4_3` 全为空。目前证据能确认 Web 曾直接返回独立图，但未找到保证填充该字段的请求参数。
+
+- [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus/blob/217fb54f51f6764176319bbdedab2a7522d75401/lib/http/video.dart#L137-L185) 的 App 请求使用 `mobi_app=android_i`、`device=phone`、`column=2`，并带 HD 标识的请求头。[视频模型](https://github.com/bggRGjQaUbCoE/PiliPlus/blob/217fb54f51f6764176319bbdedab2a7522d75401/lib/models/home/rcmd/result.dart#L18)直接取 `cover`。本次按其布局参数做简化游客请求未成功，手机版 8／8 的尺寸结论来自另外实测的 `mobi_app=android`。
+- [BewlyCat 的 Web 请求](https://github.com/keleus/BewlyCat/blob/d5de0d4db16ed0e45785fea6e4794064f43a963e/src/background/messageListeners/api/video.ts#L4-L22)使用 V8、列数和视口参数，[首页卡片](https://github.com/keleus/BewlyCat/blob/d5de0d4db16ed0e45785fea6e4794064f43a963e/src/contentScripts/views/Home/components/ForYou.vue#L769)取 `item.pic`。
+- [Bilibili-Gate 的 PC 请求](https://github.com/magicdawn/Bilibili-Gate/blob/3b84579bc16a768b94ddd64cc35bcea1c8ed57fb/src/modules/rec-services/pc.tsx#L114-L129)使用 V8 和 `fresh_type=8`。游客抽样 30 条均无独立地址，读前 8 张原图有 7 张约 16:9、1 张为 1296×809。[iPad 请求](https://github.com/magicdawn/Bilibili-Gate/blob/3b84579bc16a768b94ddd64cc35bcea1c8ed57fb/src/modules/rec-services/app.tsx#L239-L254)使用 `platform=ios`、`mobi_app=iphone`、`device=pad`。其游客参数返回 15 张 `large_cover_v1` 视频卡，前 8 张原图均约 16:9。
 
 ## 2026-11-26：16:9 视频卡更多按钮与标题排版
 

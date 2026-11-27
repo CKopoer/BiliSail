@@ -43,6 +43,23 @@ void main() {
     },
   );
 
+  test('exposes the remaining cooldown after a rejected cover batch', () async {
+    var now = DateTime.utc(2026);
+    final transport = _Transport(null, code: -352);
+    final api = BiliApiClient(transport: transport, clock: () => now);
+    addTearDown(api.close);
+    expect(api.videoCover43Cooldown, Duration.zero);
+    await expectLater(
+      api.getVideoCover43Urls([_first]),
+      throwsA(isA<ApiFailure>()),
+    );
+    now = now.add(const Duration(seconds: 29));
+    expect(api.videoCover43Cooldown, const Duration(seconds: 1));
+    now = now.add(const Duration(seconds: 1));
+    expect(api.videoCover43Cooldown, Duration.zero);
+    expect(transport.requests, hasLength(1));
+  });
+
   test(
     'skips empty work, rejects invalid batches and does not retry failures',
     () async {
@@ -69,10 +86,11 @@ void main() {
 }
 
 final class _Transport implements ApiTransport {
-  _Transport(this.data, {this.status = 200});
+  _Transport(this.data, {this.status = 200, this.code = 0});
 
   final Object? data;
   final int status;
+  final int code;
   final requests = <Uri>[];
   final headers = <Map<String, String>>[];
 
@@ -87,7 +105,7 @@ final class _Transport implements ApiTransport {
     this.headers.add(headers);
     return ApiHttpResponse(
       status,
-      Uint8List.fromList(utf8.encode(jsonEncode({'code': 0, 'data': data}))),
+      Uint8List.fromList(utf8.encode(jsonEncode({'code': code, 'data': data}))),
       const {},
     );
   }

@@ -12,6 +12,9 @@ final class ApiVideoCoverRepository implements VideoCoverRepository {
   final ApiRequests requests;
 
   @override
+  Duration get cover43Cooldown => api.videoCover43Cooldown;
+
+  @override
   Future<Map<VideoId, Uri>> loadCover43Urls(
     List<VideoId> ids, {
     required RequestCancellation cancellation,
