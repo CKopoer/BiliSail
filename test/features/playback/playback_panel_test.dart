@@ -1893,7 +1893,6 @@ void main() {
           var infoToggles = 0;
           await tester.pumpWidget(
             PlaybackInfoScope(
-              wide: false,
               showInfo: true,
               tooltip: '收起播放信息',
               onToggle: () => infoToggles++,
@@ -2364,7 +2363,10 @@ void main() {
       await _showControls(tester);
       expectAdjacent(fullscreen);
       expect(
-        find.byKey(const ValueKey('playback-collapse-info')),
+        find.descendant(
+          of: sidebar,
+          matching: find.byIcon(Icons.zoom_out_map_rounded),
+        ),
         findsOneWidget,
       );
       await tester.tap(findMaterialTooltip('收起视频信息'));
@@ -2373,7 +2375,10 @@ void main() {
       await _showControls(tester);
       expectAdjacent(fullscreen);
       expect(
-        find.byKey(const ValueKey('playback-expand-info')),
+        find.descendant(
+          of: sidebar,
+          matching: find.byIcon(Icons.zoom_in_map_rounded),
+        ),
         findsOneWidget,
       );
       await tester.tap(fullscreen);

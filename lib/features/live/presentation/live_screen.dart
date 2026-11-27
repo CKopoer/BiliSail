@@ -347,7 +347,6 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
                       children: [
                         Expanded(
                           child: PlaybackInfoScope(
-                            wide: wide,
                             showInfo: _infoVisible,
                             tooltip: _infoVisible ? '收起直播信息' : '展开直播信息',
                             onToggle: () => setState(

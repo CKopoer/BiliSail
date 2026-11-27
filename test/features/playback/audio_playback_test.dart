@@ -788,7 +788,6 @@ void main() {
                 listenable: Listenable.merge([session, session.snapshots]),
                 builder: (context, _) => PlaybackInfoScope(
                   showInfo: true,
-                  wide: size.width >= 900,
                   tooltip: '收起视频信息',
                   onToggle: () => toggles++,
                   child: AudioPlaybackView(

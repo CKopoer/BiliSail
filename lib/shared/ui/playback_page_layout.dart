@@ -180,7 +180,6 @@ class _PlaybackPageLayoutState extends State<PlaybackPageLayout> {
                       width: playerWidth,
                       height: playerAreaHeight,
                       child: PlaybackInfoScope(
-                        wide: widget.wide,
                         showInfo: widget.showInfo,
                         tooltip: widget.toggleTooltip,
                         onToggle: widget.toggleInfo,

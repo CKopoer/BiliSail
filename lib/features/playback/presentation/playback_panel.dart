@@ -440,7 +440,6 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     final info = PlaybackInfoScope.read(context);
     if (info != null) {
       player = PlaybackInfoScope(
-        wide: info.wide,
         showInfo: false,
         tooltip: '返回播放页并展开信息',
         onToggle: () {
