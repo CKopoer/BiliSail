@@ -105,7 +105,7 @@ final class DownloadTaskEntry {
             previous.createdAt == task.createdAt &&
             previous.selection.quality == task.selection.quality &&
             previous.selection.codec == task.selection.codec &&
-            previous.selection.audioQuality == task.selection.audioQuality &&
+            previous.audioQuality == task.audioQuality &&
             previous.selection.output == task.selection.output &&
             previous.downloadedBytes == task.downloadedBytes &&
             previous.totalBytes == task.totalBytes &&

@@ -114,6 +114,9 @@ final class ApiDownloadSourceRepository implements DownloadSourceRepository {
   static bool _isAac(ApiMediaTrack track) =>
       track.codecs.toLowerCase().startsWith('mp4a');
 
+  static AudioQualityPreference? _audioQuality(ApiMediaTrack track) =>
+      AudioQualityPreference.identify(track.id, track.codecs);
+
   @override
   Future<DownloadOptions> options(
     DownloadItem item, {
@@ -124,7 +127,7 @@ final class ApiDownloadSourceRepository implements DownloadSourceRepository {
     final first = await _playInfo(item, 127, cancellation, scope, epoch);
     final audio = first.dashAudio
         .where(_hasDownloadSource)
-        .map((track) => AudioQualityPreference.identify(track.id, track.codecs))
+        .map(_audioQuality)
         .nonNulls;
     if (audio.isEmpty) {
       throw const AppFailure(AppFailureKind.playback, '当前没有可下载的音频轨道');
@@ -157,24 +160,25 @@ final class ApiDownloadSourceRepository implements DownloadSourceRepository {
     final videos =
         info.dashVideo.where((track) => _videoOption(track) == option).toList()
           ..sort((a, b) => b.bandwidth.compareTo(a.bandwidth));
-    final audioQuality = selection.audioQuality;
-    final audios = info.dashAudio.where((track) {
-      if (!_hasDownloadSource(track)) return false;
-      if (audioQuality == null) return _isAac(track);
-      if (selection.output.isMerged && !_isAac(track)) return false;
-      return AudioQualityPreference.identify(track.id, track.codecs) ==
-          audioQuality;
-    }).toList()..sort((a, b) => b.bandwidth.compareTo(a.bandwidth));
+    final audios = info.dashAudio.where(_hasDownloadSource).toList()
+      ..sort((a, b) => b.bandwidth.compareTo(a.bandwidth));
+    final audio = switch (selection.audioQuality) {
+      null => audios.where(_isAac).firstOrNull,
+      final AudioQualityPreference preference =>
+        preference.fallbackOrder
+            .map(
+              (quality) => audios
+                  .where((track) => _audioQuality(track) == quality)
+                  .firstOrNull,
+            )
+            .nonNulls
+            .firstOrNull,
+    };
     if (videos.isEmpty) {
       throw const AppFailure(AppFailureKind.playback, '所选画质或视频编码当前不可用');
     }
-    if (audios.isEmpty) {
-      throw AppFailure(
-        AppFailureKind.playback,
-        audioQuality == null
-            ? '当前没有可下载的 AAC 音频轨道'
-            : '所选音质当前不可用：${audioQuality.displayLabel}',
-      );
+    if (audio == null) {
+      throw const AppFailure(AppFailureKind.playback, '当前没有可下载的音频轨道');
     }
     final preference =
         await cdnPreference?.call() ?? MediaCdnPreference.automatic;
@@ -195,12 +199,15 @@ final class ApiDownloadSourceRepository implements DownloadSourceRepository {
         urls: urls,
         codec: media.codecs,
         bandwidth: media.bandwidth,
+        audioQuality: kind == DownloadTrackKind.audio
+            ? _audioQuality(media)
+            : null,
       );
     }
 
     return DownloadResolvedSource(
       video: track(videos.first, DownloadTrackKind.video),
-      audio: track(audios.first, DownloadTrackKind.audio),
+      audio: track(audio, DownloadTrackKind.audio),
       quality: selection.quality,
       duration: info.duration,
       headers: _headers,

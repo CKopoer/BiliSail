@@ -751,22 +751,29 @@ void main() {
     expect(repository.current.tasks, hasLength(3));
   });
 
-  test('queue rejects merging a non-AAC audio selection', () async {
-    await useMuxer();
-    await expectLater(
-      repository.enqueue(
+  test(
+    'merged download persists both the requested and actual audio tiers',
+    () async {
+      await useMuxer();
+      sources.audioQuality = AudioQualityPreference.aac132;
+      await repository.enqueue(
         [item],
         const DownloadSelection(
           audioQuality: AudioQualityPreference.dolby,
           output: DownloadOutput.mp4,
         ),
-      ),
-      throwsA(
-        isA<AppFailure>().having((e) => e.message, 'message', contains('分轨')),
-      ),
-    );
-    expect(repository.current.tasks, isEmpty);
-  });
+      );
+      await _waitFor(repository, DownloadStatus.completed);
+      final id = repository.current.tasks.single.id;
+      await repository.close();
+      await db.close();
+      await openRepository();
+      final task = await repository.offlineTask(id);
+      expect(task.selection.audioQuality, AudioQualityPreference.dolby);
+      expect(task.audioQuality, AudioQualityPreference.aac132);
+      expect(task.mergedMedia?.output, DownloadOutput.mp4);
+    },
+  );
 
   test('separate downloads bypass permission and Photos import', () async {
     await repository.close();
@@ -1205,6 +1212,7 @@ final class _Sources implements DownloadSourceRepository {
   int epoch = 0;
   int resolveCalls = 0;
   bool changeIdentityOnRefresh = false;
+  AudioQualityPreference? audioQuality;
   @override
   String get accountScope => scope;
   @override
@@ -1239,6 +1247,7 @@ final class _Sources implements DownloadSourceRepository {
         urls: [base.resolve(revision == 1 ? '/audio' : '/audio2')],
         codec: 'mp4a',
         bandwidth: 128,
+        audioQuality: audioQuality,
       ),
       quality: 80,
       duration: const Duration(seconds: 3),

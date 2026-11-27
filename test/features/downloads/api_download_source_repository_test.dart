@@ -165,27 +165,31 @@ void main() {
         ]) {
           final resolved = await repository.resolve(
             item,
-            DownloadSelection(audioQuality: quality),
+            DownloadSelection(
+              audioQuality: quality,
+              output: DownloadOutput.mp4,
+            ),
             cancellation: RequestCancellation(),
           );
           expect(resolved.audio.codec, codec);
           expect(resolved.audio.bandwidth, bandwidth);
+          expect(resolved.audio.audioQuality, quality);
         }
-        transport.extendedAudio = false;
-        await expectLater(
-          repository.resolve(
+        transport.hasLosslessAudio = false;
+        for (final (preferred, actual) in [
+          (AudioQualityPreference.lossless, AudioQualityPreference.aac192),
+          (AudioQualityPreference.aac132, AudioQualityPreference.aac64),
+        ]) {
+          final resolved = await repository.resolve(
             item,
-            const DownloadSelection(audioQuality: AudioQualityPreference.aac64),
-            cancellation: RequestCancellation(),
-          ),
-          throwsA(
-            isA<AppFailure>().having(
-              (e) => e.message,
-              'message',
-              contains('64K'),
+            DownloadSelection(
+              audioQuality: preferred,
+              output: DownloadOutput.mkv,
             ),
-          ),
-        );
+            cancellation: RequestCancellation(),
+          );
+          expect(resolved.audio.audioQuality, actual);
+        }
       },
     );
   }
@@ -297,6 +301,7 @@ final class _Transport implements ApiTransport {
   int? forcedQuality;
   List<Map<String, Object?>> extraVideo = const [];
   bool extendedAudio = false;
+  bool hasLosslessAudio = true;
   String? audioUrl;
   int playRequestCount = 0;
   int videoDetailRequestCount = 0;
@@ -380,14 +385,15 @@ final class _Transport implements ApiTransport {
               ],
             ],
             if (extendedAudio) ...{
-              'flac': {
-                'audio': {
-                  'id': 30251,
-                  'base_url': trackUrl,
-                  'codecs': 'fLaC',
-                  'bandwidth': 450000,
+              if (hasLosslessAudio)
+                'flac': {
+                  'audio': {
+                    'id': 30251,
+                    'base_url': trackUrl,
+                    'codecs': 'fLaC',
+                    'bandwidth': 450000,
+                  },
                 },
-              },
               'dolby': {
                 'audio': [
                   {

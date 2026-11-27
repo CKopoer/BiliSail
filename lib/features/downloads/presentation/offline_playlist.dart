@@ -50,7 +50,7 @@ class OfflineSummary extends StatelessWidget {
                   item.video.author,
                 '本地',
                 downloadQualityText(task.selection.quality),
-                if (task.selection.audioQuality case final audioQuality?)
+                if (task.audioQuality case final audioQuality?)
                   audioQuality.displayLabel,
                 if (duration > Duration.zero) durationLabel(duration),
               ].join(' · '),
@@ -418,9 +418,7 @@ class _OfflinePlaylistState extends State<OfflinePlaylist> {
                             CheckedPopupMenuItem(
                               value: version,
                               checked: version.id == current?.id,
-                              child: Text(
-                                downloadFormatText(version.selection),
-                              ),
+                              child: Text(downloadFormatText(version)),
                             ),
                         ],
                         child: Padding(

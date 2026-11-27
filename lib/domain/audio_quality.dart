@@ -10,11 +10,6 @@ enum AudioQualityPreference {
 
   String get label => this == aac192 ? '$displayLabel（默认）' : displayLabel;
 
-  bool get isAac => switch (this) {
-    aac64 || aac132 || aac192 => true,
-    lossless || dolby => false,
-  };
-
   static AudioQualityPreference? identify(int id, String codec) {
     final name = codec.toLowerCase();
     if (name == 'flac' || name.startsWith('flac.') || id == 30251) {

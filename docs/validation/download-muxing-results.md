@@ -80,3 +80,7 @@ Windows 需要 MSYS2 UCRT64 GCC/G++、make 等工具；当前主机已有且已�
 | 文档和构建脚本 | 12 条本地链接、Bash／PowerShell 语法、`git diff --check` 通过；CI 测试用 ffprobe 配置也加入 Matroska 读取，尚未运行远端 CI |
 
 本轮 Windows 精简 DLL 为 1,499,635 字节（约 1.43 MiB），这是组件大小，不是安装包增量。Windows 实测使用合成媒体；真实 Bilibili 长视频、HDR／磁盘满／休眠恢复、Android/macOS 实机仍需单独验收。macOS 组件与应用未在本 Windows 主机构建或运行。
+
+## FLAC 与 Dolby Digital Plus（2026-11-27）
+
+MP4 和 MKV 启用 FLAC 与 E-AC-3 音轨直封。Windows x64 重新构建了组件，原生回归 19 项通过。四个新增组合分别比较两轨的包数、SHA-256、时间戳、时长和音画起始偏移。Windows 下载与离线播放集成测试 5 项通过，含 HTTP 下载后合并 E-AC-3 MP4 和 FLAC MKV、重开 SQLite、断网后 seek 及音视频解码。Android arm64 封装组件已交叉编译，设备播放及相册兼容性仍待验证。E-AC-3 使用合成双声道样片，JOC 信令与设备全景声输出未在本轮验收。

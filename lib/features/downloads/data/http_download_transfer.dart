@@ -151,6 +151,7 @@ final class HttpDownloadTransfer {
           fileName: previous.fileName,
           codec: source.codec,
           bandwidth: source.bandwidth,
+          audioQuality: source.audioQuality,
           bytes: bytes,
           totalBytes: total,
           etag: etag,
@@ -238,6 +239,7 @@ final class HttpDownloadTransfer {
           fileName: progress.fileName,
           codec: progress.codec,
           bandwidth: progress.bandwidth,
+          audioQuality: progress.audioQuality,
           bytes: length,
           totalBytes: progress.totalBytes,
           etag: progress.etag,
@@ -276,6 +278,7 @@ final class HttpDownloadTransfer {
     fileName: name,
     codec: source.codec,
     bandwidth: source.bandwidth,
+    audioQuality: source.audioQuality,
   );
 
   static Future<void> _discard(File file) async {

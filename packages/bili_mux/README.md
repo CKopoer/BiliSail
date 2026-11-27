@@ -52,7 +52,8 @@ iOS framework 使用扁平布局，`BiliMux`、`Info.plist`、`COPYING.LGPLv2.1`
 
 ## 行为与回归
 
-两个已校验输入 → 显式指定 MP4 / MKV 临时输出 → 重新读取输出核对两轨逐包内容/数量 → 成功返回。
+两个本地输入 → 显式指定 MP4 / MKV 临时输出 → 写入音视频包并提交容器。
+两个容器均支持 AAC、FLAC、AC-3 和 E-AC-3 音频与 H.264、HEVC 或 AV1 视频的流复制。
 不对音视频分别归零；保留压缩数据、编码参数和共享时间轴。MP4 保留 B 帧 PTS/DTS；MKV 采用容器的毫秒时间基，不存独立 DTS，逐包内容/顺序和音画相对偏移继续校验。
 AV1 分片若仅在数据包中携带序列头，MKV 写头前通过已有 parser/extradata filter 做本地探测（`probesize` 8 MiB、`max_probe_packets` 256、`max_analyze_duration` 5 秒）；未编入解码器。ABI 2 将容器参数独立于临时文件后缀，旧 ABI 1 资产不可用于新绑定，需重新构建组件。
 内存只持有两条待交错写入的数据包，原生任务有 3 小时 deadline。
@@ -68,5 +69,5 @@ cd packages/bili_mux
 flutter test
 ```
 
-`ffprobe` 只用作测试 oracle，不进入应用资产；手动回归使用与组件一致的 FFmpeg `9.0.2`，旧版本可能遗漏 AV1 分片输入的 `duration_time`。CI 在组件构建后运行 [build-test-ffprobe.sh](tool/build-test-ffprobe.sh)，从同一份已校验源码构建仅供测试的 ffprobe，不使用系统包中的版本。提交的[合成样片](test/fixtures/README.md)覆盖 H.264/HEVC/AV1 + AAC、B 帧、250 ms 音频偏移和 UTF-8 文件路径；检查数据包 SHA-256、数量、PTS、时长与相对起始偏移；MP4 额外检查 DTS，MKV 的时间比较允许 1.1 ms 容器量化误差，以及取消、输入错误和并发。
+`ffprobe` 只用作测试 oracle，不进入应用资产；手动回归使用与组件一致的 FFmpeg `9.0.2`，旧版本可能遗漏 AV1 分片输入的 `duration_time`。CI 在组件构建后运行 [build-test-ffprobe.sh](tool/build-test-ffprobe.sh)，从同一份已校验源码构建仅供测试的 ffprobe，不使用系统包中的版本。提交的[合成样片](test/fixtures/README.md)覆盖 H.264/HEVC/AV1 + AAC、H.264 + FLAC／E-AC-3、B 帧、250 ms 音频偏移和 UTF-8 文件路径。用例检查数据包 SHA-256、数量、PTS、时长与相对起始偏移。MP4 额外检查 DTS，MKV 的时间比较允许 1.1 ms 容器量化误差。另有取消、输入错误和并发回归。
 Windows 测试与 Android ELF 构建不替代 Android/macOS 实机或真实 DASH 长视频验收。

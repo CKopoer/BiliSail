@@ -14,3 +14,7 @@ foreach ($codec in @('h264', 'hevc', 'av1')) {
 }
 & $FFmpeg -nostdin -hide_banner -v error -y -f lavfi -i 'sine=frequency=440:sample_rate=48000' -t 1 -c:a aac -b:a 32k -output_ts_offset 0.25 (Join-Path $destination 'audio.m4a')
 if ($LASTEXITCODE -ne 0) { throw 'Audio fixture generation failed' }
+foreach ($codec in @('flac', 'eac3')) {
+  & $FFmpeg -nostdin -hide_banner -v error -y -f lavfi -i 'sine=frequency=440:sample_rate=48000' -ac 2 -t 1 -c:a $codec -output_ts_offset 0.25 -movflags 'delay_moov+default_base_moof+frag_keyframe' -f mp4 (Join-Path $destination "$codec.m4s")
+  if ($LASTEXITCODE -ne 0) { throw "Audio fixture generation failed: $codec" }
+}

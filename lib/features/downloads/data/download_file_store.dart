@@ -208,6 +208,8 @@ final class DownloadFileStore {
                   'fileName': track.fileName,
                   'bytes': track.bytes,
                   'sha256': track.sha256,
+                  if (track.audioQuality case final audioQuality?)
+                    'audioQuality': audioQuality.name,
                 },
               )
               .toList(),

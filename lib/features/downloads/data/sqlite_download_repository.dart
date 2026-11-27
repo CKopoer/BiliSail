@@ -322,9 +322,6 @@ final class SqliteDownloadRepository implements DownloadRepository {
     if (selection.output.isMerged && !_muxer.available) {
       throw const AppFailure(AppFailureKind.storage, '当前无法合并音视频，请选择分轨保存');
     }
-    if (selection.output.isMerged && selection.audioQuality?.isAac == false) {
-      throw const AppFailure(AppFailureKind.storage, '当前音质仅支持分轨保存');
-    }
     final unique = <String, DownloadItem>{};
     for (final item in items) {
       if (!item.isValid) throw ArgumentError.value(item.key, 'item');
@@ -515,6 +512,7 @@ final class SqliteDownloadRepository implements DownloadRepository {
               fileName: name,
               codec: source.codec,
               bandwidth: source.bandwidth,
+              audioQuality: source.audioQuality,
             );
         if (track.complete &&
             track.identity == source.identity &&
@@ -846,6 +844,7 @@ final class SqliteDownloadRepository implements DownloadRepository {
         fileName: track.fileName,
         codec: track.codec,
         bandwidth: track.bandwidth,
+        audioQuality: track.audioQuality,
       );
 
   static DownloadTrackProgress _withBytes(
@@ -857,6 +856,7 @@ final class SqliteDownloadRepository implements DownloadRepository {
     fileName: track.fileName,
     codec: track.codec,
     bandwidth: track.bandwidth,
+    audioQuality: track.audioQuality,
     bytes: bytes,
     totalBytes: track.totalBytes,
     etag: track.etag,
@@ -1277,6 +1277,8 @@ String _encodeTask(DownloadTask task) => jsonEncode({
           'fileName': track.fileName,
           'codec': track.codec,
           'bandwidth': track.bandwidth,
+          if (track.audioQuality case final audioQuality?)
+            'audioQuality': audioQuality.name,
           'bytes': track.bytes,
           'totalBytes': track.totalBytes,
           'etag': track.etag,
@@ -1405,6 +1407,9 @@ DownloadTask _decodeTask(String text, Map<String, DownloadWork> works) {
           fileName: t['fileName'] as String,
           codec: t['codec'] as String,
           bandwidth: t['bandwidth'] as int,
+          audioQuality: AudioQualityPreference.values
+              .where((quality) => quality.name == t['audioQuality'])
+              .firstOrNull,
           bytes: t['bytes'] as int,
           totalBytes: t['totalBytes'] as int?,
           etag: t['etag'] as String?,

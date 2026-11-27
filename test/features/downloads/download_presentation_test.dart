@@ -268,124 +268,72 @@ void main() {
     },
   );
 
-  testWidgets(
-    'selecting all episodes keeps only shared quality and codec pairs',
-    (tester) async {
-      final repository = _DownloadRepository();
-      addTearDown(repository.close);
-      final source = _SourceRepository()
-        ..optionsByCid = {
-          '1': {
-            (quality: 126, codec: VideoCodecPreference.dolbyVision),
-            (quality: 80, codec: VideoCodecPreference.av1),
-            (quality: 80, codec: VideoCodecPreference.h264),
-          },
-          '2': {
-            (quality: 80, codec: VideoCodecPreference.h264),
-            (quality: 64, codec: VideoCodecPreference.av1),
-          },
-        };
-      await _pump(
-        tester,
-        DownloadDialog(
-          items: [_item(1), _item(2)],
-          initialKey: _item(1).key,
-          initialSelection: const DownloadSelection(
-            quality: 80,
-            codec: VideoCodecPreference.av1,
-          ),
-        ),
-        repository,
-        source,
-      );
-      final codecField = find.byType(DropdownButton<VideoCodecPreference>);
-      expect(
-        tester.widget<DropdownButton<VideoCodecPreference>>(codecField).value,
-        VideoCodecPreference.av1,
-      );
-      await tester.tap(find.text('全选'));
-      await tester.pumpAndSettle();
-      final qualities = tester.widget<DropdownButton<int>>(
-        find.byType(DropdownButton<int>),
-      );
-      final codecs = tester.widget<DropdownButton<VideoCodecPreference>>(
-        codecField,
-      );
-      expect(qualities.items!.map((item) => item.value), [80]);
-      expect(codecs.items!.map((item) => item.value), [
-        VideoCodecPreference.h264,
-      ]);
-      expect(codecs.value, VideoCodecPreference.h264);
-      await tester.tap(find.text('开始下载'));
-      await tester.pumpAndSettle();
-      expect(repository.selection?.codec, VideoCodecPreference.h264);
-    },
-  );
-
-  testWidgets('a shared quality with no shared codec prevents enqueue', (
-    tester,
-  ) async {
-    final repository = _DownloadRepository();
-    final source = _SourceRepository()
-      ..optionsByCid = {
-        '1': {(quality: 80, codec: VideoCodecPreference.h264)},
-        '2': {(quality: 80, codec: VideoCodecPreference.hevc)},
-      };
-    await _pump(
-      tester,
-      DownloadDialog(items: [_item(1), _item(2)]),
-      repository,
-      source,
-    );
-    expect(find.text('所选分集没有共同可用的画质和编码，请调整选择'), findsOneWidget);
-    expect(
-      tester
-          .widget<FilledButton>(find.widgetWithText(FilledButton, '开始下载'))
-          .onPressed,
-      isNull,
-    );
-    expect(repository.enqueued, isEmpty);
-    await repository.close();
-  });
-
-  testWidgets('batch audio choices follow the selected episodes', (
+  testWidgets('selecting all episodes queries only the current episode', (
     tester,
   ) async {
     final repository = _DownloadRepository(canMerge: true);
     addTearDown(repository.close);
     final source = _SourceRepository()
+      ..optionsByCid = {
+        '2': {
+          (quality: 126, codec: VideoCodecPreference.dolbyVision),
+          (quality: 80, codec: VideoCodecPreference.av1),
+          (quality: 80, codec: VideoCodecPreference.h264),
+        },
+      }
       ..audioByCid = {
-        '1': {AudioQualityPreference.aac64, AudioQualityPreference.aac192},
-        '2': {AudioQualityPreference.aac64, AudioQualityPreference.dolby},
-        '3': {AudioQualityPreference.lossless},
+        '2': {AudioQualityPreference.lossless},
       };
     await _pump(
       tester,
-      DownloadDialog(items: [_item(1), _item(2), _item(3)]),
+      DownloadDialog(
+        items: List.generate(100, (index) => _item(index + 1)),
+        initialKey: _item(2).key,
+        initialSelection: const DownloadSelection(
+          quality: 80,
+          codec: VideoCodecPreference.av1,
+          output: DownloadOutput.mp4,
+        ),
+      ),
       repository,
       source,
     );
-    final start = find.widgetWithText(FilledButton, '开始下载');
-    expect(find.text('所选分集没有共同可用的音质，请调整选择'), findsOneWidget);
-    expect(tester.widget<FilledButton>(start).onPressed, isNull);
-    await tester.tap(find.text('第 3 集').last);
+    final codecField = find.byType(DropdownButton<VideoCodecPreference>);
+    expect(
+      tester.widget<DropdownButton<VideoCodecPreference>>(codecField).value,
+      VideoCodecPreference.av1,
+    );
+    await tester.tap(find.text('全选'));
     await tester.pumpAndSettle();
+    final qualities = tester.widget<DropdownButton<int>>(
+      find.byType(DropdownButton<int>),
+    );
+    final codecs = tester.widget<DropdownButton<VideoCodecPreference>>(
+      codecField,
+    );
+    expect(qualities.items!.map((item) => item.value), [126, 80]);
+    expect(codecs.items!.map((item) => item.value), [
+      VideoCodecPreference.h264,
+      VideoCodecPreference.av1,
+    ]);
+    expect(codecs.value, VideoCodecPreference.av1);
     final audio = tester.widget<DropdownButton<AudioQualityPreference>>(
       find.byType(DropdownButton<AudioQualityPreference>),
     );
     expect(audio.items!.map((option) => option.value), [
-      AudioQualityPreference.aac64,
+      AudioQualityPreference.lossless,
     ]);
-    expect(audio.value, AudioQualityPreference.aac64);
-    expect(source.qualityCalls, 3);
-    await tester.tap(start);
+    expect(audio.value, AudioQualityPreference.lossless);
+    expect(source.optionCids, ['2']);
+    await tester.tap(find.text('开始下载'));
     await tester.pumpAndSettle();
-    expect(repository.enqueued.single.map((item) => item.part.cid), ['1', '2']);
-    expect(repository.selection?.audioQuality, AudioQualityPreference.aac64);
+    expect(repository.enqueued.single, hasLength(100));
+    expect(repository.selection?.codec, VideoCodecPreference.av1);
+    expect(repository.selection?.audioQuality, AudioQualityPreference.lossless);
     expect(repository.selection?.output, DownloadOutput.mp4);
   });
 
-  testWidgets('FLAC is selectable and can only be saved as separate tracks', (
+  testWidgets('selecting FLAC keeps both merged output options available', (
     tester,
   ) async {
     final repository = _DownloadRepository(canMerge: true);
@@ -415,15 +363,15 @@ void main() {
     );
     await tester.pumpAndSettle();
     final formats = tester.widget<DropdownButton<DownloadOutput>>(output);
-    expect(formats.value, DownloadOutput.separate);
+    expect(formats.value, DownloadOutput.mp4);
     expect(
       formats.items!.where((item) => item.enabled).map((item) => item.value),
-      [DownloadOutput.separate],
+      DownloadOutput.values,
     );
     await tester.tap(find.text('开始下载'));
     await tester.pumpAndSettle();
     expect(repository.selection?.audioQuality, AudioQualityPreference.lossless);
-    expect(repository.selection?.output, DownloadOutput.separate);
+    expect(repository.selection?.output, DownloadOutput.mp4);
     expect(tester.takeException(), isNull);
   });
 
@@ -510,7 +458,7 @@ void main() {
     await repository.close();
   });
 
-  testWidgets('successful quality results are reused after selection changes', (
+  testWidgets('clearing and reselecting episodes keeps the current options', (
     tester,
   ) async {
     final repository = _DownloadRepository();
@@ -521,12 +469,12 @@ void main() {
       repository,
       source,
     );
-    expect(source.qualityCalls, 2);
+    expect(source.optionCids, ['1']);
     await tester.tap(find.text('清空'));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(find.text('全选'));
     await tester.pump(const Duration(milliseconds: 300));
-    expect(source.qualityCalls, 2);
+    expect(source.optionCids, ['1']);
     await repository.close();
   });
 
@@ -868,7 +816,8 @@ final class _SourceRepository implements DownloadSourceRepository {
   Map<String, Set<AudioQualityPreference>> audioByCid = {};
   String scope = 'user:1';
   int epoch = 1;
-  int qualityCalls = 0;
+  final optionCids = <String>[];
+  int get qualityCalls => optionCids.length;
   @override
   String get accountScope => scope;
   @override
@@ -878,7 +827,7 @@ final class _SourceRepository implements DownloadSourceRepository {
     DownloadItem item, {
     required RequestCancellation cancellation,
   }) async {
-    qualityCalls++;
+    optionCids.add(item.part.cid);
     return (
       video:
           optionsByCid[item.part.cid] ??

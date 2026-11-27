@@ -57,12 +57,18 @@ void main() {
     tearDown(() async => temp.delete(recursive: true));
 
     for (final container in MuxContainer.values) {
-      for (final codec in ['h264', 'hevc', 'av1']) {
+      for (final (codec, audioFile, audioCodec) in [
+        ('h264', 'audio.m4a', 'AAC'),
+        ('hevc', 'audio.m4a', 'AAC'),
+        ('av1', 'audio.m4a', 'AAC'),
+        ('h264', 'flac.m4s', 'FLAC'),
+        ('h264', 'eac3.m4s', 'E-AC-3'),
+      ]) {
         test(
-          '${container.name}: $codec + AAC preserves packets and shared timeline',
+          '${container.name}: $codec + $audioCodec preserves packets and shared timeline',
           () async {
             final video = '${fixtures.path}/$codec.m4s';
-            final audio = '${fixtures.path}/audio.m4a';
+            final audio = '${fixtures.path}/$audioFile';
             final output = '${temp.path}/合并.${container.name}.part';
             var progress = 0.0;
             await muxer.merge(

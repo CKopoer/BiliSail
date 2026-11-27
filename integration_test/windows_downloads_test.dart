@@ -28,9 +28,14 @@ import 'package:path/path.dart' as path;
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized().framePolicy =
       LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
-  for (final output in DownloadOutput.values) {
+  for (final (output, audioQuality) in [
+    for (final output in DownloadOutput.values)
+      (output, AudioQualityPreference.aac192),
+    (DownloadOutput.mp4, AudioQualityPreference.dolby),
+    (DownloadOutput.mkv, AudioQualityPreference.lossless),
+  ]) {
     testWidgets(
-      'Windows ${output.name} download survives restart and plays both streams, subtitles and danmaku offline',
+      'Windows ${output.name} + ${audioQuality.name} survives restart and plays both streams, subtitles and danmaku offline',
       (tester) async {
         initializePlayerBackend();
         final directory = await Directory.systemTemp.createTemp(
@@ -45,15 +50,13 @@ void main() {
             'video.mp4',
           ),
         );
-        final audioFixture = File(
-          path.join(
-            Directory.current.path,
-            'test',
-            'fixtures',
-            'media',
-            'audio.m4a',
-          ),
-        );
+        final audioFixture = File(switch (audioQuality) {
+          AudioQualityPreference.dolby =>
+            'packages/bili_mux/test/fixtures/eac3.m4s',
+          AudioQualityPreference.lossless =>
+            'packages/bili_mux/test/fixtures/flac.m4s',
+          _ => 'test/fixtures/media/audio.m4a',
+        });
         expect(await fixture.exists(), isTrue);
         final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
         var transfers = 0;
@@ -68,7 +71,7 @@ void main() {
           await request.response.addStream(file.openRead());
           await request.response.close();
         });
-        final sources = _FixtureSources(server.port);
+        final sources = _FixtureSources(server.port, audioQuality);
         final dbFile = File(path.join(directory.path, 'client.sqlite'));
         var database = AppDatabase(NativeDatabase(dbFile));
         var downloads = SqliteDownloadRepository(
@@ -95,7 +98,10 @@ void main() {
               ],
             ),
           );
-          await downloads.enqueue(items, DownloadSelection(output: output));
+          await downloads.enqueue(
+            items,
+            DownloadSelection(audioQuality: audioQuality, output: output),
+          );
           await _until(
             tester,
             () => downloads.current.tasks.every(
@@ -127,6 +133,10 @@ void main() {
           expect(
             downloads.current.tasks.map((t) => t.status),
             everyElement(DownloadStatus.completed),
+          );
+          expect(
+            downloads.current.tasks.map((t) => t.audioQuality),
+            everyElement(audioQuality),
           );
           final offline = OfflinePlaybackRepository(
             downloads: downloads,
@@ -206,13 +216,16 @@ void main() {
             cancellation: RequestCancellation(),
           );
           expect(comments.single.text, '本地弹幕');
-          await player.seek(const Duration(seconds: 3));
+          final seekPosition = audioQuality == AudioQualityPreference.aac192
+              ? const Duration(seconds: 3)
+              : const Duration(milliseconds: 400);
+          await player.seek(seekPosition);
           await player.togglePlaying();
           await _until(
             tester,
             () =>
                 player.snapshots.value.position >
-                    const Duration(milliseconds: 3300) &&
+                    seekPosition + const Duration(milliseconds: 300) &&
                 engine.inspectDiagnostics().hasDecodedVideo &&
                 engine.inspectDiagnostics().hasDecodedAudio,
           );
@@ -284,8 +297,9 @@ const _item = DownloadItem(
 );
 
 final class _FixtureSources implements DownloadSourceRepository {
-  _FixtureSources(this.port);
+  _FixtureSources(this.port, this.audioQuality);
   final int port;
+  final AudioQualityPreference audioQuality;
   int resolutions = 0;
   @override
   String get accountScope => 'guest';
@@ -297,7 +311,7 @@ final class _FixtureSources implements DownloadSourceRepository {
     required RequestCancellation cancellation,
   }) async => (
     video: {(quality: 80, codec: VideoCodecPreference.h264)},
-    audio: {AudioQualityPreference.aac192},
+    audio: {audioQuality},
   );
   @override
   Future<DownloadResolvedSource> resolve(
@@ -310,8 +324,15 @@ final class _FixtureSources implements DownloadSourceRepository {
       identity: 'native-fixture-${kind.name}',
       kind: kind,
       urls: [Uri.parse('http://127.0.0.1:$port/${kind.name}')],
-      codec: kind == DownloadTrackKind.video ? 'avc1' : 'mp4a',
+      codec: kind == DownloadTrackKind.video
+          ? 'avc1'
+          : switch (audioQuality) {
+              AudioQualityPreference.dolby => 'ec-3',
+              AudioQualityPreference.lossless => 'fLaC',
+              _ => 'mp4a',
+            },
       bandwidth: 1000,
+      audioQuality: kind == DownloadTrackKind.audio ? audioQuality : null,
     );
     return DownloadResolvedSource(
       video: track(DownloadTrackKind.video),

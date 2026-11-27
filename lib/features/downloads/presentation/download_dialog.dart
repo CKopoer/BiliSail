@@ -42,6 +42,11 @@ final class DownloadDialog extends ConsumerStatefulWidget {
 }
 
 final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
+  late final DownloadItem? _currentItem =
+      widget.items
+          .where((item) => item.isValid && item.key == widget.initialKey)
+          .firstOrNull ??
+      widget.items.where((item) => item.isValid).firstOrNull;
   late final Set<String> _selected = widget.initialKey == null
       ? widget.items
             .where((item) => item.isValid)
@@ -66,13 +71,8 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
   bool _submitting = false;
   String? _error;
   RequestCancellation? _cancellation;
-  int _generation = 0;
   late final String _openedScope;
   late final int _openedEpoch;
-  final Map<String, DownloadOptions> _optionCache = {};
-
-  String _cacheKey(DownloadItem item) =>
-      '$_openedScope:$_openedEpoch:${item.key}';
 
   bool get _accountChanged {
     final source = ref.read(downloadSourceRepositoryProvider);
@@ -98,83 +98,39 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
   }
 
   Future<void> _loadOptions() async {
+    final item = _currentItem;
+    if (item == null || _accountChanged) return;
     _cancellation?.cancel();
     final cancellation = RequestCancellation();
     _cancellation = cancellation;
-    final generation = ++_generation;
-    final source = ref.read(downloadSourceRepositoryProvider);
-    if (_accountChanged) {
-      setState(() {
-        _loading = false;
-        _options = null;
-        _error = '账号已变化，请重新打开下载窗口';
-      });
-      return;
-    }
-    final chosen = widget.items
-        .where((item) => item.isValid && _selected.contains(item.key))
-        .toList();
     setState(() {
-      _loading = chosen.isNotEmpty;
+      _loading = true;
       _options = null;
       _error = null;
     });
-    if (chosen.isEmpty) return;
     try {
-      final loaded = <String, DownloadOptions>{};
-      // Keep source reads bounded. A cancelled selection never commits its
-      // new results to the per-dialog cache.
-      for (var start = 0; start < chosen.length; start += 3) {
-        if (cancellation.isCancelled || _accountChanged) return;
-        final batch = chosen.skip(start).take(3).toList();
-        final values = await Future.wait([
-          for (final item in batch)
-            if (_optionCache[_cacheKey(item)] case final cached?)
-              Future.value(cached)
-            else
-              ref
-                  .read(downloadControllerProvider.notifier)
-                  .options(item, cancellation: cancellation),
-        ]);
-        if (cancellation.isCancelled || _accountChanged) return;
-        for (var index = 0; index < batch.length; index++) {
-          loaded[_cacheKey(batch[index])] = values[index];
-        }
-      }
-      if (!mounted ||
-          cancellation.isCancelled ||
-          generation != _generation ||
-          source.sessionEpoch != _openedEpoch ||
-          source.accountScope != _openedScope) {
-        return;
-      }
-      _optionCache.addAll(loaded);
-      final common = loaded.values.reduce(
-        (a, b) => (
-          video: a.video.intersection(b.video),
-          audio: a.audio.intersection(b.audio),
-        ),
-      );
+      final options = await ref
+          .read(downloadControllerProvider.notifier)
+          .options(item, cancellation: cancellation);
+      if (!mounted || cancellation.isCancelled || _accountChanged) return;
       setState(() {
-        _options = common;
-        if (common.video.isEmpty) {
-          _error = chosen.length == 1
-              ? '当前分集没有可下载的视频轨道'
-              : '所选分集没有共同可用的画质和编码，请调整选择';
-        } else if (common.audio.isEmpty) {
-          _error = '所选分集没有共同可用的音质，请调整选择';
+        _options = options;
+        if (options.video.isEmpty) {
+          _error = '当前分集没有可下载的视频轨道';
+        } else if (options.audio.isEmpty) {
+          _error = '当前分集没有可下载的音频轨道';
         }
         _loading = false;
       });
     } on AppFailure catch (error) {
-      if (mounted && !cancellation.isCancelled && generation == _generation) {
+      if (mounted && !cancellation.isCancelled && !_accountChanged) {
         setState(() {
           _loading = false;
           _error = error.message;
         });
       }
     } catch (_) {
-      if (mounted && !cancellation.isCancelled && generation == _generation) {
+      if (mounted && !cancellation.isCancelled && !_accountChanged) {
         setState(() {
           _loading = false;
           _error = '读取下载选项失败，请重试';
@@ -191,7 +147,6 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
         _selected.remove(key);
       }
     });
-    _loadOptions();
   }
 
   Future<void> _submit(DownloadSelection selection) async {
@@ -273,9 +228,7 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
     final audioQuality = _preferredAudioQuality.fallbackOrder
         .where(audioOptions.contains)
         .firstOrNull;
-    final canMergeAudio = audioQuality?.isAac ?? true;
-    final canMergeSelection = canMerge && canMergeAudio;
-    final output = canMergeSelection ? _output : DownloadOutput.separate;
+    final output = canMerge ? _output : DownloadOutput.separate;
     return AlertDialog(
       title: const Text('下载视频'),
       content: SizedBox(
@@ -298,25 +251,19 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
                     TextButton(
                       onPressed: _submitting
                           ? null
-                          : () {
-                              setState(
-                                () => _selected.addAll(
-                                  widget.items
-                                      .where((item) => item.isValid)
-                                      .map((item) => item.key),
-                                ),
-                              );
-                              _loadOptions();
-                            },
+                          : () => setState(
+                              () => _selected.addAll(
+                                widget.items
+                                    .where((item) => item.isValid)
+                                    .map((item) => item.key),
+                              ),
+                            ),
                       child: const Text('全选'),
                     ),
                     TextButton(
                       onPressed: _submitting
                           ? null
-                          : () {
-                              setState(_selected.clear);
-                              _loadOptions();
-                            },
+                          : () => setState(_selected.clear),
                       child: const Text('清空'),
                     ),
                   ],
@@ -418,6 +365,11 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
                             }
                           },
                   ),
+                  if (_selected.any((key) => key != _currentItem?.key))
+                    Text(
+                      '其他分集缺少所选音质时会自动选择可用档位',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                 ],
                 const SizedBox(height: 12),
                 DropdownButtonFormField<DownloadOutput>(
@@ -427,7 +379,7 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
                     for (final output in DownloadOutput.values)
                       DropdownMenuItem(
                         value: output,
-                        enabled: !output.isMerged || canMergeSelection,
+                        enabled: !output.isMerged || canMerge,
                         child: Text(output.label),
                       ),
                   ],
@@ -439,11 +391,7 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
                 ),
                 const SizedBox(height: 5),
                 Text(
-                  !canMergeAudio
-                      ? '当前音质仅支持分轨保存'
-                      : canMerge
-                      ? '保留原画质，字幕和弹幕单独保存'
-                      : '当前无法合并，可分轨保存',
+                  canMerge ? '保留原画质，字幕和弹幕单独保存' : '当前无法合并，可分轨保存',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 CheckboxListTile(
@@ -478,14 +426,9 @@ final class _DownloadDialogState extends ConsumerState<DownloadDialog> {
                       color: Theme.of(context).colorScheme.error,
                     ),
                   ),
-                  if (!_loading &&
-                      _selected.isNotEmpty &&
-                      (quality == null || audioQuality == null))
+                  if (!_loading && (quality == null || audioQuality == null))
                     TextButton(
-                      onPressed: () {
-                        _optionCache.clear();
-                        _loadOptions();
-                      },
+                      onPressed: _loadOptions,
                       child: const Text('重新读取下载选项'),
                     ),
                 ],

@@ -166,8 +166,10 @@ void merge(bili_mux_job& job) {
   const int vi = stream_index(*video, AVMEDIA_TYPE_VIDEO);
   const int ai = stream_index(*audio, AVMEDIA_TYPE_AUDIO);
   const auto vc = video->streams[vi]->codecpar->codec_id;
+  const auto ac = audio->streams[ai]->codecpar->codec_id;
   if ((vc != AV_CODEC_ID_H264 && vc != AV_CODEC_ID_HEVC && vc != AV_CODEC_ID_AV1) ||
-      audio->streams[ai]->codecpar->codec_id != AV_CODEC_ID_AAC) {
+      (ac != AV_CODEC_ID_AAC && ac != AV_CODEC_ID_FLAC &&
+       ac != AV_CODEC_ID_AC3 && ac != AV_CODEC_ID_EAC3)) {
     throw mux_error{result::input};
   }
   output_context output;

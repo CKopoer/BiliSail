@@ -23,7 +23,7 @@ cd "$build_dir"
   --disable-avdevice --disable-avfilter --disable-swresample --disable-swscale \
   --enable-static --disable-shared \
   --enable-demuxer=mov,matroska --enable-protocol=file \
-  --enable-parser=aac,h264,hevc,av1 > configure.log 2>&1
+  --enable-parser=aac,ac3,flac,h264,hevc,av1 > configure.log 2>&1
 expected_version="$(cut -d ' ' -f 1 "$source_record")"
 # An extracted source tree inside this checkout otherwise inherits the app's
 # Git description instead of the FFmpeg release revision.

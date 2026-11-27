@@ -187,7 +187,7 @@ final class DownloadSelection {
   final int quality;
   final VideoCodecPreference codec;
 
-  /// Older tasks used the highest available AAC bitrate.
+  /// Preferred audio tier. Older tasks used the highest available AAC bitrate.
   final AudioQualityPreference? audioQuality;
   final bool includeDanmaku, includeSubtitles;
   final DownloadOutput output;
@@ -221,11 +221,13 @@ final class DownloadTrackSource {
     required List<Uri> urls,
     required this.codec,
     required this.bandwidth,
+    this.audioQuality,
   }) : urls = List.unmodifiable(urls);
   final String identity, codec;
   final DownloadTrackKind kind;
   final List<Uri> urls;
   final int bandwidth;
+  final AudioQualityPreference? audioQuality;
 }
 
 final class DownloadResolvedSource {
@@ -273,6 +275,7 @@ final class DownloadTrackProgress {
     required this.fileName,
     required this.codec,
     required this.bandwidth,
+    this.audioQuality,
     this.bytes = 0,
     this.totalBytes,
     this.etag,
@@ -282,6 +285,7 @@ final class DownloadTrackProgress {
   final DownloadTrackKind kind;
   final String identity, fileName, codec;
   final int bandwidth, bytes;
+  final AudioQualityPreference? audioQuality;
   final int? totalBytes;
   final String? etag, sha256;
 
@@ -300,6 +304,7 @@ final class DownloadTrackProgress {
     fileName: fileName,
     codec: codec,
     bandwidth: bandwidth,
+    audioQuality: audioQuality,
     bytes: bytes ?? this.bytes,
     totalBytes: totalBytes ?? this.totalBytes,
     etag: etag ?? this.etag,
@@ -344,6 +349,12 @@ final class DownloadTask {
   final Duration? duration;
   final DownloadMergedMedia? mergedMedia;
   final double? muxProgress;
+  AudioQualityPreference? get audioQuality =>
+      tracks
+          .where((track) => track.kind == DownloadTrackKind.audio)
+          .firstOrNull
+          ?.audioQuality ??
+      selection.audioQuality;
   int get downloadedBytes => tracks.fold(0, (sum, track) => sum + track.bytes);
   int? get totalBytes =>
       tracks.length != 2 || tracks.any((track) => track.totalBytes == null)
