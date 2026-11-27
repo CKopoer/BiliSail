@@ -327,8 +327,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
                     )
                   : constraints.maxWidth;
               final compactAreaHeight = math.min(
-                constraints.maxWidth * 9 / 16 +
-                    PlaybackPlayerArea.toggleStripHeight,
+                constraints.maxWidth * 9 / 16,
                 constraints.maxHeight * 0.55,
               );
               final infoHeight = wide
@@ -347,14 +346,14 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Expanded(
-                          child: PlaybackPlayerArea(
-                            player: player,
+                          child: PlaybackInfoScope(
                             wide: wide,
                             showInfo: _infoVisible,
                             tooltip: _infoVisible ? '收起直播信息' : '展开直播信息',
                             onToggle: () => setState(
                               () => _infoVisibilityOverride = !_infoVisible,
                             ),
+                            child: player,
                           ),
                         ),
                         if (bottomSummary != null)
@@ -418,11 +417,13 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
             ),
           )
         : Builder(
-            builder: (context) => Center(
-              child: Text(
-                '主播尚未开播',
-                style: Theme.of(context).textTheme.titleMedium
-                    ?.copyWith(color: Colors.white),
+            builder: (context) => PlaybackInfoPlaceholder(
+              child: Center(
+                child: Text(
+                  '主播尚未开播',
+                  style: Theme.of(context).textTheme.titleMedium
+                      ?.copyWith(color: Colors.white),
+                ),
               ),
             ),
           ),

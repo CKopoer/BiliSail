@@ -1,4 +1,5 @@
 import '../support/material_tooltip_finder.dart';
+import '../support/playback_info_finder.dart';
 
 import 'dart:async';
 
@@ -97,7 +98,7 @@ void main() {
             comment: CommentLocation('10', replyId: '11'),
           ),
         );
-        expect(findMaterialTooltip(pgc ? '收起影视信息' : '收起视频信息'), findsOneWidget);
+        expect(findPlaybackInfo(pgc ? '收起影视信息' : '收起视频信息'), findsOneWidget);
         expect(find.text('评论详情'), findsOneWidget);
         expect(find.text('二级回复').hitTestable(), findsOneWidget);
         expect(harness.repo.locates, 1);

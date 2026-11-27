@@ -21,7 +21,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../support/material_tooltip_finder.dart';
+import '../../support/playback_info_finder.dart';
 
 final _video = VideoSummary(
   id: const VideoId('BV1234567890'),
@@ -764,8 +764,8 @@ void main() {
         await tester.pump(const Duration(milliseconds: 300));
         expect(playerConstraints, isNotNull);
         expect(playerConstraints!.maxWidth, width);
-        expect(playerConstraints!.maxHeight, width >= 1000 ? 800 : 760);
-        await tester.tap(findMaterialTooltip('展开离线信息'));
+        expect(playerConstraints!.maxHeight, 800);
+        togglePlaybackInfo(tester, findPlaybackInfo('展开离线信息'));
         await tester.pump();
         expect(playerConstraints!.hasBoundedWidth, isTrue);
         expect(playerConstraints!.hasBoundedHeight, isTrue);

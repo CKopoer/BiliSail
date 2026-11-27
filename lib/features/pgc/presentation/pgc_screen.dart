@@ -27,6 +27,7 @@ import '../../../shared/ui/app_cover_image.dart';
 import '../../../shared/ui/workspace_link.dart';
 import '../../../shared/ui/app_notice.dart';
 import '../../../shared/ui/playback_page_layout.dart';
+import '../../../shared/ui/playback_sidebar_toggle.dart';
 import '../../../shared/ui/scroll_collapsing_header.dart';
 import '../../../shared/ui/playback_info_tabs.dart';
 import '../../../shared/ui/comment_detail_builder.dart';
@@ -477,27 +478,27 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
           color: widget.course && episode?.playable != true
               ? Theme.of(context).colorScheme.surfaceContainer
               : Colors.black,
-          child: episode == null
-              ? StateView.empty(
-                  message: widget.course ? '这门课程暂无课时' : '这个作品暂无可选择的剧集',
-                  icon: widget.course
-                      ? Icons.school_outlined
-                      : Icons.movie_outlined,
-                )
-              : episode.playable
-              // Keep inherited dependencies on this element, so settings/theme
-              // updates still reach the injected player without sidebar rebuilds.
+          child: episode != null && episode.playable
               ? builder(context, season, episode)
-              : StateView.empty(
-                  message: episode.unavailableReason,
-                  icon: Icons.lock_outline,
-                  actionLabel: '登录已购账号',
-                  onAction:
-                      widget.course &&
-                          !episode.available &&
-                          !ref.read(authControllerProvider).isSignedIn
-                      ? widget.onLogin
-                      : null,
+              : PlaybackInfoPlaceholder(
+                  child: episode == null
+                      ? StateView.empty(
+                          message: widget.course ? '这门课程暂无课时' : '这个作品暂无可选择的剧集',
+                          icon: widget.course
+                              ? Icons.school_outlined
+                              : Icons.movie_outlined,
+                        )
+                      : StateView.empty(
+                          message: episode.unavailableReason,
+                          icon: Icons.lock_outline,
+                          actionLabel: '登录已购账号',
+                          onAction:
+                              widget.course &&
+                                  !episode.available &&
+                                  !ref.read(authControllerProvider).isSignedIn
+                              ? widget.onLogin
+                              : null,
+                        ),
                 ),
         ),
       );

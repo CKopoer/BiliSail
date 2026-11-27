@@ -1,101 +1,150 @@
+import 'dart:math' as math;
+
 import 'package:material_ui/material_ui.dart';
 
-/// Keeps the information toggle beside the player or in its own strip below it.
-class PlaybackPlayerArea extends StatelessWidget {
-  const PlaybackPlayerArea({
+/// The playback page owns the panel state, including manual overrides.
+class PlaybackInfoScope extends InheritedWidget {
+  const PlaybackInfoScope({
     super.key,
-    required this.player,
     required this.wide,
     required this.showInfo,
     required this.tooltip,
     required this.onToggle,
-    this.showStackedToggle = true,
+    required super.child,
   });
 
-  static const toggleStripHeight = 40.0;
-
-  final Widget player;
   final bool wide;
   final bool showInfo;
   final String tooltip;
   final VoidCallback onToggle;
-  final bool showStackedToggle;
+
+  static PlaybackInfoScope? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<PlaybackInfoScope>();
+
+  static PlaybackInfoScope? read(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<PlaybackInfoScope>();
+
+  @override
+  bool updateShouldNotify(PlaybackInfoScope oldWidget) =>
+      wide != oldWidget.wide ||
+      showInfo != oldWidget.showInfo ||
+      tooltip != oldWidget.tooltip ||
+      onToggle != oldWidget.onToggle;
+}
+
+class PlaybackSidebarToggle extends StatelessWidget {
+  const PlaybackSidebarToggle({super.key, this.color});
+
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
-    final toggle = PlaybackSidebarToggle(
-      wide: wide,
-      showInfo: showInfo,
-      tooltip: tooltip,
-      onPressed: onToggle,
-    );
-    return Stack(
-      children: [
-        Positioned.fill(
-          bottom: wide || !showStackedToggle ? 0 : toggleStripHeight,
-          child: player,
-        ),
-        if (wide)
-          Align(alignment: Alignment.centerRight, child: toggle)
-        else if (showStackedToggle)
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: toggleStripHeight,
-            child: ColoredBox(
-              color: Theme.of(context).colorScheme.surface,
-              child: Center(child: toggle),
+    final info = PlaybackInfoScope.maybeOf(context);
+    if (info == null) return const SizedBox.shrink();
+    return Semantics(
+      expanded: info.showInfo,
+      child: IconButton(
+        color: color,
+        tooltip: info.tooltip,
+        onPressed: info.onToggle,
+        icon: Builder(
+          builder: (context) => CustomPaint(
+            key: ValueKey(
+              info.showInfo ? 'playback-collapse-info' : 'playback-expand-info',
+            ),
+            size: const Size.square(20),
+            painter: _InfoPanelIcon(
+              wide: info.wide,
+              expanded: info.showInfo,
+              color:
+                  IconTheme.of(context).color ??
+                  Theme.of(context).colorScheme.onSurface,
             ),
           ),
-      ],
+        ),
+      ),
     );
   }
 }
 
-class PlaybackSidebarToggle extends StatelessWidget {
-  const PlaybackSidebarToggle({
-    super.key,
-    required this.tooltip,
+class _InfoPanelIcon extends CustomPainter {
+  const _InfoPanelIcon({
     required this.wide,
-    required this.showInfo,
-    required this.onPressed,
+    required this.expanded,
+    required this.color,
   });
 
-  final String tooltip;
   final bool wide;
-  final bool showInfo;
-  final VoidCallback onPressed;
+  final bool expanded;
+  final Color color;
 
   @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final icon = wide
-        ? (showInfo ? Icons.chevron_right : Icons.chevron_left)
-        : (showInfo ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up);
-    return Material(
-      type: MaterialType.transparency,
-      child: IconButton(
-        tooltip: tooltip,
-        onPressed: onPressed,
-        style: IconButton.styleFrom(
-          foregroundColor: wide ? Colors.white : colors.onSurfaceVariant,
-          backgroundColor: wide
-              ? Colors.black45
-              : colors.surfaceContainerHighest,
-          fixedSize: wide ? const Size(36, 56) : const Size(64, 24),
-          minimumSize: Size.zero,
-          padding: EdgeInsets.zero,
-          tapTargetSize: wide
-              ? MaterialTapTargetSize.shrinkWrap
-              : MaterialTapTargetSize.padded,
-          visualDensity: VisualDensity.standard,
-          shape: wide
-              ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))
-              : const StadiumBorder(),
-        ),
-        icon: Icon(icon, size: wide ? null : 20),
-      ),
+  void paint(Canvas canvas, Size size) {
+    final frame = Rect.fromLTRB(1, 2.5, size.width - 1, size.height - 2.5);
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..strokeWidth = 1.5;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(frame, const Radius.circular(2.5)),
+      stroke,
     );
+    var center = frame.center;
+    if (expanded) {
+      if (wide) {
+        final x = frame.right - 4.5;
+        canvas.drawLine(Offset(x, frame.top), Offset(x, frame.bottom), stroke);
+        center = Offset((frame.left + x) / 2, center.dy);
+      } else {
+        final y = frame.bottom - 4;
+        canvas.drawLine(Offset(frame.left, y), Offset(frame.right, y), stroke);
+        center = Offset(center.dx, (frame.top + y) / 2);
+      }
+    }
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    if (!wide) canvas.rotate(math.pi / 2);
+    if (!expanded) canvas.rotate(math.pi);
+    // The chevron points towards the visible panel. An inward arrow opens it again.
+    final arrow = Path()
+      ..moveTo(-1, -2.8)
+      ..lineTo(1.8, 0)
+      ..lineTo(-1, 2.8);
+    if (!expanded) {
+      arrow.moveTo(-4, 0);
+      arrow.lineTo(1.8, 0);
+    }
+    canvas.drawPath(arrow, stroke);
+    canvas.restore();
   }
+
+  @override
+  bool shouldRepaint(_InfoPanelIcon oldDelegate) =>
+      wide != oldDelegate.wide ||
+      expanded != oldDelegate.expanded ||
+      color != oldDelegate.color;
+}
+
+/// Offline rooms and unavailable episodes have no playback toolbar.
+class PlaybackInfoPlaceholder extends StatelessWidget {
+  const PlaybackInfoPlaceholder({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    fit: StackFit.expand,
+    children: [
+      child,
+      const Align(
+        alignment: Alignment.bottomRight,
+        child: Material(
+          color: Colors.black54,
+          child: PlaybackSidebarToggle(color: Colors.white),
+        ),
+      ),
+    ],
+  );
 }

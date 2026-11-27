@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../../shared/ui/app_cover_image.dart';
 import '../../../shared/ui/playback_page_commands.dart';
+import '../../../shared/ui/playback_sidebar_toggle.dart';
 import '../application/playback_session.dart';
 import 'audio_subtitle_lyrics.dart';
 import 'listening_sleep_timer_button.dart';
@@ -134,8 +135,8 @@ class AudioPlaybackView extends StatelessWidget {
                 ),
                 SizedBox(
                   height: 48,
-                  child: Row(
-                    children: [
+                  child: _AudioToolbar(
+                    transport: [
                       IconButton(
                         tooltip: '后退 10 秒',
                         onPressed: ready ? () => _skip(-10) : null,
@@ -173,7 +174,8 @@ class AudioPlaybackView extends StatelessWidget {
                               : null,
                           icon: const Icon(Icons.skip_next_rounded),
                         ),
-                      const Spacer(),
+                    ],
+                    menus: [
                       PopupMenuButton<double>(
                         tooltip: '播放速度',
                         enabled: ready,
@@ -281,6 +283,10 @@ class AudioPlaybackView extends StatelessWidget {
                         ],
                         icon: const Icon(Icons.more_horiz_rounded),
                       ),
+                    ],
+                    trailing: [
+                      if (PlaybackInfoScope.maybeOf(context) != null)
+                        const PlaybackSidebarToggle(),
                       IconButton(
                         tooltip: fullScreen ? '退出全屏' : '全屏',
                         onPressed: onFullScreen,
@@ -463,6 +469,59 @@ class _AudioCover extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Keep the window controls pinned when the available width is too short for
+/// transport, speed and the options menu to fit beside them.
+class _AudioToolbar extends StatelessWidget {
+  const _AudioToolbar({
+    required this.transport,
+    required this.menus,
+    required this.trailing,
+  });
+
+  final List<Widget> transport;
+  final List<Widget> menus;
+  final List<Widget> trailing;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, bounds) {
+      final compact =
+          bounds.maxWidth <
+          48 * (transport.length + menus.length + trailing.length);
+      return IconButtonTheme(
+        data: IconButtonThemeData(
+          style: IconButton.styleFrom(
+            minimumSize: Size(compact ? 40 : 48, 48),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, remaining) => SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minWidth: remaining.maxWidth),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(children: transport),
+                        Row(children: menus),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            ...trailing,
+          ],
+        ),
+      );
+    },
+  );
 }
 
 class _AudioTimeline extends StatefulWidget {

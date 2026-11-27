@@ -21,6 +21,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:bilisail/shared/ui/playback_sidebar_toggle.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fake_video_output.dart';
@@ -772,6 +773,7 @@ void main() {
         await session.open(_detail, _part);
         await session.setAudioOnly(true);
         final boundary = GlobalKey();
+        var toggles = 0;
         await tester.pumpWidget(
           MaterialApp(
             theme: size.width == 900 ? BiliTheme.dark() : BiliTheme.light(),
@@ -784,15 +786,21 @@ void main() {
               key: boundary,
               child: ListenableBuilder(
                 listenable: Listenable.merge([session, session.snapshots]),
-                builder: (context, _) => AudioPlaybackView(
-                  session: session,
-                  snapshot: session.snapshots.value,
-                  fullScreen: false,
-                  onFullScreen: () {},
-                  navigation: IconButton(
-                    tooltip: '返回',
-                    onPressed: () {},
-                    icon: const Icon(Icons.arrow_back),
+                builder: (context, _) => PlaybackInfoScope(
+                  showInfo: true,
+                  wide: size.width >= 900,
+                  tooltip: '收起视频信息',
+                  onToggle: () => toggles++,
+                  child: AudioPlaybackView(
+                    session: session,
+                    snapshot: session.snapshots.value,
+                    fullScreen: false,
+                    onFullScreen: () {},
+                    navigation: IconButton(
+                      tooltip: '返回',
+                      onPressed: () {},
+                      icon: const Icon(Icons.arrow_back),
+                    ),
                   ),
                 ),
               ),
@@ -801,6 +809,11 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
+        final info = findMaterialTooltip('收起视频信息');
+        final fullscreen = findMaterialTooltip('全屏');
+        expect(tester.getTopRight(info).dx, tester.getTopLeft(fullscreen).dx);
+        await tester.tap(info);
+        expect(toggles, 1);
         await tester.tap(find.byKey(const ValueKey('audio-toggle-playing')));
         await tester.pump();
         expect(engine.currentSnapshot.desiredPlaying, isFalse);

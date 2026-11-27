@@ -1890,27 +1890,34 @@ void main() {
           var settings = AppSettings(playerControlsMode: mode);
           var toggles = 0;
           var nextCalls = 0;
+          var infoToggles = 0;
           await tester.pumpWidget(
-            StatefulBuilder(
-              builder: (context, setState) => _app(
-                session,
-                window,
-                settings,
-                width: 320,
-                textScale: 2,
-                target: target,
-                onBack: () {},
-                onHome: () {},
-                showNavigationInPlayer: true,
-                nextPart: () => nextCalls++,
-                composer: (_) => const TextField(key: Key('small-editor')),
-                overlay: (_) => const Text('画面弹幕'),
-                onToggleComments: () => setState(() {
-                  toggles++;
-                  settings = settings.copyWith(
-                    danmakuEnabled: !settings.danmakuEnabled,
-                  );
-                }),
+            PlaybackInfoScope(
+              wide: false,
+              showInfo: true,
+              tooltip: '收起播放信息',
+              onToggle: () => infoToggles++,
+              child: StatefulBuilder(
+                builder: (context, setState) => _app(
+                  session,
+                  window,
+                  settings,
+                  width: 320,
+                  textScale: 2,
+                  target: target,
+                  onBack: () {},
+                  onHome: () {},
+                  showNavigationInPlayer: true,
+                  nextPart: () => nextCalls++,
+                  composer: (_) => const TextField(key: Key('small-editor')),
+                  overlay: (_) => const Text('画面弹幕'),
+                  onToggleComments: () => setState(() {
+                    toggles++;
+                    settings = settings.copyWith(
+                      danmakuEnabled: !settings.danmakuEnabled,
+                    );
+                  }),
+                ),
               ),
             ),
           );
@@ -1926,7 +1933,7 @@ void main() {
                 of: find.byKey(const ValueKey('player-controls')),
                 matching: find.byType(IconButton),
               ),
-              findsNWidgets(target is OfflinePlaybackTarget ? 4 : 5),
+              findsNWidgets(target is OfflinePlaybackTarget ? 5 : 6),
             );
             expect(
               findMaterialTooltip('重新加载直播').hitTestable(),
@@ -2302,8 +2309,8 @@ void main() {
     );
   }
 
-  for (final width in [390.0, 999.0, 1000.0]) {
-    testWidgets('video sidebar toggle stays outside fullscreen at $width', (
+  for (final width in [320.0, 999.0, 1440.0]) {
+    testWidgets('video info button stays left of fullscreen at $width', (
       tester,
     ) async {
       tester.view.devicePixelRatio = 1;
@@ -2347,20 +2354,36 @@ void main() {
       await session.pause();
       final generation = session.sourceGeneration;
       final sidebar = find.byType(PlaybackSidebarToggle);
-      expect(sidebar.hitTestable(), findsOneWidget);
+      final fullscreen = findMaterialTooltip('全屏（F）');
+      void expectAdjacent(Finder button) {
+        expect(sidebar.hitTestable(), findsOneWidget);
+        expect(tester.getCenter(sidebar).dy, tester.getCenter(button).dy);
+        expect(tester.getTopRight(sidebar).dx, tester.getTopLeft(button).dx);
+      }
+
       await _showControls(tester);
-      await tester.tap(findMaterialTooltip('全屏（F）'));
+      expectAdjacent(fullscreen);
+      expect(
+        find.byKey(const ValueKey('playback-collapse-info')),
+        findsOneWidget,
+      );
+      await tester.tap(findMaterialTooltip('收起视频信息'));
+      await _pumpFrames(tester);
+      expect(find.byType(PlaybackInfoTabs), findsNothing);
+      await _showControls(tester);
+      expectAdjacent(fullscreen);
+      expect(
+        find.byKey(const ValueKey('playback-expand-info')),
+        findsOneWidget,
+      );
+      await tester.tap(fullscreen);
       await _pumpFrames(tester);
       expect(window.fullScreen, isTrue);
-      expect(sidebar.hitTestable(), findsNothing);
-      expect(
-        find.descendant(of: find.byType(Dialog), matching: sidebar),
-        findsNothing,
-      );
-      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await _showControls(tester);
+      expectAdjacent(find.widgetWithIcon(IconButton, Icons.fullscreen_exit));
+      await tester.tap(findMaterialTooltip('返回播放页并展开信息'));
       await _pumpFrames(tester);
       expect(window.fullScreen, isFalse);
-      expect(sidebar.hitTestable(), findsOneWidget);
       expect(
         tester.widget<PlaybackInfoTabs>(find.byType(PlaybackInfoTabs)).value,
         1,

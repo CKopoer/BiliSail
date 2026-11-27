@@ -4,6 +4,7 @@ import 'package:bilisail/features/playback/application/playback_session.dart';
 import 'package:bili_player/bili_player.dart' show VideoDimensions;
 
 import '../../support/material_tooltip_finder.dart';
+import '../../support/playback_info_finder.dart';
 
 import 'dart:async';
 
@@ -156,34 +157,34 @@ void main() {
     await showPage(tester, width: 390);
     await tester.pumpAndSettle();
     final player = tester.state(find.byType(_PlayerProbe));
-    expect(findMaterialTooltip('收起直播信息'), findsOneWidget);
+    expect(findPlaybackInfo('收起直播信息'), findsOneWidget);
     expect(find.byKey(const ValueKey('live-chat-list')), findsOneWidget);
     for (final width in [999.0, 1000.0, 1280.0, 390.0, 1000.0]) {
       await tester.binding.setSurfaceSize(Size(width, 800));
       await tester.pumpAndSettle();
-      expect(findMaterialTooltip('收起直播信息'), findsOneWidget);
+      expect(findPlaybackInfo('收起直播信息'), findsOneWidget);
       expect(find.byKey(const ValueKey('live-chat-list')), findsOneWidget);
       expect(tester.state(find.byType(_PlayerProbe)), same(player));
     }
-    await tester.tap(findMaterialTooltip('收起直播信息'));
+    togglePlaybackInfo(tester, findPlaybackInfo('收起直播信息'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('live-chat-list')), findsNothing);
     await tester.binding.setSurfaceSize(const Size(999, 800));
     await tester.pumpAndSettle();
-    expect(findMaterialTooltip('展开直播信息'), findsOneWidget);
+    expect(findPlaybackInfo('展开直播信息'), findsOneWidget);
     expect(find.byKey(const ValueKey('live-chat-list')), findsNothing);
-    expect(tester.getSize(find.byType(_PlayerProbe)), const Size(999, 760));
-    await tester.tap(findMaterialTooltip('展开直播信息'));
+    expect(tester.getSize(find.byType(_PlayerProbe)), const Size(999, 800));
+    togglePlaybackInfo(tester, findPlaybackInfo('展开直播信息'));
     await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('live-chat-list')).hitTestable(),
       findsOneWidget,
     );
-    await tester.tap(findMaterialTooltip('收起直播信息'));
+    togglePlaybackInfo(tester, findPlaybackInfo('收起直播信息'));
     await tester.pumpAndSettle();
     await tester.binding.setSurfaceSize(const Size(1000, 800));
     await tester.pumpAndSettle();
-    await tester.tap(findMaterialTooltip('展开直播信息'));
+    togglePlaybackInfo(tester, findPlaybackInfo('展开直播信息'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('live-chat-list')), findsOneWidget);
     expect(tester.state(find.byType(_PlayerProbe)), same(player));
@@ -290,14 +291,14 @@ void main() {
 
     layout.value = ResponsiveLayoutSettings(playbackSideBySideWidth: 800);
     await tester.pumpAndSettle();
-    expect(findMaterialTooltip('收起直播信息'), findsOneWidget);
+    expect(findPlaybackInfo('收起直播信息'), findsOneWidget);
     expect(tester.getSize(player).width, 420);
     expect(tester.getTopLeft(chat).dx, tester.getTopRight(player).dx);
     expect(tester.state(player), same(playerState));
 
     layout.value = const ResponsiveLayoutSettings.defaults();
     await tester.pumpAndSettle();
-    expect(findMaterialTooltip('收起直播信息'), findsOneWidget);
+    expect(findPlaybackInfo('收起直播信息'), findsOneWidget);
     expect(tester.getSize(player).width, 800);
     expect(tester.state(player), same(playerState));
     expect(chatPosition(tester), same(chatScrollPosition));
@@ -347,10 +348,7 @@ void main() {
       final pages = tester.widget(pager);
       final height = tester.getSize(chat).height;
       final headerTop = tester.getTopLeft(find.byType(LiveRoomHeader)).dy;
-      expect(
-        headerTop - tester.getBottomLeft(find.byType(_PlayerProbe)).dy,
-        40,
-      );
+      expect(headerTop - tester.getBottomLeft(find.byType(_PlayerProbe)).dy, 0);
       expect(tester.getTopLeft(pager).dy - headerTop, 45);
       playerBuilds = 0;
       composerBuilds = 0;
@@ -503,7 +501,7 @@ void main() {
     expect(realtime.opens, opens);
     expect(realtime.reads.single.isCancelled, false);
 
-    await tester.tap(findMaterialTooltip('收起直播信息'));
+    togglePlaybackInfo(tester, findPlaybackInfo('收起直播信息'));
     await tester.pumpAndSettle();
     receiveMessages(30, 1);
     await tester.pumpAndSettle();
@@ -512,7 +510,7 @@ void main() {
     expect(playerBuilds, 0);
     expect(realtime.opens, opens);
     expect(realtime.reads.single.isCancelled, false);
-    await tester.tap(findMaterialTooltip('展开直播信息'));
+    togglePlaybackInfo(tester, findPlaybackInfo('展开直播信息'));
     await tester.pumpAndSettle();
     expect(chatPosition(tester).extentAfter, lessThanOrEqualTo(1));
     expect(playerBuilds, 0);
@@ -540,6 +538,12 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(_PlayerProbe), findsNothing);
       expect(find.text('主播尚未开播'), findsWidgets);
+      await tester.tap(findMaterialTooltip('收起直播信息'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('live-chat-list')), findsNothing);
+      await tester.tap(findMaterialTooltip('展开直播信息'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('live-chat-list')), findsOneWidget);
       expect(playerBuilds, 0);
       await container.read(liveControllerProvider(room.id).notifier).load();
       await tester.pumpAndSettle();
@@ -1033,10 +1037,10 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(position.extentAfter, 0);
-    await tester.tap(findMaterialTooltip('收起直播信息'));
+    togglePlaybackInfo(tester, findPlaybackInfo('收起直播信息'));
     receiveMessages(12, 12);
     await tester.pumpAndSettle();
-    await tester.tap(findMaterialTooltip('展开直播信息'));
+    togglePlaybackInfo(tester, findPlaybackInfo('展开直播信息'));
     await tester.pumpAndSettle();
     expect(position.extentAfter, 0);
     await tester.binding.setSurfaceSize(const Size(1024, 520));
@@ -1081,10 +1085,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('live-tab-0')));
     await tester.pumpAndSettle();
     expect(position.pixels, before);
-    await tester.tap(findMaterialTooltip('收起直播信息'));
+    togglePlaybackInfo(tester, findPlaybackInfo('收起直播信息'));
     receiveMessages(8, 8);
     await tester.pumpAndSettle();
-    await tester.tap(findMaterialTooltip('展开直播信息'));
+    togglePlaybackInfo(tester, findPlaybackInfo('展开直播信息'));
     await tester.pumpAndSettle();
     expect(position.pixels, before);
     await tester.binding.setSurfaceSize(const Size(1024, 520));
@@ -1377,10 +1381,10 @@ void main() {
     expect(find.text('第二条完整的 SC 内容'), findsOneWidget);
     expect(tester.state(find.byType(_PlayerProbe)), same(player));
 
-    await tester.tap(findMaterialTooltip('收起直播信息'));
+    togglePlaybackInfo(tester, findPlaybackInfo('收起直播信息'));
     await tester.pump();
     expect(tester.state(find.byType(_PlayerProbe)), same(player));
-    await tester.tap(findMaterialTooltip('展开直播信息'));
+    togglePlaybackInfo(tester, findPlaybackInfo('展开直播信息'));
     await tester.pump();
     expect(find.text('共 2 条 SC'), findsOneWidget);
     expect(tester.state(find.byType(_PlayerProbe)), same(player));
@@ -1531,9 +1535,9 @@ void main() {
         await tester.pumpAndSettle();
         expect(position.pixels, greaterThan(120));
         final before = position.pixels;
-        await tester.tap(findMaterialTooltip('收起直播信息'));
+        togglePlaybackInfo(tester, findPlaybackInfo('收起直播信息'));
         await tester.pump();
-        await tester.tap(findMaterialTooltip('展开直播信息'));
+        togglePlaybackInfo(tester, findPlaybackInfo('展开直播信息'));
         await tester.pump();
         expect(position.pixels, before);
         expect(tester.state(find.byType(_PlayerProbe)), same(player));
@@ -1651,9 +1655,9 @@ void main() {
     final before = tester.state<ScrollableState>(scrollable).position.pixels;
     expect(before, greaterThan(0));
 
-    await tester.tap(findMaterialTooltip('收起直播信息'));
+    togglePlaybackInfo(tester, findPlaybackInfo('收起直播信息'));
     await tester.pump();
-    await tester.tap(findMaterialTooltip('展开直播信息'));
+    togglePlaybackInfo(tester, findPlaybackInfo('展开直播信息'));
     await tester.pump();
     final after = tester.state<ScrollableState>(scrollable).position.pixels;
     expect(after, before);

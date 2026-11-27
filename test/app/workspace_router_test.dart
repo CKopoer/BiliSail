@@ -1,4 +1,5 @@
 import '../support/material_tooltip_finder.dart';
+import '../support/playback_info_finder.dart';
 
 import 'package:bilisail/features/video/application/video_author_controller.dart';
 import 'package:bilisail/features/video/presentation/video_author_header.dart';
@@ -643,15 +644,15 @@ void main() {
       final screenState = tester.state(screen);
       final player = find.text('测试播放器');
       final playerElement = tester.element(player);
-      final expand = findMaterialTooltip('展开$label信息');
-      final collapse = findMaterialTooltip('收起$label信息');
+      final expand = findPlaybackInfo('展开$label信息');
+      final collapse = findPlaybackInfo('收起$label信息');
       final info = find.byType(PlaybackInfoTabs);
       expect(expand, findsOneWidget);
       expect(info, findsNothing);
 
       tester.view.physicalSize = const Size(390, 900);
       await tester.pumpAndSettle();
-      expect(expand.hitTestable(), findsOneWidget);
+      expect(expand, findsOneWidget);
       expect(info, findsNothing);
 
       final controller = ProviderScope.containerOf(tester.element(screen))
@@ -664,16 +665,16 @@ void main() {
       await tester.pumpAndSettle();
       expect(info, findsNothing);
       final hiddenHeight = tester.getSize(player).height;
-      await tester.tap(expand);
+      togglePlaybackInfo(tester, expand);
       await tester.pumpAndSettle();
       expect(collapse, findsOneWidget);
       expect(info, findsOneWidget);
       expect(tester.getSize(player).height, lessThan(hiddenHeight));
-      await tester.tap(collapse);
+      togglePlaybackInfo(tester, collapse);
       await tester.pumpAndSettle();
       expect(info, findsNothing);
       expect(tester.getSize(player).height, hiddenHeight);
-      await tester.tap(expand);
+      togglePlaybackInfo(tester, expand);
       await tester.pumpAndSettle();
       tester.view.physicalSize = const Size(1440, 900);
       await tester.pumpAndSettle();

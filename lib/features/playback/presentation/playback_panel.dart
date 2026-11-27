@@ -18,6 +18,7 @@ import '../../../core/presentation/history_back_region.dart';
 import '../../../core/presentation/android_system_ui.dart';
 import '../../../core/presentation/mobile_playback_status_bar.dart';
 import '../../../shared/ui/playback_page_commands.dart';
+import '../../../shared/ui/playback_sidebar_toggle.dart';
 import '../../../shared/ui/playback_navigation.dart';
 import '../../../shared/ui/content_link_scope.dart';
 import '../../../domain/content_link.dart';
@@ -431,12 +432,29 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   }
 
   bool _exitingFullScreen = false;
-  Widget _withFullScreenBack(
-    BuildContext context,
+  Widget _fullScreenPage(
+    BuildContext routeContext,
     Object request,
     Widget player,
   ) {
-    if (Theme.of(context).platform != TargetPlatform.iOS) return player;
+    final info = PlaybackInfoScope.read(context);
+    if (info != null) {
+      player = PlaybackInfoScope(
+        wide: info.wide,
+        showInfo: false,
+        tooltip: '返回播放页并展开信息',
+        onToggle: () {
+          if (!mounted || !_active || !identical(request, _fullScreenRequest)) {
+            return;
+          }
+          final current = PlaybackInfoScope.read(context);
+          if (current != null && !current.showInfo) current.onToggle();
+          unawaited(_exitFullScreen());
+        },
+        child: player,
+      );
+    }
+    if (Theme.of(routeContext).platform != TargetPlatform.iOS) return player;
     return ColoredBox(
       color: Colors.black,
       child: HistoryBackRegion(
@@ -877,7 +895,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
                 fullScreenVideo: !_session.audioOnly,
                 builder: (_) => child!,
               ),
-              child: _withFullScreenBack(
+              child: _fullScreenPage(
                 dialogContext,
                 request,
                 AndroidSystemUi(
@@ -1784,6 +1802,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                       playbackQualityLabel(media.quality)
           : null,
       hasComposer: widget.danmakuComposerBuilder != null,
+      hasInfoToggle: PlaybackInfoScope.maybeOf(context) != null,
       hasSubtitles: session.subtitleTracks.isNotEmpty,
       hasVoices: session.voiceTracks.isNotEmpty,
       hasNextButton:
@@ -3181,6 +3200,7 @@ class _ControlBar extends StatelessWidget {
                     (transport.length +
                         1 +
                         (showNext ? 1 : 0) +
+                        (layout.inputs.hasInfoToggle ? 1 : 0) +
                         visibleToolCount))
             .clamp(0.0, double.infinity),
       );
@@ -3207,21 +3227,29 @@ class _ControlBar extends StatelessWidget {
                 ),
               ),
               Expanded(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    if (composer != null)
-                      slot(
-                        IconButton(
-                          tooltip: '发送弹幕',
-                          onPressed: () => unawaited(onOpenComposer(context)),
-                          icon: const Icon(Icons.edit_outlined, size: 20),
-                        ),
-                      ),
-                    slot(danmakuButton),
-                  ],
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        if (composer != null)
+                          slot(
+                            IconButton(
+                              tooltip: '发送弹幕',
+                              onPressed: () =>
+                                  unawaited(onOpenComposer(context)),
+                              icon: const Icon(Icons.edit_outlined, size: 20),
+                            ),
+                          ),
+                        slot(danmakuButton),
+                      ],
+                    ),
+                  ),
                 ),
               ),
+              if (layout.inputs.hasInfoToggle)
+                slot(const PlaybackSidebarToggle()),
               slot(fullscreenButton),
             ],
           ),
@@ -3235,6 +3263,7 @@ class _ControlBar extends StatelessWidget {
     // it or shrinking the buttons' hit targets.
     final compactButtonCount =
         3 +
+        (layout.inputs.hasInfoToggle ? 1 : 0) +
         (composer != null ? 1 : 0) +
         (showPlayInBar ? 1 : 0) +
         (showNext ? 1 : 0) +
@@ -3269,6 +3298,8 @@ class _ControlBar extends StatelessWidget {
                   ),
                 ),
               slot(_moreOptions(context)),
+              if (layout.inputs.hasInfoToggle)
+                slot(const PlaybackSidebarToggle()),
               slot(fullscreenButton),
             ]
           : [
@@ -3295,6 +3326,8 @@ class _ControlBar extends StatelessWidget {
               else
                 const Spacer(),
               ...secondary,
+              if (layout.inputs.hasInfoToggle)
+                slot(const PlaybackSidebarToggle()),
               slot(fullscreenButton),
             ],
     );
@@ -3581,6 +3614,7 @@ typedef _ControlsLayoutInputs = ({
   String timeLabel,
   String? qualityLabel,
   bool hasComposer,
+  bool hasInfoToggle,
   bool hasSubtitles,
   bool hasVoices,
   bool hasNextButton,
@@ -3624,6 +3658,7 @@ class _ControlsLayout {
         inputs.width <
         buttonWidth *
                 (4 +
+                    (inputs.hasInfoToggle ? 1 : 0) +
                     (inputs.isLive ? 1 : 0) +
                     (inputs.hasNextButton ? 1 : 0) +
                     (inputs.hasSubtitles ? 1 : 0) +
