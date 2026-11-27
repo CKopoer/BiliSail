@@ -12,7 +12,6 @@ final class AppRecommendationClient {
     String cursor = '0',
     ApiAppRecommendationLoadReason reason =
         ApiAppRecommendationLoadReason.initial,
-    bool standardCover = true,
     required String buvid,
     String? accessToken,
     String? appAccountMid,
@@ -28,23 +27,21 @@ final class AppRecommendationClient {
     final data = await api.requestAppJson(
       '/x/v2/feed/index',
       {
-        'build': AndroidRecommendationProfile.build,
-        'mobi_app': AndroidRecommendationProfile.mobiApp,
+        'build': AppProfile.build,
+        'mobi_app': AppProfile.mobiApp,
         'platform': 'android',
         'c_locale': 'zh_CN',
         's_locale': 'zh_CN',
         'splash_id': '',
         'channel': 'master',
-        'column': standardCover ? '2' : '1',
-        'device': 'phone',
-        'device_name': AndroidRecommendationProfile.deviceName(device),
+        'column': '2',
+        'device': 'pad',
+        'device_name': device.model,
         'device_type': '0',
         'disable_rcmd': '0',
         'flush': '${reason.flush}',
         'idx': cursor,
         'pull': '${reason.pull}',
-        if (reason == ApiAppRecommendationLoadReason.initial)
-          'open_event': 'cold',
         'fnval': '976',
         'fnver': '0',
         'force_host': '2',
@@ -56,7 +53,7 @@ final class AppRecommendationClient {
         'qn': '32',
         'recsys_mode': '0',
         'voice_balance': '0',
-        'statistics': AndroidRecommendationProfile.statistics,
+        'statistics': AppProfile.statistics,
       },
       endpoint: 'app_recommended',
       buvid: buvid,
@@ -91,7 +88,7 @@ final class AppRecommendationClient {
           entry['can_play'] != 1) {
         continue;
       }
-      final item = _parse(entry, index + 1, standardCover: standardCover);
+      final item = _parse(entry, index + 1);
       if (item != null) items.add(item);
     }
     return ApiPage(
@@ -137,9 +134,8 @@ final class AppRecommendationClient {
 
   static ApiAppRecommendation? _parse(
     Map<String, Object?> entry,
-    int position, {
-    required bool standardCover,
-  }) {
+    int position,
+  ) {
     final player = _map(entry['player_args']);
     final args = _map(entry['args']);
     final cardGoto = entry['card_goto'];
@@ -213,9 +209,6 @@ final class AppRecommendationClient {
     String? label(Object? value) =>
         value is String && value.length <= 64 ? track(value) : null;
     final trackValues = navigation?.queryParametersAll['trackid'];
-    final cover = _image(entry['cover']);
-    // Pegasus supplies the small card's cover in the requested layout.
-    final smallCover = standardCover && entry['card_type'] == 'small_cover_v2';
     return ApiAppRecommendation(
       aid: aid,
       cardGoto: cardGoto,
@@ -233,8 +226,8 @@ final class AppRecommendationClient {
       video: ApiVideoSummary(
         bvid: bvid,
         title: title,
-        coverUrl: cover,
-        cover43Url: _image(entry['cover43']) ?? (smallCover ? cover : null),
+        coverUrl: _image(entry['cover']),
+        cover43Url: _image(entry['cover43']),
         ownerName: isVideo
             ? (args['up_name'] is String ? args['up_name'] as String : '')
             : (_map(entry['desc_button'])['text'] is String

@@ -142,7 +142,7 @@ void main() {
       expect(reads, 2);
       expect(transport.uris.last.queryParameters['device_name'], 'Pixel 9');
       expect(transport.uris.last.queryParameters['network'], 'mobile');
-      expect(transport.uris.last.queryParameters['mobi_app'], 'android');
+      expect(transport.uris.last.queryParameters['mobi_app'], 'android_hd');
       expect(transport.headers.last['User-Agent'], contains('model/Pixel 9'));
       expect(
         transport.headers.last['User-Agent'],
@@ -270,7 +270,7 @@ void main() {
       final expected = md5
           .convert(
             utf8.encode(
-              'access_key=fixture-token&appkey=1d8b6e7d45233436&empty=&text=a%20b%25%E4%B8%AD&ts=1234567890560c52ccd288fed045859ed18bffd973',
+              'access_key=fixture-token&appkey=dfca71928277209b&empty=&text=a%20b%25%E4%B8%AD&ts=1234567890b5475a8825547a4fc26c7d518eaaa02e',
             ),
           )
           .toString();
@@ -288,11 +288,11 @@ void main() {
       expect(headers, {
         'Accept': 'application/json',
         'User-Agent':
-            'Mozilla/5.0 BiliDroid/9.21.0 (bbcallen@gmail.com) os/android '
-            'model/android mobi_app/android build/9210300 channel/master '
-            'innerVer/9210300 osVer/15 network/2',
+            'Mozilla/5.0 BiliDroid/2.0.1 (bbcallen@gmail.com) os/android '
+            'model/android_hd mobi_app/android_hd build/2001100 channel/master '
+            'innerVer/2001100 osVer/15 network/2',
         'buvid': _device,
-        'app-key': 'android64',
+        'app-key': 'android_hd',
         'env': 'prod',
         'x-bili-mid': '42',
         'x-bili-aurora-eid': 'VVY',
@@ -386,7 +386,7 @@ void main() {
   );
 
   test(
-    'phone profile signs both cover layouts and preserves account identity',
+    'HD credentials use a coherent feed profile and explicit request scenes',
     () async {
       final transport = _Transport();
       final client = AppRecommendationClient(
@@ -398,7 +398,6 @@ void main() {
       for (final page in [1, 3]) {
         await client.load(
           cursor: '${page - 1}',
-          standardCover: page == 1,
           reason: page == 1
               ? ApiAppRecommendationLoadReason.initial
               : ApiAppRecommendationLoadReason.loadMore,
@@ -408,12 +407,12 @@ void main() {
         );
         final query = {...transport.uris.last.queryParameters}..remove('sign');
         expect(query, {
-          'build': '9210300',
+          'build': '2001100',
           'c_locale': 'zh_CN',
           'channel': 'master',
-          'column': page == 1 ? '2' : '1',
-          'device': 'phone',
-          'device_name': 'android',
+          'column': '2',
+          'device': 'pad',
+          'device_name': 'android_hd',
           'device_type': '0',
           'disable_rcmd': '0',
           'flush': page == 1 ? '0' : '8',
@@ -424,64 +423,57 @@ void main() {
           'guidance': '0',
           'https_url_req': '1',
           'idx': '${page - 1}',
-          'mobi_app': 'android',
+          'mobi_app': 'android_hd',
           'network': 'wifi',
           'platform': 'android',
           'player_net': '1',
           'pull': page == 1 ? 'true' : 'false',
-          if (page == 1) 'open_event': 'cold',
           'qn': '32',
           'recsys_mode': '0',
           's_locale': 'zh_CN',
           'splash_id': '',
           'statistics':
-              '{"appId":1,"platform":3,"version":"9.21.0","abtest":""}',
+              '{"appId":5,"platform":3,"version":"2.0.1","abtest":""}',
           'voice_balance': '0',
           'access_key': 'fixture-token',
-          'appkey': '1d8b6e7d45233436',
+          'appkey': 'dfca71928277209b',
           'ts': '1234567890',
         });
         // Fixed vectors include splash_id= in the independently encoded input.
         expect(
           transport.uris.last.queryParameters['sign'],
           page == 1
-              ? 'd80568035757762aa34f51beece67c7d'
-              : '64b64b8e1fc637435ebc07fb05419f3f',
+              ? '533f4629ca6f106643e6076213d4f36a'
+              : '34011548643b7f5fb2537735efb2f8c7',
         );
       }
     },
   );
 
-  test('phone small card supplies its own 4:3 URL per card', () async {
-    final transport = _Transport()
-      ..entries = [
-        _entry(extra: {'card_type': 'small_cover_v2'}),
-        _entry(
-          extra: {
-            'card_type': 'small_cover_v2',
-            'cover43': '//i0.hdslb.com/bfs/archive/explicit.jpg',
-          },
-        ),
-        _entry(extra: {'card_type': 'large_cover_single_v9'}),
-        _entry(extra: {'card_type': 'small_cover_v2', 'cover': ''}),
-      ];
-    final api = BiliApiClient(transport: transport);
-    addTearDown(api.close);
-    final client = AppRecommendationClient(api);
-    final standard = await client.load(buvid: _device);
-    final wide = await client.load(buvid: _device, standardCover: false);
-    expect(standard.items.map((item) => item.video.cover43Url?.path), [
-      '/bfs/archive/cover.jpg',
-      '/bfs/archive/explicit.jpg',
-      null,
-      null,
-    ]);
-    expect(wide.items.first.video.cover43Url, isNull);
-    expect(
-      wide.items.first.video.coverUrl,
-      standard.items.first.video.coverUrl,
-    );
-  });
+  test(
+    'HD small cards keep the ordinary cover separate from cover43',
+    () async {
+      final transport = _Transport()
+        ..entries = [
+          _entry(extra: {'card_type': 'small_cover_v2'}),
+          _entry(
+            extra: {
+              'card_type': 'small_cover_v2',
+              'cover43': '//i0.hdslb.com/bfs/archive/explicit.jpg',
+            },
+          ),
+        ];
+      final api = BiliApiClient(transport: transport);
+      addTearDown(api.close);
+      final page = await AppRecommendationClient(api).load(buvid: _device);
+      expect(page.items.first.video.coverUrl?.path, '/bfs/archive/cover.jpg');
+      expect(page.items.first.video.cover43Url, isNull);
+      expect(
+        page.items.last.video.cover43Url?.path,
+        '/bfs/archive/explicit.jpg',
+      );
+    },
+  );
 
   test(
     'playable non-ad cards retain their type and original identity',

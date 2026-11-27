@@ -9,7 +9,6 @@ import '../../../shared/data/video_access_mapper.dart';
 import '../../../core/network/api_requests.dart';
 import '../../../domain/page_result.dart';
 import '../../../domain/request_cancellation.dart';
-import '../../../domain/responsive_layout_settings.dart';
 import '../../../domain/video.dart';
 import '../../../domain/recommendation_source.dart';
 import '../../../domain/app_failure.dart';
@@ -196,7 +195,6 @@ class ApiFeedRepository
     try {
       result = await AppRecommendationClient(api).load(
         cursor: request.cursor,
-        standardCover: request.coverRatio == CardCoverRatio.standard,
         reason: switch (request.reason) {
           AppRecommendationLoadReason.initial =>
             ApiAppRecommendationLoadReason.initial,

@@ -340,7 +340,6 @@ final class BiliApiClient {
       throw ArgumentError('Invalid App device identity');
     }
     final feedback = path.startsWith('/x/feed/dislike');
-    final androidFeed = path == '/x/v2/feed/index';
     if (feedback && (accessToken == null || accessToken.isEmpty)) {
       throw ApiFailure(ApiFailureCategory.authentication, endpoint);
     }
@@ -361,30 +360,23 @@ final class BiliApiClient {
     check();
     final device = deviceInfo ?? await appDeviceInfo(context: active);
     check();
-    final appParameters = {
+    final signed = AppProfile.sign({
       ...parameters,
       if (accessToken != null && accessToken.isNotEmpty)
         'access_key': accessToken,
-    };
-    final now = _clock();
-    final signed = androidFeed
-        ? AndroidRecommendationProfile.sign(appParameters, now)
-        : AppProfile.sign(appParameters, now);
+    }, _clock());
     final headers = {
       'Accept': 'application/json',
-      'User-Agent': androidFeed
-          ? AndroidRecommendationProfile.userAgentFor(device)
-          : AppProfile.userAgentFor(device),
+      'User-Agent': AppProfile.userAgentFor(device),
       'buvid': buvid,
+      'app-key': 'android_hd',
       'env': 'prod',
-      if (androidFeed)
-        ...AndroidRecommendationProfile.recommendationHeaders(
+      if (path == '/x/v2/feed/index')
+        ...AppProfile.recommendationHeaders(
           appAccountMid,
           sessionId: _appSessionId,
           traceId: '${_appRandomHex(16)}:${_appRandomHex(8)}:0:0',
-        )
-      else
-        'app-key': 'android_hd',
+        ),
     };
     final uri = Uri.https(
       passport ? 'passport.bilibili.com' : 'app.bilibili.com',

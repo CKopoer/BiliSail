@@ -7,7 +7,6 @@ import '../../../domain/page_result.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
 import '../../../domain/recommendation_settings.dart';
-import '../../../domain/responsive_layout_settings.dart';
 import '../../../shared/application/recommendation_filter_provider.dart';
 import '../../video/domain/video_actions_repository.dart';
 import '../domain/feed_repository.dart';
@@ -138,8 +137,7 @@ final class FeedController extends Notifier<FeedState> {
   final _rejected = <VideoId, RecommendationFeedback>{};
   final _uncertainRejections = <VideoId>{};
   final _uncertainRestorations = <VideoId>{};
-  ({RecommendationSource source, int identity, CardCoverRatio? appCoverRatio})?
-  _recommendationKey;
+  ({RecommendationSource source, int identity})? _recommendationKey;
   String _appRecommendationCursor = '0';
   AppRecommendationRequest? _failedAppRefresh;
 
@@ -239,8 +237,7 @@ final class FeedController extends Notifier<FeedState> {
       if (_recommendationKey == next) return;
       final identityChanged =
           next.source == RecommendationSource.app &&
-          _recommendationKey?.source == next.source &&
-          _recommendationKey?.identity != next.identity;
+          _recommendationKey?.source == next.source;
       _recommendationKey = next;
       _appRecommendationCursor = '0';
       _failedAppRefresh = null;
@@ -561,8 +558,6 @@ final class FeedController extends Notifier<FeedState> {
         ? failedAppRefresh
         : AppRecommendationRequest(
             cursor: _appRecommendationCursor,
-            coverRatio:
-                _recommendationKey?.appCoverRatio ?? CardCoverRatio.standard,
             reason:
                 appReason ??
                 (_page == 0
@@ -761,9 +756,6 @@ final class FeedController extends Notifier<FeedState> {
                 AppRecommendationRequest(
                   cursor: _appRecommendationCursor,
                   reason: AppRecommendationLoadReason.loadMore,
-                  coverRatio:
-                      _recommendationKey?.appCoverRatio ??
-                      CardCoverRatio.standard,
                 ),
             cancellation: cancellation,
           );
