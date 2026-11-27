@@ -53,7 +53,9 @@ macOS 用 BlackHole 回录同一段八秒样片。压力测试在起播一秒后
 | 正常接包 | 播放至结尾，波形与参考匹配 | 左右声道各 60/60 个窗口匹配 |
 | 剩余音频低于 20 ms 才给出就绪提示 | 出现队列断供，重复测试中录得静音并超时 | 左右声道各 60/60 个窗口匹配，保持 `apple-joc` 直至播完 |
 
-六个播放位置的原生暂停耗时为 0.082 至 0.850 秒。macOS Release 与 iPhone 模拟器均验证了在线分轨、离线分轨、MKV 和 MP4，以及暂停、跳转和音频模式切换。实体 iPhone、Mac 扬声器、耳机及 HDMI 接收端仍需分别试听。[旧驱动断供日志](https://github.com/CKopoer/BiliSail/actions/runs/46010085203) · [旧驱动回录](https://github.com/CKopoer/BiliSail/actions/runs/46017410520) · [修复后波形检查](https://github.com/CKopoer/BiliSail/actions/runs/46019097394) · [暂停耗时](https://github.com/CKopoer/BiliSail/actions/runs/46015292545) · [五个原生切片构建](https://github.com/CKopoer/BiliSail/actions/runs/46015192445)
+两台 runner 各连续回录四轮，正常和延迟就绪两种条件下均得到表中的结果。另一次应用工作流的压力回录仅有 43/60 个窗口匹配；该次未保存音频，无法从日志判定差异来自输出还是采集。后续工作流在失败时保存参考和两个声道的系统回录，并检查入队时间戳是否连续。[四轮回录复验](https://github.com/CKopoer/BiliSail/actions/runs/46021258093) · [出现偏差的记录](https://github.com/CKopoer/BiliSail/actions/runs/46019269281/job/140574359028)
+
+六个播放位置的原生暂停耗时为 0.082 至 0.850 秒。macOS Release 与 iPhone 模拟器均验证了在线分轨、离线分轨、MKV 和 MP4，以及暂停、跳转和音频模式切换。实体 iPhone、Mac 扬声器、耳机及 HDMI 接收端仍需分别试听。[旧驱动断供日志](https://github.com/CKopoer/BiliSail/actions/runs/46010085203) · [旧驱动回录](https://github.com/CKopoer/BiliSail/actions/runs/46017410520) · [修复后波形检查](https://github.com/CKopoer/BiliSail/actions/runs/46019650402) · [暂停耗时](https://github.com/CKopoer/BiliSail/actions/runs/46015292545) · [五个原生切片构建](https://github.com/CKopoer/BiliSail/actions/runs/46015192445)
 
 ## 在设备上复验
 

@@ -128,7 +128,8 @@ jobs:
           ffmpeg -v error -i build/fixtures/joc.m4a \
             -af 'pan=stereo|FL<FL+0.70710678*FC+0.70710678*SL|FR<FR+0.70710678*FC+0.70710678*SR' \
             -ar 48000 -c:a pcm_s16le build/reference.wav
-          captures=$(mktemp -d)
+          captures=build/joc-captures
+          mkdir -p "$captures"
           for mode in joc pressure; do
             output="$captures/$mode.wav"
             build/wave-tools/bin/python tool/validation/apple_joc_waveform.py --record "$output" &
@@ -143,3 +144,12 @@ jobs:
             echo "$mode"
             build/wave-tools/bin/python tool/validation/apple_joc_waveform.py build/reference.wav "$captures/$mode.wav"
           done
+      - name: Preserve failed audio comparison
+        if: failure() && matrix.platform == 'macos'
+        uses: actions/upload-artifact@v4
+        with:
+          name: joc-system-output
+          path: |
+            build/joc-captures/*.wav
+            build/reference.wav
+          if-no-files-found: ignore
