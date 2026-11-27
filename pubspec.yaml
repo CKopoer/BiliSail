@@ -56,12 +56,12 @@ dependency_overrides:
     git:
       url: https://github.com/CKopoer/media-kit.git
       path: media_kit
-      ref: 4055fd1a0d3dc0d54502c0747c5ca65be704c551
+      ref: 6470f8a21de0b7894060bb4f4c2ecfea28657dfa
   media_kit_video:
     git:
       url: https://github.com/CKopoer/media-kit.git
       path: media_kit_video
-      ref: 4055fd1a0d3dc0d54502c0747c5ca65be704c551
+      ref: 6470f8a21de0b7894060bb4f4c2ecfea28657dfa
 
 dev_dependencies:
   flutter_driver:

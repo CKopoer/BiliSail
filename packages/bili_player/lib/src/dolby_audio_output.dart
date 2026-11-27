@@ -82,3 +82,22 @@ final class WindowsDolbyOutput {
     _enabled = false;
   }
 }
+
+/// Apple renders compressed samples at ordinary player volume. Tempo and
+/// user gain use mpv's PCM path and return to JOC at neutral settings.
+final class AppleJocOutput {
+  AppleJocOutput({required this.rate, required this.gain, required this.write})
+    : _enabled = rate == 1 && gain == 0;
+
+  final void Function(String) write;
+  double rate, gain;
+  bool _enabled;
+  String get option => _enabled ? 'apple-joc' : '';
+
+  void apply() {
+    final enable = rate == 1 && gain == 0;
+    if (_enabled == enable) return;
+    write(enable ? 'apple-joc' : '');
+    _enabled = enable;
+  }
+}

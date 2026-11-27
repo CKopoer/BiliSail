@@ -81,6 +81,36 @@ void main() {
     },
   );
 
+  test(
+    'Apple JOC output requires a rendering AO with submitted packets',
+    () async {
+      final properties = {
+        'current-ao': 'apple-joc',
+        'audio-out-params/format': 'apple-joc',
+        'current-tracks/audio/codec-profile':
+            'Dolby Digital Plus + Dolby Atmos',
+        'apple-joc-rendered-packets': '0',
+      };
+      Future<PlayerPlaybackInformation> sample() =>
+          sampleNativePlaybackInformation(
+            read: (name) async => properties[name],
+            diagnostics: diagnostics,
+            audioGainDb: 0,
+            appleJoc: true,
+          );
+      final preparing = await sample();
+      expect(preparing.atmosSource, isTrue);
+      expect(preparing.encodedAudioOutput, isFalse);
+      properties['apple-joc-rendered-packets'] = '7';
+      final rendering = (await sample()).withGeneration(4);
+      expect(rendering.encodedAudioOutput, isTrue);
+      expect(rendering.appleJocRenderedPackets, 7);
+      properties['current-ao'] = 'coreaudio';
+      properties['audio-out-params/format'] = 'float';
+      expect((await sample()).encodedAudioOutput, isFalse);
+    },
+  );
+
   testWidgets(
     'one stalled property is bounded and does not hide other values',
     (tester) async {

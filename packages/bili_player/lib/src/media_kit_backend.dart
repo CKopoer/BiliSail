@@ -66,6 +66,7 @@ final class MediaKitBackend
   Future<NativeLoadObserver>? _attachingLoad;
   NativeAudioGain? _audioGain;
   WindowsDolbyOutput? _dolbyOutput;
+  AppleJocOutput? _appleJocOutput;
   Future<mk.Player>? _creating;
   Future<void>? _disposal;
   PlaybackOperation? _preparation;
@@ -189,6 +190,7 @@ final class MediaKitBackend
     if (player == null || _disposed) return null;
     final information = await sampleNativePlaybackInformation(
       read: player.getPropertyAsync,
+      appleJoc: Platform.isMacOS || Platform.isIOS,
       diagnostics: inspectDiagnostics(),
       audioGainDb: appliedAudioGainDb,
     );
@@ -559,7 +561,16 @@ final class MediaKitBackend
     final liveHeaders = plan.live
         ? nativeMediaHeaders(mediaTrack.requestPolicy.headers)
         : null;
+    final appleJoc = _appleJocOutput =
+        (Platform.isIOS || Platform.isMacOS) && !plan.live && !plan.silent
+        ? AppleJocOutput(
+            rate: options.rate,
+            gain: options.audioGainDb,
+            write: (value) => _setAudioTransport(player, 'audio-spdif', value),
+          )
+        : null;
     final fileOptions = {
+      if (appleJoc != null) 'audio-spdif': appleJoc.option,
       'force-media-title': 'BiliSail',
       'user-agent': ?liveHeaders?.userAgent,
       'referrer': ?liveHeaders?.referer,
@@ -667,22 +678,16 @@ final class MediaKitBackend
         'DASH audio track did not become ready.',
       );
     }
+    if (appleJoc != null &&
+        !isDolbyDigitalPlus(player.getProperty('current-tracks/audio/codec'))) {
+      _appleJocOutput = null;
+    }
     if (Platform.isWindows &&
         !plan.silent &&
         !plan.live &&
         isDolbyDigitalPlus(player.getProperty('current-tracks/audio/codec'))) {
       final output = _dolbyOutput = WindowsDolbyOutput(
-        write: (name, value) {
-          final position = player.getProperty('time-pos');
-          final restore =
-              player.getProperty('seekable') == 'yes' &&
-              player.getProperty('seeking') != 'yes' &&
-              double.tryParse(position)?.isFinite == true;
-          // Reinitializing a decoder drops its prefetched audio. Refill at the
-          // presentation clock without overriding a pending user seek.
-          player.setProperty('file-local-options/$name', value);
-          if (restore) player.setProperty('time-pos', position);
-        },
+        write: (name, value) => _setAudioTransport(player, name, value),
         isCurrent: () =>
             !_disposed && _generation == generation && !operation.isCancelled,
         rate: options.rate,
@@ -1103,13 +1108,31 @@ final class MediaKitBackend
     return true;
   }
 
+  void _setAudioTransport(mk.Player player, String name, String value) {
+    final position = player.getProperty('time-pos');
+    final restore =
+        player.getProperty('seekable') == 'yes' &&
+        player.getProperty('seeking') != 'yes' &&
+        double.tryParse(position)?.isFinite == true;
+    // Reinitializing a decoder drops its prefetched audio. Refill at the
+    // presentation clock without overriding a pending user seek.
+    player.setProperty('file-local-options/$name', value);
+    if (restore) player.setProperty('time-pos', position);
+  }
+
   @override
   Future<void> setRate(double rate) async {
+    final apple = _appleJocOutput;
+    if (apple != null) {
+      apple.rate = rate;
+      if (rate != 1) apple.apply();
+    }
     if (_dolbyOutput case final output?) {
       output.rate = rate;
       if (rate != 1) output.apply();
     }
     await _player!.setRate(rate);
+    if (identical(apple, _appleJocOutput)) apple?.apply();
     _dolbyOutput?.apply();
   }
 
@@ -1125,11 +1148,17 @@ final class MediaKitBackend
 
   @override
   Future<void> setGainDb(double gainDb) async {
+    final apple = _appleJocOutput;
+    if (apple != null) {
+      apple.gain = gainDb;
+      if (gainDb != 0) apple.apply();
+    }
     if (_dolbyOutput case final output?) {
       output.gain = gainDb;
       if (gainDb != 0) output.apply();
     }
     await _audioGain!.apply(gainDb, smooth: false);
+    if (identical(apple, _appleJocOutput)) apple?.apply();
     _dolbyOutput?.apply();
   }
 
@@ -1140,6 +1169,7 @@ final class MediaKitBackend
     ++_generation;
     _dolbyOutput?.stop();
     _dolbyOutput = null;
+    _appleJocOutput = null;
     _preparation?.cancel();
     unawaited(cancelSeek().catchError((Object _) {}));
     _generationChanges.add(_generation);
@@ -1174,6 +1204,7 @@ final class MediaKitBackend
   Future<void> resetForNextSource(PlaybackOperation operation) async {
     _dolbyOutput?.stop();
     _dolbyOutput = null;
+    _appleJocOutput = null;
     _bufferDiagnostics?.dispose();
     _bufferDiagnostics = null;
     ++_generation;

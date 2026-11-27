@@ -18,6 +18,7 @@ final class PlayerPlaybackInformation {
     this.atmosSource = false,
     this.audioOutputFormat,
     this.audioDecoder,
+    this.appleJocRenderedPackets,
     this.sourceFps,
     this.outputFps,
     this.videoBitrate,
@@ -54,6 +55,7 @@ final class PlayerPlaybackInformation {
       audioOutputFormat == 'E-AC-3 JOC' ||
       audioOutputFormat == 'E-AC-3';
   final String? audioDecoder;
+  final int? appleJocRenderedPackets;
   final double? sourceFps, outputFps;
   final double? videoBitrate, audioBitrate;
 
@@ -100,6 +102,7 @@ final class PlayerPlaybackInformation {
         atmosSource: atmosSource,
         audioOutputFormat: audioOutputFormat,
         audioDecoder: audioDecoder,
+        appleJocRenderedPackets: appleJocRenderedPackets,
         sourceFps: sourceFps,
         outputFps: outputFps,
         videoBitrate: videoBitrate,

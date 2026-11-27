@@ -6,6 +6,8 @@ import 'package:bilisail/core/platform/macos_application_window.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import 'apple_joc_playback.dart';
+
 /// A standalone Apple Runner entry point, including the production macOS
 /// window bootstrap. HTTPS fixtures also work on a physical iPhone.
 Future<void> main() async {
@@ -63,6 +65,10 @@ Future<void> main() async {
     final policy = MediaRequestPolicy();
     const audio = String.fromEnvironment('APPLE_COMPANION_AUDIO');
     success = true;
+    const jocBase = String.fromEnvironment('APPLE_JOC_BASE');
+    if (jocBase.isNotEmpty) {
+      await verifyAppleJoc(engine, Uri.parse(jocBase));
+    }
     for (final entry in samples.entries.where(
       (value) => value.value.isNotEmpty,
     )) {

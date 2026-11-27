@@ -692,8 +692,8 @@ packages:
     dependency: "direct overridden"
     description:
       path: media_kit
-      ref: "4055fd1a0d3dc0d54502c0747c5ca65be704c551"
-      resolved-ref: "4055fd1a0d3dc0d54502c0747c5ca65be704c551"
+      ref: "6470f8a21de0b7894060bb4f4c2ecfea28657dfa"
+      resolved-ref: "6470f8a21de0b7894060bb4f4c2ecfea28657dfa"
       url: "https://github.com/CKopoer/media-kit.git"
     source: git
     version: "1.1.11"
@@ -701,8 +701,8 @@ packages:
     dependency: "direct overridden"
     description:
       path: media_kit_video
-      ref: "4055fd1a0d3dc0d54502c0747c5ca65be704c551"
-      resolved-ref: "4055fd1a0d3dc0d54502c0747c5ca65be704c551"
+      ref: "6470f8a21de0b7894060bb4f4c2ecfea28657dfa"
+      resolved-ref: "6470f8a21de0b7894060bb4f4c2ecfea28657dfa"
       url: "https://github.com/CKopoer/media-kit.git"
     source: git
     version: "1.2.5"

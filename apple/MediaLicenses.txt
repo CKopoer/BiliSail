@@ -1,6 +1,6 @@
 BiliSail Apple media dependency notices
 
-https://github.com/CKopoer/libmpv-darwin-build/releases/tag/apple-edr-joc-2026-11-27
+https://github.com/CKopoer/libmpv-darwin-build/releases/tag/apple-joc-output-2026-11-27
 
 SOURCES.md
 

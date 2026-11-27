@@ -7,8 +7,10 @@ Future<PlayerPlaybackInformation> sampleNativePlaybackInformation({
   required Future<String?> Function(String) read,
   required PlayerDiagnostics diagnostics,
   required double audioGainDb,
+  bool appleJoc = false,
 }) async {
-  const properties = [
+  final properties = [
+    if (appleJoc) 'apple-joc-rendered-packets',
     'hwdec-current',
     'video-format',
     'audio-codec-name',
@@ -67,6 +69,12 @@ Future<PlayerPlaybackInformation> sampleNativePlaybackInformation({
     return value != null && value >= 0 ? value : null;
   }
 
+  final format = identifier('audio-out-params/format');
+  final renderedPackets = count('apple-joc-rendered-packets');
+  final appleRendered =
+      identifier('current-ao') == 'apple-joc' &&
+      format == 'apple-joc' &&
+      (renderedPackets ?? 0) > 0;
   return PlayerPlaybackInformation(
     generation: diagnostics.generation,
     backend: 'media_kit / libmpv',
@@ -74,8 +82,11 @@ Future<PlayerPlaybackInformation> sampleNativePlaybackInformation({
     hardwareDecoder: identifier('hwdec-current'),
     videoCodec: identifier('video-format'),
     audioCodec: identifier('audio-codec-name'),
-    atmosSource: isAtmosProfile(data['current-tracks/audio/codec-profile']),
-    audioOutputFormat: identifier('audio-out-params/format'),
+    atmosSource:
+        appleRendered ||
+        isAtmosProfile(data['current-tracks/audio/codec-profile']),
+    audioOutputFormat: appleRendered ? 'E-AC-3 JOC' : format,
+    appleJocRenderedPackets: renderedPackets,
     audioDecoder: identifier('current-tracks/audio/decoder'),
     sourceFps: number('container-fps'),
     outputFps: number('estimated-vf-fps'),

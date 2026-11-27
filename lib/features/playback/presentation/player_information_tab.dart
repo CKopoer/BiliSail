@@ -225,7 +225,12 @@ class _PlayerInformationTabState extends State<PlayerInformationTab>
               if (native?.audioOutputFormat case final format?)
                 ('音频输出格式', format),
               if (native?.encodedAudioOutput == true)
-                ('音频传输', '压缩码流透传')
+                (
+                  '音频传输',
+                  native?.audioOutput == 'apple-joc'
+                      ? 'Apple 系统渲染 JOC'
+                      : '压缩码流透传',
+                )
               else
                 ('音频已解码', _optionalYes(diagnostics?.hasDecodedAudio)),
             ],

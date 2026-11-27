@@ -1,8 +1,8 @@
-# Apple 视频输出与 JOC 音频原型
+# Apple 视频输出与 JOC 音频播放
 
 ## 视频
 
-macOS 和 iOS 共用 BiliSail 的 media_kit 播放会话、分轨请求、缓冲、seek 和音频时钟。选中的视频轨为 Dolby Vision Profile 5、Profile 8、HDR10 或 HLG 时，Flutter 平台视图承载独立的 CAMetalLayer。mpv 的 gpu-next 和 libplacebo 通过 MoltenVK 向该层提交画面。普通 SDR 源沿用原有纹理。Apple 原生依赖包含可重建配方、源码版本、补丁和许可。[应用显示面](../../apple/AppleVideoSurface.swift) · [固定依赖及校验值](https://github.com/CKopoer/libmpv-darwin-build/releases/tag/apple-edr-joc-2026-11-27)
+macOS 和 iOS 共用 BiliSail 的 media_kit 播放会话、分轨请求、缓冲、seek 和音频时钟。选中的视频轨为 Dolby Vision Profile 5、Profile 8、HDR10 或 HLG 时，Flutter 平台视图承载独立的 CAMetalLayer。mpv 的 gpu-next 和 libplacebo 通过 MoltenVK 向该层提交画面。普通 SDR 源沿用原有纹理。Apple 原生依赖包含可重建配方、源码版本、补丁和许可。[应用显示面](../../apple/AppleVideoSurface.swift) · [固定依赖及校验值](https://github.com/CKopoer/libmpv-darwin-build/releases/tag/apple-joc-output-2026-11-27)
 
 | 源与设备 | 接入行为 | 如何判读 |
 | --- | --- | --- |
@@ -16,9 +16,11 @@ SDR 路径在带 sRGB 标记的 Metal drawable 被提交呈现后确认交接。
 
 这条视频路径在播放器内解释杜比元数据，再把渲染结果交给 Apple 合成器。显示器是否进入 Dolby Vision 专有信号模式须另行观测。窗口移动或全屏切换会重新确认显示目标。显示器的 EDR 能力、当前亮度余量及画面实际高光分别验证。[Apple 对 Metal EDR 的说明](https://developer.apple.com/videos/play/wwdc2022/110565/) · [MoltenVK 交换链实现](https://github.com/KhronosGroup/MoltenVK/blob/v1.4.2/MoltenVK/MoltenVK/GPUObjects/MVKSwapchain.mm)
 
-## JOC 原型
+## 正式播放器的 JOC 输出
 
-对单独运行的原型，mpv 在其 E-AC-3 解码入口复制成功接收的原始压缩包和 PTS。AVFoundation 从同一个本地 MP4 的唯一音轨取得带解码配置的格式描述。探针构造有时间戳的压缩 CMSampleBuffer，送入 AVSampleBufferAudioRenderer。mpv 的静音空输出维护主时钟，暂停或缓冲时同步器停走，seek 刷掉旧包后重新对时。原型会报告 Apple 的 Atmos 格式标识、提交包数、跳转后的进度和渲染器错误码。正常应用播放以现有音频输出工作。原型尚限单音轨 MP4，产品还需处理分轨配置、路由热插拔、音量和倍速。[探针源码](https://github.com/CKopoer/libmpv-darwin-build/blob/8c14f3c7e6367ce425667759724a5a20b66b3a8e/bilisail/joc_probe.m) · [Apple 音频渲染接口](https://developer.apple.com/documentation/avfoundation/avsamplebufferaudiorenderer)
+在线 DASH、离线分轨和本地 MP4／MKV 都使用现有 media_kit 会话。mpv 检查选中音轨的实际 E-AC-3 profile，将确认的 JOC 原始压缩包交给 `apple-joc` 音频输出。输出驱动从码流重建带 `dec3` 的格式描述，并确认 Apple 返回 `ec+3`。随后由 `AVSampleBufferAudioRenderer` 消费压缩样本，队列延迟反馈给 mpv 音频时钟。请求头、Range、缓存和视频仍由同一次打开操作管理。[原生输出源码](https://github.com/CKopoer/libmpv-darwin-build/blob/8ac233313b53fe966369a4f17086bc1d29d5ea08/bilisail/ao_apple_joc.m) · [播放器回归入口](../../tool/validation/apple_joc_playback.dart)
+
+在 1×、0 dB 时自动选择 JOC 输出。音量和静音作用于系统渲染器。变速、额外增益使用 PCM，恢复设置后可以重新启用 JOC。普通 DD+、AAC 走已有解码输出。播放信息在当前音频输出为 `apple-joc` 且 Apple 渲染器进入 rendering 并收到样本后，显示「Apple 系统渲染 JOC」。耳机、扬声器及 HDMI 的最终输出取决于系统和当前路由。[Apple 音频渲染接口](https://developer.apple.com/documentation/avfoundation/avsamplebufferaudiorenderer)
 
 ## 构建与验证
 
