@@ -59,13 +59,13 @@ Future<void> main() async {
       'hdr10': String.fromEnvironment('APPLE_HDR10'),
       'hlg': String.fromEnvironment('APPLE_HLG'),
     };
-    if (samples.values.every((uri) => uri.isEmpty)) {
+    const jocBase = String.fromEnvironment('APPLE_JOC_BASE');
+    if (jocBase.isEmpty && samples.values.every((uri) => uri.isEmpty)) {
       throw ArgumentError('No test source');
     }
     final policy = MediaRequestPolicy();
     const audio = String.fromEnvironment('APPLE_COMPANION_AUDIO');
     success = true;
-    const jocBase = String.fromEnvironment('APPLE_JOC_BASE');
     if (jocBase.isNotEmpty) {
       await verifyAppleJoc(engine, Uri.parse(jocBase));
     }

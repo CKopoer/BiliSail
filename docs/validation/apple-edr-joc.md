@@ -30,14 +30,17 @@ SDR 路径在带 sRGB 标记的 Metal drawable 被提交呈现后确认交接。
 | macOS 应用视频 | Release 通过实际播放器打开 Profile 5、8.4、HDR10、HLG，四种片源均运行 gpu-next，暂停、定位、继续播放和音轨检查通过。前两种的输入矩阵为 `dolbyvision`，同源 HLG 为 `bt.2020-ncl`。当前屏幕支持 sRGB，四次输出均为 SDR。[播放日志](https://github.com/CKopoer/BiliSail/actions/runs/45872185913/job/140090161070) |
 | iPhone 模拟器应用视频 | 使用 iOS Runner 打开相同四段素材。四次均向 Metal 提交 sRGB 图像，P5 和 P8.4 收到 Dolby Vision 矩阵，分轨音频、暂停定位和继续播放通过。[播放日志](https://github.com/CKopoer/BiliSail/actions/runs/45872185913/job/140090160715) |
 | 应用打包 | macOS [arm64](https://github.com/CKopoer/BiliSail/actions/runs/45872186024/job/140091685377)、[Intel x64](https://github.com/CKopoer/BiliSail/actions/runs/45872186024/job/140091685440) 安装包和 [iOS arm64 未签名 IPA](https://github.com/CKopoer/BiliSail/actions/runs/45872186024/job/140091685447) 均构建成功。 |
+| macOS 正式播放 JOC | Release 播放在线 DASH、离线分轨、MKV 和 MP4，四组均在暂停定位后恢复为 `apple-joc / E-AC-3 JOC`。普通 DD+、AAC 均输出 `coreaudio / floatp`，JOC 计数为 0。MKV 验证了静音、音量、1.25× 与 +3 dB 回退，以及恢复 1×、0 dB 后重新输出 JOC。[播放日志](https://github.com/CKopoer/BiliSail/actions/runs/45995280770/job/140493360999) |
+| iOS 正式播放 JOC | iPhone 模拟器运行相同的播放器和六组样片。四组 JOC 在暂停、跳转和恢复后均报告 `apple-joc / E-AC-3 JOC`，各次采样已有 7 至 8 个已提交包。普通 DD+、AAC 均输出 `audiounit / floatp`，JOC 计数为 0。MKV 音量、倍速和增益切换通过。[播放日志](https://github.com/CKopoer/BiliSail/actions/runs/45995280770/job/140493361402) |
+| 本次 Apple 打包 | iOS arm64 未签名 IPA、macOS arm64 与 x64 构建均通过。[iOS](https://github.com/CKopoer/BiliSail/actions/runs/45995276570/job/140494559148) · [macOS arm64](https://github.com/CKopoer/BiliSail/actions/runs/45995276570/job/140494559203) · [macOS x64](https://github.com/CKopoer/BiliSail/actions/runs/45995276570/job/140494559465) |
 | macOS JOC 原型 | Dolby 公开样片识别为 Atmos，格式配置 15 字节；接收 87 包、222720 字节，跳转后接收 48 包。渲染器进入 rendering，时钟随 mpv 恢复，错误码 0。[原型日志](https://github.com/CKopoer/BiliSail/actions/runs/45861827586) |
 | iPhone 模拟器 JOC 原型 | 同一样片识别为 Atmos，末次接收 84 包、215040 字节，跳转后接收 46 包，时钟检查通过，错误码 0。[模拟器日志](https://github.com/CKopoer/BiliSail/actions/runs/45872185913/job/140090160715) |
 
-早期有一次模拟器冷启动后 JOC 探针返回 1，该次日志没有保留计数。现行工作流分别检查视频和音频，并在探针失败时保留统计量。[早期运行](https://github.com/CKopoer/BiliSail/actions/runs/45871103125/job/140086424516)
+表中的 JOC 原型记录来自独立的单音轨 MP4 程序。现行工作流使用应用内的同一个 `MediaKitEngine` 与 `VideoSurface` 播放全部样片，每次换源和跳转后读取当前音频输出。在线分轨服务要求携带 Referer 并接受 Range，离线组先把文件写入应用沙盒，再以文件 URI 打开。[工作流与样片生成命令](../../.github/workflows/apple-playback.yml)
 
 实际 HDR 面板需验看高光和 Profile 5 色彩。Profile 8 可使用带／去 RPU 的同源对照。耳机、内置扬声器的对象渲染和 HDMI 接收端的 Atmos 指示均需在对应硬件分别验收。
 
-## 在设备上复验画面
+## 在设备上复验
 
 [独立验证入口](../../tool/validation/apple_hdr_probe.dart) 通过正式 macOS 窗口或 iOS Runner 打开样片，检查实际 Metal 输出、暂停定位、继续播放及解码音轨。先按 [bili_mux 说明](../../packages/bili_mux/README.md) 准备该设备的组件。对实机选设备 ID，样片 URL 必须可被该设备访问。下例中的 URL 代表各自含音轨、时长超过两秒的受控片源。
 
@@ -49,3 +52,5 @@ flutter run --release -d macos -t tool/validation/apple_hdr_probe.dart \
 ```
 
 可另传 `APPLE_HDR10`、`APPLE_HLG`。Profile 5 样片使用自带音轨，其余样片可用 `APPLE_COMPANION_AUDIO` 指定独立音轨。Apple Silicon 上测试 iPhone 模拟器先运行 `bash packages/bili_mux/tool/build.sh ios-simulator-arm64`，再为模拟器执行 debug 构建。要求 HDR 的检查在仅支持 SDR 的屏幕上会失败。测试入口打印实际输出，执行完毕退出。
+
+在 macOS 或 iPhone 模拟器复验 JOC 时，按工作流准备测试文件，运行 `python3 tool/validation/apple_fixture_server.py build/fixtures`，并向同一 Flutter 入口传入 `--dart-define=APPLE_JOC_BASE=http://127.0.0.1:18085/`。使用实体 iPhone 时可将同一套素材及分轨路由部署到设备可达的 HTTPS 地址。普通用户在播放信息中可查看「音轨格式」「音频输出格式」和「音频传输」。
