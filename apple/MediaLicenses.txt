@@ -1,6 +1,6 @@
 BiliSail Apple media dependency notices
 
-https://github.com/CKopoer/libmpv-darwin-build/releases/tag/apple-joc-continuity-2026-11-27-r2
+https://github.com/CKopoer/libmpv-darwin-build/releases/tag/apple-joc-continuity-2026-11-27-r3
 
 SOURCES.md
 

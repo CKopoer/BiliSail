@@ -2,7 +2,7 @@
 
 ## 视频
 
-macOS 和 iOS 共用 BiliSail 的 media_kit 播放会话、分轨请求、缓冲、seek 和音频时钟。选中的视频轨为 Dolby Vision Profile 5、Profile 8、HDR10 或 HLG 时，Flutter 平台视图承载独立的 CAMetalLayer。mpv 的 gpu-next 和 libplacebo 通过 MoltenVK 向该层提交画面。普通 SDR 源沿用原有纹理。Apple 原生依赖包含可重建配方、源码版本、补丁和许可。[应用显示面](../../apple/AppleVideoSurface.swift) · [固定依赖及校验值](https://github.com/CKopoer/libmpv-darwin-build/releases/tag/apple-joc-continuity-2026-11-27-r2)
+macOS 和 iOS 共用 BiliSail 的 media_kit 播放会话、分轨请求、缓冲、seek 和音频时钟。选中的视频轨为 Dolby Vision Profile 5、Profile 8、HDR10 或 HLG 时，Flutter 平台视图承载独立的 CAMetalLayer。mpv 的 gpu-next 和 libplacebo 通过 MoltenVK 向该层提交画面。普通 SDR 源沿用原有纹理。Apple 原生依赖包含可重建配方、源码版本、补丁和许可。[应用显示面](../../apple/AppleVideoSurface.swift) · [固定依赖及校验值](https://github.com/CKopoer/libmpv-darwin-build/releases/tag/apple-joc-continuity-2026-11-27-r3)
 
 | 源与设备 | 接入行为 | 如何判读 |
 | --- | --- | --- |
@@ -18,7 +18,7 @@ SDR 路径在带 sRGB 标记的 Metal drawable 被提交呈现后确认交接。
 
 ## 正式播放器的 JOC 输出
 
-在线 DASH、离线分轨和本地 MP4／MKV 都使用现有 media_kit 会话。mpv 检查选中音轨的实际 E-AC-3 profile，将确认的 JOC 原始压缩包交给 `apple-joc` 音频输出。输出驱动从码流重建带 `dec3` 的格式描述，并确认 Apple 返回 `ec+3`。随后由 `AVSampleBufferAudioRenderer` 消费压缩样本，队列延迟反馈给 mpv 音频时钟。请求头、Range、缓存和视频仍由同一次打开操作管理。[原生输出源码](https://github.com/CKopoer/libmpv-darwin-build/blob/d23e1d576bc679ce212468e6b4899a780b7d24c4/bilisail/ao_apple_joc.m) · [播放器回归入口](../../tool/validation/apple_joc_playback.dart)
+在线 DASH、离线分轨和本地 MP4／MKV 都使用现有 media_kit 会话。mpv 检查选中音轨的实际 E-AC-3 profile，将确认的 JOC 原始压缩包交给 `apple-joc` 音频输出。输出驱动从码流重建带 `dec3` 的格式描述，并确认 Apple 返回 `ec+3`。随后由 `AVSampleBufferAudioRenderer` 消费压缩样本，队列延迟反馈给 mpv 音频时钟。请求头、Range、缓存和视频仍由同一次打开操作管理。[原生输出源码](https://github.com/CKopoer/libmpv-darwin-build/blob/1146169ce340ddec08d2f139de830dc301d76e28/bilisail/ao_apple_joc.m) · [播放器回归入口](../../tool/validation/apple_joc_playback.dart)
 
 在 1×、0 dB 时自动选择 JOC 输出。音量和静音作用于系统渲染器。变速、额外增益使用 PCM，恢复设置后可以重新启用 JOC。普通 DD+、AAC 走已有解码输出。播放信息在当前音频输出为 `apple-joc` 且 Apple 渲染器进入 rendering 并收到样本后，显示「Apple 系统渲染 JOC」。耳机、扬声器及 HDMI 的最终输出取决于系统和当前路由。[Apple 音频渲染接口](https://developer.apple.com/documentation/avfoundation/avsamplebufferaudiorenderer)
 
@@ -44,18 +44,18 @@ SDR 路径在带 sRGB 标记的 Metal drawable 被提交呈现后确认交接。
 
 在 `fa793d86` 的原生依赖上，48 kHz 的 Dolby《Glass Blowing》样片每个压缩包包含 1,536 个采样，时长 32 ms。旧驱动遇到 `readyForMoreMediaData=false` 就停止送包，下一次定时检查按标称设备缓冲计算，间隔可达 62.5 ms。当系统直到播放队列接近耗尽才重新给出就绪提示时，剩余音频可能撑不到下次补包。mpv 报告 underrun 并反复重启音频。先前的短时包数检查在队列首次填充后即可通过。[Apple 对就绪提示和有界入队的说明](https://developer.apple.com/documentation/avfoundation/avsamplebufferaudiorenderer/isreadyformoremediadata?language=objc)
 
-新驱动使用 Apple 的预缓冲机制启动音频，再按队列的实际剩余时长安排补包。系统暂缓接包时，驱动按最多 250 ms 的已排定音频补充完整压缩包。系统就绪时上限为 500 ms，以限制片尾暂停时排空音频队列所需的时间。音量只在值变化时写入。压缩包时长与解码帧覆盖的时长不一致，或有数据且应当播放时渲染时钟持续停滞，会触发已有的 PCM 回退。[原生修复与重建配方](https://github.com/CKopoer/libmpv-darwin-build/tree/d23e1d576bc679ce212468e6b4899a780b7d24c4/bilisail)
+新驱动使用 Apple 的预缓冲机制启动音频，再按队列的实际剩余时长安排补包。驱动用已排定音频的剩余时长控制送包，目标上限为 500 ms。只要队列仍有音频，每隔 4 至 16 ms 检查一次余量，并按完整压缩包补充。半秒上限同时限制片尾暂停时排空队列所需的时间。音量只在值变化时写入。压缩包时长与解码帧覆盖的时长不一致，或有数据且应当播放时渲染时钟持续停滞，会触发已有的 PCM 回退。[原生修复与重建配方](https://github.com/CKopoer/libmpv-darwin-build/tree/1146169ce340ddec08d2f139de830dc301d76e28/bilisail)
 
 macOS 用 BlackHole 回录同一段八秒样片。压力测试在起播一秒后延迟就绪提示，继续使用系统解码、时钟和音频输出。基准取自同一音轨，由 FFmpeg 离线解码并按 Lo/Ro 混成立体声。测试将回录整段对齐一次，左右声道分别按 100 ms 有声窗口比较，匹配门槛为相关系数 0.95。
 
 | macOS 回录条件 | 旧依赖 | 新依赖 |
 | --- | --- | --- |
-| 正常接包 | 播放至结尾，波形与参考匹配 | 左右声道各 60/60 个窗口匹配 |
-| 剩余音频低于 20 ms 才给出就绪提示 | 出现队列断供，重复测试中录得静音并超时 | 左右声道各 60/60 个窗口匹配，保持 `apple-joc` 直至播完 |
+| 正常接包 | 播放至结尾，波形与参考匹配 | 四轮中三轮为 60/60，另一次为 57/60，左右声道一致 |
+| 剩余音频低于 20 ms 才给出就绪提示 | 出现队列断供，重复测试中录得静音并超时 | 四轮均为左右声道各 60/60 个窗口匹配，保持 `apple-joc` 直至播完 |
 
-两台 runner 各连续回录四轮，正常和延迟就绪两种条件下均得到表中的结果。另一次应用工作流的压力回录仅有 43/60 个窗口匹配；该次未保存音频，无法从日志判定差异来自输出还是采集。后续工作流在失败时保存参考和两个声道的系统回录，并检查入队时间戳是否连续。[四轮回录复验](https://github.com/CKopoer/BiliSail/actions/runs/46021258093) · [出现偏差的记录](https://github.com/CKopoer/BiliSail/actions/runs/46019269281/job/140574359028)
+中间版本在系统暂缓接包时只保留 250 ms 音频。一次压力回录中，原生驱动保持 JOC 输出直至播完，所有入队时间戳连续；实际录音仍在多个压缩包边界附近出现约 6 至 37 ms 的静音。最终驱动在两种条件下都维持半秒队列，给系统解码留出相同余量。失败的回归会保留原始录音和 PCM 参考。[中间版本的时间戳和原始回录](https://github.com/CKopoer/BiliSail/actions/runs/46021975222/job/140583631641)
 
-六个播放位置的原生暂停耗时为 0.082 至 0.850 秒。macOS Release 与 iPhone 模拟器均验证了在线分轨、离线分轨、MKV 和 MP4，以及暂停、跳转和音频模式切换。实体 iPhone、Mac 扬声器、耳机及 HDMI 接收端仍需分别试听。[旧驱动断供日志](https://github.com/CKopoer/BiliSail/actions/runs/46010085203) · [旧驱动回录](https://github.com/CKopoer/BiliSail/actions/runs/46017410520) · [修复后波形检查](https://github.com/CKopoer/BiliSail/actions/runs/46019650402) · [暂停耗时](https://github.com/CKopoer/BiliSail/actions/runs/46015292545) · [五个原生切片构建](https://github.com/CKopoer/BiliSail/actions/runs/46015192445)
+六个播放位置的原生暂停耗时为 0.038 至 0.991 秒。macOS Release 与 iPhone 模拟器的应用回归覆盖在线分轨、离线分轨、MKV 和 MP4，以及暂停、跳转和音频模式切换。实体 iPhone、Mac 扬声器、耳机及 HDMI 接收端仍需分别试听。[旧驱动断供与时间戳中断](https://github.com/CKopoer/BiliSail/actions/runs/46024220187) · [压力回录对照](https://github.com/CKopoer/BiliSail/actions/runs/46024019716) · [暂停耗时](https://github.com/CKopoer/BiliSail/actions/runs/46023790133) · [五个原生切片构建](https://github.com/CKopoer/BiliSail/actions/runs/46023603560)
 
 ## 在设备上复验
 
