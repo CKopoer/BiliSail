@@ -2,7 +2,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/recommendation_settings.dart';
 import '../../../domain/app_failure.dart';
+import '../../../domain/responsive_layout_settings.dart';
 import '../../../shared/application/recommendation_filter_provider.dart';
+import '../../settings/application/settings_controller.dart';
 import '../domain/app_recommendation_identity_repository.dart';
 
 final appRecommendationIdentityRepositoryProvider =
@@ -54,5 +56,13 @@ final recommendationQueryKeyProvider = Provider((ref) {
             ref.watch(appRecommendationIdentityRepositoryProvider)?.revision ??
             0
       : 0;
-  return (source: source, identity: identity);
+  final appCoverRatio = source == RecommendationSource.app
+      ? ref.watch(
+              settingsControllerProvider.select(
+                (state) => state.value?.responsiveLayout.cardCoverRatio,
+              ),
+            ) ??
+            CardCoverRatio.standard
+      : null;
+  return (source: source, identity: identity, appCoverRatio: appCoverRatio);
 });

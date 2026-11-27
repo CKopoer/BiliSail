@@ -340,6 +340,7 @@ final class BiliApiClient {
       throw ArgumentError('Invalid App device identity');
     }
     final feedback = path.startsWith('/x/feed/dislike');
+    final androidFeed = path == '/x/v2/feed/index';
     if (feedback && (accessToken == null || accessToken.isEmpty)) {
       throw ApiFailure(ApiFailureCategory.authentication, endpoint);
     }
@@ -360,23 +361,30 @@ final class BiliApiClient {
     check();
     final device = deviceInfo ?? await appDeviceInfo(context: active);
     check();
-    final signed = AppProfile.sign({
+    final appParameters = {
       ...parameters,
       if (accessToken != null && accessToken.isNotEmpty)
         'access_key': accessToken,
-    }, _clock());
+    };
+    final now = _clock();
+    final signed = androidFeed
+        ? AndroidRecommendationProfile.sign(appParameters, now)
+        : AppProfile.sign(appParameters, now);
     final headers = {
       'Accept': 'application/json',
-      'User-Agent': AppProfile.userAgentFor(device),
+      'User-Agent': androidFeed
+          ? AndroidRecommendationProfile.userAgentFor(device)
+          : AppProfile.userAgentFor(device),
       'buvid': buvid,
-      'app-key': 'android_hd',
       'env': 'prod',
-      if (path == '/x/v2/feed/index')
-        ...AppProfile.recommendationHeaders(
+      if (androidFeed)
+        ...AndroidRecommendationProfile.recommendationHeaders(
           appAccountMid,
           sessionId: _appSessionId,
           traceId: '${_appRandomHex(16)}:${_appRandomHex(8)}:0:0',
-        ),
+        )
+      else
+        'app-key': 'android_hd',
     };
     final uri = Uri.https(
       passport ? 'passport.bilibili.com' : 'app.bilibili.com',
@@ -3731,6 +3739,10 @@ final class BiliApiClient {
         _int(data['duration']) ??
         _parseDuration(_string(data['duration']) ?? '');
     final stat = _optionalMap(data['stat']);
+    final cover = _uri(data['pic']);
+    final recommendationCover43 = endpoint == 'recommended'
+        ? _cover43Uri(data['pic_4_3'])
+        : null;
     return ApiVideoSummary(
       access: parseVideoAccess(data),
       bvid: _requiredString(data['bvid'], endpoint),
@@ -3739,8 +3751,10 @@ final class BiliApiClient {
         data['title'],
         endpoint,
       ).replaceAll(RegExp(r'<[^>]*>'), ''),
-      coverUrl: _uri(data['pic']),
-      cover43Url: _cover43Uri(data['cover43']),
+      coverUrl: cover,
+      cover43Url:
+          _cover43Uri(data['cover43']) ??
+          (recommendationCover43 == cover ? null : recommendationCover43),
       ownerName: _string(owner?['name']) ?? _string(data['author']) ?? '',
       ownerMid: _userMid(owner?['mid'] ?? data['mid']),
       ownerAvatarUrl: _uri(owner?['face'] ?? data['upic']),

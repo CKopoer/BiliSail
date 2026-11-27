@@ -5,6 +5,7 @@ import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/page_result.dart';
 import 'package:bilisail/domain/recommendation_settings.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/domain/responsive_layout_settings.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/feed/application/app_recommendation_identity.dart';
 import 'package:bilisail/features/feed/application/feed_controller.dart';
@@ -196,6 +197,40 @@ void main() {
       complete('new-device');
       await container.pump();
       expect(ids(), ['new-device']);
+    },
+  );
+
+  test(
+    'changing cover ratio reloads App only and discards the old cursor',
+    () async {
+      final settings = container.read(settingsControllerProvider.notifier);
+      final first = controller.refresh();
+      complete('web');
+      await first;
+      await settings.setCardCoverRatio(CardCoverRatio.standard);
+      await container.pump();
+      expect(feed.calls, hasLength(1));
+
+      await source(RecommendationSource.app);
+      expect(feed.appRequests.last.coverRatio, CardCoverRatio.standard);
+      complete('standard', cursor: '123');
+      await container.pump();
+      final more = controller.loadMore();
+      final stale = feed.calls.last;
+      expect(feed.appRequests.last.cursor, '123');
+      expect(feed.appRequests.last.coverRatio, CardCoverRatio.standard);
+
+      await settings.setCardCoverRatio(CardCoverRatio.widescreen);
+      await container.pump();
+      expect(stale.cancellation.isCancelled, isTrue);
+      expect(feed.appRequests.last.coverRatio, CardCoverRatio.widescreen);
+      expect(feed.appRequests.last.cursor, '0');
+      expect(feed.appRequests.last.reason, AppRecommendationLoadReason.initial);
+      complete('wide');
+      await container.pump();
+      stale.result.complete(const PageResult(items: [], hasMore: false));
+      await more;
+      expect(ids(), ['wide']);
     },
   );
 }

@@ -1,5 +1,7 @@
 # API、鉴权与数据边界
 
+2026-11-27 App 首页推荐的 GET `app.bilibili.com/x/v2/feed/index` 使用普通 Android 手机 9.21.0 的 profile。请求采用 `mobi_app=android`、`device=phone`、`build=9210300`、手机 UA、`app-key=android64` 和该 profile 的 MD5 签名。客户端只发送本应用的设备与会话标识；已有同账号 App token 仍可作为 `access_key` 传入，无 token 时以游客身份请求。扫码授权、密码短信和反馈使用各自既有协议。沿用 JSON `data.items`、服务端首卡游标、刷新场景、取消、账号 epoch、25 秒总期限和每次 2 秒的有界读重试。封面布局和在线验证见[视频卡片封面](validation/shared-video-cards.md#2026-11-27app-手机推荐封面)。
+
 2026-11-24 课程（PUGV）以 Web Cookie 读取 `api.bilibili.com` 的 JSON 接口。`GET /pugv/view/web/season` 接受 `ep_id` 或 `season_id`，返回课程、章节及课时目录；`GET /pugv/player/web/playurl` 使用 `ep_id/cid/qn/fnver/fnval/fourk` 获取可播放的 DASH 音视频分轨。两者无 WBI、CSRF 或客户端翻页，沿用 25 秒总期限、账号 epoch、取消与有界读重试。课时时长以秒计，目录保留不可播项。每一课时的评论用 `oid=课时 ID, type=33`。登录账号沿用原有心跳设置和单次 CSRF POST，课程使用 `type=10, aid, cid, epid, sid`。课程与影视详情分开缓存，本地 SQLite v4 为课时新增可空列。
 
 协议对照本地 PiliPlus `217fb54f51f6764176319bbdedab2a7522d75401` 的 `lib/http/search.dart`、`lib/http/video.dart`、`lib/models/common/video/video_type.dart` 和 `lib/pages/video/reply/controller.dart`。本项目独立实现 Web PUGV 接口与页面，复用已有播放器。[公开样本](https://www.bilibili.com/cheese/play/ep20766) 的游客目录含 603 节，其中 3 节可试看。Windows 已验证首节 146 秒源的音视频解码及进度推进。已购账号、线上账号写入和移动设备播放尚未实测。
@@ -278,7 +280,7 @@ Cookie 由 domain/path/secure/expiry 规则的 CookieStore 维护，持久化整
 - WBI key 更新与会话刷新是不同流程，各自合并并发请求。外部时钟可注入测试，生产使用 UTC 时间戳。
 - CSRF 从当前 Cookie 会话取得，按端点规定放 query/body；Web CSRF 与 App 签名不是替代关系。
 - buvid 等设备上下文由协议模块按需要获取和持久化，保持同一安装内一致；不能每次请求随机生成或全局伪造设备参数。
-- App 推荐/HD 授权通过 `AppProfile` 声明 app key、签名与 token 上下文；静态签名参数是兼容协议参数，不当作能安全保存的秘密。App host 不加入 Web Cookie 目的地白名单；token 仅保存在独立系统安全槽，普通数据库只保存设备标识与撤销标记。
+- App 首页推荐使用 `AndroidRecommendationProfile`，HD 授权使用 `AppProfile`，分别声明客户端 app key 和签名。App host 不加入 Web Cookie 目的地白名单；token 仅保存在独立系统安全槽，普通数据库只保存设备标识与撤销标记。
 
 ## 6. 重试、降级和错误
 
@@ -330,7 +332,7 @@ Protobuf 只引入所需消息及传递依赖，记录源提交、生成器版�
 
 ## 首页推荐 4:3 封面
 
-卡片已进入首页推荐视口布局、4:3 模式开启且列表未返回 `cover43` 时，使用 GET `api.bilibili.com/x/article/cards`。请求用逗号连接去重后的 `ids`（BV 号），每批最多 30 条，同一请求作用域内串行执行。使用 B 站首页 Referer 和访客 GET，无 WBI 签名、Cookie 或 App token。按响应 `data` 的各对象中实际返回的 `bvid` 匹配请求，只取有效的 `cover43` 地址。
+在 4:3 模式下，列表已返回的 `cover43`、Web／桌面推荐中有效且不同于普通封面的 `pic_4_3`、App 手机双列 `small_cover_v2` 的 `cover` 都可直接使用。已进入首页推荐视口布局且缺少上述地址的卡片使用 GET `api.bilibili.com/x/article/cards`。请求用逗号连接去重后的 `ids`（BV 号），每批最多 30 条，同一请求作用域内串行执行。使用 B 站首页 Referer 和访客 GET，无 WBI 签名、Cookie 或 App token。按响应 `data` 的各对象中实际返回的 `bvid` 匹配请求，只取有效的 `cover43` 地址。
 
 每批最多一次，超时 2 秒，JSON 响应上限 512 KiB。视口同一帧内挂载的卡片共享批次，成功结果包含有界的缺项缓存。推荐来源、身份、账号与挂载生命周期隔离请求。需要补取的卡片等待批量结果后选择封面地址，缺少独立地址时使用普通封面。游客抽查的 30 条请求均取得记录，其中 28 条有独立封面。[公开批量接口样例](https://api.bilibili.com/x/article/cards?ids=BV1YdZtYHE6d,BV1xx411c7mD)
 

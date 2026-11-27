@@ -66,6 +66,30 @@ void main() {
     expect(empty.nextCursor, isNull);
   });
 
+  test('Web and desktop use distinct valid 4:3 URLs from the list', () async {
+    final transport = _Transport();
+    final api = BiliApiClient(transport: transport);
+    addTearDown(api.close);
+    for (final load in [
+      api.getRecommended,
+      () => api.getDesktopRecommended(freshIndex: 0),
+    ]) {
+      for (final (pic43, cover43, expected) in [
+        ('//i0.hdslb.com/43.jpg', null, '/43.jpg'),
+        ('//i0.hdslb.com/wide.jpg', null, null),
+        ('https:/invalid.jpg', null, null),
+        ('', null, null),
+        ('//i0.hdslb.com/43.jpg', '//i0.hdslb.com/known.jpg', '/known.jpg'),
+      ]) {
+        transport.pic43 = pic43;
+        transport.cover43 = cover43;
+        final item = (await load()).items.single;
+        expect(item.coverUrl?.path, '/wide.jpg');
+        expect(item.cover43Url?.path, expected);
+      }
+    }
+  });
+
   test(
     'Web recommendation text stays independent of explicit follow status',
     () async {
@@ -126,6 +150,7 @@ final class _Transport implements ApiTransport {
   bool onlyAds = false;
   Object? followed;
   Object? reason = const {'content': '已关注'};
+  String? pic43, cover43;
   @override
   Future<ApiHttpResponse> get(
     Uri uri, {
@@ -165,6 +190,9 @@ final class _Transport implements ApiTransport {
         'bvid': 'BV1234567890',
         'title': '视频',
         'duration': 60,
+        'pic': 'http://i0.hdslb.com/wide.jpg',
+        'pic_4_3': pic43,
+        'cover43': cover43,
         'is_followed': followed,
         'rcmd_reason': reason,
       },
