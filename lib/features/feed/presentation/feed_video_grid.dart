@@ -8,6 +8,7 @@ import '../application/recommendation_reporter.dart';
 
 import '../../../core/platform/external_links.dart';
 import '../../../core/network/api_requests.dart';
+import '../../../core/presentation/app_foreground.dart';
 import '../../playback/application/recommendation_playback_registry.dart';
 import '../../../core/presentation/workspace_activity.dart';
 import '../../../shared/ui/app_notice.dart';
@@ -19,7 +20,6 @@ import '../../../shared/ui/responsive_layout_scope.dart';
 import '../../../shared/ui/video_card.dart';
 import '../../../shared/ui/workspace_link.dart';
 import '../application/feed_controller.dart';
-import '../application/recommendation_cover43.dart';
 import '../application/recommendation_publication_time.dart';
 import '../domain/home_channel.dart';
 
@@ -67,7 +67,7 @@ final class FeedVideoGrid extends ConsumerWidget {
             ModalRoute.isCurrentOf(context) != false
         ? ref.watch(recommendationReporterProvider)
         : null;
-    final active = reporter != null && ref.watch(_foregroundProvider);
+    final active = reporter != null && ref.watch(appForegroundProvider);
     final reporting = active ? reporter : null;
     final boundary = previousStartIndex;
     if (boundary == null || boundary < 0 || boundary >= items.length) {
@@ -94,24 +94,6 @@ final class FeedVideoGrid extends ConsumerWidget {
         _grid(boundary, items.length, reporting),
       ],
     );
-  }
-}
-
-final _foregroundProvider = NotifierProvider.autoDispose<_Foreground, bool>(
-  _Foreground.new,
-);
-
-final class _Foreground extends Notifier<bool> {
-  @override
-  bool build() {
-    final listener = AppLifecycleListener(
-      onStateChange: (value) {
-        state = value == AppLifecycleState.resumed;
-      },
-    );
-    ref.onDispose(listener.dispose);
-    final current = WidgetsBinding.instance.lifecycleState;
-    return current == null || current == AppLifecycleState.resumed;
   }
 }
 
@@ -145,7 +127,6 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
   VideoCard? _card;
   _FeedbackState? _feedback;
   DateTime? _publicationTime;
-  ({Uri? url, bool pending})? _cover43;
 
   void _report(RecommendationInteraction interaction) {
     final card = widget.video.recommendationCard;
@@ -236,7 +217,6 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
         oldWidget.recommended != widget.recommended) {
       _card = null;
       _publicationTime = null;
-      _cover43 = null;
     }
   }
 
@@ -260,28 +240,6 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
         _publicationTime = date;
         _card = null;
       }
-    }
-    final needsCover43 = standardCover && widget.video.cover43Url == null;
-    final lookup =
-        needsCover43 &&
-            visibleRecommendation &&
-            ModalRoute.isCurrentOf(context) != false &&
-            ref.watch(_foregroundProvider)
-        ? ref.watch(
-            recommendationCover43Provider((
-              id: widget.video.id,
-              epoch: ref.read(sessionEpochProvider)(),
-            )),
-          )
-        : null;
-    final cover43 = !needsCover43
-        ? null
-        : lookup == null
-        ? _cover43 ?? (url: null, pending: true)
-        : (url: lookup.asData?.value, pending: lookup.isLoading);
-    if (_cover43 != cover43) {
-      _cover43 = cover43;
-      _card = null;
     }
     var feedback = (rejected: false, busy: false, uncertain: false);
     if (widget.recommended) {
@@ -310,8 +268,6 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
     final child = _card ??= VideoCard(
       key: ValueKey(widget.video.id),
       video: widget.video,
-      cover43Url: cover43?.url,
-      cover43Pending: cover43?.pending ?? false,
       onTap: _open,
       onOpenUser: (id) => context.openWorkspaceLink('/user/${id.value}'),
       showRecommendationReason: widget.recommended,

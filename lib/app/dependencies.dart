@@ -51,6 +51,8 @@ import '../core/storage/app_database.dart';
 import '../core/storage/credential_store.dart';
 import '../core/storage/image_byte_cache.dart';
 import '../core/presentation/app_image_provider.dart';
+import '../shared/application/video_cover43.dart';
+import '../shared/data/api_video_cover_repository.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/application/account_overview_controller.dart';
 import '../features/auth/data/api_account_overview_repository.dart';
@@ -527,6 +529,13 @@ class AppDependencies {
         ),
         downloadSourceRepositoryProvider.overrideWithValue(downloadSources),
         sessionEpochProvider.overrideWithValue(() => requests.sessionEpoch),
+        videoCoverRepositoryProvider.overrideWithValue(
+          ApiVideoCoverRepository(api, requests),
+        ),
+        videoCoverSessionEpochProvider.overrideWith((ref) {
+          ref.watch(authControllerProvider);
+          return requests.sessionEpoch;
+        }),
         castMediaRepositoryProvider.overrideWithValue(
           ApiCastMediaRepository(
             api,

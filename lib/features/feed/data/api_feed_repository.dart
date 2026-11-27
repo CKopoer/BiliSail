@@ -23,7 +23,6 @@ class ApiFeedRepository
         PopularFeedRepository,
         RankingFeedRepository,
         RecommendationPublicationTimeRepository,
-        RecommendationCoverRepository,
         AppRecommendationFeedRepository,
         DesktopRecommendationFeedRepository,
         RecommendationReportingRepository,
@@ -305,18 +304,6 @@ class ApiFeedRepository
         }),
       ),
     );
-  }, cancellation: cancellation);
-
-  @override
-  Future<Map<VideoId, Uri>> loadRecommendationCover43Urls(
-    List<VideoId> ids, {
-    required RequestCancellation cancellation,
-  }) => requests.run((context) async {
-    final urls = await api.getVideoCover43Urls(
-      ids.map((id) => id.value),
-      context: context,
-    );
-    return {for (final entry in urls.entries) VideoId(entry.key): entry.value};
   }, cancellation: cancellation);
 
   @override

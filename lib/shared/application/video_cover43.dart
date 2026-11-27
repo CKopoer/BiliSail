@@ -2,29 +2,35 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../domain/app_failure.dart';
-import '../../../domain/request_cancellation.dart';
-import '../../../domain/video.dart';
-import '../domain/feed_repository.dart';
-import 'app_recommendation_identity.dart';
-import 'feed_controller.dart';
+import '../../core/network/api_requests.dart';
+import '../../domain/app_failure.dart';
+import '../../domain/request_cancellation.dart';
+import '../../domain/video.dart';
+import '../../domain/video_cover_repository.dart';
 
-final _coverBatchesProvider = Provider.autoDispose.family<_CoverBatches?, int>((
-  ref,
-  epoch,
-) {
-  final repository = ref.watch(feedRepositoryProvider);
-  if (repository is! RecommendationCoverRepository) return null;
-  ref.watch(recommendationQueryKeyProvider);
-  final batches = _CoverBatches(repository as RecommendationCoverRepository);
+final videoCoverRepositoryProvider = Provider<VideoCoverRepository?>(
+  (ref) => null,
+);
+
+final videoCoverSessionEpochProvider = Provider(
+  (ref) => ref.watch(sessionEpochProvider)(),
+);
+
+final _coverBatchesProvider = Provider.autoDispose<_CoverBatches?>((ref) {
+  final repository = ref.watch(videoCoverRepositoryProvider);
+  if (repository == null) return null;
+  ref.watch(videoCoverSessionEpochProvider);
+  final batches = _CoverBatches(repository);
   ref.onDispose(batches.dispose);
   return batches;
 });
 
-final recommendationCover43Provider = FutureProvider.autoDispose
-    .family<Uri?, ({VideoId id, int epoch})>((ref, request) {
-      return ref.watch(_coverBatchesProvider(request.epoch))?.load(request.id);
-    }, retry: (_, _) => null);
+final videoCover43Provider = FutureProvider.autoDispose.family<Uri?, VideoId>((
+  ref,
+  id,
+) {
+  return ref.watch(_coverBatchesProvider)?.load(id);
+}, retry: (_, _) => null);
 
 final class _CoverBatches {
   _CoverBatches(this.repository);
@@ -33,7 +39,7 @@ final class _CoverBatches {
   static const _maximumPending = 60;
   static const _maximumCached = 256;
 
-  final RecommendationCoverRepository repository;
+  final VideoCoverRepository repository;
   final _pending = <VideoId, Completer<Uri?>>{};
   final _cache = <VideoId, Uri?>{};
   Timer? _scheduled;
@@ -67,7 +73,7 @@ final class _CoverBatches {
     final ids = _pending.keys.take(_batchSize).toList(growable: false);
     final cancellation = _inFlight = RequestCancellation();
     try {
-      final covers = await repository.loadRecommendationCover43Urls(
+      final covers = await repository.loadCover43Urls(
         ids,
         cancellation: cancellation,
       );

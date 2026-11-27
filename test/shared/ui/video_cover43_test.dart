@@ -1,17 +1,18 @@
 import 'dart:async';
 
+import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/responsive_layout_settings.dart';
 import 'package:bilisail/domain/video.dart';
-import 'package:bilisail/features/feed/application/feed_controller.dart';
-import 'package:bilisail/features/feed/application/recommendation_cover43.dart';
-import 'package:bilisail/features/feed/domain/feed_repository.dart';
-import 'package:bilisail/features/feed/domain/home_channel.dart';
-import 'package:bilisail/features/feed/presentation/feed_video_grid.dart';
+import 'package:bilisail/domain/video_cover_repository.dart';
+import 'package:bilisail/features/feed/domain/home_repository.dart';
+import 'package:bilisail/features/feed/presentation/home_feed_cards.dart';
+import 'package:bilisail/shared/application/video_cover43.dart';
 import 'package:bilisail/shared/ui/app_cover_image.dart';
 import 'package:bilisail/shared/ui/responsive_layout_scope.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
+import 'package:bilisail/shared/ui/video_grid.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -25,12 +26,12 @@ void main() {
     () async {
       final repository = _Repository();
       final container = ProviderContainer(
-        overrides: [feedRepositoryProvider.overrideWithValue(repository)],
+        overrides: [videoCoverRepositoryProvider.overrideWithValue(repository)],
       );
       addTearDown(container.dispose);
       final providers = [
         for (var index = 1; index <= 32; index++)
-          recommendationCover43Provider((id: _id(index), epoch: 0)),
+          videoCover43Provider(_id(index)),
       ];
       for (final provider in providers) {
         container.listen(provider, (_, _) {});
@@ -60,9 +61,9 @@ void main() {
     () async {
       final repository = _Repository();
       final container = ProviderContainer(
-        overrides: [feedRepositoryProvider.overrideWithValue(repository)],
+        overrides: [videoCoverRepositoryProvider.overrideWithValue(repository)],
       );
-      final provider = recommendationCover43Provider((id: _id(1), epoch: 0));
+      final provider = videoCover43Provider(_id(1));
       container.listen(provider, (_, _) {});
       await Future<void>.delayed(Duration.zero);
       final old = repository.calls.single;
@@ -74,8 +75,34 @@ void main() {
     },
   );
 
+  test('a new session cancels the old batch for the same video', () async {
+    final repository = _Repository();
+    var epoch = 0;
+    final container = ProviderContainer(
+      overrides: [
+        videoCoverRepositoryProvider.overrideWithValue(repository),
+        videoCoverSessionEpochProvider.overrideWith((ref) => epoch),
+      ],
+    );
+    addTearDown(container.dispose);
+    final id = _id(1);
+    final provider = videoCover43Provider(id);
+    container.listen(provider, (_, _) {});
+    await Future<void>.delayed(Duration.zero);
+    final old = repository.calls.single;
+    epoch++;
+    container.invalidate(videoCoverSessionEpochProvider);
+    final current = container.read(provider.future);
+    await Future<void>.delayed(Duration.zero);
+    expect(old.cancellation.isCancelled, isTrue);
+    expect(repository.calls, hasLength(2));
+    old.result.complete({id: _cover});
+    repository.calls.last.result.complete({});
+    expect(await current, isNull);
+  });
+
   testWidgets(
-    '4:3 recommendation cards independently choose a cover after a partial batch result',
+    'the shared video grid independently chooses each cover after a partial batch',
     (tester) async {
       final repository = _Repository();
       final ratio = ValueNotifier(CardCoverRatio.widescreen);
@@ -94,7 +121,9 @@ void main() {
       ];
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [feedRepositoryProvider.overrideWithValue(repository)],
+          overrides: [
+            videoCoverRepositoryProvider.overrideWithValue(repository),
+          ],
           child: MaterialApp(
             home: Scaffold(
               body: ValueListenableBuilder(
@@ -104,14 +133,7 @@ void main() {
                     cardCoverRatio: value,
                   ),
                   child: CustomScrollView(
-                    slivers: [
-                      FeedVideoGrid(
-                        items: items,
-                        channel: HomeChannel.recommended,
-                        onReject: (_) {},
-                        onUndo: (_) {},
-                      ),
-                    ],
+                    slivers: [SliverVideoGrid(items: items, onOpen: (_) {})],
                   ),
                 ),
               ),
@@ -120,7 +142,7 @@ void main() {
         ),
       );
       Finder coverImage(int index) => find.descendant(
-        of: find.byKey(ValueKey(items[index].id)),
+        of: find.byKey(ValueKey((items[index].id, index))),
         matching: find.byType(AppCoverImage),
       );
       String coverUrl(int index) =>
@@ -143,10 +165,88 @@ void main() {
       expect(coverUrl(1), items[1].coverUrl);
     },
   );
+
+  testWidgets(
+    'home and search cards share a batch when their workspace is active',
+    (tester) async {
+      final repository = _Repository();
+      final active = ValueNotifier(false);
+      addTearDown(active.dispose);
+      final id = _id(1);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            videoCoverRepositoryProvider.overrideWithValue(repository),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: ValueListenableBuilder(
+                valueListenable: active,
+                builder: (_, value, _) => WorkspaceActivity(
+                  active: value,
+                  child: ResponsiveLayoutScope(
+                    settings: const ResponsiveLayoutSettings.defaults(
+                      cardCoverRatio: CardCoverRatio.standard,
+                    ),
+                    child: CustomScrollView(
+                      slivers: [
+                        SliverToBoxAdapter(
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: SizedBox(
+                              width: 168,
+                              child: HomeVideoCard(
+                                entry: HomeEntry(
+                                  id: id.value,
+                                  bvid: id.value,
+                                  title: '稍后再看',
+                                  kind: HomeEntryKind.video,
+                                ),
+                                onTap: () {},
+                              ),
+                            ),
+                          ),
+                        ),
+                        SliverVideoGrid(
+                          items: [
+                            VideoSummary(
+                              id: id,
+                              title: '搜索结果',
+                              coverUrl: '',
+                              author: '',
+                              duration: Duration.zero,
+                            ),
+                          ],
+                          onOpen: (_) {},
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(repository.calls, isEmpty);
+      active.value = true;
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 1));
+      expect(repository.calls.single.ids, [id]);
+      repository.calls.single.result.complete({id: _cover});
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widgetList<AppCoverImage>(find.byType(AppCoverImage))
+            .map((it) => it.url),
+        [_cover.toString(), _cover.toString()],
+      );
+    },
+  );
 }
 
-final class _Repository
-    implements FeedRepository, RecommendationCoverRepository {
+final class _Repository implements VideoCoverRepository {
   final calls =
       <
         ({
@@ -157,7 +257,7 @@ final class _Repository
       >[];
 
   @override
-  Future<Map<VideoId, Uri>> loadRecommendationCover43Urls(
+  Future<Map<VideoId, Uri>> loadCover43Urls(
     List<VideoId> ids, {
     required RequestCancellation cancellation,
   }) {
@@ -165,7 +265,4 @@ final class _Repository
     calls.add((ids: ids, cancellation: cancellation, result: result));
     return result.future;
   }
-
-  @override
-  Object? noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

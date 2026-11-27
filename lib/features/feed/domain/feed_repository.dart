@@ -93,13 +93,6 @@ abstract interface class RecommendationPublicationTimeRepository {
   });
 }
 
-abstract interface class RecommendationCoverRepository {
-  Future<Map<VideoId, Uri>> loadRecommendationCover43Urls(
-    List<VideoId> ids, {
-    required RequestCancellation cancellation,
-  });
-}
-
 abstract interface class RecommendationReportingRepository {
   Future<void> reportRecommendations(
     List<RecommendationEvent> events, {
