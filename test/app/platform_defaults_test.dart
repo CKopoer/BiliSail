@@ -109,15 +109,19 @@ void main() {
       }
     },
   );
-  test('Android defaults to single page and other platforms to dual tabs', () {
-    addTearDown(() => debugDefaultTargetPlatformOverride = null);
-    for (final platform in TargetPlatform.values) {
-      debugDefaultTargetPlatformOverride = platform;
-      final expected = platform == TargetPlatform.android
-          ? WorkspaceNavigationMode.singlePage
-          : WorkspaceNavigationMode.dualTabs;
-      expect(workspaceNavigationModeForPlatform(platform), expected);
-      expect(defaultWorkspaceNavigationMode, expected);
-    }
-  });
+  test(
+    'Android and iOS default to single page and other platforms to dual tabs',
+    () {
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      for (final platform in TargetPlatform.values) {
+        debugDefaultTargetPlatformOverride = platform;
+        final expected =
+            platform == TargetPlatform.android || platform == TargetPlatform.iOS
+            ? WorkspaceNavigationMode.singlePage
+            : WorkspaceNavigationMode.dualTabs;
+        expect(workspaceNavigationModeForPlatform(platform), expected);
+        expect(defaultWorkspaceNavigationMode, expected);
+      }
+    },
+  );
 }

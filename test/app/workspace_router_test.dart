@@ -1910,6 +1910,7 @@ void main() {
     TargetPlatform.windows,
     TargetPlatform.macOS,
     TargetPlatform.android,
+    TargetPlatform.iOS,
   ]) {
     _workspaceTestWidgets(
       '$platform uses its default while loading and preserves a saved override',
@@ -1942,14 +1943,15 @@ void main() {
           workspaceNavigationModeForPlatform(platform),
         );
         expect(find.byKey(const ValueKey('workspace-tab-strip')), findsNothing);
-        settings.loaded.complete(
-          AppSettings(
-            navigationMode: dual
-                ? WorkspaceNavigationMode.multipleTabs
-                : WorkspaceNavigationMode.dualTabs,
-          ),
-        );
+        final savedMode = dual
+            ? WorkspaceNavigationMode.multipleTabs
+            : WorkspaceNavigationMode.dualTabs;
+        settings.loaded.complete(AppSettings(navigationMode: savedMode));
         await tester.pumpAndSettle();
+        expect(
+          tester.widget<BiliAppShell>(find.byType(BiliAppShell)).navigationMode,
+          savedMode,
+        );
         expect(
           find.byKey(const ValueKey('workspace-tab-strip')),
           dual ? findsOneWidget : findsNothing,

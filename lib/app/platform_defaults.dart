@@ -23,9 +23,11 @@ ShortcutSettings get defaultShortcuts =>
 /// Platform defaults apply only when no valid user preference has been saved.
 WorkspaceNavigationMode workspaceNavigationModeForPlatform(
   TargetPlatform platform,
-) => platform == TargetPlatform.android
-    ? WorkspaceNavigationMode.singlePage
-    : WorkspaceNavigationMode.dualTabs;
+) => switch (platform) {
+  TargetPlatform.android ||
+  TargetPlatform.iOS => WorkspaceNavigationMode.singlePage,
+  _ => WorkspaceNavigationMode.dualTabs,
+};
 
 WorkspaceNavigationMode get defaultWorkspaceNavigationMode =>
     workspaceNavigationModeForPlatform(defaultTargetPlatform);
