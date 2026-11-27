@@ -66,7 +66,7 @@ void main() {
     expect(empty.nextCursor, isNull);
   });
 
-  test('Web and desktop use distinct valid 4:3 URLs from the list', () async {
+  test('Web and desktop accept the 4:3 cover supplied by the list', () async {
     final transport = _Transport();
     final api = BiliApiClient(transport: transport);
     addTearDown(api.close);
@@ -76,7 +76,8 @@ void main() {
     ]) {
       for (final (pic43, cover43, expected) in [
         ('//i0.hdslb.com/43.jpg', null, '/43.jpg'),
-        ('//i0.hdslb.com/wide.jpg', null, null),
+        ('//i0.hdslb.com/wide.jpg', null, '/wide.jpg'),
+        (null, null, null),
         ('https:/invalid.jpg', null, null),
         ('', null, null),
         ('//i0.hdslb.com/43.jpg', '//i0.hdslb.com/known.jpg', '/known.jpg'),

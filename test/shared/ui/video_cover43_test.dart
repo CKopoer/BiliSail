@@ -152,12 +152,16 @@ void main() {
       final embeddedCover = Uri.parse('https://i1.hdslb.com/embedded4x3.jpg');
       addTearDown(ratio.dispose);
       final items = [
-        for (var index = 1; index <= 4; index++)
+        for (var index = 1; index <= 5; index++)
           VideoSummary(
             id: index == 4 ? const VideoId('app:bangumi:1') : _id(index),
             title: '视频$index',
             coverUrl: 'https://i0.hdslb.com/ordinary$index.jpg',
-            cover43Url: index == 3 ? embeddedCover : null,
+            cover43Url: switch (index) {
+              3 => embeddedCover,
+              5 => Uri.parse('https://i0.hdslb.com/ordinary5.jpg'),
+              _ => null,
+            },
             author: 'UP',
             duration: const Duration(minutes: 1),
           ),
@@ -197,11 +201,12 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 1));
       expect(repository.calls.single.ids, [_id(1), _id(2)]);
-      expect(find.byType(VideoCard), findsNWidgets(4));
+      expect(find.byType(VideoCard), findsNWidgets(5));
       expect(coverImage(0), findsNothing);
       expect(coverImage(1), findsNothing);
       expect(coverUrl(2), embeddedCover.toString());
       expect(coverUrl(3), items[3].coverUrl);
+      expect(coverUrl(4), items[4].coverUrl);
       repository.calls.single.result.complete({_id(1): _cover});
       await tester.pumpAndSettle();
       expect(coverUrl(0), _cover.toString());
