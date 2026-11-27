@@ -566,7 +566,21 @@ final class MediaKitBackend
         ? AppleJocOutput(
             rate: options.rate,
             gain: options.audioGainDb,
-            write: (value) => _setAudioTransport(player, 'audio-spdif', value),
+            write: (value) {
+              // A local container can expose video before selecting its audio
+              // track. Check the active decoder when a control changes.
+              if (player.getProperty('current-ao') == 'apple-joc' ||
+                  isDolbyDigitalPlus(
+                    player.getProperty('current-tracks/audio/codec'),
+                  )) {
+                _setAudioTransport(
+                  player,
+                  'audio-spdif',
+                  value,
+                  reopenTrack: true,
+                );
+              }
+            },
           )
         : null;
     final fileOptions = {
@@ -677,10 +691,6 @@ final class MediaKitBackend
         _remaining(watch, openBudget),
         'DASH audio track did not become ready.',
       );
-    }
-    if (appleJoc != null &&
-        !isDolbyDigitalPlus(player.getProperty('current-tracks/audio/codec'))) {
-      _appleJocOutput = null;
     }
     if (Platform.isWindows &&
         !plan.silent &&
@@ -1108,7 +1118,12 @@ final class MediaKitBackend
     return true;
   }
 
-  void _setAudioTransport(mk.Player player, String name, String value) {
+  void _setAudioTransport(
+    mk.Player player,
+    String name,
+    String value, {
+    bool reopenTrack = false,
+  }) {
     final position = player.getProperty('time-pos');
     final restore =
         player.getProperty('seekable') == 'yes' &&
@@ -1116,7 +1131,21 @@ final class MediaKitBackend
         double.tryParse(position)?.isFinite == true;
     // Reinitializing a decoder drops its prefetched audio. Refill at the
     // presentation clock without overriding a pending user seek.
-    player.setProperty('file-local-options/$name', value);
+    final selected = reopenTrack
+        ? int.tryParse(player.getProperty('current-tracks/audio/id'))
+        : null;
+    if (selected == null) {
+      player.setProperty('file-local-options/$name', value);
+    } else {
+      // Release the compressed AO before mpv configures tempo or PCM gain.
+      // Keep the same selected track in a multi-audio container.
+      player.setProperty('aid', 'no');
+      try {
+        player.setProperty('file-local-options/$name', value);
+      } finally {
+        player.setProperty('aid', selected.toString());
+      }
+    }
     if (restore) player.setProperty('time-pos', position);
   }
 
