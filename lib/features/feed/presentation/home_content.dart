@@ -870,6 +870,7 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
                         access: candidate.access,
                         title: candidate.title,
                         coverUrl: candidate.coverUrl?.toString() ?? '',
+                        cover43Url: candidate.cover43Url,
                         author: candidate.authorName,
                         duration: candidate.duration ?? Duration.zero,
                         authorId: UserId.tryParse(candidate.authorMid),

@@ -50,6 +50,7 @@ final class HomeVideoCard extends StatelessWidget {
           previewCid: entry.previewCid,
           title: entry.title,
           coverUrl: entry.coverUrl?.toString() ?? '',
+          cover43Url: entry.cover43Url,
           author: entry.authorName,
           authorId: UserId.tryParse(entry.authorMid),
           duration: entry.duration ?? Duration.zero,

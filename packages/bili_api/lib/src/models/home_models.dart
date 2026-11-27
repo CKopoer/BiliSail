@@ -10,6 +10,7 @@ final class ApiHomeEntry {
     required this.title,
     required this.kind,
     this.coverUrl,
+    this.cover43Url,
     this.subtitle = '',
     this.description = '',
     this.bvid,
@@ -38,6 +39,7 @@ final class ApiHomeEntry {
   final String title;
   final ApiHomeEntryKind kind;
   final Uri? coverUrl;
+  final Uri? cover43Url;
   final String subtitle;
   final String description;
   final String? bvid;

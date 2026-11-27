@@ -1,8 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../../core/presentation/app_foreground.dart';
 import '../../domain/responsive_layout_settings.dart';
 import '../../domain/user.dart';
 import '../../features/comments/domain/comment_time.dart';
@@ -27,7 +24,6 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/foundation.dart' show listEquals;
 
 import '../../domain/video.dart';
-import '../application/video_cover43.dart';
 
 String compactCount(int? count) {
   if (count == null) return '—';
@@ -596,37 +592,20 @@ final class _VideoCardState extends State<VideoCard> {
 
   Widget _buildCoverImage(BuildContext context, {required bool standardCover}) {
     final video = widget.video;
-    final alternate = standardCover ? video.cover43Url : null;
+    final url = standardCover
+        ? video.cover43Url?.toString() ?? video.coverUrl
+        : video.coverUrl;
     final placeholder = _coverFallback(context);
+    if (url.isEmpty) return placeholder;
     final normalCard = widget.feedback == null;
-
-    Widget image(Uri? cover) {
-      final url = cover?.toString() ?? video.coverUrl;
-      if (url.isEmpty) return placeholder;
-      return AppCoverImage(
-        url: url,
-        excludeFromSemantics: normalCard,
-        errorBuilder: (_, _, _) => placeholder,
-        frameBuilder: normalCard
-            ? (_, child, frame, _) => frame == null ? placeholder : child
-            : null,
-      );
-    }
-
-    // A standalone card can still render outside the application's providers.
-    if (standardCover &&
-        alternate == null &&
-        video.id.isValid &&
-        context.findAncestorWidgetOfExactType<UncontrolledProviderScope>() !=
-            null) {
-      return _VideoCardCoverLookup(
-        key: ValueKey('cover43:${video.id.value}'),
-        id: video.id,
-        placeholder: placeholder,
-        image: image,
-      );
-    }
-    return image(alternate);
+    return AppCoverImage(
+      url: url,
+      excludeFromSemantics: normalCard,
+      errorBuilder: (_, _, _) => placeholder,
+      frameBuilder: normalCard
+          ? (_, child, frame, _) => frame == null ? placeholder : child
+          : null,
+    );
   }
 
   Widget _coverFallback(BuildContext context) => ColoredBox(
@@ -638,52 +617,6 @@ final class _VideoCardState extends State<VideoCard> {
           .withValues(alpha: 0.6),
     ),
   );
-}
-
-final class _VideoCardCoverLookup extends ConsumerStatefulWidget {
-  const _VideoCardCoverLookup({
-    required super.key,
-    required this.id,
-    required this.placeholder,
-    required this.image,
-  });
-
-  final VideoId id;
-  final Widget placeholder;
-  final Widget Function(Uri?) image;
-
-  @override
-  ConsumerState<_VideoCardCoverLookup> createState() =>
-      _VideoCardCoverLookupState();
-}
-
-final class _VideoCardCoverLookupState
-    extends ConsumerState<_VideoCardCoverLookup> {
-  ({int epoch, Uri? url})? _resolved;
-
-  @override
-  Widget build(BuildContext context) {
-    if (ref.watch(videoCoverRepositoryProvider) == null) {
-      return widget.image(null);
-    }
-    final epoch = ref.watch(videoCoverSessionEpochProvider);
-    if (WorkspaceActivity.isActive(context) &&
-        ModalRoute.isCurrentOf(context) != false &&
-        ref.watch(appForegroundProvider)) {
-      final lookup = ref.watch(videoCover43Provider(widget.id));
-      if (!lookup.isLoading) {
-        _resolved = (epoch: epoch, url: lookup.asData?.value);
-      } else if (_resolved?.url == null) {
-        // A previous miss cannot select the ordinary image for a new lookup.
-        _resolved = null;
-      }
-    }
-    // Retained pages can keep showing a resolved cover while unsubscribed.
-    final resolved = _resolved;
-    return resolved != null && resolved.epoch == epoch
-        ? widget.image(resolved.url)
-        : widget.placeholder;
-  }
 }
 
 final class _CoverMetadata extends StatefulWidget {

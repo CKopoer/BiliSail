@@ -532,7 +532,7 @@ void main() {
     },
   );
   for (final section in ['全部', '未看完']) {
-    test('watch later $section reads view counts including zero', () async {
+    test('watch later $section reads counts and per-video covers', () async {
       final transport = Transport(
         (_) => {
           'code': 0,
@@ -541,6 +541,8 @@ void main() {
               {
                 'bvid': 'BV1234567890',
                 'title': '有播放量',
+                'pic': 'http://i0.hdslb.com/wide.jpg',
+                'cover43': '//i0.hdslb.com/standard.jpg',
                 'cid': '12345',
                 'progress': 30,
                 'stat': {'view': 12345, 'danmaku': 178},
@@ -555,6 +557,7 @@ void main() {
               {
                 'bvid': 'BV1234567892',
                 'title': '缺少播放量',
+                'cover43': 'https:/broken.jpg',
                 'progress': 0,
                 'stat': {'danmaku': 3},
               },
@@ -565,6 +568,15 @@ void main() {
       final result = await HomeClient(
         BiliApiClient(transport: transport),
       ).load(channel: 'watchLater', section: section, page: 1);
+      expect(
+        result.items.first.coverUrl,
+        Uri.https('i0.hdslb.com', '/wide.jpg'),
+      );
+      expect(result.items.map((item) => item.cover43Url), [
+        Uri.https('i0.hdslb.com', '/standard.jpg'),
+        null,
+        null,
+      ]);
       expect(result.items.map((item) => item.playCountText), [
         '12345',
         '0',

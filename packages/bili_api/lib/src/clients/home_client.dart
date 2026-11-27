@@ -611,6 +611,7 @@ final class HomeClient {
           : _required(m['title']),
       kind: ApiHomeEntryKind.video,
       coverUrl: _uri(m['pic'] ?? m['cover']),
+      cover43Url: _uri(m['cover43']),
       subtitle: bvid == null ? '内容已失效或不支持在此播放' : _text(owner?['name']) ?? '',
       authorName: _text(owner?['name']) ?? '',
       authorMid: _positiveId(owner?['mid']),
@@ -741,7 +742,10 @@ final class HomeClient {
     final text = _text(value);
     if (text == null) return null;
     final uri = Uri.tryParse(text.startsWith('//') ? 'https:$text' : text);
-    return uri != null && (uri.scheme == 'https' || uri.scheme == 'http')
+    return uri != null &&
+            uri.host.isNotEmpty &&
+            uri.userInfo.isEmpty &&
+            (uri.scheme == 'https' || uri.scheme == 'http')
         ? uri.replace(scheme: 'https')
         : null;
   }

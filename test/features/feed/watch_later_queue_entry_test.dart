@@ -1,11 +1,14 @@
 import 'package:bilisail/core/network/api_requests.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/domain/responsive_layout_settings.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/feed/application/home_controller.dart';
 import 'package:bilisail/features/feed/domain/home_channel.dart';
 import 'package:bilisail/features/feed/domain/home_repository.dart';
 import 'package:bilisail/features/feed/presentation/home_content.dart';
 import 'package:bilisail/features/video/application/watch_later_queue_registry.dart';
+import 'package:bilisail/shared/ui/app_cover_image.dart';
+import 'package:bilisail/shared/ui/responsive_layout_scope.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -46,10 +49,20 @@ void main() {
       await tester.pumpWidget(
         UncontrolledProviderScope(
           container: container,
-          child: MaterialApp.router(routerConfig: router),
+          child: ResponsiveLayoutScope(
+            settings: const ResponsiveLayoutSettings.defaults(
+              cardCoverRatio: CardCoverRatio.standard,
+            ),
+            child: MaterialApp.router(routerConfig: router),
+          ),
         ),
       );
       await tester.pumpAndSettle();
+      final covers = tester.widgetList<AppCoverImage>(
+        find.byType(AppCoverImage),
+      );
+      expect(covers.map((image) => image.url), [_firstWide, _secondStandard]);
+      expect(covers.map((image) => image.fit), everyElement(BoxFit.cover));
       expect(
         tester
             .widgetList<VideoCard>(find.byType(VideoCard))
@@ -75,12 +88,19 @@ void main() {
       expect(queue.items.last.playCountText, '2万');
       expect(queue.items.last.danmakuCountText, '100');
       expect(queue.items.last.video.author, '测试 UP');
+      expect(queue.items.first.video.cover43Url, isNull);
+      expect(queue.items.last.video.coverUrl, _secondWide);
+      expect(queue.items.last.video.cover43Url, Uri.parse(_secondStandard));
       expect(queue.items.last.entryId, '2');
       expect(queue.items.last.aid, '9007199254740993');
       expect(tester.takeException(), isNull);
     });
   }
 }
+
+const _firstWide = 'https://i0.hdslb.com/first-wide.jpg';
+const _secondWide = 'https://i0.hdslb.com/second-wide.jpg';
+const _secondStandard = 'https://i0.hdslb.com/second-standard.jpg';
 
 final class _Repository implements HomeRepository {
   @override
@@ -92,20 +112,23 @@ final class _Repository implements HomeRepository {
     required int page,
     String? cursor,
     required RequestCancellation cancellation,
-  }) async => const HomePage([
+  }) async => HomePage([
     HomeEntry(
       id: '1',
       title: '第一条',
       kind: HomeEntryKind.video,
       bvid: 'BV1abc123456',
+      coverUrl: Uri.parse(_firstWide),
     ),
-    HomeEntry(id: 'invalid', title: '失效条目', kind: HomeEntryKind.video),
+    const HomeEntry(id: 'invalid', title: '失效条目', kind: HomeEntryKind.video),
     HomeEntry(
       id: '2',
       aid: '9007199254740993',
       title: '第二条',
       kind: HomeEntryKind.video,
       bvid: 'BV2abc123456',
+      coverUrl: Uri.parse(_secondWide),
+      cover43Url: Uri.parse(_secondStandard),
       authorName: '测试 UP',
       playCountText: '2万',
       danmakuCountText: '100',

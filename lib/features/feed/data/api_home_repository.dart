@@ -392,6 +392,7 @@ final class ApiHomeRepository
     title: item.title,
     kind: HomeEntryKind.values.byName(item.kind.name),
     coverUrl: item.coverUrl,
+    cover43Url: item.cover43Url,
     subtitle: item.subtitle,
     description: item.description,
     bvid: item.bvid,

@@ -14,6 +14,7 @@ final class HomeEntry {
     required this.title,
     required this.kind,
     this.coverUrl,
+    this.cover43Url,
     this.subtitle = '',
     this.description = '',
     this.bvid,
@@ -42,6 +43,7 @@ final class HomeEntry {
   final String title;
   final HomeEntryKind kind;
   final Uri? coverUrl;
+  final Uri? cover43Url;
   final String subtitle;
   final String description;
   final String? bvid;
