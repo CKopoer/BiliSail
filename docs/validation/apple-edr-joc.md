@@ -16,6 +16,16 @@ SDR 路径在带 sRGB 标记的 Metal drawable 被提交呈现后确认交接。
 
 这条视频路径在播放器内解释杜比元数据，再把渲染结果交给 Apple 合成器。显示器是否进入 Dolby Vision 专有信号模式须另行观测。窗口移动或全屏切换会重新确认显示目标。显示器的 EDR 能力、当前亮度余量及画面实际高光分别验证。[Apple 对 Metal EDR 的说明](https://developer.apple.com/videos/play/wwdc2022/110565/) · [MoltenVK 交换链实现](https://github.com/KhronosGroup/MoltenVK/blob/v1.4.2/MoltenVK/MoltenVK/GPUObjects/MVKSwapchain.mm)
 
+### 普通窗口与全屏的画面裁切
+
+旧实现把 Metal 图层的 `bounds` 缩到播放器大小，同时把 `drawableSize` 设回片源分辨率。mpv 用后者设置绘制区域。MoltenVK 用 `bounds × contentsScale` 计算表面的自然像素尺寸，两者不一致时，libplacebo 可以按较小的表面重建交换链。此时 mpv 仍按原来的区域绘制，小窗只显示画面的一部分，扩大窗口后可见范围随之增大。[mpv 的 MoltenVK 上下文](https://github.com/mpvkit/MPVKit/blob/d9194243bdc68b87d8989376ab52aee7da6c8e0b/Sources/BuildScripts/patch/libmpv/0001-player-add-moltenvk-context.patch) · [MoltenVK 表面尺寸](https://github.com/KhronosGroup/MoltenVK/blob/v1.4.2/MoltenVK/MoltenVK/OS/CAMetalLayer%2BMoltenVK.mm) · [libplacebo 交换链](https://github.com/haasn/libplacebo/blob/v7.360.1/src/vulkan/swapchain.c)
+
+现在 Metal 图层的本地坐标与 drawable 使用相同的片源显示尺寸。窗口布局只更新图层的中心和等比缩放，Core Animation 将完整画面合成到播放器内。播放回归在 P5、P8.4 暂停时依次切到小窗大小、整个窗口、再回到小窗，读取实际图层，检查交换链尺寸和投影后的四边。[Apple 显示层](../../apple/AppleVideoSurface.swift) · [回归入口](../../tool/validation/apple_hdr_probe.dart)
+
+macOS Release 上，1920×1080 的 P5 从 320×180 点放大至 1024×576 点，再缩回原大小，三次 drawable 均为 1920×1080。iPhone 模拟器的 402×874 点竖屏窗口内，画面居中占约 402×226 点。两端均通过 P5、P8.4 的尺寸检查，以及 HDR10、HLG 的播放回归。运行环境使用 sRGB 输出。[macOS 记录](https://github.com/CKopoer/BiliSail/actions/runs/46012058890/job/140549795858) · [iOS 记录](https://github.com/CKopoer/BiliSail/actions/runs/46012058890/job/140549795291)
+
+另用一段 1280×720 的 P8.4 样片对照修复前后的系统截图。样片在黑色背景的四角各有一个白块。macOS 和 iPhone 模拟器的旧版小窗都只显示局部，修复后小窗和铺满窗口都能在四个预期位置采到白块，中心保持黑色。[macOS 截图对照](https://github.com/CKopoer/BiliSail/actions/runs/46014122536/job/140557068159) · [iOS 截图对照](https://github.com/CKopoer/BiliSail/actions/runs/46017805345)
+
 ## 正式播放器的 JOC 输出
 
 在线 DASH、离线分轨和本地 MP4／MKV 都使用现有 media_kit 会话。mpv 检查选中音轨的实际 E-AC-3 profile，将确认的 JOC 原始压缩包交给 `apple-joc` 音频输出。输出驱动从码流重建带 `dec3` 的格式描述，并确认 Apple 返回 `ec+3`。随后由 `AVSampleBufferAudioRenderer` 消费压缩样本，队列延迟反馈给 mpv 音频时钟。请求头、Range、缓存和视频仍由同一次打开操作管理。[原生输出源码](https://github.com/CKopoer/libmpv-darwin-build/blob/1146169ce340ddec08d2f139de830dc301d76e28/bilisail/ao_apple_joc.m) · [播放器回归入口](../../tool/validation/apple_joc_playback.dart)

@@ -8,6 +8,9 @@ import 'package:flutter/widgets.dart';
 
 import 'apple_joc_playback.dart';
 
+const _hdrChannel = MethodChannel('bilisail/hdr_video');
+const _inlineSize = Size(320, 180);
+
 /// A standalone Apple Runner entry point, including the production macOS
 /// window bootstrap. HTTPS fixtures also work on a physical iPhone.
 Future<void> main() async {
@@ -16,6 +19,8 @@ Future<void> main() async {
   final engine = MediaKitEngine(
     onDiagnostic: (event) => stdout.writeln('APPLE_MEDIA ${event.toJson()}'),
   );
+  final viewport = ValueNotifier(_inlineSize);
+  final viewportKey = GlobalKey();
   var success = false;
   try {
     final window = await MacOSApplicationWindow.create();
@@ -24,17 +29,18 @@ Future<void> main() async {
     final surface = Directionality(
       textDirection: TextDirection.ltr,
       child: Center(
-        child: SizedBox(
-          width: 320,
-          height: 180,
-          child: Builder(
-            builder: (context) {
-              if (!mounted.isCompleted) {
-                mounted.complete(View.of(context).viewId);
-              }
-              return VideoSurface(engine: engine);
-            },
-          ),
+        child: ValueListenableBuilder<Size>(
+          valueListenable: viewport,
+          builder: (context, size, _) {
+            if (!mounted.isCompleted) {
+              mounted.complete(View.of(context).viewId);
+            }
+            return SizedBox.fromSize(
+              key: viewportKey,
+              size: size,
+              child: VideoSurface(engine: engine),
+            );
+          },
         ),
       ),
     );
@@ -44,8 +50,9 @@ Future<void> main() async {
       window.present(surface);
     }
     final view = await mounted.future.timeout(const Duration(seconds: 15));
-    final transfer = await const MethodChannel('bilisail/hdr_video')
-        .invokeMethod<String>('supported', {'view': view});
+    final transfer = await _hdrChannel.invokeMethod<String>('supported', {
+      'view': view,
+    });
     if (transfer != 'pq' && transfer != 'srgb') {
       throw StateError('No Apple display');
     }
@@ -100,6 +107,18 @@ Future<void> main() async {
         if (engine.currentSnapshot.desiredPlaying) {
           throw StateError('Seek resumed a paused source');
         }
+        if (entry.key == 'p5' || entry.key == 'p8') {
+          final dimensions = engine.currentSnapshot.videoDimensions!;
+          final source = Size(
+            dimensions.width.toDouble(),
+            dimensions.height.toDouble(),
+          );
+          for (final size in [_inlineSize, Size.infinite, _inlineSize]) {
+            viewport.value = size;
+            await WidgetsBinding.instance.endOfFrame;
+            await _checkFraming(source, viewportKey.currentContext!.size!);
+          }
+        }
         await engine.play();
         final position = engine.currentSnapshot.position;
         for (
@@ -124,9 +143,47 @@ Future<void> main() async {
     success = false;
     stderr.writeln('APPLE_MEDIA_FAILED $error\n$stack');
   } finally {
+    viewport.dispose();
     await engine.dispose().timeout(const Duration(seconds: 15));
   }
   if (success) stdout.writeln('APPLE_MEDIA_PASSED');
   await stdout.flush();
   exit(success ? 0 : 1);
+}
+
+Future<void> _checkFraming(Size source, Size viewport) async {
+  final fitted = applyBoxFit(BoxFit.contain, source, viewport).destination;
+  Object? last;
+  // Flutter layout can precede UIKit/AppKit platform-view composition.
+  for (var attempt = 0; attempt < 50; attempt++) {
+    final layers = await _hdrChannel.invokeListMethod<Object?>('geometry');
+    final geometry = layers?.singleOrNull;
+    last = geometry;
+    if (geometry is Map<Object?, Object?>) {
+      bool near(String name, List<double> expected) {
+        final actual = geometry[name];
+        if (actual is! List || actual.length != expected.length) return false;
+        for (var i = 0; i < expected.length; i++) {
+          final value = actual[i];
+          if (value is! num ||
+              !value.isFinite ||
+              (value - expected[i]).abs() > 1) {
+            return false;
+          }
+        }
+        return true;
+      }
+
+      final pixels = [source.width, source.height];
+      if (near('drawable', pixels) &&
+          near('natural', pixels) &&
+          near('host', [fitted.width, fitted.height]) &&
+          near('frame', [0, 0, fitted.width, fitted.height])) {
+        stdout.writeln('APPLE_MEDIA_FRAMING viewport=$viewport layer=$last');
+        return;
+      }
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+  }
+  throw StateError('Incomplete frame for $source in $viewport: $last');
 }

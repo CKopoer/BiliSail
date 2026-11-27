@@ -70,9 +70,11 @@ final class AppleVideoSurface: NSObject, FlutterPlatformViewFactory {
         // change this to a tagged high precision HDR swapchain.
         layer.pixelFormat = .bgra8Unorm
         layer.colorspace = CGColorSpace(name: CGColorSpace.sRGB)
-        layer.frame = CGRect(x: 0, y: 0, width: width, height: height)
-        layer.sourceSize = layer.bounds.size
-        layer.drawableSize = layer.sourceSize
+        // MoltenVK derives the natural swapchain extent from bounds × contentsScale.
+        // Keep that extent equal to the drawable size mpv reads on reconfiguration.
+        layer.contentsScale = 1
+        layer.bounds = CGRect(x: 0, y: 0, width: width, height: height)
+        layer.drawableSize = layer.bounds.size
         if #available(iOS 16.0, macOS 10.11, *) {
           layer.wantsExtendedDynamicRangeContent = transfer == "pq"
         }
@@ -87,6 +89,8 @@ final class AppleVideoSurface: NSObject, FlutterPlatformViewFactory {
         result((call.arguments as? NSNumber).flatMap { self.layers[$0.int64Value]?.isInWindow } ?? false)
       case "describe":
         result((call.arguments as? NSNumber).flatMap { self.layers[$0.int64Value]?.outputDescription })
+      case "geometry":
+        result(self.layers.values.compactMap { $0.presentationGeometry })
       case "release":
         if let id = call.arguments as? NSNumber {
           self.layers.removeValue(forKey: id.int64Value)?.removeFromSuperlayer()
@@ -119,6 +123,17 @@ private final class PlaybackMetalLayer: CAMetalLayer {
   weak var host: MetalHost?
   var isInWindow: Bool { host?.window != nil && superlayer != nil }
 
+  // Read on the platform thread by the playback probe, after presentation.
+  var presentationGeometry: [String: [CGFloat]]? {
+    guard isInWindow, let host = host else { return nil }
+    return [
+      "natural": [bounds.width * contentsScale, bounds.height * contentsScale],
+      "drawable": [drawableSize.width, drawableSize.height],
+      "frame": [frame.minX, frame.minY, frame.maxX, frame.maxY],
+      "host": [host.bounds.width, host.bounds.height],
+    ]
+  }
+
   private var transfer: String? {
     if colorspace?.name == CGColorSpace.sRGB { return "srgb" }
     if #available(iOS 16.0, macOS 10.15, *), wantsExtendedDynamicRangeContent,
@@ -143,8 +158,6 @@ private final class PlaybackMetalLayer: CAMetalLayer {
     defer { lock.unlock() }
     return presentedTransfer == expected || (expected == "srgb" && submittedSDR)
   }
-
-  var sourceSize: CGSize = .zero
 
   override func nextDrawable() -> CAMetalDrawable? {
     let drawable = super.nextDrawable()
@@ -246,11 +259,12 @@ private final class MetalHost: UIView, FlutterPlatformView {
 
 private func fit(_ target: PlaybackMetalLayer, _ bounds: CGRect) {
   guard !bounds.isEmpty else { return }
-  // Keep the source-sized Vulkan swapchain while Core Animation scales the
-  // already color-managed image to the layout bounds.
+  // Resize only the composited image. Changing the Metal layer's bounds here
+  // can shrink the swapchain while mpv still draws into a source-sized viewport.
+  let scale = min(bounds.width / target.bounds.width, bounds.height / target.bounds.height)
   CATransaction.begin()
   CATransaction.setDisableActions(true)
-  target.frame = bounds
-  target.drawableSize = target.sourceSize
+  target.position = CGPoint(x: bounds.midX, y: bounds.midY)
+  target.setAffineTransform(CGAffineTransform(scaleX: scale, y: scale))
   CATransaction.commit()
 }
