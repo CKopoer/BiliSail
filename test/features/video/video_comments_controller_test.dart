@@ -459,13 +459,13 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('甲').first);
     expect(opened, [const UserId('100')]);
-    await tester.tap(find.text('乙：').first);
+    await tester.tapOnText(find.textRange.ofSubstring('乙：'));
     expect(opened.last, const UserId('101'));
     expect(find.text('评论详情').evaluate(), isEmpty);
     await tester.tap(find.textContaining('共 3 条回复').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('乙').first);
-    expect(opened.last, const UserId('101'));
+    expect(opened, const [UserId('100'), UserId('101'), UserId('101')]);
   });
   testWidgets(
     'reply preview preserves text cursor, copying and profile links',
@@ -505,6 +505,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      final previewText = '${mentionedReply.author}：${mentionedReply.message}';
+      final preview = find.text(previewText);
       final mouse = await tester.createGesture(
         kind: PointerDeviceKind.mouse,
         pointer: 1,
@@ -512,10 +514,7 @@ void main() {
       await mouse.addPointer(location: Offset.zero);
       Future<void> expectCursor(String substring, MouseCursor cursor) async {
         final match = find.textRange
-            .ofSubstring(
-              substring,
-              descendentOf: find.byType(CommentRichContent).at(1),
-            )
+            .ofSubstring(substring, descendentOf: preview)
             .evaluate()
             .single;
         final box = match.renderObject
@@ -545,10 +544,7 @@ void main() {
         SystemMouseCursors.basic,
       );
       await mouse.removePointer();
-      expect(
-        await selectAndCopyText(tester, find.text(mentionedReply.message)),
-        mentionedReply.message,
-      );
+      expect(await selectAndCopyText(tester, preview), previewText);
       expect(find.text('评论详情'), findsNothing);
       await tester.tapOnText(find.textRange.ofSubstring('@主评论用户'));
       await tester.tapOnText(find.textRange.ofSubstring('@小迷糊陈'));

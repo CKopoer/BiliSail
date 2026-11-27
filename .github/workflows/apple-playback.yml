@@ -1,0 +1,132 @@
+name: Apple media playback
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/apple-edr-joc]
+    paths:
+      - '.github/workflows/apple-playback.yml'
+      - 'apple/**'
+      - 'tool/validation/apple_hdr_probe.dart'
+      - 'packages/bili_player/lib/src/native_hdr_output.dart'
+      - 'pubspec.lock'
+      - 'test/fixtures/media/**'
+      - 'tool/media-kit-patches/**'
+permissions:
+  contents: read
+concurrency:
+  group: apple-media-test-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  exercise:
+    runs-on: macos-15
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos, ios-simulator]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: CKopoer/libmpv-darwin-build
+          ref: 8c14f3c7e6367ce425667759724a5a20b66b3a8e
+          path: build/darwin
+      - uses: actions/checkout@v4
+        with:
+          repository: mpv-player/mpv
+          ref: 41f6a645068483470267271e1d09966ca3b9f413
+          path: build/mpv
+      - name: Fetch the checked Dolby sample
+        run: |
+          mkdir -p build/fixtures
+          cd build/fixtures
+          curl --fail --retry 2 --silent --show-error -L --range 0-33554431 --max-time 180 'https://media.developer.dolby.com/DolbyVision_Atmos/mp4/iOS_P5_GlassBlowing2_1920x1080%4059.94fps_15200kbps.mp4' -o p5-joc.mp4
+          echo '2e1a62c39519ccef267353672aff6c2985b7ef145739fb60b56029fa91ec6fac  p5-joc.mp4' | shasum -a 256 -c -
+      - name: Boot an iPhone simulator
+        id: boot
+        if: matrix.platform == 'ios-simulator'
+        run: |
+          device=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; print(next(i["udid"] for runtime, group in reversed(list(json.load(sys.stdin)["devices"].items())) if "iOS" in runtime for i in group if "iPhone" in i["name"]))')
+          echo "APPLE_SIMULATOR=$device" >> "$GITHUB_ENV"
+          xcrun simctl boot "$device"
+          xcrun simctl bootstatus "$device" -b
+      - if: matrix.platform == 'macos'
+        run: echo "DEVELOPER_DIR=/Applications/Xcode_26.2.app/Contents/Developer" >> "$GITHUB_ENV"
+      - uses: ./.github/actions/restore-flutter
+      - if: matrix.platform == 'macos'
+        uses: ./.github/actions/restore-mux
+        with:
+          target: macos-arm64
+      - name: Prepare application dependencies
+        run: |
+          if [[ -n "$APPLE_SIMULATOR" ]]; then
+            bash packages/bili_mux/tool/build.sh ios-simulator-arm64
+          else
+            pwsh -NoProfile -File tool/build-download-mux.ps1 -Target macos-arm64
+          fi
+          flutter pub get --enforce-lockfile
+      - name: Build and exercise the application surface
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp test/fixtures/media/{p84.mp4,hdr10.mp4,hlg.mp4,audio.m4a} build/fixtures/
+          base=http://127.0.0.1:18085
+          args=(--target tool/validation/apple_hdr_probe.dart
+                --dart-define=APPLE_P5=$base/p5-joc.mp4 --dart-define=APPLE_P8=$base/p84.mp4
+                --dart-define=APPLE_HDR10=$base/hdr10.mp4 --dart-define=APPLE_HLG=$base/hlg.mp4
+                --dart-define=APPLE_COMPANION_AUDIO=$base/audio.m4a)
+          if [[ -n "$APPLE_SIMULATOR" ]]; then
+            flutter build ios --simulator --debug "${args[@]}"
+          else
+            flutter build macos --release "${args[@]}"
+          fi
+          if ! swift -e 'import Metal; import Darwin; exit(MTLCreateSystemDefaultDevice() == nil ? 1 : 0)'; then
+            echo 'No Metal device on this runner. Application compiled, display test skipped.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          python3 -m http.server 18085 --bind 127.0.0.1 --directory build/fixtures >/tmp/bilisail-fixture-server.log 2>&1 &
+          python3 - <<'PY'
+          import os, pathlib, plistlib, subprocess
+          simulator = os.environ.get("APPLE_SIMULATOR")
+          if simulator:
+              app = next(pathlib.Path("build/ios/iphonesimulator").glob("*.app"))
+              bundle = plistlib.loads((app/"Info.plist").read_bytes())["CFBundleIdentifier"]
+              subprocess.run(["xcrun", "simctl", "install", simulator, str(app)], check=True)
+              command = ["xcrun", "simctl", "launch", "--console", simulator, bundle]
+          else:
+              app = next(pathlib.Path("build/macos/Build/Products/Release").glob("*.app"))
+              command = [str(next((app/"Contents/MacOS").iterdir()))]
+          try:
+              result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=150)
+          except subprocess.TimeoutExpired as exc:
+              print((exc.stdout or b"").decode(errors="replace"))
+              raise
+          print(result.stdout)
+          if result.returncode or "APPLE_MEDIA_PASSED" not in result.stdout:
+              if not simulator and result.returncode < 0:
+                  subprocess.run(["xcrun", "lldb", "--batch", "-o", "run", "-k", "thread backtrace all", "--", *command], timeout=120)
+              raise SystemExit(f"Apple presentation probe exited with {result.returncode}")
+          PY
+      - name: Probe compressed audio on a booted iPhone simulator
+        if: ${{ !cancelled() && matrix.platform == 'ios-simulator' && steps.boot.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download apple-edr-joc-2026-11-27 -R CKopoer/libmpv-darwin-build -p bilisail-edr-ios.tar.gz -D build
+          echo '209fecaa26e5372b12c31c2afff777e2470f351a5eeb036e5a448d2f515e952f  build/bilisail-edr-ios.tar.gz' | shasum -a 256 -c -
+          tar -xzf build/bilisail-edr-ios.tar.gz -C build
+          mkdir build/sim
+          lipo build/Mpv.xcframework/ios-arm64_x86_64-simulator/Mpv.framework/Mpv -thin arm64 -output build/sim/Mpv
+          cd build
+          xcrun --sdk iphonesimulator clang -target arm64-apple-ios15-simulator -fobjc-arc -I mpv/include darwin/bilisail/joc_probe.m sim/Mpv -framework AVFoundation -framework CoreMedia -framework Foundation -o joc-probe
+          install_name_tool -change '@rpath/Mpv.framework/Mpv' "$PWD/sim/Mpv" joc-probe
+          codesign --force --sign - sim/Mpv
+          codesign --force --sign - joc-probe
+          set -o pipefail
+          xcrun simctl spawn "$APPLE_SIMULATOR" "$PWD/joc-probe" "$PWD/fixtures/p5-joc.mp4" | tee joc-result.txt
+          grep -q 'appleAtmosFormat=1' joc-result.txt
+          grep -q 'timelineAdvanced=1' joc-result.txt
+      - name: Apple process diagnostics
+        if: failure()
+        run: |
+          find ~/Library/Logs/DiagnosticReports -maxdepth 1 -iname '*BiliSail*' -print -exec tail -c 18000 {} \; 2>/dev/null || true

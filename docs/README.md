@@ -181,6 +181,7 @@
 | [Windows 全屏弹幕与 Skia 对照](validation/windows-skia-playback-2026-11-01.md) | 实际硬解、PiliPlus 渲染后端差异、真实视频交叉对照及验证边界 |
 | [直通硬解调研与方案](hardware-decoding-plan-2026-11-01.md) | #44 发布追溯、Bili.Libre.Speed／Predidit 路径、各平台硬解设置与自有 fork 分阶段维护 |
 | [Windows ANGLE 直通硬解](validation/windows-angle-direct-hwdec-2026-11-01.md) | copy 回退修复、PiliPlus 实际链路差异、三组 Profile 交叉对照及原生验收边界 |
+| [Apple EDR 视频与 JOC 原型](validation/apple-edr-joc.md) | macOS／iOS 的 gpu-next Metal 显示面、RPU、系统压缩音频探针及设备验证边界 |
 | [Windows 杜比视界 Profile 5 偏色](validation/dolby-vision-profile5-2026-11-02.md) | 解码前色彩转换、公开 Dolby 样片、实际纹理颜色回归与平台边界 |
 | [跨平台杜比视界与兼容回退](validation/dolby-vision-cross-platform-2026-11-03.md) | Android RPU／gpu-next 真机对照、原生能力检查、共享兼容流回退及各平台未测项 |
 | [听视频与音频控件](validation/listen-video.md) | 独立音轨、常驻响应式控件、切换／检查点及原生验证 |

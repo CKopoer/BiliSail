@@ -27,7 +27,7 @@
 - 相邻 `../biliuwp-lite` 提供功能和交互/模块划分参考；`../bili-kernel` 提供 C#/.NET API 实现参考，后者不是 Rust 项目。
 - `../PiliPlus` 用于协议、播放器与弹幕行为参考；采用前核对实际 Git overrides、锁文件和精确提交。PiliPlus 应用的 GPLv3 与其所用 media-kit 分支的 MIT 许可分别处理，不能将应用源码按 MIT 使用。
 - 定位源码、提交与采用限制见 [参考文档](docs/references.md)。除用户明确要求外，不修改相邻仓库，不将它们作为需要发布的运行时依赖。
-- 播放核心和视频插件使用基于 Predidit/media-kit 的同一完整提交。CKopoer 分支锁定支持 DD+ 透传的两种 Windows 原生库，其他平台保留上游原生资产。Android 的 JOC 音轨可使用系统 Media3。见[当前播放链路](docs/validation/predidit-playback-2026-11-23.md)和[杜比全景声方案](docs/dolby-atmos-playback.md)。
+- 播放核心和视频插件使用基于 Predidit/media-kit 的同一完整提交。CKopoer 分支锁定支持 DD+ 透传的两种 Windows 原生库，Apple 两端固定带 libplacebo／MoltenVK 的原生资产，见 [Apple EDR 与 JOC 原型](docs/validation/apple-edr-joc.md)。Android 的 JOC 音轨可使用系统 Media3。见[当前播放链路](docs/validation/predidit-playback-2026-11-23.md)和[杜比全景声方案](docs/dolby-atmos-playback.md)。
 - 借鉴职责、协议和模型，避免机械翻译 UWP 控件、静态全局服务或整仓导入。引用代码/schema/资源前记录来源与明确的许可范围。
 - 参考 API 不等于在线可用；未做在线验证必须注明。不要把对话中的性能概括当作测量结果。
 

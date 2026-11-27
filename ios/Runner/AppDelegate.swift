@@ -28,6 +28,9 @@ import UIKit
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     downloads.attach(to: engineBridge.applicationRegistrar.messenger())
     downloadPhotos = DownloadPhotosHandler(messenger: engineBridge.applicationRegistrar.messenger())
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "BiliSailAppleVideo") {
+      AppleVideoSurface.register(registrar: registrar)
+    }
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     let channel = FlutterMethodChannel(name: "bilisail/app_icon", binaryMessenger: engineBridge.applicationRegistrar.messenger())
     channel.setMethodCallHandler { call, result in

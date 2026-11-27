@@ -43,9 +43,12 @@ final class MediaKitVideoOutput
   Completer<void>? _sourceFrame;
   VoidCallback? _refreshReadiness;
   bool _selectingHdr = false;
+  bool _appleTextureMapped = false;
 
   Future<void> get videoFramePresented =>
-      _presentation ?? Future.error(StateError('No video output is bound.'));
+      usesAppleMetalOutput && hasNativeSurface && _sourceFrame != null
+      ? _sourceFrame!.future
+      : _presentation ?? Future.error(StateError('No video output is bound.'));
 
   @override
   ValueListenable<bool> get frameReady => _frameReady;
@@ -68,6 +71,16 @@ final class MediaKitVideoOutput
       final rect = controller.rect.value;
       final state = controller.player.state;
       // Match Video's visibility gate and its mask over the initial 1px texture.
+      if (usesAppleMetalOutput) {
+        if (_hdr.value != null) {
+          return hasNativeSurface &&
+              !_selectingHdr &&
+              _sourceFrame?.isCompleted == true;
+        }
+        if (_hdrDolby && _hdrProfile != '8' && !_appleTextureMapped) {
+          return false;
+        }
+      }
       return rendered &&
           !_selectingHdr &&
           controller.id.value != null &&
@@ -152,6 +165,7 @@ final class MediaKitVideoOutput
   VideoDimensions? _videoDimensions;
   bool _androidGpuNext = false;
   final _hdr = ValueNotifier<NativeHdrOutput?>(null);
+  final _appleLayerVisible = ValueNotifier(false);
   Future<void>? _hdrAttempt;
   Timer? _hdrDisplayTimer;
   bool _hdrRetired = false;
@@ -161,7 +175,8 @@ final class MediaKitVideoOutput
   ({int view, String? transfer})? _hdrDisplay;
   int? _viewId;
 
-  bool get hasHdrOutput => _hdr.value != null;
+  bool get hasNativeSurface => _hdr.value?.verified == true;
+  bool get hasHdrOutput => hasNativeSurface && _hdr.value?.transfer != 'srgb';
   bool get hasHdrSource => _hdrSource;
 
   @override
@@ -200,7 +215,7 @@ final class MediaKitVideoOutput
 
   void identifyHdrSource({required bool hinted}) {
     final player = _player;
-    if ((!Platform.isAndroid && !Platform.isWindows) ||
+    if ((!Platform.isAndroid && !Platform.isWindows && !usesAppleMetalOutput) ||
         player == null ||
         _hdrRetired ||
         _disposed) {
@@ -276,6 +291,9 @@ final class MediaKitVideoOutput
     if (size == null || size.width < 2 || size.height < 2) return;
     _hdrDisplay = display;
     final old = _hdr.value;
+    if (usesAppleMetalOutput && (old != null || transfer != null)) {
+      _frameReady.value = false;
+    }
     if (old != null) {
       try {
         await old.restore(player);
@@ -284,14 +302,31 @@ final class MediaKitVideoOutput
       }
     }
     if (transfer != null && !_hdrRetired) {
-      _hdr.value = await NativeHdrOutput.tryOpen(
-        player,
-        size,
-        view,
-        transfer,
-        dolby: _hdrDolby,
-        profile: _hdrProfile,
-      );
+      Future<NativeHdrOutput?> open(String targetTransfer) =>
+          NativeHdrOutput.tryOpen(
+            player,
+            size,
+            view,
+            targetTransfer,
+            dolby: _hdrDolby,
+            profile: _hdrProfile,
+            mountAppleLayer: (target) {
+              _appleLayerVisible.value = false;
+              _hdr.value = target;
+            },
+            showNegotiatedAppleLayer: () => _appleLayerVisible.value = true,
+          );
+      _hdr.value = await open(transfer);
+      if (usesAppleMetalOutput &&
+          transfer == 'pq' &&
+          _hdr.value == null &&
+          !_hdrRetired) {
+        _hdr.value = await open('srgb');
+      }
+    }
+    if (usesAppleMetalOutput && !_hdrRetired) {
+      if (_hdr.value == null) _appleLayerVisible.value = false;
+      _refreshReadiness?.call();
     }
   }
 
@@ -424,6 +459,7 @@ final class MediaKitVideoOutput
         when _usesAndroidViewport) {
       return size;
     }
+    if (_hdr.value case final target?) return target.dimensions;
     final rect = _controller.value?.rect.value;
     return rect == null
         ? null
@@ -449,7 +485,9 @@ final class MediaKitVideoOutput
     // Predidit completes its Android "first frame" on a dimensions change.
     // A SurfaceTexture pre-sized to the decoded dimensions skips that event.
     // Presentation waits separately for this generation's consumed buffer.
-    if (!Platform.isAndroid) await controller.waitUntilFirstFrameRendered;
+    if (!Platform.isAndroid && !(usesAppleMetalOutput && hasNativeSurface)) {
+      await controller.waitUntilFirstFrameRendered;
+    }
     Future<void> pending;
     do {
       pending = _androidSurfaceSize;
@@ -618,12 +656,16 @@ final class MediaKitVideoOutput
     _viewportRevision++;
   }
 
-  void confirmSourceFrame() {
+  void confirmSourceFrame({bool appleTextureMapped = false}) {
+    _appleTextureMapped = appleTextureMapped;
     final frame = _sourceFrame;
     if (frame != null && !frame.isCompleted) frame.complete();
+    if (usesAppleMetalOutput && hasNativeSurface) _refreshReadiness?.call();
   }
 
   void resetSource() {
+    _appleTextureMapped = false;
+    _hdrDolby = false;
     _hdrSource = false;
     _selectingHdr = false;
     _hdrDisplay = null;
@@ -661,6 +703,7 @@ final class MediaKitVideoOutput
     cancelPendingViewport();
     clearPlayer();
     _frameReady.dispose();
+    _appleLayerVisible.dispose();
     _hdr.dispose();
     _controller.dispose();
   }
@@ -710,18 +753,34 @@ final class MediaKitVideoOutput
                   ),
                 ),
               ),
-              builder: (_, ready, child) => _VideoFrameMask(
-                key: const ValueKey('video-first-frame-mask'),
-                ready: ready,
-                child: child,
-              ),
+              builder: (_, ready, child) => usesAppleMetalOutput
+                  ? ValueListenableBuilder<bool>(
+                      valueListenable: _appleLayerVisible,
+                      child: child,
+                      builder: (_, visible, surface) => Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          ?surface,
+                          if (!ready && !visible)
+                            const ColoredBox(color: Color(0xff000000)),
+                        ],
+                      ),
+                    )
+                  : _VideoFrameMask(
+                      key: const ValueKey('video-first-frame-mask'),
+                      ready: ready,
+                      child: child,
+                    ),
             );
     },
   );
 
   @override
   void attach(Object owner) {
-    if ((!Platform.isWindows && !Platform.isAndroid) || _disposed) return;
+    if ((!Platform.isWindows && !Platform.isAndroid && !usesAppleMetalOutput) ||
+        _disposed) {
+      return;
+    }
     _viewportOwner = owner;
     _watchHdrDisplay();
     _viewportLayout = null;
