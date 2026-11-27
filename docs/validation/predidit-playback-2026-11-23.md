@@ -42,3 +42,13 @@ Android 在 `renderedTexture` 和 `directTexture` 两种输出模式下各运行
 根应用和四个独立包通过 `tool/check.ps1 -EnforceLockfile`。Dart／Flutter 套件共 7,473 项通过，另有 21 项按测试条件跳过。此次检查已配置原生 mux 库及 ffprobe。
 
 上述样片验证覆盖 SDR 映射。原生 HDR 显示、其他显卡／物理 Linux 设备、公开在线源及长时间播放性能均未在本次验证中测量。
+
+## 2026-11-26：Intel Mac 视频起播失败
+
+反馈为 Intel 版任意视频提示「音视频播放失败，请重新加载或切换线路」，无现场诊断日志。该文案由共享播放器统一生成，覆盖原生初始化、加载和等待画面等失败。正式版 `1.3.0+8` 和预览版 `1.3.0+9` 都包含这次播放器迁移。固定的 Predidit 源码在 CGL 像素格式、上下文或纹理缓存无法创建时会回退到软件渲染，但移入的应用补丁沿用旧 fork 的强制初始化路径，覆盖了该回退。OpenGL 初始化和提交帧也把 Swift 临时指针传出了有效作用域。初始化失败可阻断起播，帧提交失败可使画面一直不可用。旧 `1.3.0+6` 的插件同样存在这两处缺陷，因此版本差异无法单独证明用户现场触发了它们。[预览版 Intel 构建日志](https://github.com/CKopoer/BiliSail/actions/runs/45528827282/job/138919943132) · [Swift 临时指针生命周期](https://docs.swift.org/swift-book/ReferenceManual/Expressions.html#Implicit-Conversion-to-a-Pointer-Type)
+
+恢复可失败的 macOS OpenGL 初始化。CGL 或 libmpv OpenGL 上下文建立失败时，用同一个 mpv 播放实例创建软件纹理。libmpv 调用在参数有效期间完成。macOS BGRA 缓冲明确要求 IOSurface、OpenGL 与 Metal 兼容，CoreVideo 保持对纹理的所有权，分配或绘制失败时保留上一个完成帧。发布构建增加对 `Mpv`、`media_kit_video` 和 `media_kit_event_loop` 的目标架构检查。[构建补丁](../../tool/media-kit-patches/macos.patch) · [Apple OpenGL 与 Metal 共享缓冲](https://developer.apple.com/documentation/metal/mixing-metal-and-opengl-rendering-in-a-view)
+
+以 SHA-256 核对 Predidit 0.6.8 macOS 归档及 `1.3.0+9` Intel DMG。归档的 libmpv x86_64 切片导出渲染和弱客户端符号。DMG 中的 Native Assets 清单包含 `macos_x64` 的 19 个 media_kit 条目，主程序、播放器和相关 framework 共 35 个 Mach-O 均含 x86_64，`@rpath` 引用的 framework 均已打包。[预览版安装包](https://github.com/CKopoer/BiliSail/releases/tag/v1.3.0%2B9)
+
+Apple 受控回归模拟硬件纹理初始化失败，验证软件纹理收到渲染任务、通知首帧并正常释放。对 macOS Swift 渲染器使用真实 mpv C 头文件做类型检查，并用图形 API 替身复验初始化失败后的资源释放及失败帧后的恢复。Windows 格式、静态分析、打包边界检查和四个独立包的 1,510 项测试通过，播放器另有 7 项按环境条件跳过。根应用共 6,013 项通过，评论页 `video_comments_controller_test.dart` 两项查找不到预期控件而失败，另有 14 项跳过。真实 Intel macOS 构建和播放仍待验证。可在 Intel Mac 运行[原生播放回归](../../integration_test/native_video_readiness_test.dart)，再用普通在线 DASH 验证 HTTPS、音频与画面。

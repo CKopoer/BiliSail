@@ -73,6 +73,9 @@ class AppleVideoLifecycleExecutionTest(unittest.TestCase):
     def test_close_during_texture_initialization_waits_and_prevents_registration(self):
         self.run_case("initialize")
 
+    def test_hardware_initialization_failure_renders_with_software(self):
+        self.run_case("fallback")
+
     def test_isolate_shutdown_retires_the_renderer_before_the_client(self):
         self.run_case("hot-restart")
 

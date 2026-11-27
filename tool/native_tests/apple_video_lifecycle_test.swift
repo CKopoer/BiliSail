@@ -51,9 +51,9 @@ enum MPVHelpers {
     return MPVVideoOutParams()
   }
 }
-class TextureHW: NSObject, FlutterTexture, ResizableTextureProtocol {
+class TestTexture: NSObject, FlutterTexture, ResizableTextureProtocol {
   private var disposed = false
-  init(handle: OpaquePointer, updateCallback: @escaping () -> Void) {
+  init(updateCallback: @escaping () -> Void) {
     super.init()
     evidence.withLock { $0.updates = updateCallback }
     if evidence.withLock({ $0.stallInitialization }) {
@@ -84,11 +84,23 @@ class TextureHW: NSObject, FlutterTexture, ResizableTextureProtocol {
     }
   }
 }
-final class TextureSW: TextureHW {}
+final class TextureHW: TestTexture {
+  init?(handle: OpaquePointer, updateCallback: @escaping () -> Void) {
+    guard CommandLine.arguments[1] != "fallback" else { return nil }
+    super.init(updateCallback: updateCallback)
+  }
+}
+final class TextureSW: TestTexture {
+  init(handle: OpaquePointer, updateCallback: @escaping () -> Void) {
+    precondition(CommandLine.arguments[1] == "fallback", "Unexpected software fallback")
+    super.init(updateCallback: updateCallback)
+  }
+}
 final class Registry: FlutterTextureRegistry {
   var textures: [Int64: FlutterTexture] = [:]
   var frames = 0
   var nextID: Int64 = 0
+  var onFrame: (() -> Void)?
   func register(_ texture: FlutterTexture) -> Int64 {
     precondition(DispatchQueue.getSpecific(key: platformQueue) == 1)
     nextID += 1; textures[nextID] = texture; return nextID
@@ -100,6 +112,7 @@ final class Registry: FlutterTextureRegistry {
   func textureFrameAvailable(_ textureId: Int64) {
     precondition(DispatchQueue.getSpecific(key: platformQueue) == 1 && textures[textureId] != nil)
     frames += 1
+    onFrame?()
   }
 }
 
@@ -159,7 +172,14 @@ func begin(_ textureId: Int64) {
   started = true
   retainedTexture = registry.textures[textureId]
   lateUpdate = evidence.withLock { $0.updates }
-  if scenario == "retained" {
+  if scenario == "fallback" {
+    registry.onFrame = {
+      registry.onFrame = nil
+      precondition(evidence.withLock { $0.renders == 1 } && registry.frames == 1)
+      closeOutput()
+    }
+    signalFrame()
+  } else if scenario == "retained" {
     closeOutput()
   } else if scenario == "repeat" {
     disposeOutput(completion: { completed += 1; if completed == 2 { finish() } })

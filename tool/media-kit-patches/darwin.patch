@@ -534,7 +534,7 @@
      let enableHardwareAcceleration =
        VideoOutput.isSimulator ? false : enableHardwareAcceleration
  
-@@ -104,31 +134,35 @@ public class VideoOutput: NSObject {
+@@ -104,31 +134,19 @@
        )
      }
  
@@ -542,50 +542,38 @@
 -      self?.updateCallback()
 -    }
 -    var hardwareTexture: ResizableTextureProtocol?
-     if enableHardwareAcceleration {
+-    if enableHardwareAcceleration {
 -      hardwareTexture = TextureHW(
 -        handle: handle,
 -        updateCallback: update
-+      texture = SafeResizableTexture(
-+        TextureHW(
-+          handle: handle,
-+          // Use `weak self` to prevent memory leaks
-+          updateCallback: { [weak self]() in
-+            guard let that = self else {
-+              return
-+            }
-+            that.updateCallback()
-+          }
-+        )
-       )
+-      )
 -    }
--    if let hardwareTexture = hardwareTexture {
--      texture = SafeResizableTexture(hardwareTexture)
++    let update: () -> Void = { [weak self] in self?.updateCallback() }
++    let hardwareTexture: ResizableTextureProtocol? = enableHardwareAcceleration
++      ? TextureHW(handle: handle, updateCallback: update) : nil
+     if let hardwareTexture = hardwareTexture {
+       texture = SafeResizableTexture(hardwareTexture)
      } else {
--      if enableHardwareAcceleration {
--        NSLog("VideoOutput: hardware rendering unavailable; using software rendering")
--      }
-       texture = SafeResizableTexture(
-         TextureSW(
-           handle: handle,
+       if enableHardwareAcceleration {
+         NSLog("VideoOutput: hardware rendering unavailable; using software rendering")
+       }
+-      texture = SafeResizableTexture(
+-        TextureSW(
+-          handle: handle,
 -          updateCallback: update
-+          // Use `weak self` to prevent memory leaks
-+          updateCallback: { [weak self]() in
-+            guard let that = self else {
-+              return
-+            }
-+            that.updateCallback()
-+          }
-         )
-       )
-     }
- 
+-        )
+-      )
+-    }
+-
 -    DispatchQueue.main.sync { [weak self]() in
++      texture = SafeResizableTexture(TextureSW(handle: handle, updateCallback: update))
++    }
++
 +    DispatchQueue.main.async { [weak self]() in
        guard let that = self else {
          return
        }
-@@ -138,33 +172,53 @@ public class VideoOutput: NSObject {
+@@ -138,33 +156,53 @@ public class VideoOutput: NSObject {
  
    // Must be run on the main thread
    private func registerTextureId() {
@@ -651,7 +639,7 @@
      let size = videoSize
  
      if size.width == 0 || size.height == 0 {
-@@ -175,25 +229,40 @@ public class VideoOutput: NSObject {
+@@ -175,25 +213,40 @@ public class VideoOutput: NSObject {
        currentSize = size
  
        texture.resize(size)

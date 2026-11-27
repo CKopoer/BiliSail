@@ -35,6 +35,16 @@ class AppleTextureStagingTest(unittest.TestCase):
         self.assertNotIn("nextAvailable", render)
         self.assertLess(render.index("CVPixelBufferUnlockBaseAddress"), render.index("frames.publish("))
 
+    def test_macos_gl_uses_shareable_buffers_and_failable_initialization(self):
+        plugin = package_root("media_kit_video") / "macos/media_kit_video/Sources/media_kit_video/plugin"
+        renderer = (plugin / "TextureHW.swift").read_text(encoding="utf-8")
+        helpers = (plugin / "gl/OpenGLHelpers.swift").read_text(encoding="utf-8")
+        self.assertIn("guard initMPV() else { return nil }", renderer)
+        self.assertNotIn("MPVHelpers.checkError(", renderer)
+        self.assertIn("kCVPixelBufferIOSurfacePropertiesKey", helpers)
+        self.assertIn("kCVPixelBufferOpenGLCompatibilityKey", helpers)
+        self.assertIn("kCVPixelBufferMetalCompatibilityKey", helpers)
+
 
 if __name__ == "__main__":
     unittest.main()
