@@ -96,6 +96,48 @@ void main() {
     expect(feed.at(4)?.id, _item(3).id);
   });
 
+  test('leaving an unfinished refresh resumes the retained cursor', () async {
+    final repo = _Requests();
+    final feed = FeaturedFeedController(
+      repo,
+      FeaturedSource.desktop,
+      RecommendationFilter(const RecommendationSettings.defaults()),
+    );
+    addTearDown(feed.dispose);
+    feed.setActive(true);
+    final first = feed.load();
+    repo.finish(List.generate(5, _item));
+    await first;
+
+    feed.select(2);
+    final append = feed.load();
+    repo.finish(List.generate(5, (i) => _item(i + 5)));
+    await append;
+    feed.select(7);
+    final staleAppend = repo.replies.last;
+    final refresh = feed.refresh();
+    staleAppend.complete(PageResult(items: [_item(99)], hasMore: false));
+    repo.finish([]);
+    await Future<void>.delayed(Duration.zero);
+    final staleReplacement = repo.replies.last;
+
+    feed.setActive(false);
+    expect(repo.cancellations.last.isCancelled, isTrue);
+    feed.setActive(true);
+    final resumed = feed.load();
+    staleReplacement.complete(PageResult(items: [_item(100)], hasMore: false));
+    repo.finish([_item(10)], more: false);
+    await refresh;
+    await resumed;
+
+    expect(repo.batches, [1, 2, 3, 1, 2, 3]);
+    expect(repo.refreshes, [false, false, false, true, false, false]);
+    expect(feed.refreshRevision, 0);
+    expect(feed.selected, 7);
+    expect(feed.at(7)?.id, _item(7).id);
+    expect(feed.at(10)?.id, _item(10).id);
+  });
+
   test(
     'filtered refresh preserves the current card until a retry can replace it',
     () async {
@@ -121,6 +163,9 @@ void main() {
       expect(feed.selected, 1);
       expect(feed.at(1)?.id, _item(2).id);
       expect(feed.error, isNotNull);
+      feed.setActive(false);
+      feed.setActive(true);
+      expect(repo.batches, [1, 1, 2]);
       final retry = feed.load();
       repo.finish([_item(4)], more: false);
       await retry;

@@ -40,7 +40,8 @@ class FeaturedFeedController extends ChangeNotifier {
   Future<void>? _loading;
   int refreshRevision = 0;
   int first = 0, selected = 0, _batch = 1;
-  bool active = false, hasMore = true, _refreshPending = false;
+  int? _replacementBatch;
+  bool active = false, hasMore = true;
   String? error;
   bool get busy => _request != null;
   int get end => first + _items.length;
@@ -55,6 +56,9 @@ class FeaturedFeedController extends ChangeNotifier {
     } else if (!changed) {
       return;
     } else if (!active) {
+      // An unfinished replacement belongs to the explicit selection that began
+      // it. A later activation resumes the retained feed's own cursor.
+      if (busy) _replacementBatch = null;
       _request?.cancel();
       _request = null;
       _loading = null;
@@ -79,8 +83,7 @@ class FeaturedFeedController extends ChangeNotifier {
     _request?.cancel();
     _request = null;
     _loading = null;
-    _refreshPending = true;
-    _batch = 1;
+    _replacementBatch = 1;
     return load();
   }
 
@@ -89,7 +92,9 @@ class FeaturedFeedController extends ChangeNotifier {
   }
 
   Future<void> load() {
-    if (!active || (!hasMore && !_refreshPending)) return Future.value();
+    if (!active || (!hasMore && _replacementBatch == null)) {
+      return Future.value();
+    }
     if (busy) return _loading ?? Future.value();
     return _loading = _load();
   }
@@ -100,8 +105,9 @@ class FeaturedFeedController extends ChangeNotifier {
     notifyListeners();
     try {
       for (var attempt = 0; attempt < 2; attempt++) {
-        final replacing = _refreshPending;
-        final batch = _batch;
+        final replacement = _replacementBatch;
+        final replacing = replacement != null;
+        final batch = replacement ?? _batch;
         final page = await repository.loadFeatured(
           source: source,
           batch: batch,
@@ -126,12 +132,15 @@ class FeaturedFeedController extends ChangeNotifier {
             next.add(video);
           }
         }
-        _batch = batch + 1;
         if (next.isEmpty) {
-          if (!replacing) hasMore = page.hasMore;
+          if (replacing) {
+            _replacementBatch = page.hasMore ? batch + 1 : 1;
+          } else {
+            _batch = batch + 1;
+            hasMore = page.hasMore;
+          }
           if (!page.hasMore || attempt == 1) {
             if (replacing || page.hasMore) error = '本批没有符合条件的视频';
-            if (replacing && !page.hasMore) _batch = 1;
             break;
           }
           continue;
@@ -141,9 +150,10 @@ class FeaturedFeedController extends ChangeNotifier {
           _seen.clear();
           first = 0;
           selected = 0;
-          _refreshPending = false;
+          _replacementBatch = null;
           refreshRevision++;
         }
+        _batch = batch + 1;
         hasMore = page.hasMore;
         keys.forEach(_remember);
         _items.addAll(next);

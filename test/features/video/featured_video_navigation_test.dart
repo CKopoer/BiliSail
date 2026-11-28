@@ -27,7 +27,7 @@ void main() {
     (390.0, 'workspace-bottom'),
     (1200.0, 'workspace-nav'),
   ]) {
-    testWidgets('explicit $prefix selection refreshes the retained feed', (
+    testWidgets('$prefix refreshes only when featured is already selected', (
       tester,
     ) async {
       _size(tester, width);
@@ -89,28 +89,29 @@ void main() {
       expect(videos.refreshes, [false, true, true]);
       expect(find.byKey(const ValueKey('playing-1')), findsOneWidget);
 
-      await select('mine');
-      await select('featured');
-      expect(videos.refreshes, [false, true, true, true]);
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.pumpAndSettle();
+      await select('mine');
+      await select('featured');
+      expect(videos.refreshes, [false, true, true]);
+      expect(find.byKey(const ValueKey('playing-2')), findsOneWidget);
       router.go('/me');
       await tester.pumpAndSettle();
       router.go('/featured?tab=home');
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('playing-2')), findsOneWidget);
-      expect(videos.refreshes, hasLength(4));
+      expect(videos.refreshes, hasLength(3));
       final otherWidth = width > 600 ? 390.0 : 1200.0;
       tester.view.display.size = Size(otherWidth, 800);
       tester.view.physicalSize = Size(otherWidth, 800);
       await tester.pumpAndSettle();
-      expect(videos.refreshes, hasLength(4));
+      expect(videos.refreshes, hasLength(3));
       expect(find.byKey(const ValueKey('playing-2')), findsOneWidget);
       await select(
         'featured',
         using: width > 600 ? 'workspace-bottom' : 'workspace-nav',
       );
-      expect(videos.refreshes, hasLength(5));
+      expect(videos.refreshes, [false, true, true, true]);
       expect(find.byKey(const ValueKey('playing-1')), findsOneWidget);
     });
   }

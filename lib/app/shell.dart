@@ -1441,14 +1441,24 @@ final class _BiliAppShellState extends State<BiliAppShell>
   }
 
   void _selectSection(WorkspaceSection section, {required bool compact}) {
+    final reselectingFeatured =
+        _workspace.active.isFeatured &&
+        (!_desktopDual || !_detachedPlaybackSelected);
     if (_workspace.closeTemporaryBrowsingPages()) {
       _prunePages();
       setState(() {});
     }
     switch (section) {
       case WorkspaceSection.featured:
-        _featuredSelection.value++;
-        if (!_workspace.active.isFeatured) context.go('/featured');
+        if (reselectingFeatured) {
+          _featuredSelection.value++;
+        } else if (_desktopDual && _displayTab.isFeatured) {
+          // The browser may already show Featured while the detached player
+          // has priority. Return playback ownership without refreshing it.
+          _selectTab(_displayTab.id);
+        } else {
+          context.go('/featured');
+        }
       case WorkspaceSection.home:
         final channels = channelsForSection(section, compact: _compactChannels);
         final previous = _lastChannels[section];

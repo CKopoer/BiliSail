@@ -15,10 +15,12 @@ import '../support/system_back_gesture.dart';
 
 import 'package:bilisail/app/workspace_playback_window.dart';
 import 'package:bilisail/core/platform/detached_playback_window.dart';
+import 'package:bilisail/core/platform/window_service.dart';
 
 import 'package:bilisail/features/playback/application/playback_manager.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
+import 'package:bilisail/features/playback/presentation/playback_panel.dart';
 import 'package:bilisail/features/video/presentation/video_screen.dart';
 import 'package:bilisail/features/video/application/watch_later_queue_registry.dart';
 import 'package:bilisail/features/video/domain/watch_later_queue.dart';
@@ -86,6 +88,132 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final mode in WorkspaceNavigationMode.values) {
+    _workspaceTestWidgets(
+      'featured restores playback after switching in $mode',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(1280, 900);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        const first = VideoId('BV1234567890');
+        const second = VideoId('BV0987654321');
+        final feed = _FeaturedWindowFeed([
+          for (final id in [first, second])
+            VideoSummary(
+              id: id,
+              title: '精选 ${id.value}',
+              coverUrl: '',
+              author: '测试 UP',
+              duration: const Duration(minutes: 2),
+              previewCid: '1',
+            ),
+        ]);
+        final manager = PlaybackManager(
+          createSession: (timer) => PlaybackSession(
+            engine: _WindowPlaybackEngine(() {}),
+            repository: _WindowPlaybackRepository(),
+            progress: _WindowPlaybackProgress(),
+            accountScope: () => 'guest',
+            sleepTimer: timer,
+          ),
+        );
+        final settings = _SettingsRepository(navigationMode: mode);
+        settings.settings = settings.settings.copyWith(
+          danmakuEnabled: false,
+          allowConcurrentPlayback: mode == WorkspaceNavigationMode.multipleTabs,
+        );
+        final window = WindowService();
+        final router = createBiliRouter(
+          playerBuilder: (_, detail, part) => PlaybackPanel(
+            detail: detail,
+            part: part,
+            settings: settings.settings,
+            onToggleComments: () {},
+            window: window,
+          ),
+        );
+        addTearDown(router.dispose);
+
+        Future<void> settle() async {
+          await tester.pumpAndSettle(
+            const Duration(milliseconds: 16),
+            EnginePhase.sendSemanticsUpdate,
+            const Duration(seconds: 5),
+          );
+        }
+
+        try {
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [
+                settingsRepositoryProvider.overrideWithValue(settings),
+                playbackManagerProvider.overrideWithValue(manager),
+                videoRepositoryProvider.overrideWithValue(_VideoRepository()),
+                feedRepositoryProvider.overrideWithValue(feed),
+                homeRepositoryProvider.overrideWithValue(_HomeRepository()),
+              ],
+              child: InputTestApp.router(routerConfig: router),
+            ),
+          );
+          await settle();
+
+          Future<void> select(String name) async {
+            await tester.tap(find.byKey(ValueKey('workspace-nav-$name')));
+            await settle();
+          }
+
+          expect(feed.refreshes, isEmpty);
+          await select('featured');
+          expect(feed.refreshes, [false]);
+          final session = manager.selectedSession!;
+          expect(session.detail?.summary.id, first);
+          await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+          await settle();
+          expect(session.detail?.summary.id, second);
+          const position = Duration(seconds: 7);
+          (session.engine as _WindowPlaybackEngine).advance(position);
+          final generation = session.sourceGeneration;
+          final player = tester.element(find.byType(PlaybackPanel));
+
+          for (final phase in [PlaybackPhase.playing, PlaybackPhase.paused]) {
+            if (phase == PlaybackPhase.paused) await session.pause();
+            await settle();
+            expect(session.snapshots.value.phase, phase);
+            await select('home');
+            expect(session.snapshots.value.phase, PlaybackPhase.paused);
+            await select('featured');
+            expect(feed.refreshes, [false]);
+            expect(manager.selectedSession, same(session));
+            expect(tester.element(find.byType(PlaybackPanel)), same(player));
+            expect(session.detail?.summary.id, second);
+            expect(session.sourceGeneration, generation);
+            expect(session.snapshots.value.position, position);
+            expect(session.snapshots.value.phase, phase);
+          }
+
+          await select('featured');
+          expect(feed.refreshes, [false, true]);
+          expect(session.detail?.summary.id, first);
+        } finally {
+          await tester.pumpWidget(const SizedBox());
+          await settle();
+          final closed = manager.close();
+          // Riverpod's provider disposal and the session's broadcast streams
+          // complete on different schedulers in a widget test.
+          for (var frame = 0; frame < 5; frame++) {
+            await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+            await tester.pump();
+          }
+          await tester.runAsync(
+            () => closed.timeout(const Duration(seconds: 2)),
+          );
+          await window.dispose();
+        }
+      },
+    );
+  }
+
   for (final featuredInitially in ['empty', 'idle', 'playing', 'paused']) {
     _workspaceTestWidgets(
       'desktop playback can take focus with featured $featuredInitially',
@@ -282,9 +410,20 @@ void main() {
             await tester.pumpAndSettle();
             expectPlayer(featured);
           }
+          expect(feed.refreshes, [false]);
           await focus(window.viewId);
           expectPlayer(detached);
           expect(detached.sourceGeneration, generation);
+          if (featuredWasPlaying) {
+            await tester.tap(
+              find.byKey(const ValueKey('workspace-nav-featured')),
+            );
+            await tester.pumpAndSettle();
+            expectPlayer(featured);
+            expect(feed.refreshes, [false]);
+            await focus(window.viewId);
+            expectPlayer(detached);
+          }
           await focus(window.viewId, ViewFocusState.unfocused);
           expectPlayer(detached);
 
@@ -3610,6 +3749,7 @@ final class _FeaturedWindowFeed extends _FeedRepository
   _FeaturedWindowFeed(this.items);
 
   final List<VideoSummary> items;
+  final refreshes = <bool>[];
 
   @override
   Future<PageResult<VideoSummary>> loadFeatured({
@@ -3618,7 +3758,10 @@ final class _FeaturedWindowFeed extends _FeedRepository
     required bool refresh,
     FeaturedSeed? seed,
     required RequestCancellation cancellation,
-  }) async => PageResult(items: items, hasMore: false);
+  }) async {
+    refreshes.add(refresh);
+    return PageResult(items: items, hasMore: false);
+  }
 }
 
 final class _WindowPlaybackEngine extends CardFakeEngine {
