@@ -29,6 +29,7 @@ import 'package:bilisail/app/router.dart';
 import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:bilisail/shared/ui/danmaku_composer_draft.dart';
+import 'package:bilisail/shared/ui/featured_bottom_navigation_scope.dart';
 import 'package:bilisail/shared/ui/featured_paging_scope.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
 import 'package:bilisail/features/video/presentation/featured_video_overlay.dart';
@@ -5250,6 +5251,66 @@ void main() {
     expect(engine.opens, 1);
     expect(engine.maxSurfaces, 1);
     expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    await _pumpFrames(tester);
+  });
+
+  testWidgets('bottom-navigation featured uses the playback info icons', (
+    tester,
+  ) async {
+    final engine = _FakeEngine();
+    final session = _session(engine);
+    final geometry = FeaturedControlsGeometry();
+    addTearDown(session.close);
+    addTearDown(geometry.dispose);
+    await tester.pumpWidget(
+      _app(
+        session,
+        _FakeWindowService(),
+        const AppSettings.defaults(),
+        width: 360,
+        playerHeight: 440,
+        onBack: () {},
+        onHome: () {},
+        showNavigationInPlayer: true,
+        featuredGeometry: geometry,
+        featuredBottomNavigation: true,
+      ),
+    );
+    await _pumpFrames(tester);
+    await tester.tapAt(_surfacePoint(tester));
+    await _pumpSurfaceTap(tester);
+    final hide = findMaterialTooltip('收起底栏');
+    final show = findMaterialTooltip('展开底栏');
+    final hideOverlays = findMaterialTooltip('隐藏视频信息和互动按钮');
+    final back = find.byKey(const ValueKey('player-back'));
+    final home = find.byKey(const ValueKey('player-home'));
+    Finder icon(Finder button, IconData icon) =>
+        find.descendant(of: button, matching: find.byIcon(icon));
+
+    expect(back, findsNothing);
+    expect(home, findsNothing);
+    expect(hide.hitTestable(), findsOneWidget);
+    expect(icon(hide, Icons.zoom_out_map_rounded), findsOneWidget);
+    expect(
+      tester.getRect(hide).right,
+      tester.getRect(findMaterialTooltip('全屏（F）')).left,
+    );
+    await tester.tap(hide);
+    await _pumpFrames(tester);
+    expect(icon(show, Icons.zoom_in_map_rounded), findsOneWidget);
+    expect(hideOverlays.hitTestable(), findsOneWidget);
+    expect(find.byType(FeaturedVideoOverlay), findsOneWidget);
+
+    await session.setAudioOnly(true);
+    await _pumpFrames(tester);
+    expect(back, findsNothing);
+    expect(home, findsNothing);
+    expect(show.hitTestable(), findsOneWidget);
+    await tester.tap(show);
+    await _pumpFrames(tester);
+    expect(icon(hide, Icons.zoom_out_map_rounded), findsOneWidget);
+    expect(hideOverlays.hitTestable(), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
     await _pumpFrames(tester);
   });
@@ -11889,6 +11950,7 @@ Widget _app(
   SettingsRepository? settingsRepository,
   VoidCallback? onToggleComments,
   FeaturedControlsGeometry? featuredGeometry,
+  bool featuredBottomNavigation = false,
   ContentLink link = const ContentLink(),
 }) => ProviderScope(
   overrides: [
@@ -11948,6 +12010,7 @@ Widget _app(
                         danmakuComposerBuilder: composer,
                         danmakuOverlayBuilder: overlay,
                       ),
+                      bottomNavigation: featuredBottomNavigation,
                     ),
                   ),
                 ),
@@ -11965,31 +12028,46 @@ Widget _app(
   ),
 );
 
-Widget _wrapFeaturedPlayer(FeaturedControlsGeometry? geometry, Widget player) {
+Widget _wrapFeaturedPlayer(
+  FeaturedControlsGeometry? geometry,
+  Widget player, {
+  required bool bottomNavigation,
+}) {
   if (geometry == null) return player;
   var showOverlays = true;
+  var showNavigation = true;
   return StatefulBuilder(
-    builder: (context, setState) => Stack(
-      fit: StackFit.expand,
-      children: [
-        FeaturedPagingScope(
-          showVideoOverlays: showOverlays,
-          onToggleVideoOverlays: () =>
-              setState(() => showOverlays = !showOverlays),
-          controlsGeometry: geometry,
-          child: player,
-        ),
-        if (showOverlays)
-          FeaturedVideoOverlay(
-            detail: _detail,
+    builder: (context, setState) {
+      final content = Stack(
+        fit: StackFit.expand,
+        children: [
+          FeaturedPagingScope(
+            showVideoOverlays: showOverlays,
+            onToggleVideoOverlays: () =>
+                setState(() => showOverlays = !showOverlays),
             controlsGeometry: geometry,
-            onLogin: () {},
-            onOpenUser: (_) {},
-            onShowDescription: () {},
-            onShowComments: () {},
+            child: player,
           ),
-      ],
-    ),
+          if (showOverlays)
+            FeaturedVideoOverlay(
+              detail: _detail,
+              controlsGeometry: geometry,
+              onLogin: () {},
+              onOpenUser: (_) {},
+              onShowDescription: () {},
+              onShowComments: () {},
+            ),
+        ],
+      );
+      return bottomNavigation
+          ? FeaturedBottomNavigationScope(
+              visible: showNavigation,
+              enabled: true,
+              onToggle: () => setState(() => showNavigation = !showNavigation),
+              child: content,
+            )
+          : content;
+    },
   );
 }
 

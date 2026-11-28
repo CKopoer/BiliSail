@@ -16,6 +16,7 @@ import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
 import 'package:bilisail/features/video/application/video_controller.dart';
 import 'package:bilisail/features/video/domain/video_repository.dart';
 import 'package:bilisail/features/video/presentation/featured_video_screen.dart';
+import 'package:bilisail/shared/ui/featured_bottom_navigation_scope.dart';
 import 'package:bilisail/shared/ui/measured_list_view.dart';
 import 'package:bilisail/shared/ui/playback_page_commands.dart';
 import 'package:flutter/gestures.dart';
@@ -138,7 +139,8 @@ void main() {
               home: BiliAppShell(
                 location: '/featured',
                 navigationMode: WorkspaceNavigationMode.singlePage,
-                pageBuilder: (_, _) => _screen(videos),
+                pageBuilder: (_, _) =>
+                    _screen(videos, withBottomNavigationToggle: true),
                 child: const SizedBox.shrink(),
               ),
             ),
@@ -200,6 +202,9 @@ void main() {
         await tester.pumpAndSettle();
         await wheel(pager, 130);
         expect(find.byKey(const ValueKey('playing-2')), findsOneWidget);
+        expect(bar.hitTestable(), findsOneWidget);
+        await tester.tap(find.byTooltip('收起底栏'));
+        await tester.pumpAndSettle();
         expect(bar, findsNothing);
 
         await openPanel(2);
@@ -222,11 +227,51 @@ void main() {
         await tester.pumpAndSettle();
         await wheel(pager, -130);
         expect(find.byKey(const ValueKey('playing-1')), findsOneWidget);
+        expect(bar, findsNothing);
+        await tester.tap(find.byTooltip('展开底栏'));
+        await tester.pumpAndSettle();
         expect(bar.hitTestable(), findsOneWidget);
       },
       variant: TargetPlatformVariant.only(TargetPlatform.windows),
     );
   }
+
+  testWidgets('failed featured details still let the user restore navigation', (
+    tester,
+  ) async {
+    _size(tester, 390);
+    final videos = _Videos()..unavailableCid = '2';
+    await tester.pumpWidget(
+      _withVideos(
+        videos,
+        InputTestApp(
+          home: BiliAppShell(
+            location: '/featured',
+            navigationMode: WorkspaceNavigationMode.singlePage,
+            pageBuilder: (_, _) =>
+                _screen(videos, withBottomNavigationToggle: true),
+            child: const SizedBox.shrink(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final bar = find.byKey(const ValueKey('workspace-bottom-navigation'));
+    await tester.tap(find.byTooltip('收起底栏'));
+    await tester.pumpAndSettle();
+    expect(bar, findsNothing);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    expect(find.text('找不到此视频分 P'), findsOneWidget);
+    expect(bar, findsNothing);
+    final restore = find.byTooltip('展开底栏');
+    expect(restore.hitTestable(), findsOneWidget);
+    await tester.tap(restore);
+    await tester.pumpAndSettle();
+    expect(bar.hitTestable(), findsOneWidget);
+    expect(restore, findsNothing);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
 
   testWidgets(
     'arrows page without picture focus and yield to editors and overlays',
@@ -348,6 +393,7 @@ Widget _withVideos(_Videos videos, Widget child) => ProviderScope(
 Widget _screen(
   _Videos videos, {
   bool withEditor = false,
+  bool withBottomNavigationToggle = false,
   VoidCallback? onReturnToVideo,
 }) => FeaturedVideoScreen(
   onReturnToVideo: onReturnToVideo,
@@ -382,6 +428,11 @@ Widget _screen(
               ),
             ),
           )
+        : withBottomNavigationToggle
+        ? const Align(
+            alignment: Alignment.topCenter,
+            child: Material(child: FeaturedBottomNavigationToggle()),
+          )
         : const SizedBox.expand(),
   ),
   onLogin: () {},
@@ -406,6 +457,7 @@ class _Videos implements FeaturedFeedRepository, VideoRepository {
   });
   final refreshes = <bool>[];
   bool failNext = false;
+  String? unavailableCid;
 
   @override
   Future<PageResult<VideoSummary>> loadFeatured({
@@ -434,12 +486,13 @@ class _Videos implements FeaturedFeedRepository, VideoRepository {
       aid: withPanelContent ? item.previewCid : null,
       description: withPanelContent ? '分段简介\n' * 60 : '简介',
       parts: [
-        VideoPart(
-          cid: item.previewCid!,
-          page: 1,
-          title: item.title,
-          duration: item.duration,
-        ),
+        if (item.previewCid != unavailableCid)
+          VideoPart(
+            cid: item.previewCid!,
+            page: 1,
+            title: item.title,
+            duration: item.duration,
+          ),
       ],
     );
   }

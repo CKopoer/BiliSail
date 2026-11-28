@@ -18,8 +18,8 @@ import '../../../domain/shortcut_command.dart';
 import '../../../shared/ui/recommendation_playback_scope.dart';
 import '../../../domain/user.dart';
 import '../../../domain/video.dart';
-import '../../../shared/ui/bottom_navigation_scroll_region.dart';
 import '../../../shared/ui/content_link_scope.dart';
+import '../../../shared/ui/featured_bottom_navigation_scope.dart';
 import '../../../shared/ui/featured_paging_scope.dart';
 import '../../../shared/ui/featured_selection_scope.dart';
 import '../../../shared/ui/playback_navigation.dart';
@@ -343,6 +343,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
   }
 
   Widget _viewer(VideoSummary? current, AsyncValue<VideoDetail>? detail) {
+    final navigation = FeaturedBottomNavigationScope.maybeOf(context);
     return PageBackHandler(
       enabled: active && (panel != null || widget.onReturnToVideo != null),
       onBack: () {
@@ -426,9 +427,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
                                 ? PlaybackSplitLayout.sidebarWidth
                                 : null,
                             height: wide ? null : bounds.maxHeight * .62,
-                            child: BottomNavigationScrollExclusion(
-                              child: _infoPanel(info),
-                            ),
+                            child: _infoPanel(info),
                           ),
                       ],
                     );
@@ -450,6 +449,17 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
                   ),
                   child: Text('$message · 重试', overflow: TextOverflow.ellipsis),
                 ),
+              ),
+            ),
+          if (navigation?.visible == false &&
+              (current == null ||
+                  _partFor(current, detail?.value, seed: false) == null))
+            const PositionedDirectional(
+              end: 8,
+              bottom: 8,
+              child: Material(
+                color: Colors.black54,
+                child: FeaturedBottomNavigationToggle(color: Colors.white),
               ),
             ),
           if (feed.seed != null)

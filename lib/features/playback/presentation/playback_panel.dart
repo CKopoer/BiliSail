@@ -21,6 +21,7 @@ import '../../../core/presentation/mobile_playback_status_bar.dart';
 import '../../../shared/ui/playback_page_commands.dart';
 import '../../../shared/ui/featured_paging_scope.dart';
 import '../../../shared/ui/playback_sidebar_toggle.dart';
+import '../../../shared/ui/featured_bottom_navigation_scope.dart';
 import '../../../shared/ui/playback_navigation.dart';
 import '../../../shared/ui/collapsed_playback_header.dart';
 import '../../../shared/ui/content_link_scope.dart';
@@ -1866,6 +1867,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
     BuildContext context,
     PlaybackSnapshot snapshot,
     double width, {
+    required bool hasInfoToggle,
     required bool hasOverlayToggle,
   }) {
     final session = widget.session;
@@ -1883,7 +1885,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                       playbackQualityLabel(media.quality)
           : null,
       hasComposer: widget.danmakuComposerBuilder != null,
-      hasInfoToggle: PlaybackInfoScope.maybeOf(context) != null,
+      hasInfoToggle: hasInfoToggle,
       hasOverlayToggle: hasOverlayToggle,
       hasSubtitles: session.subtitleTracks.isNotEmpty,
       hasVoices: session.voiceTracks.isNotEmpty,
@@ -1937,6 +1939,14 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
         : FeaturedPagingScope.maybeOf(context);
     final geometry = featured?.controlsGeometry;
     final usesSlotPicture = featured?.inlinePicture != null;
+    final hasFeaturedNavigation =
+        featured != null &&
+        FeaturedBottomNavigationScope.maybeOf(context) != null;
+    final infoToggle = hasFeaturedNavigation
+        ? const FeaturedBottomNavigationToggle()
+        : PlaybackInfoScope.maybeOf(context) != null
+        ? const PlaybackSidebarToggle()
+        : null;
     final overlayToggle = switch (featured) {
       FeaturedPagingScope(
         :final showVideoOverlays,
@@ -2015,6 +2025,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                       onFullScreen: _toggleFullScreen,
                       commands: widget.pageCommands.value,
                       completedOverlay: completedOverlay,
+                      infoToggle: infoToggle,
                       overlayToggle: overlayToggle,
                       onControlsInsetChanged: geometry?.showAudioToolbar,
                       navigation: ValueListenableBuilder<PlaybackNavigation?>(
@@ -2025,7 +2036,8 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                             if ((widget.fullScreen &&
                                     Theme.of(context).platform ==
                                         TargetPlatform.iOS) ||
-                                (actions?.showInPlayer ?? false))
+                                (!hasFeaturedNavigation &&
+                                    (actions?.showInPlayer ?? false)))
                               IconButton(
                                 key: const ValueKey('player-back'),
                                 tooltip: '返回',
@@ -2036,7 +2048,8 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                     : () => widget.onNavigate(actions.onBack),
                                 icon: const Icon(Icons.arrow_back_rounded),
                               ),
-                            if (actions?.showInPlayer ?? false)
+                            if (!hasFeaturedNavigation &&
+                                (actions?.showInPlayer ?? false))
                               IconButton(
                                 key: const ValueKey('player-home'),
                                 tooltip: '回到主页',
@@ -2058,6 +2071,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                         context,
                         snapshot,
                         width - 20,
+                        hasInfoToggle: infoToggle != null,
                         hasOverlayToggle: overlayToggle != null,
                       );
                       final smallWindow = layout.compact && !widget.fullScreen;
@@ -2377,6 +2391,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                       retainDynamicPress: true,
                                       child: _PlayerTopBar(
                                         navigation: widget.navigation,
+                                        hideNavigation: hasFeaturedNavigation,
                                         smallWindow: smallWindow,
                                         showSleepTimer: !layout.compact,
                                         onMenuChanged: _onControlsMenuChanged,
@@ -2817,6 +2832,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                                         controls ||
                                                         geometry == null,
                                                     layout: layout,
+                                                    infoToggle: infoToggle,
                                                     overlayToggle:
                                                         overlayToggle,
                                                     composerKey: _composerKey,
@@ -3141,6 +3157,7 @@ class _ControlBar extends StatelessWidget {
     required this.onMenuChanged,
     this.danmakuComposerBuilder,
     this.pageCommands,
+    this.infoToggle,
     this.overlayToggle,
   });
 
@@ -3149,6 +3166,7 @@ class _ControlBar extends StatelessWidget {
   final AppSettings settings;
   final PlaybackSnapshot snapshot;
   final PlaybackPageCommands? pageCommands;
+  final Widget? infoToggle;
   final Widget? overlayToggle;
   final VoidCallback onToggleComments;
   final VoidCallback onFullScreen;
@@ -3372,8 +3390,8 @@ class _ControlBar extends StatelessWidget {
       slot(volumeButton),
     ];
     final trailing = [
-      if (layout.inputs.hasInfoToggle) slot(const PlaybackSidebarToggle()),
       if (overlayToggle case final toggle?) slot(toggle),
+      if (infoToggle case final toggle?) slot(toggle),
       slot(fullscreenButton),
     ];
     if (layout.compact && !fullScreen) {
@@ -4090,6 +4108,7 @@ class _PlayerRateButton extends StatelessWidget {
 class _PlayerTopBar extends StatelessWidget {
   const _PlayerTopBar({
     required this.navigation,
+    required this.hideNavigation,
     required this.smallWindow,
     required this.showSleepTimer,
     required this.onMenuChanged,
@@ -4102,6 +4121,7 @@ class _PlayerTopBar extends StatelessWidget {
     required this.onSettings,
   });
   final ValueListenable<PlaybackNavigation?> navigation;
+  final bool hideNavigation;
   final bool smallWindow;
   final bool showSleepTimer;
   final ValueChanged<bool> onMenuChanged;
@@ -4149,7 +4169,8 @@ class _PlayerTopBar extends StatelessWidget {
       child: ValueListenableBuilder<PlaybackNavigation?>(
         valueListenable: navigation,
         builder: (context, actions, _) {
-          final showHomeButton = actions?.showInPlayer ?? false;
+          final showHomeButton =
+              !hideNavigation && (actions?.showInPlayer ?? false);
           final showBackButton =
               showHomeButton ||
               (fullScreen && Theme.of(context).platform == TargetPlatform.iOS);

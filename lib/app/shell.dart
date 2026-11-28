@@ -1003,13 +1003,15 @@ final class _BiliAppShellState extends State<BiliAppShell>
                       enabled:
                           bottomNavigation &&
                           View.of(context).viewInsets.bottom == 0,
+                      featuredNavigationHeight:
+                          bottomNavigation && tab.isFeatured
+                          ? _bottomNavigationHeight
+                          : null,
                       navigationBuilder: bottomNavigation
                           ? (context, visible) => _animatedBottomNavigation(
                               context,
                               scrollVisible: visible,
-                              // Resize the settled page once before it can
-                              // accept another wheel or touch gesture.
-                              animate: !tab.isFeatured,
+                              featured: tab.isFeatured,
                             )
                           : null,
                       child: Row(
@@ -1886,13 +1888,12 @@ final class _BiliAppShellState extends State<BiliAppShell>
   Widget _animatedBottomNavigation(
     BuildContext context, {
     required bool scrollVisible,
-    required bool animate,
+    required bool featured,
   }) {
     // Scaffold clears the body's insets. Read the view to hide immediately
     // when the keyboard opens, including during a scroll-driven transition.
     final keyboardOpen = View.of(context).viewInsets.bottom > 0;
-    final animateVisibility =
-        animate && !keyboardOpen && !shouldReduceMotion(context);
+    final animateVisibility = !keyboardOpen && !shouldReduceMotion(context);
     final target = scrollVisible && !keyboardOpen ? 1.0 : 0.0;
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: target, end: target),
@@ -1912,13 +1913,18 @@ final class _BiliAppShellState extends State<BiliAppShell>
             excluding: progress < 1,
             child: IgnorePointer(
               ignoring: progress < 1,
-              child: ClipRect(
-                child: Align(
-                  alignment: Alignment.bottomCenter,
-                  heightFactor: progress,
-                  child: Opacity(opacity: progress, child: child),
-                ),
-              ),
+              child: featured
+                  ? FractionalTranslation(
+                      translation: Offset(0, 1 - progress),
+                      child: Opacity(opacity: progress, child: child),
+                    )
+                  : ClipRect(
+                      child: Align(
+                        alignment: Alignment.bottomCenter,
+                        heightFactor: progress,
+                        child: Opacity(opacity: progress, child: child),
+                      ),
+                    ),
             ),
           ),
         );

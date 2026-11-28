@@ -66,8 +66,10 @@
 
 ## 滚动时收起底栏（2026-11-28）
 
-有底栏的页面向上滑动时收起导航，反向滑动恢复。桌面窄窗的纵向滚轮也可以恢复和收起底栏。切换目的地、从侧栏切回底栏或关闭软键盘后恢复可见。收起让出完整的导航高度，系统安全区继续保留。
+首页、动态和我的等普通底栏页面向上滑动时收起导航，反向滑动恢复。桌面窄窗的纵向滚轮也可以恢复和收起底栏。切换目的地、从侧栏切回底栏或关闭软键盘后恢复可见。收起让出完整的导航高度，系统安全区继续保留。
 
-参考 PiliPlus `217fb54f51f6764176319bbdedab2a7522d75401` 中按用户纵向滚动方向显隐导航的行为，在 BiliSail 的 [工作区内容层](../../lib/shared/ui/bottom_navigation_scroll_region.dart) 独立实现。拖动和滚轮信号触发显隐，惯性、横向滑动或程序跳转保持当前显隐状态。精选在纵向分页落位后一次性更新可用高度，避免改变已开始的动画目标。 [PiliPlus 滚动处理](https://github.com/bggRGjQaUbCoE/PiliPlus/blob/217fb54f51f6764176319bbdedab2a7522d75401/lib/pages/common/common_page.dart) · [PiliPlus 导航布局](https://github.com/bggRGjQaUbCoE/PiliPlus/blob/217fb54f51f6764176319bbdedab2a7522d75401/lib/pages/main/view.dart)
+参考 PiliPlus `217fb54f51f6764176319bbdedab2a7522d75401` 中按用户纵向滚动方向显隐导航的行为，在 BiliSail 的 [工作区内容层](../../lib/shared/ui/bottom_navigation_scroll_region.dart) 独立实现。拖动和滚轮信号触发显隐，惯性、横向滑动或程序跳转保持当前显隐状态。 [PiliPlus 滚动处理](https://github.com/bggRGjQaUbCoE/PiliPlus/blob/217fb54f51f6764176319bbdedab2a7522d75401/lib/pages/common/common_page.dart) · [PiliPlus 导航布局](https://github.com/bggRGjQaUbCoE/PiliPlus/blob/217fb54f51f6764176319bbdedab2a7522d75401/lib/pages/main/view.dart)
+
+底栏模式下，精选根页仅通过播放工具栏右下角的四角按钮收起或展开底栏。一次点击更新一次分页视口高度，底栏独立滑动并淡入淡出。触摸、滚轮、方向键和信息面板内滚动均保留显隐状态。底栏已经收起且播放器暂不可用时，可以在页面右下角用同一图标展开。切换根页后按新页面的初始状态显示导航。
 
 [组件测试](../../test/app/bottom_navigation_scroll_test.dart) 覆盖首页、动态、我的、精选分页、鼠标滚轮、键盘、路由及侧栏切换。触摸与滚轮手感仍需实机验收。

@@ -29,6 +29,7 @@ class AudioPlaybackView extends StatelessWidget {
     required this.navigation,
     this.commands,
     this.completedOverlay,
+    this.infoToggle,
     this.overlayToggle,
     this.onControlsInsetChanged,
   });
@@ -40,6 +41,7 @@ class AudioPlaybackView extends StatelessWidget {
   final Widget navigation;
   final PlaybackPageCommands? commands;
   final Widget? completedOverlay;
+  final Widget? infoToggle;
   final Widget? overlayToggle;
   final ValueChanged<double>? onControlsInsetChanged;
 
@@ -303,9 +305,11 @@ class AudioPlaybackView extends StatelessWidget {
                       ),
                     ],
                     trailing: [
-                      if (PlaybackInfoScope.maybeOf(context) != null)
-                        const PlaybackSidebarToggle(),
                       ?overlayToggle,
+                      if (infoToggle case final toggle?)
+                        toggle
+                      else if (PlaybackInfoScope.maybeOf(context) != null)
+                        const PlaybackSidebarToggle(),
                       IconButton(
                         tooltip: fullScreen ? '退出全屏' : '全屏',
                         onPressed: onFullScreen,

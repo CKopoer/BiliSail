@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:bilisail/app/shell.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
+import 'package:bilisail/shared/ui/featured_bottom_navigation_scope.dart';
 import 'package:bilisail/shared/ui/smooth_scroll_behavior.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
@@ -136,71 +137,136 @@ void main() {
     variant: TargetPlatformVariant.only(TargetPlatform.windows),
   );
 
-  testWidgets('featured drag and wheel settle the page before resizing', (
-    tester,
-  ) async {
-    _size(tester);
-    final pages = PageController();
-    addTearDown(pages.dispose);
-    await _pumpShell(
-      tester,
-      '/featured',
-      body: (_) => PageView.builder(
-        controller: pages,
-        scrollDirection: Axis.vertical,
-        itemCount: 3,
-        itemBuilder: (_, index) => Listener(
-          onPointerSignal: (event) {
-            if (event is! PointerScrollEvent || event.scrollDelta.dy == 0) {
-              return;
-            }
-            GestureBinding.instance.pointerSignalResolver.register(event, (_) {
-              final target =
-                  pages.page!.round() + event.scrollDelta.dy.sign.toInt();
-              if (target < 0 || target >= 3) return;
-              unawaited(
-                pages.animateToPage(
-                  target,
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOutCubic,
+  testWidgets(
+    'featured reserves navigation space only on manual toggles',
+    (tester) async {
+      _size(tester);
+      final pages = PageController();
+      addTearDown(pages.dispose);
+      final router = await _pumpShell(
+        tester,
+        '/featured',
+        body: (location) => location.path != '/featured'
+            ? _list(null)
+            : PageView.builder(
+                controller: pages,
+                scrollDirection: Axis.vertical,
+                itemCount: 3,
+                itemBuilder: (_, index) => Listener(
+                  onPointerSignal: (event) {
+                    if (event is! PointerScrollEvent ||
+                        event.scrollDelta.dy == 0) {
+                      return;
+                    }
+                    GestureBinding.instance.pointerSignalResolver.register(
+                      event,
+                      (_) {
+                        final target =
+                            pages.page!.round() +
+                            event.scrollDelta.dy.sign.toInt();
+                        if (target < 0 || target >= 3) return;
+                        unawaited(
+                          pages.animateToPage(
+                            target,
+                            duration: const Duration(milliseconds: 220),
+                            curve: Curves.easeOutCubic,
+                          ),
+                        );
+                      },
+                    );
+                  },
+                  child: Material(
+                    color: Colors.black,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Center(child: Text('第 $index 条')),
+                        const Align(
+                          alignment: Alignment.bottomRight,
+                          child: FeaturedBottomNavigationToggle(),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              );
-            });
-          },
-          child: ColoredBox(
-            color: Colors.black,
-            child: Center(child: Text('第 $index 条')),
-          ),
-        ),
-      ),
-    );
-    final bar = find.byKey(_barKey);
-    final pager = find.byType(PageView);
-    final viewport = pages.position.viewportDimension;
-    final barHeight = tester.getSize(bar).height;
-    final gesture = await tester.startGesture(tester.getCenter(pager));
-    await gesture.moveBy(const Offset(0, -380));
-    await tester.pump(const Duration(milliseconds: 72));
-    expect(pages.page, inExclusiveRange(0.0, 1.0));
-    expect(pages.position.viewportDimension, viewport);
-    expect(bar.hitTestable(), findsOneWidget);
-    await gesture.up();
-    await tester.pumpAndSettle();
-    expect(pages.page, 1);
-    expect(bar, findsNothing);
-    expect(pages.position.viewportDimension, viewport + barHeight);
+              ),
+      );
+      final bar = find.byKey(_barKey);
+      final pager = find.byType(PageView);
+      final viewport = pages.position.viewportDimension;
+      final barHeight = tester.getSize(bar).height;
+      final barTop = tester.getTopLeft(bar).dy;
+      final gesture = await tester.startGesture(tester.getCenter(pager));
+      await gesture.moveBy(const Offset(0, -380));
+      await tester.pump(const Duration(milliseconds: 72));
+      expect(pages.page, inExclusiveRange(0.0, 1.0));
+      expect(pages.position.viewportDimension, viewport);
+      expect(bar.hitTestable(), findsOneWidget);
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(pages.page, 1);
+      expect(bar.hitTestable(), findsOneWidget);
+      expect(pages.position.viewportDimension, viewport);
 
-    await _wheel(tester, pager, const Offset(0, -120), settle: false);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 80));
-    expect(pages.page, inExclusiveRange(0.0, 1.0));
-    expect(bar, findsNothing);
-    expect(pages.position.viewportDimension, viewport + barHeight);
-    await tester.pumpAndSettle();
-    expect(pages.page, 0);
-    expect(bar.hitTestable(), findsOneWidget);
-    expect(pages.position.viewportDimension, viewport);
-  }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+      await _wheel(tester, pager, const Offset(0, -120), settle: false);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(pages.page, inExclusiveRange(0.0, 1.0));
+      expect(bar.hitTestable(), findsOneWidget);
+      expect(pages.position.viewportDimension, viewport);
+      await tester.pumpAndSettle();
+      expect(pages.page, 0);
+
+      await tester.tap(find.byTooltip('收起底栏'));
+      await tester.pump();
+      expect(pages.position.viewportDimension, viewport + barHeight);
+      expect(tester.getTopLeft(bar).dy, barTop);
+      await tester.pump(const Duration(milliseconds: 70));
+      expect(
+        tester.getTopLeft(bar).dy,
+        inExclusiveRange(barTop, barTop + barHeight),
+      );
+      expect(bar.hitTestable(), findsNothing);
+      expect(pages.position.viewportDimension, viewport + barHeight);
+      await tester.pumpAndSettle();
+      expect(bar, findsNothing);
+
+      await _wheel(tester, pager, const Offset(0, 120));
+      expect(pages.page, 1);
+      expect(bar, findsNothing);
+      await tester.drag(pager, const Offset(0, 430));
+      await tester.pumpAndSettle();
+      expect(pages.page, 0);
+      expect(bar, findsNothing);
+      expect(pages.position.viewportDimension, viewport + barHeight);
+
+      await tester.tap(find.byTooltip('展开底栏'));
+      await tester.pump();
+      expect(pages.position.viewportDimension, viewport);
+      await tester.pump(const Duration(milliseconds: 70));
+      expect(
+        tester.getTopLeft(bar).dy,
+        inExclusiveRange(barTop, barTop + barHeight),
+      );
+      expect(bar.hitTestable(), findsNothing);
+      expect(pages.position.viewportDimension, viewport);
+      await tester.pumpAndSettle();
+      expect(bar.hitTestable(), findsOneWidget);
+
+      await tester.tap(find.byTooltip('收起底栏'));
+      await tester.pumpAndSettle();
+      router.go('/me');
+      await tester.pumpAndSettle();
+      expect(bar.hitTestable(), findsOneWidget);
+      router.go('/featured');
+      await tester.pumpAndSettle();
+      expect(bar.hitTestable(), findsOneWidget);
+    },
+    variant: TargetPlatformVariant({
+      TargetPlatform.android,
+      TargetPlatform.windows,
+    }),
+  );
 }
 
 void _size(WidgetTester tester) {

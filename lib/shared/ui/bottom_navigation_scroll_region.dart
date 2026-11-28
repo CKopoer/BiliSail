@@ -4,32 +4,7 @@ import 'package:flutter/widgets.dart';
 
 import '../../core/presentation/input_scope.dart';
 import '../../core/presentation/workspace_activity.dart';
-
-final _excludedScrollInput = Expando<bool>();
-
-/// Keeps a panel's own scrolling independent of the workspace navigation bar.
-class BottomNavigationScrollExclusion extends StatelessWidget {
-  const BottomNavigationScrollExclusion({super.key, required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) =>
-      NotificationListener<ScrollNotification>(
-        onNotification: (notification) {
-          _excludedScrollInput[notification] = true;
-          return false;
-        },
-        child: Listener(
-          behavior: HitTestBehavior.opaque,
-          onPointerSignal: (event) {
-            // Each hit-test target can receive a differently transformed copy.
-            _excludedScrollInput[event.original ?? event] = true;
-          },
-          child: child,
-        ),
-      );
-}
+import 'featured_bottom_navigation_scope.dart';
 
 class BottomNavigationScrollRegion extends StatefulWidget {
   const BottomNavigationScrollRegion({
@@ -38,12 +13,14 @@ class BottomNavigationScrollRegion extends StatefulWidget {
     required this.enabled,
     required this.navigationBuilder,
     required this.child,
+    this.featuredNavigationHeight,
   });
 
   final Object destination;
   final bool enabled;
   final Widget Function(BuildContext, bool visible)? navigationBuilder;
   final Widget child;
+  final double? featuredNavigationHeight;
 
   @override
   State<BottomNavigationScrollRegion> createState() =>
@@ -55,7 +32,6 @@ class _BottomNavigationScrollRegionState
   static const _minimumTravel = 24.0;
   static const _wheelPause = Duration(milliseconds: 180);
 
-  final _scrollingPagers = <BuildContext>{};
   bool _active = true;
   bool _visible = true;
   bool? _pendingVisibility;
@@ -63,6 +39,10 @@ class _BottomNavigationScrollRegionState
   double _dragTravel = 0;
   double _wheelTravel = 0;
   Duration? _lastWheelInput;
+
+  bool get _usesFeaturedNavigation => widget.featuredNavigationHeight != null;
+  bool get _reactsToScrolling =>
+      _active && widget.enabled && !_usesFeaturedNavigation;
 
   @override
   void didChangeDependencies() {
@@ -74,7 +54,9 @@ class _BottomNavigationScrollRegionState
   @override
   void didUpdateWidget(BottomNavigationScrollRegion oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.destination != oldWidget.destination || !widget.enabled) {
+    if (widget.destination != oldWidget.destination ||
+        widget.featuredNavigationHeight != oldWidget.featuredNavigationHeight ||
+        (!widget.enabled && !_usesFeaturedNavigation)) {
       _reset();
     }
   }
@@ -82,27 +64,17 @@ class _BottomNavigationScrollRegionState
   void _reset() {
     _visible = true;
     _pendingVisibility = null;
-    _scrollingPagers.clear();
     _dragTravel = 0;
     _wheelTravel = 0;
     _lastWheelInput = null;
   }
 
   bool _onScroll(ScrollNotification notification) {
-    if (!_active ||
-        !widget.enabled ||
-        _excludedScrollInput[notification] == true ||
-        notification.metrics.axis != Axis.vertical) {
+    if (!_reactsToScrolling || notification.metrics.axis != Axis.vertical) {
       return false;
     }
     if (notification is ScrollStartNotification) {
       if (notification.dragDetails != null) _dragTravel = 0;
-      if (notification.context case final pager?
-          when notification.metrics is PageMetrics) {
-        _scrollingPagers.add(pager);
-      }
-    } else if (notification is ScrollEndNotification) {
-      if (_scrollingPagers.remove(notification.context)) _applyWhenSettled();
     } else {
       final dy = switch (notification) {
         ScrollUpdateNotification(:final dragDetails) => dragDetails?.delta.dy,
@@ -117,10 +89,8 @@ class _BottomNavigationScrollRegionState
   }
 
   void _onPointerSignal(PointerSignalEvent event) {
-    if (!_active ||
-        !widget.enabled ||
+    if (!_reactsToScrolling ||
         event is! PointerScrollEvent ||
-        _excludedScrollInput[event.original ?? event] == true ||
         (event.kind != PointerDeviceKind.mouse &&
             event.kind != PointerDeviceKind.trackpad) ||
         InputModifierScope.anyPressedOf(context, const [
@@ -151,21 +121,19 @@ class _BottomNavigationScrollRegionState
     final visible = travel < 0;
     if ((_pendingVisibility ?? _visible) != visible) {
       _pendingVisibility = visible;
-      _applyWhenSettled();
+      _scheduleVisibility();
     }
     return 0;
   }
 
-  void _applyWhenSettled() {
-    if (_pendingVisibility == null || _updateScheduled) return;
+  void _scheduleVisibility() {
+    if (_updateScheduled) return;
     _updateScheduled = true;
-    // Let the pointer signal resolve and the pager finish using its old extent
-    // before resizing. Ballistic and programmatic updates supply no intent.
+    // Apply scroll notifications after layout and let pointer signals resolve.
     final binding = WidgetsBinding.instance;
     binding.addPostFrameCallback((_) {
       _updateScheduled = false;
-      _scrollingPagers.removeWhere((pager) => !pager.mounted);
-      if (!mounted || _scrollingPagers.isNotEmpty) return;
+      if (!mounted) return;
       final pending = _pendingVisibility;
       _pendingVisibility = null;
       if (pending != null && pending != _visible) {
@@ -175,20 +143,51 @@ class _BottomNavigationScrollRegionState
     binding.ensureVisualUpdate();
   }
 
+  void _toggleFeaturedNavigation() {
+    if (_active && _usesFeaturedNavigation) {
+      setState(() => _visible = !_visible);
+    }
+  }
+
   @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      Expanded(
-        child: NotificationListener<ScrollNotification>(
-          onNotification: _onScroll,
-          child: Listener(
-            onPointerSignal: _onPointerSignal,
-            child: widget.child,
-          ),
+  Widget build(BuildContext context) {
+    final navigation = widget.navigationBuilder?.call(context, _visible);
+    final featuredHeight = widget.featuredNavigationHeight;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Column(
+          children: [
+            Expanded(
+              child: FeaturedBottomNavigationScope(
+                visible: _visible,
+                onToggle: _toggleFeaturedNavigation,
+                enabled: _usesFeaturedNavigation,
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: _onScroll,
+                  child: Listener(
+                    onPointerSignal: _onPointerSignal,
+                    child: widget.child,
+                  ),
+                ),
+              ),
+            ),
+            if (featuredHeight == null)
+              ?navigation
+            else if (_visible && widget.enabled)
+              // The bar animates separately without resizing the pager.
+              SizedBox(height: featuredHeight),
+          ],
         ),
-      ),
-      if (widget.navigationBuilder case final buildNavigation?)
-        buildNavigation(context, _visible),
-    ],
-  );
+        if (featuredHeight != null && navigation != null)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: featuredHeight,
+            child: ClipRect(child: navigation),
+          ),
+      ],
+    );
+  }
 }

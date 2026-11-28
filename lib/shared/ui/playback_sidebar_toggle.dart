@@ -82,24 +82,38 @@ class _SidebarEdgeToggle extends StatelessWidget {
 }
 
 class PlaybackSidebarToggle extends StatelessWidget {
-  const PlaybackSidebarToggle({super.key, this.color});
+  const PlaybackSidebarToggle({super.key, this.color}) : _control = null;
+
+  const PlaybackSidebarToggle.controlled({
+    super.key,
+    this.color,
+    required bool expanded,
+    required String tooltip,
+    required VoidCallback onToggle,
+  }) : _control = (expanded, tooltip, onToggle);
 
   final Color? color;
+  final (bool, String, VoidCallback)? _control;
 
   @override
   Widget build(BuildContext context) {
-    final info = PlaybackInfoScope.maybeOf(context);
-    if (info == null) return const SizedBox.shrink();
+    final control =
+        _control ??
+        switch (PlaybackInfoScope.maybeOf(context)) {
+          PlaybackInfoScope(:final showInfo, :final tooltip, :final onToggle) =>
+            (showInfo, tooltip, onToggle),
+          null => null,
+        };
+    if (control == null) return const SizedBox.shrink();
+    final (expanded, tooltip, onToggle) = control;
     return Semantics(
-      expanded: info.showInfo,
+      expanded: expanded,
       child: IconButton(
         color: color,
-        tooltip: info.tooltip,
-        onPressed: info.onToggle,
+        tooltip: tooltip,
+        onPressed: onToggle,
         icon: Icon(
-          info.showInfo
-              ? Icons.zoom_out_map_rounded
-              : Icons.zoom_in_map_rounded,
+          expanded ? Icons.zoom_out_map_rounded : Icons.zoom_in_map_rounded,
           size: 20,
         ),
       ),
