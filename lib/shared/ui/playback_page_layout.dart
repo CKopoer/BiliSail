@@ -139,10 +139,19 @@ class _PlaybackPageLayoutState extends State<PlaybackPageLayout> {
         : collapsed - toolbarRange * collapse;
     final scrollRange = expanded - minimum;
     final infoTop = widget.wide ? 0.0 : minimum;
-    final pageHeight =
-        widget.wide || !widget.showInfo || scrollRange > 0 || editingInfo
-        ? bounds.maxHeight
-        : math.max(bounds.maxHeight, infoTop + widget.minimumInfoHeight);
+    // Give back the extra scroll space gradually as the toolbar animation
+    // frees room for information within the window.
+    final extraPageHeight =
+        widget.wide || !widget.showInfo || expanded > collapsed || editingInfo
+        ? 0.0
+        : math.max(
+                0.0,
+                availablePlayerHeight +
+                    widget.minimumInfoHeight -
+                    bounds.maxHeight,
+              ) *
+              (1 - collapse);
+    final pageHeight = bounds.maxHeight + extraPageHeight;
     return PlaybackSplitLayout(
       page: widget.splitPage,
       enabled: widget.wide && !widget.listening,

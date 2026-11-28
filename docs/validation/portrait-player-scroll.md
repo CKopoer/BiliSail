@@ -10,6 +10,8 @@
 
 窗口高度不足时，暂停布局最多为信息区预留 240 逻辑像素，便于从评论列表开始拖动。
 
+工具栏动画会逐步缩减播放信息区原有的额外滚动空间。此前动画一开始就移除这段空间，导致合集倒序接续时工具栏暂时找不到，迷你小窗中的稍后再看队列也会发生布局溢出。现有连播回归覆盖这两条路径。[CI 失败日志](https://github.com/CKopoer/BiliSail/actions/runs/46113451434) · [连播测试](../../test/features/playback/continuous_playback_test.dart)
+
 交互参考 PiliPlus 提交 `217fb54f51f6764176319bbdedab2a7522d75401` 的视频页与滚动头部。本项目在既有嵌套滚动、播放会话及菜单上独立实现。[视频页](../../../PiliPlus/lib/pages/video/view.dart) · [VideoHeader](../../../PiliPlus/lib/common/widgets/sliver/video_header.dart)
 
 ## 初版行为与实现
