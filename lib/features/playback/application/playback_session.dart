@@ -233,6 +233,7 @@ class PlaybackSession extends ChangeNotifier {
   Object? _featuredHistoryOwner;
   (VideoId, String?)? _featuredCurrent;
   (VideoId, String)? _featuredNeighbor;
+  (VideoId, String)? _featuredSwipePreview;
   final _featuredVisits = <(VideoId, String), _FeaturedVisit>{};
   ((VideoId, String), Object)? _featuredPlaying;
   ({
@@ -244,6 +245,7 @@ class PlaybackSession extends ChangeNotifier {
   })?
   _featuredPresentation;
   _FeaturedPausedEngine? _featuredPaused;
+  ({(VideoId, String) clip, PlayerEngine engine})? _featuredClaimed;
   bool _featuredWaitingForPanel = false;
   Future<void>? _retiringEngine;
   final CardPreviewPlayback? cardPreviews;
@@ -476,6 +478,7 @@ class PlaybackSession extends ChangeNotifier {
 
   void pauseForSleepTimer() {
     if (_disposed || _closing || !sleepTimer.elapsed) return;
+    _syncFeaturedSwipePreview();
     final next = _nextSourceIntent;
     if (next != null) {
       // Revoke an accepted autoplay intent before its new route can mount.
@@ -1114,7 +1117,12 @@ class PlaybackSession extends ChangeNotifier {
     final nextFeaturedClip = openingFeatured
         ? (video!.summary.id, selected!.cid)
         : null;
-    if (nextFeaturedClip == null) _featuredPresentation = null;
+    if (nextFeaturedClip == null) {
+      _featuredPresentation = null;
+      _featuredSwipePreview = null;
+      unawaited(featuredStandby?.clear(owner: this));
+      _discardFeaturedPaused();
+    }
     final outgoingClip = _featuredPlaying?.$1;
     final canPark =
         nextFeaturedClip != null &&
@@ -1443,7 +1451,11 @@ class PlaybackSession extends ChangeNotifier {
               _desiredPlaying &&
               !sleepTimer.elapsed,
           rate: isLive ? 1 : oldRate,
-          volume: _tabMuted ? 0 : oldVolume,
+          volume: openingFeatured
+              ? _featuredOpeningVolume
+              : _tabMuted
+              ? 0
+              : oldVolume,
           audioGainDb: _audioGainFor(resolved),
           videoDecoding: videoDecoding,
           androidVideoOutput: switch (_settings.androidVideoOutput) {
@@ -1457,10 +1469,17 @@ class PlaybackSession extends ChangeNotifier {
           cacheLimits: openedCacheLimits,
           retainPresentation: retryMedia != null,
         );
-        final options = optionsFor(openBudget);
+        Duration remainingBudget() {
+          final remaining =
+              openBudget -
+              ((startupNow?.call() ?? _clock.elapsed) - nativeOpenStarted!);
+          if (remaining > Duration.zero) return remaining;
+          throw const AppFailure(AppFailureKind.playback, '打开媒体超时');
+        }
+
         if (openingFeatured && _featuredDolby(resolved)) {
           _discardFeaturedPaused();
-          await featuredStandby?.clear(owner: this);
+          await featuredStandby?.clear(owner: this).timeout(remainingBudget());
           if (parked && isCurrent()) await previousEngine.stop();
           parked = false;
           if (!isCurrent()) return;
@@ -1476,19 +1495,27 @@ class PlaybackSession extends ChangeNotifier {
               video.summary.id,
               selected.cid,
               source,
-              options,
+              optionsFor(remainingBudget()),
               cancellation,
               isCurrent,
+              remainingBudget: remainingBudget,
               park: parked ? outgoingClip : null,
               useVisited: resumeFeaturedMedia,
             )) {
           return;
+        }
+        if (openingFeatured) {
+          // A speculative decoder whose source failed validation can still
+          // be releasing its texture and audio output.
+          await featuredStandby?.clear(owner: this).timeout(remainingBudget());
+          await _retiringEngine?.timeout(remainingBudget());
         }
         if (parked && isCurrent() && identical(engine, previousEngine)) {
           await _openWithFeaturedEngine(
             previousEngine,
             outgoingClip!,
             isCurrent,
+            remainingBudget,
           );
         }
         if (!isCurrent()) return;
@@ -1497,7 +1524,10 @@ class PlaybackSession extends ChangeNotifier {
           _notify();
         }
         try {
-          await engine.open(source, options);
+          await engine.open(
+            source,
+            optionsFor(openingFeatured ? remainingBudget() : openBudget),
+          );
         } on PlayerFailure catch (failure) {
           if (!isCurrent() ||
               _featuredPaused == null ||
@@ -1507,13 +1537,10 @@ class PlaybackSession extends ChangeNotifier {
           }
           // A device can have fewer decoder/audio-output slots than expected.
           _discardFeaturedPaused();
-          await _retiringEngine;
-          await featuredStandby?.clear(owner: this);
-          final remaining =
-              openBudget -
-              ((startupNow?.call() ?? _clock.elapsed) - nativeOpenStarted!);
-          if (remaining <= Duration.zero || !isCurrent()) rethrow;
-          await engine.open(source, optionsFor(remaining));
+          await _retiringEngine?.timeout(remainingBudget());
+          await featuredStandby?.clear(owner: this).timeout(remainingBudget());
+          if (!isCurrent()) rethrow;
+          await engine.open(source, optionsFor(remainingBudget()));
         }
       }
 
@@ -1556,6 +1583,8 @@ class PlaybackSession extends ChangeNotifier {
       }
       _mediaGeneration = generation;
       _resolving = false;
+      _finishFeaturedSwipePreview(nextFeaturedClip);
+      _prepareFeaturedNeighbor();
       final cacheLimits = _settings.playbackCacheLimits(live: isLive);
       if (openedAudioOutput != _settings.androidAudioOutput) {
         await _applyAndroidAudioOutput(_settings.androidAudioOutput);
@@ -1583,7 +1612,6 @@ class PlaybackSession extends ChangeNotifier {
       }
       _notify();
       mediaReady.complete(true);
-      _prepareFeaturedNeighbor();
       _ensureComments(engine.currentSnapshot.position);
       if (!isLive && video != null && selected != null) {
         unawaited(
@@ -1712,6 +1740,7 @@ class PlaybackSession extends ChangeNotifier {
       }
     } finally {
       if (_openingLiveGeneration == generation) _openingLiveGeneration = null;
+      if (isCurrent()) _finishFeaturedSwipePreview(nextFeaturedClip);
       if (isCurrent() &&
           (error != null || !_desiredPlaying) &&
           _interruptedGeneration == null) {
@@ -2028,11 +2057,20 @@ class PlaybackSession extends ChangeNotifier {
     final previous = _settings;
     final previousFeaturedProfile = _featuredProfile;
     _settings = settings.normalized();
-    if (_featuredPaused != null &&
-        previousFeaturedProfile != _featuredProfile) {
+    final preparationChanged =
+        previousFeaturedProfile != _featuredProfile ||
+        previous.resumePlayback != _settings.resumePlayback ||
+        previous.audioNormalization != _settings.audioNormalization ||
+        previous.defaultPlaybackRate != _settings.defaultPlaybackRate ||
+        previous.rememberPlaybackRate != _settings.rememberPlaybackRate;
+    if (preparationChanged) {
+      unawaited(featuredStandby?.clear(owner: this));
       _discardFeaturedPaused();
+      _discardFeaturedClaimed();
     }
     _rateMemory.configure(enabled: _settings.rememberPlaybackRate);
+    if (preparationChanged) _prepareFeaturedNeighbor();
+    _syncFeaturedSwipePreview();
     if (previous.danmakuSendStyle != _settings.danmakuSendStyle) {
       setDanmakuSendStyle(_settings.danmakuSendStyle);
     }
@@ -2844,7 +2882,9 @@ class PlaybackSession extends ChangeNotifier {
       _prepareFeaturedNeighbor();
     } else {
       unawaited(featuredStandby?.clear(owner: this));
+      _featuredSwipePreview = null;
       _discardFeaturedPaused();
+      _discardFeaturedClaimed();
     }
     if (!allowed) {
       _interruptedGeneration = null;
@@ -3057,7 +3097,9 @@ class PlaybackSession extends ChangeNotifier {
   double get commandRate => _rateTargetGeneration == _generation
       ? _rateTarget ?? _temporaryRateOriginal ?? snapshots.value.rate
       : _temporaryRateOriginal ?? snapshots.value.rate;
-  double get commandVolume => _volumeTargetGeneration == _generation
+  double get commandVolume => _resolving && _isFeaturedClip(detail, part)
+      ? _featuredOpeningVolume
+      : _volumeTargetGeneration == _generation
       ? _volumeTarget ?? snapshots.value.volume
       : snapshots.value.volume;
 
@@ -3182,6 +3224,9 @@ class PlaybackSession extends ChangeNotifier {
         try {
           await engine.setVolume(volume);
           if (_disposed || _closing || generation != _generation) return;
+          if (_resolving && _isFeaturedClip(detail, part) && !tabMuted) {
+            _openingVolume = volume;
+          }
           if (memoryRevision != null) {
             _volumeMemory.remember(volume, revision: memoryRevision);
           }
@@ -3277,6 +3322,12 @@ class PlaybackSession extends ChangeNotifier {
         _audioOnly == _listeningMode.enabled ||
         (contentTarget == null && (detail == null || part == null))) {
       return;
+    }
+    if (_listeningMode.enabled) {
+      _featuredSwipePreview = null;
+      unawaited(featuredStandby?.clear(owner: this));
+      _discardFeaturedPaused();
+      _discardFeaturedClaimed();
     }
     await open(
       detail,
@@ -3414,6 +3465,7 @@ class PlaybackSession extends ChangeNotifier {
     // Swiping can unmount the previous panel before the selected card's
     // delayed details arrive. Retain its prepared engine through that gap.
     if (clearCheckpoints || _featuredOwner == null) {
+      _featuredSwipePreview = null;
       unawaited(featuredStandby?.clear(owner: this));
       _discardFeaturedPaused();
     }

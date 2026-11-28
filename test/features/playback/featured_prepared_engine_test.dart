@@ -71,6 +71,7 @@ void main() {
       final engine = engines.single;
       expect(engine.options?.play, isFalse);
       expect(engine.options?.volume, 0);
+      expect(engine.options?.preload, isTrue);
       expect(engine.options?.startPosition, foreground.startPosition);
       expect(engine.options?.rate, foreground.rate);
       expect(engine.options?.audioGainDb, foreground.audioGainDb);
@@ -257,6 +258,39 @@ void main() {
     expect(engines, isEmpty);
   });
 
+  for (final matches in [true, false]) {
+    test(
+      'an in-flight plan is claimed while still resolving (matches=$matches)',
+      () async {
+        final plan = Completer<FeaturedEnginePlan>();
+        final source = _dash();
+        const options = OpenOptions();
+        standby.prepare('next', (_) => plan.future);
+        final taking = standby.take(
+          'next',
+          source,
+          options,
+          RequestCancellation(),
+        );
+        expect(taking, isNotNull);
+        expect(engines, isEmpty);
+        plan.complete((
+          source: matches ? source : _dash(videoQuery: 'other'),
+          options: options,
+        ));
+        if (matches) {
+          final ready = await taking;
+          expect(ready, same(engines.single));
+          expect(engines.single.opens, 1);
+          await ready!.dispose();
+        } else {
+          expect(await taking, isNull);
+          expect(engines, isEmpty);
+        }
+      },
+    );
+  }
+
   test('foreground cancellation interrupts an opening engine', () async {
     final opening = Completer<void>();
     final engine = CardFakeEngine()..opening = opening;
@@ -273,6 +307,23 @@ void main() {
     expect(engine.disposals, 1);
     opening.complete();
   });
+
+  test(
+    'the slot can attach the native surface before the engine finishes opening',
+    () async {
+      final opening = Completer<void>();
+      final engine = CardFakeEngine()..opening = opening;
+      standby = FeaturedPreparedEngine(createEngine: () => engine);
+      standby.prepare(
+        'next',
+        (_) async => (source: _dash(), options: const OpenOptions()),
+      );
+      await _turn();
+      expect(engine.currentSnapshot.phase, PlaybackPhase.opening);
+      expect(standby.preview('next'), same(engine));
+      opening.complete();
+    },
+  );
 
   test(
     'expiry cancels a prepared engine and permits ordinary playback',

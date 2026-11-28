@@ -4,6 +4,7 @@ import '../../../core/network/api_requests.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/app_failure.dart';
 import '../../../domain/video.dart';
+import '../domain/featured_playback_limits.dart';
 
 typedef FeaturedQualityRequest = ({
   int quality,
@@ -22,7 +23,12 @@ final class FeaturedPlayInfoCache {
   final _entries = <(VideoId, String), _PreparedInfo>{};
 
   /// The returned lease belongs to the visible feed while the card is in its three-card window.
-  void Function() prepare(VideoId video, String cid, {bool neighbor = false}) {
+  void Function() prepare(
+    VideoId video,
+    String cid, {
+    bool neighbor = false,
+    bool forStandby = false,
+  }) {
     final key = (video, cid);
     var entry = _entries[key];
     if (entry != null && _stale(entry)) {
@@ -49,7 +55,9 @@ final class FeaturedPlayInfoCache {
     if (neighbor) entry.claimed = false;
     final leased = entry;
     leased.leases++;
+    if (forStandby) leased.standbyLeases++;
     return () {
+      if (forStandby) leased.standbyLeases--;
       if (--leased.leases == 0) {
         leased.token.cancel();
       }
@@ -71,7 +79,10 @@ final class FeaturedPlayInfoCache {
   }
 
   bool _stale(_PreparedInfo entry) =>
-      _now().difference(entry.started) >= const Duration(minutes: 1);
+      _now().difference(entry.started) >=
+      (entry.standbyLeases > 0
+          ? featuredStandbyMaximumAge
+          : const Duration(minutes: 1));
 
   Future<ApiPlayInfo?>? take(
     VideoId video,
@@ -98,8 +109,9 @@ final class FeaturedPlayInfoCache {
     try {
       if (_stale(entry)) return null;
       final discovery = await entry.info;
-      if (discovery == null || entry.token.isCancelled || _stale(entry))
+      if (discovery == null || entry.token.isCancelled || _stale(entry)) {
         return null;
+      }
       ApiPlayInfo info = discovery;
       if (supplement != null &&
           needsPlayInfoSupplement(info, supplement.quality)) {
@@ -151,6 +163,7 @@ final class _PreparedInfo {
   late final Future<ApiPlayInfo?> info;
   ({int quality, Future<ApiPlayInfo> result})? supplement;
   int leases = 0;
+  int standbyLeases = 0;
   bool claimed = false;
 }
 

@@ -66,9 +66,10 @@ class FeaturedVideoScreen extends ConsumerStatefulWidget {
 class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
     with WidgetsBindingObserver {
   PlaybackSession? _preparingSession;
+  int? _previewingIndex;
   int _direction = 1;
-  bool _dragAimed = false;
   bool _appVisible = true;
+  bool _routeCurrent = true;
 
   @override
   void initState() {
@@ -84,37 +85,80 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final visible = _mayPrepare(state);
     if (visible == _appVisible) return;
-    if (!visible) _preparingSession?.leaveFeatured(this);
     setState(() => _appVisible = visible);
+    if (!visible) {
+      _cancelPaging();
+      _preparingSession?.leaveFeatured(this);
+    }
   }
 
-  void _aim(int direction, {bool renew = false}) {
-    if (direction == 0 || (!renew && direction == _direction)) return;
+  void _aim(int direction) {
     _direction = direction;
-    // Scroll updates arrive after layout. Direction only matters once per
-    // reversal, before the page settles.
     final selected = feed.at(feed.selected);
-    if (_appVisible && active && selected != null) _nominate(selected);
+    if (selected != null) _nominate(selected, feed.selected);
   }
 
-  void _nominate(VideoSummary selected) {
+  void _nominate(VideoSummary selected, int index) {
     if (_preparingSession == null) return;
     final candidate =
-        feed.at(feed.selected + _direction) ??
-        feed.at(feed.selected - _direction);
-    final cid = candidate == null
-        ? null
-        : candidate.previewCid ??
-              ref
-                  .read(videoDetailProvider(candidate.id))
-                  .value
-                  ?.parts
-                  .singleOrNull
-                  ?.cid;
+        feed.at(index + _direction) ?? feed.at(index - _direction);
     _preparingSession?.setFeaturedNeighbor(this, (
       selected.id,
       selected.previewCid,
-    ), candidate == null || cid == null ? null : (candidate.id, cid));
+    ), _previewClip(candidate));
+  }
+
+  (VideoId, String)? _previewClip(VideoSummary? item) {
+    if (item == null) return null;
+    final cid =
+        item.previewCid ??
+        ref.read(videoDetailProvider(item.id)).value?.parts.singleOrNull?.cid;
+    return cid == null ? null : (item.id, cid);
+  }
+
+  void _clearSwipePreview({bool keepSelected = false}) {
+    _previewingIndex = null;
+    _preparingSession?.setFeaturedSwipePreview(
+      this,
+      null,
+      keepSelected: keepSelected,
+    );
+  }
+
+  void _syncSwipePreview({bool updateClip = false}) {
+    final session = _preparingSession;
+    if (!_canPage || session == null || !pages.hasClients) return;
+    final page = pages.page;
+    if (page == null) return;
+    final offset = page - feed.selected;
+    final direction = offset.sign.toInt();
+    // The prepared slot intersects the viewport only within one page of it.
+    final index = direction != 0 && offset.abs() < 2
+        ? feed.selected + direction
+        : null;
+    if (index == _previewingIndex) {
+      if (!updateClip || index == null) return;
+    } else if (index != null) {
+      _aim(direction);
+    }
+    _previewingIndex = index;
+    session.setFeaturedSwipePreview(
+      this,
+      index == null ? null : _previewClip(feed.at(index)),
+    );
+  }
+
+  void _cancelPaging() {
+    _clearSwipePreview();
+    if (!pages.hasClients ||
+        (pages.page == feed.selected &&
+            !pages.position.isScrollingNotifier.value)) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _canPage || !pages.hasClients) return;
+      pages.jumpToPage(feed.selected);
+    });
   }
 
   late final feed = widget.createController()..addListener(_changed);
@@ -143,6 +187,8 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
     active =
         WorkspaceActivity.isActive(context) &&
         WorkspaceMediaPermission.isAllowed(context);
+    _routeCurrent = ModalRoute.isCurrentOf(context) ?? true;
+    if (!_canPage) _cancelPaging();
     if (!active) _preparingSession?.leaveFeatured(this);
     final revision = feed.seed == null
         ? FeaturedSelectionScope.revisionOf(context)
@@ -161,6 +207,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
   void _changed() {
     if (!mounted) return;
     if (refreshRevision != feed.refreshRevision) {
+      _clearSwipePreview();
       _preparingSession?.clearFeaturedVisits(this);
       _visitedParts.clear();
       refreshRevision = feed.refreshRevision;
@@ -171,7 +218,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         if (pages.hasClients) pages.jumpToPage(feed.selected);
-        resettingPage = false;
+        setState(() => resettingPage = false);
       });
     }
     setState(() {});
@@ -190,7 +237,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
 
   Future<void> _step(int direction) async {
     if (!_canStep) return;
-    _aim(direction, renew: true);
+    _aim(direction);
     final before = feed.selected;
     final revision = feed.refreshRevision;
     final target = before + direction;
@@ -203,8 +250,8 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
     }
     if (feed.at(target) == null || !pages.hasClients) return;
     if (shouldReduceMotion(context)) {
-      pages.jumpToPage(target);
       _settle(target);
+      pages.jumpToPage(target);
     } else {
       moving = true;
       try {
@@ -219,24 +266,20 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
     }
   }
 
+  bool get _canPage =>
+      active && _appVisible && _routeCurrent && !resettingPage && panel == null;
+
   bool get _canStep =>
-      active &&
-      !moving &&
-      !resettingPage &&
-      panel == null &&
-      ModalRoute.of(context)?.isCurrent != false;
+      _canPage && !moving && (!pages.hasClients || pages.page == feed.selected);
 
   void _settle(int index) {
     final selected = feed.at(index);
-    if (!active ||
-        resettingPage ||
-        index == feed.selected ||
-        selected == null) {
-      return;
-    }
+    if (!_canPage || index == feed.selected || selected == null) return;
     final detail = videoDetailProvider(selected.id);
     if (ref.exists(detail) && ref.read(detail).hasError) ref.invalidate(detail);
     _direction = (index - feed.selected).sign;
+    _nominate(selected, index);
+    _clearSwipePreview(keepSelected: true);
     seedPositionPending = false;
     feed.select(index);
   }
@@ -244,9 +287,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
   void _wheel(PointerSignalEvent event) {
     if (event is! PointerScrollEvent ||
         event.scrollDelta.dy.abs() <= event.scrollDelta.dx.abs() ||
-        !active ||
-        panel != null ||
-        ModalRoute.of(context)?.isCurrent == false) {
+        !_canPage) {
       return;
     }
     GestureBinding.instance.pointerSignalResolver.register(event, (_) {
@@ -263,8 +304,10 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
     });
   }
 
-  void _toggle(_Info kind) =>
-      setState(() => panel = panel == kind ? null : kind);
+  void _toggle(_Info kind) {
+    setState(() => panel = panel == kind ? null : kind);
+    if (panel != null) _cancelPaging();
+  }
 
   CommandOutcome _pageWithKey(InputStroke stroke, int direction) {
     if (stroke.phase != InputPhase.down || !_canStep) {
@@ -274,16 +317,26 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
     return CommandOutcome.completed;
   }
 
-  bool _scrollEnded(ScrollEndNotification notification) {
-    if (notification.depth == 0 && pages.hasClients) {
-      final index = pages.page?.round();
-      if (index != null) {
-        scheduleMicrotask(() {
-          if (mounted && pages.hasClients && pages.page?.round() == index) {
-            _settle(index);
-          }
-        });
-      }
+  bool _onPaging(ScrollNotification notification) {
+    if (notification.depth != 0 || !_canPage) return false;
+    if (notification is ScrollUpdateNotification) _syncSwipePreview();
+    if (notification is ScrollEndNotification && pages.hasClients) {
+      final page = pages.page;
+      if (page == null || page != page.roundToDouble()) return false;
+      final index = page.round();
+      scheduleMicrotask(() {
+        if (!mounted ||
+            !pages.hasClients ||
+            pages.position.isScrollingNotifier.value ||
+            pages.page != index) {
+          return;
+        }
+        if (index == feed.selected) {
+          _clearSwipePreview();
+        } else {
+          _settle(index);
+        }
+      });
     }
     return false;
   }
@@ -317,6 +370,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
           ref.watch(playbackManagerProvider) != null) {
         final session = ref.read(playbackSessionProvider);
         if (!identical(_preparingSession, session)) {
+          _clearSwipePreview();
           _preparingSession?.clearFeaturedVisits(this);
           _preparingSession?.leaveFeatured(this);
           _preparingSession = session;
@@ -329,11 +383,14 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
         next: feed.at(feed.selected + 1),
         hasReusableMedia: _preparingSession?.hasFeaturedVisit,
       );
-      if (current != null && detail?.value != null) _nominate(current);
+      if (current != null && detail?.value != null) {
+        _nominate(current, feed.selected);
+      }
+      _syncSwipePreview(updateClip: true);
     }
     return CommandTargetScope<Object>(
       scope: CommandScope.page,
-      active: active && panel == null,
+      active: _canPage,
       commands: {
         FeaturedPagingShortcut.previous: (stroke) => _pageWithKey(stroke, -1),
         FeaturedPagingShortcut.next: (stroke) => _pageWithKey(stroke, 1),
@@ -377,33 +434,16 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
                               ? PlaybackSplitLayout.sidebarWidth
                               : 0,
                           child: NotificationListener<ScrollNotification>(
-                            onNotification: (event) {
-                              if (event is ScrollStartNotification &&
-                                  event.depth == 0) {
-                                _dragAimed = false;
-                              }
-                              if (event is ScrollEndNotification) {
-                                return _scrollEnded(event);
-                              }
-                              if (event is ScrollUpdateNotification &&
-                                  event.depth == 0 &&
-                                  event.dragDetails != null) {
-                                final offset =
-                                    (pages.page ?? feed.selected.toDouble()) -
-                                    feed.selected;
-                                if (offset.abs() > .04) {
-                                  _aim(offset.sign.toInt(), renew: !_dragAimed);
-                                  _dragAimed = true;
-                                }
-                              }
-                              return false;
-                            },
+                            onNotification: _onPaging,
                             child: PageView.builder(
                               controller: pages,
                               scrollDirection: Axis.vertical,
-                              physics: show
-                                  ? const NeverScrollableScrollPhysics()
-                                  : _FeaturedScrollPhysics(feed.first),
+                              // Keep one viewport on either side so a prepared
+                              // texture is attached before the first drag frame.
+                              allowImplicitScrolling: _canPage,
+                              physics: _canPage
+                                  ? _FeaturedScrollPhysics(feed.first)
+                                  : const NeverScrollableScrollPhysics(),
                               itemCount: feed.end,
                               itemBuilder: (context, index) =>
                                   _page(index, detail),

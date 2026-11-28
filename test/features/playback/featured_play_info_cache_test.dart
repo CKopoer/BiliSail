@@ -120,4 +120,48 @@ void main() {
     expect(reads[3].isCancelled, isTrue);
     requests.advanceSession();
   });
+
+  test(
+    'a native standby keeps its signed tracks for a long viewing pause',
+    () async {
+      const cid = '1';
+      final viewed = cache.prepare(id, cid, neighbor: true);
+      final standby = cache.prepare(id, cid, forStandby: true);
+      final info = _info(
+        deadline:
+            now.add(const Duration(hours: 1)).millisecondsSinceEpoch ~/ 1000,
+      );
+      results.single.complete(info);
+      now = now.add(const Duration(minutes: 3));
+      final selected = cache.prepare(id, cid);
+      expect(await cache.take(id, cid, null), same(info));
+      expect(reads, hasLength(1));
+      standby();
+      // Ordinary metadata leases return to their short lifetime.
+      expect(await cache.take(id, cid, null, speculative: true), isNull);
+      viewed();
+      selected();
+    },
+  );
+
+  test(
+    'standby leases still expire at the signed deadline or their age limit',
+    () async {
+      for (final nearExpiry in [false, true]) {
+        final cid = 'part-$nearExpiry';
+        final standby = cache.prepare(id, cid, forStandby: true);
+        final duration = Duration(minutes: nearExpiry ? 2 : 60);
+        results.last.complete(
+          _info(deadline: now.add(duration).millisecondsSinceEpoch ~/ 1000),
+        );
+        now = now.add(
+          nearExpiry
+              ? duration - const Duration(seconds: 8)
+              : const Duration(minutes: 10),
+        );
+        expect(await cache.take(id, cid, null), isNull);
+        standby();
+      }
+    },
+  );
 }

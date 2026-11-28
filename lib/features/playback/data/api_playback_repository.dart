@@ -246,7 +246,9 @@ class ApiPlaybackRepository
     }
     // A long viewing pause can outlive the UI's original lease. Hold the
     // renewed signed URLs until this native candidate is discarded or adopted.
-    cancellation.onCancel(featuredPlayInfo.prepare(video, cid));
+    cancellation.onCancel(
+      featuredPlayInfo.prepare(video, cid, forStandby: true),
+    );
     return _resolve(
       video,
       cid,

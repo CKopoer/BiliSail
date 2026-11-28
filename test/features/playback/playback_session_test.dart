@@ -218,6 +218,99 @@ void main() {
     session.leaveFeatured(owner);
   });
 
+  for (final muteDuringHandoff in [false, true]) {
+    test(
+      'featured swipe rewinds on cancellation and keeps the moving preview through the audio handoff (mute=$muteDuringHandoff)',
+      () async {
+        final primary = _FakeEngine(), spare = _FakeEngine();
+        final repository = _FakeRepository(autoResolve: true);
+        final progress = _FakeProgress();
+        final session = PlaybackSession(
+          engine: primary,
+          repository: repository,
+          progress: progress,
+          accountScope: () => 'guest',
+          featuredStandby: FeaturedPreparedEngine(createEngine: () => spare),
+          resolveFeatured: repository.resolve,
+        );
+        addTearDown(session.close);
+        session.configureSettings(
+          const AppSettings.defaults().copyWith(autoPlay: true),
+        );
+        final screen = Object(), panel = Object();
+        final a = _detail('11'), b = _detail('22');
+        final incoming = (b.summary.id, '22');
+        session.attach(panel);
+        session.setFeaturedNeighbor(screen, (a.summary.id, '11'), incoming);
+        await session.activate(panel, a, a.parts.single);
+        await _flush();
+        expect(spare.currentSnapshot.phase, PlaybackPhase.paused);
+
+        session.setFeaturedSwipePreview(screen, incoming);
+        await _flush();
+        expect(spare.currentSnapshot.phase, PlaybackPhase.playing);
+        expect(spare.currentSnapshot.volume, 0);
+        spare.emit(
+          spare.currentSnapshot.copyWith(position: const Duration(seconds: 3)),
+        );
+        session.setFeaturedSwipePreview(screen, null);
+        await _flush();
+        expect(spare.currentSnapshot.phase, PlaybackPhase.paused);
+        expect(spare.currentSnapshot.position, Duration.zero);
+        expect(progress.writes.where((write) => write.cid == '22'), isEmpty);
+
+        session.setFeaturedSwipePreview(screen, incoming);
+        await _flush();
+        spare.emit(
+          spare.currentSnapshot.copyWith(position: const Duration(seconds: 2)),
+        );
+        final plays = spare.playCount;
+        final oldPaused = primary.nextPause = Completer<void>();
+        final framePresented = spare.nextPresentation = Completer<void>();
+        addTearDown(() {
+          if (!oldPaused.isCompleted) oldPaused.complete();
+          if (!framePresented.isCompleted) framePresented.complete();
+        });
+        session.setFeaturedNeighbor(screen, incoming, null);
+        session.setFeaturedSwipePreview(screen, null, keepSelected: true);
+        final opening = session.activate(panel, b, b.parts.single);
+        await _flush();
+        expect(primary.currentSnapshot.phase, PlaybackPhase.playing);
+        expect(spare.currentSnapshot.phase, PlaybackPhase.playing);
+        expect(spare.currentSnapshot.volume, 0);
+
+        oldPaused.complete();
+        await _flush();
+        expect(session.isResolving, isTrue);
+        expect(session.engine, same(primary));
+        expect(
+          session.featuredSlotEngine(
+            screen,
+            b.summary.id,
+            '22',
+            allowPreview: true,
+          ),
+          same(spare),
+        );
+        expect(spare.currentSnapshot.volume, 0);
+        if (muteDuringHandoff) await session.toggleMute(tabOnly: true);
+        framePresented.complete();
+        await opening;
+        expect(session.engine, same(spare));
+        expect(primary.currentSnapshot.phase, PlaybackPhase.paused);
+        expect(primary.currentSnapshot.volume, 0);
+        expect(spare.currentSnapshot.phase, PlaybackPhase.playing);
+        expect(
+          spare.currentSnapshot.volume,
+          muteDuringHandoff ? 0 : greaterThan(0),
+        );
+        expect(spare.currentSnapshot.position, const Duration(seconds: 2));
+        expect(spare.playCount, plays);
+        expect(spare.sources, hasLength(1));
+      },
+    );
+  }
+
   test(
     'featured reverse navigation reuses the paused engine and card intent',
     () async {
@@ -270,6 +363,10 @@ void main() {
         session.featuredPreview(_detail('11').summary.id, '11'),
         same(primary),
       );
+      session.setFeaturedSwipePreview(screen, (_detail('11').summary.id, '11'));
+      await _flush();
+      expect(primary.currentSnapshot.phase, PlaybackPhase.paused);
+      expect(primary.currentSnapshot.position, const Duration(seconds: 4));
       final resolutions = repository.qualities.length;
       await select('11');
       expect(session.engine, same(primary));
@@ -8401,7 +8498,8 @@ final class _FakeEngine
         PlayerEngine,
         AudioGainControl,
         PlaybackCacheControl,
-        AndroidAudioOutputControl {
+        AndroidAudioOutputControl,
+        PlaybackPresentationControl {
   _FakeEngine({this.openDuration = const Duration(minutes: 2)});
   final Duration openDuration;
   final _snapshots = StreamController<PlaybackSnapshot>.broadcast(sync: true);
@@ -8462,6 +8560,7 @@ final class _FakeEngine
 
   int volumeCalls = 0;
   Completer<void>? nextPause;
+  Completer<void>? nextPresentation;
   Completer<void>? nextOpen;
   Completer<void>? nextStop;
   Completer<void>? nextDispose;
@@ -8481,6 +8580,13 @@ final class _FakeEngine
   @override
   PlayerCapabilities get capabilities =>
       const PlayerCapabilities(externalAudio: true, externalAudioHeaders: true);
+
+  @override
+  Future<void> confirmPreparedPresentation(Duration timeout) async {
+    final pending = nextPresentation;
+    nextPresentation = null;
+    await pending?.future;
+  }
 
   void emit(PlaybackSnapshot value) {
     _current = value;

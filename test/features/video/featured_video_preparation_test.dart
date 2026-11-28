@@ -188,7 +188,7 @@ void main() {
   );
 
   testWidgets(
-    'forward and reverse handoff preserve the prepared frame and paint only the displayed clip danmaku',
+    'a visible neighbor plays muted and keeps its surface through handoff',
     (tester) async {
       final videos = _Videos();
       final capture = GlobalKey();
@@ -216,7 +216,6 @@ void main() {
         activate: () async {},
       );
       final settings = const AppSettings.defaults().copyWith(
-        autoPlay: false,
         danmakuEnabled: true,
         danmakuOpacity: 1,
       );
@@ -313,6 +312,9 @@ void main() {
           Offset(0, -tester.getSize(pager).height * .7 * direction),
         );
         await tester.pump();
+        expect(target.currentSnapshot.desiredPlaying, isTrue);
+        expect(target.currentSnapshot.volume, 0);
+        expect(session.engine, same(leaving));
         await checkPixel(target, 'incoming preview in direction $direction');
         await checkDanmaku('incoming preview in direction $direction');
         final surface = find.ancestor(
@@ -397,6 +399,51 @@ void main() {
       expect(spares.single.currentSnapshot.volume, 0);
       expect(spares.single.currentSnapshot.desiredPlaying, isFalse);
       final prepared = spares.single;
+      final warmSurface = find.byWidgetPredicate(
+        (widget) =>
+            widget is VideoSurface && identical(widget.engine, prepared),
+        skipOffstage: false,
+      );
+      final preparedState = tester.state(warmSurface);
+      final pager = find.byType(PageView);
+      final canceled = await tester.startGesture(tester.getCenter(pager));
+      await canceled.moveBy(const Offset(0, -30));
+      await canceled.moveBy(const Offset(0, -120));
+      await tester.pump();
+      expect(prepared.currentSnapshot.desiredPlaying, isTrue);
+      expect(prepared.currentSnapshot.volume, 0);
+      expect(session.engine, same(primary));
+      await canceled.moveBy(const Offset(0, 160));
+      await tester.pump();
+      expect(prepared.currentSnapshot.desiredPlaying, isFalse);
+      await canceled.up();
+      await frames();
+      expect(tester.widget<PageView>(pager).controller!.page, 0);
+      expect(tester.state(warmSurface), same(preparedState));
+      expect(session.engine, same(primary));
+      expect(primary.currentSnapshot.desiredPlaying, isTrue);
+      expect(prepared.opens, 1);
+
+      final interrupted = await tester.startGesture(tester.getCenter(pager));
+      await interrupted.moveBy(const Offset(0, -30));
+      await interrupted.moveBy(const Offset(0, -120));
+      await tester.pump();
+      expect(prepared.currentSnapshot.desiredPlaying, isTrue);
+      final context = tester.element(find.byType(FeaturedVideoScreen));
+      final modal = showDialog<void>(
+        context: context,
+        builder: (_) => const AlertDialog(title: Text('测试弹窗')),
+      );
+      await frames();
+      expect(prepared.currentSnapshot.desiredPlaying, isFalse);
+      await interrupted.up();
+      Navigator.of(context).pop();
+      await modal;
+      await frames();
+      expect(tester.widget<PageView>(pager).controller!.page, 0);
+      expect(session.engine, same(primary));
+      expect(prepared.opens, 1);
+
       await swipe(1, prepared);
       expect(session.detail?.summary.id, videos.items[1].id);
       expect(session.engine, same(prepared));
@@ -488,6 +535,19 @@ void main() {
       await tester.pumpAndSettle();
       expect(videos.reads, ids.take(3));
       expect(leases, {(ids[0], '1', false), (ids[1], '2', true)});
+
+      // A long swipe can cross another slot before it lands. Only the final
+      // page mounts foreground controls and can acquire playback ownership.
+      final pager = find.byType(PageView);
+      final drag = await tester.startGesture(tester.getCenter(pager));
+      await drag.moveBy(const Offset(0, -30));
+      await drag.moveBy(Offset(0, -tester.getSize(pager).height * 2.8));
+      await tester.pump();
+      expect(opened, {ids[0], ids[1]});
+      await drag.up();
+      await tester.pumpAndSettle();
+      expect(tester.widget<PageView>(pager).controller!.page, 3);
+      expect(opened, {ids[0], ids[1], ids[3]});
       active.value = false;
       await tester.pumpAndSettle();
       expect(leases, isEmpty);
