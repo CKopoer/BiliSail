@@ -2,6 +2,12 @@
 
 首期针对 B 站点播和离线媒体常用的 Dolby Digital Plus with Dolby Atmos（E-AC-3 JOC）。Windows 优先让 HDMI 功放解码，Android 优先使用手机已有的系统杜比解码器，也覆盖兼容的外接接收端。TrueHD Atmos、AC-4 和 Windows 耳机对象渲染分别验收。五端沿用已有音质偏好，选择「杜比音频」后才优先取服务端提供的杜比轨。默认 AAC 192K 和账号可见的清晰度、音质仍由现有选轨逻辑决定。
 
+## Android 普通音频输出
+
+播放器设置和全局播放设置共用音频输出偏好。Auto 按 OpenSL ES、AAudio、AudioTrack 的顺序尝试，指定输出时只请求所选驱动。OpenSL ES 默认请求 LATENCY，也支持 NONE、LATENCY_EFFECTS 和 POWER_SAVING。切换时由当前 mpv 实例重新打开音频输出，实时播放信息分别显示请求值和 Android 在初始化后返回的实际模式。系统没有返回有效模式时显示「—」，使用其他 mpv 输出时显示「不适用」。Media3 成功接管 JOC 音轨时直接显示系统 AudioTrack，回退到 mpv 时应用普通音频偏好。
+
+Android 构建沿用 [Predidit v1.3.1 的 LGPL 配方](https://github.com/Predidit/libmpv-android-video-build/tree/0443048272a511d7a990a2a3d5ca6bbaf55a869a)，在固定的 mpv 提交 `c3ac7f39514c7f45bc38a18e66887240539ee33c` 上应用[性能模式补丁](../android/native/mpv/opensles-performance.patch)。首次打包需要可运行 Linux 容器的 Docker Buildx；Gradle 只构建目标 ABI，将结果缓存于应用构建目录。后续 Dart 或界面变更复用同一原生库。完整源码配方见 [Dockerfile](../android/native/mpv/Dockerfile)。本次单元验证覆盖配置和系统回读值的展示；外放低频、路由及真机切换效果需要设备验证。
+
 ## 能力与证据
 
 播放信息应分别记录音轨、实际输出和接收端能确认的内容。B 站音轨 ID、`ec-3` 和声道数只能识别杜比候选。MP4 的 `dec3` 对象扩展、码流的 JOC 标志或解封装器据此识别的 JOC profile 可以确认片源。普通扬声器收到 PCM 也能发声。接收端报告 Atmos 输入，或系统杜比解码器实际处理带对象的音轨，才有相应设备路径的证据。系统空间音效开关和主观听感不能单独证明对象到达。[Dolby 的容器标记](https://ott.dolby.com/OnDelKits/DDP/Dolby_Digital_Plus_Online_Delivery_Kit_v1.5/Documentation/Playback/SDM/help_files/topics/c_id_ddp_atmos_isobmff.html) · [JOC 码流标记](https://ott.dolby.com/OnDelKits/EC-3_Online_Delivery_Kit_1.6/Documentation/Playback/SDM/help_files/topics/c_ddp_structure.html)

@@ -215,7 +215,20 @@ class _PlayerInformationTabState extends State<PlayerInformationTab>
               ),
               ('声道数', diagnostics?.audioChannels?.toString() ?? '—'),
               ('均衡增益', _number(native?.audioGainDb, ' dB')),
+              if (native?.requestedAudioDriver case final driver?)
+                ('请求音频输出', driver.label),
               ('音频输出', native?.audioOutput ?? '—'),
+              if (native?.requestedOpenSlMode case final mode?) ...[
+                ('OpenSL ES 请求模式', mode.label),
+                (
+                  'OpenSL ES 实际模式',
+                  native?.actualOpenSlMode?.label ??
+                      (native?.audioOutput == null ||
+                              native?.audioOutput == 'opensles'
+                          ? '—'
+                          : '不适用'),
+                ),
+              ],
               if (native case PlayerPlaybackInformation(
                 audioDecoder: final decoder?,
               ))

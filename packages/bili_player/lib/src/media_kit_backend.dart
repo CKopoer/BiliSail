@@ -13,6 +13,8 @@ import 'native_readiness.dart';
 import 'playback_backend.dart';
 import 'validated_source.dart';
 import 'native_media_options.dart';
+import '../android_audio_output.dart';
+import 'native_playback_policy.dart';
 import 'native_player_properties.dart';
 import 'native_buffering_diagnostics.dart';
 import 'native_load_observer.dart';
@@ -28,7 +30,11 @@ import 'video_output.dart';
 
 /// mpv commands and observations for one source; owns no playback state.
 final class MediaKitBackend
-    implements PlaybackBackend, ReusablePlaybackBackend, PlaybackCacheControl {
+    implements
+        PlaybackBackend,
+        ReusablePlaybackBackend,
+        PlaybackCacheControl,
+        AndroidAudioOutputControl {
   MediaKitBackend({
     required this.snapshot,
     this.onDiagnostic,
@@ -192,6 +198,7 @@ final class MediaKitBackend
     if (player == null || _disposed) return null;
     final information = await sampleNativePlaybackInformation(
       read: player.getPropertyAsync,
+      android: Platform.isAndroid,
       appleJoc: Platform.isMacOS || Platform.isIOS,
       diagnostics: inspectDiagnostics(),
       audioGainDb: appliedAudioGainDb,
@@ -525,6 +532,7 @@ final class MediaKitBackend
       await operation.wait(attaching);
       _attachingLoad = null;
     }
+    await operation.wait(setAndroidAudioOutput(options.androidAudioOutput));
     await operation.wait(player.setVolume(options.volume));
 
     _audioGain = NativeAudioGain(
@@ -1178,6 +1186,18 @@ final class MediaKitBackend
       }
     }
     if (restore) player.setProperty('time-pos', position);
+  }
+
+  @override
+  Future<void> setAndroidAudioOutput(AndroidAudioOutput output) async {
+    final player = _player;
+    if (!Platform.isAndroid || player == null) return;
+    await applyAndroidAudioOutput(
+      output,
+      read: player.getProperty,
+      write: player.setProperty,
+      reload: () => player.native.command(['ao-reload']),
+    );
   }
 
   @override

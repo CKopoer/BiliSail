@@ -16,6 +16,74 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'Android player settings persist the chosen driver and OpenSL mode',
+    (tester) async {
+      final repository = _SettingsRepository();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [settingsRepositoryProvider.overrideWithValue(repository)],
+          child: MaterialApp(
+            home: Builder(
+              builder: (context) => TextButton(
+                onPressed: () => showPlayerSettings(context),
+                child: const Text('配置'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('配置'));
+      await tester.pumpAndSettle();
+      final driver = find.byType(DropdownButton<AndroidAudioDriver>);
+      final mode = find.byType(DropdownButton<OpenSlPerformanceMode>);
+      final scroll = find
+          .descendant(
+            of: find.byType(ListView).first,
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      await tester.scrollUntilVisible(mode, 220, scrollable: scroll);
+      expect(
+        tester.widget<DropdownButton<AndroidAudioDriver>>(driver).value,
+        AndroidAudioDriver.auto,
+      );
+      expect(
+        tester.widget<DropdownButton<OpenSlPerformanceMode>>(mode).value,
+        OpenSlPerformanceMode.latency,
+      );
+      Future<void> pick(Finder widget, String label) async {
+        await tester.ensureVisible(widget);
+        await tester.pumpAndSettle();
+        await tester.tap(widget);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(label).last);
+        await tester.pumpAndSettle();
+      }
+
+      await pick(mode, 'NONE');
+      await pick(driver, 'AudioTrack');
+      expect(
+        tester.widget<DropdownButton<OpenSlPerformanceMode>>(mode).onChanged,
+        isNull,
+      );
+      expect(repository.settings.androidAudioOutput, (
+        driver: AndroidAudioDriver.audiotrack,
+        mode: OpenSlPerformanceMode.none,
+      ));
+      await pick(driver, 'OpenSL ES');
+      expect(
+        tester.widget<DropdownButton<OpenSlPerformanceMode>>(mode).value,
+        OpenSlPerformanceMode.none,
+      );
+      expect(
+        tester.widget<DropdownButton<OpenSlPerformanceMode>>(mode).onChanged,
+        isNotNull,
+      );
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
   testWidgets('playback cache validates and saves three independent sizes', (
     tester,
   ) async {
@@ -333,6 +401,18 @@ void main() {
         await tester.pumpAndSettle();
         expect(repository.settings.defaultPlaybackRate, 1.75);
         final remove = findMaterialTooltip('删除 1.75x');
+        if (player) {
+          await tester.scrollUntilVisible(
+            remove,
+            -200,
+            scrollable: find
+                .descendant(
+                  of: find.byType(ListView).first,
+                  matching: find.byType(Scrollable),
+                )
+                .first,
+          );
+        }
         await tester.ensureVisible(remove);
         await tester.pumpAndSettle();
         await tester.tap(remove);

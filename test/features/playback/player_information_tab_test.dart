@@ -121,6 +121,10 @@ void main() {
           sourceFps: 24,
           videoNominalBitrate: 2000000,
           audioNominalBitrate: 128000,
+          audioOutput: 'opensles',
+          requestedAudioDriver: AndroidAudioDriver.auto,
+          requestedOpenSlMode: OpenSlPerformanceMode.latency,
+          actualOpenSlMode: OpenSlPerformanceMode.none,
           cacheSeconds: 2.5,
           diagnostics: PlayerDiagnostics(
             generation: 1,
@@ -164,6 +168,9 @@ void main() {
       expect(copied, contains('声道数：2'));
       expect(copied, contains('视频码率（标称）：2.00 Mbps'));
       expect(copied, contains('音频码率（标称）：128.00 kbps'));
+      expect(copied, contains('请求音频输出：Auto'));
+      expect(copied, contains('OpenSL ES 请求模式：LATENCY'));
+      expect(copied, contains('OpenSL ES 实际模式：NONE'));
       expect(copied, contains('原生缓存时长：2.50 s'));
       expect(copied, contains('音画差（A−V）：—'));
       expect(copied, contains('输出丢帧（累计）：—'));

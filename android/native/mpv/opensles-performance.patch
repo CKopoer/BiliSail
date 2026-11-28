@@ -1,0 +1,119 @@
+--- a/audio/out/ao_opensles.c
++++ b/audio/out/ao_opensles.c
+@@ -41,6 +41,7 @@
+ 
+     int frames_per_enqueue;
+     int buffer_size_in_ms;
++    int performance_mode;
+ };
+ 
+ #define DESTROY(thing) \
+@@ -189,6 +190,19 @@
+     CHK((*p->engine)->CreateAudioPlayer(p->engine, &p->player, &audio_source,
+         &audio_sink, 2, iid_array, required));
+ 
++    // Android accepts performance requests only before realizing the player.
++    SLAndroidConfigurationItf config = NULL;
++    SLuint32 requested = p->performance_mode;
++    SLresult configured = (*p->player)->GetInterface(p->player,
++        SL_IID_ANDROIDCONFIGURATION, &config);
++    if (configured == SL_RESULT_SUCCESS)
++        configured = (*config)->SetConfiguration(config, SL_ANDROID_KEY_PERFORMANCE_MODE,
++                                                  &requested, sizeof(requested));
++    // Older devices may only implement their original default path.
++    if (configured != SL_RESULT_SUCCESS && requested != SL_ANDROID_PERFORMANCE_LATENCY) {
++        MP_WARN(ao, "OpenSL ES performance request failed: %u\n", (unsigned)configured);
++        goto error;
++    }
+     CHK((*p->player)->Realize(p->player, SL_BOOLEAN_FALSE));
+     CHK((*p->player)->GetInterface(p->player, SL_IID_PLAY, (void*)&p->play));
+     CHK((*p->player)->GetInterface(p->player, SL_IID_BUFFERQUEUE,
+@@ -207,6 +221,16 @@
+     );
+ 
+     if (get_interface_result == SL_RESULT_SUCCESS) {
++        SLuint32 actual, size = sizeof(actual);
++        if ((*android_config)->GetConfiguration(android_config, SL_ANDROID_KEY_PERFORMANCE_MODE,
++                &size, &actual) == SL_RESULT_SUCCESS && size == sizeof(actual)) {
++            switch (actual) {
++            case SL_ANDROID_PERFORMANCE_LATENCY: ao->opensles_mode = "LATENCY"; break;
++            case SL_ANDROID_PERFORMANCE_NONE: ao->opensles_mode = "NONE"; break;
++            case SL_ANDROID_PERFORMANCE_LATENCY_EFFECTS: ao->opensles_mode = "LATENCY_EFFECTS"; break;
++            case SL_ANDROID_PERFORMANCE_POWER_SAVING: ao->opensles_mode = "POWER_SAVING"; break;
++            }
++        }
+         SLint32 get_configuration_result = (*android_config)->GetConfiguration(
+             android_config,
+             (const SLchar *)"androidGetAudioLatency",
+@@ -253,8 +277,14 @@
+     .priv_size = sizeof(struct priv),
+     .priv_defaults = &(const struct priv) {
+         .buffer_size_in_ms = 250,
++        .performance_mode = SL_ANDROID_PERFORMANCE_LATENCY,
+     },
+     .options = (const struct m_option[]) {
++        {"performance-mode", OPT_CHOICE(performance_mode,
++            {"LATENCY", SL_ANDROID_PERFORMANCE_LATENCY},
++            {"NONE", SL_ANDROID_PERFORMANCE_NONE},
++            {"LATENCY_EFFECTS", SL_ANDROID_PERFORMANCE_LATENCY_EFFECTS},
++            {"POWER_SAVING", SL_ANDROID_PERFORMANCE_POWER_SAVING})},
+         {"frames-per-enqueue", OPT_INT(frames_per_enqueue),
+             M_RANGE(1, 96000)},
+         {"buffer-size-in-ms", OPT_INT(buffer_size_in_ms),
+--- a/audio/out/internal.h
++++ b/audio/out/internal.h
+@@ -25,6 +25,7 @@
+ 
+ /* global data used by ao.c and ao drivers */
+ struct ao {
++    const char *opensles_mode; // Device readback for this output instance, or NULL.
+     int samplerate;
+     struct mp_chmap channels;
+     int format;                 // one of AF_FORMAT_...
+--- a/audio/out/ao.c
++++ b/audio/out/ao.c
+@@ -440,6 +440,11 @@
+     *channels = ao->channels;
+ }
+ 
++const char *ao_get_opensles_mode(struct ao *ao)
++{
++    return ao->opensles_mode;
++}
++
+ const char *ao_get_name(struct ao *ao)
+ {
+     return ao->driver->name;
+--- a/audio/out/ao.h
++++ b/audio/out/ao.h
+@@ -90,6 +90,7 @@
+ void ao_uninit(struct ao *ao);
+ void ao_get_format(struct ao *ao,
+                    int *samplerate, int *format, struct mp_chmap *channels);
++const char *ao_get_opensles_mode(struct ao *ao);
+ const char *ao_get_name(struct ao *ao);
+ const char *ao_get_description(struct ao *ao);
+ bool ao_untimed(struct ao *ao);
+--- a/player/command.c
++++ b/player/command.c
+@@ -1946,6 +1946,12 @@
+ {
+     MPContext *mpctx = ctx;
+     return m_property_strdup_ro(action, arg, mpctx->ao ? ao_get_name(mpctx->ao) : NULL);
++}
++
++static int mp_property_opensles_mode(void *ctx, struct m_property *p, int action, void *arg)
++{
++    MPContext *mpctx = ctx;
++    return m_property_strdup_ro(action, arg, mpctx->ao ? ao_get_opensles_mode(mpctx->ao) : NULL);
+ }
+ 
+ /// Audio delay (RW)
+@@ -4748,6 +4754,7 @@
+     {"audio-device", mp_property_audio_device},
+     {"audio-device-list", mp_property_audio_devices},
+     {"current-ao", mp_property_ao},
++    {"current-opensles-performance-mode", mp_property_opensles_mode},
+ 
+     // Video
+     {"video-target-params", mp_property_tgt_imgparams},

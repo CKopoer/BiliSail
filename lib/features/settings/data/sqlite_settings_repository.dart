@@ -243,6 +243,18 @@ class SqliteSettingsRepository implements SettingsRepository {
               .where((item) => item.name == decoded['playbackBackend'])
               .firstOrNull ??
           PlaybackBackendPreference.mediaKit,
+      androidAudioOutput: (
+        driver:
+            AndroidAudioDriver.values
+                .where((v) => v.name == decoded['androidAudioDriver'])
+                .firstOrNull ??
+            defaultAndroidAudioOutput.driver,
+        mode:
+            OpenSlPerformanceMode.values
+                .where((v) => v.name == decoded['openSlPerformanceMode'])
+                .firstOrNull ??
+            defaultAndroidAudioOutput.mode,
+      ),
       androidVideoOutput:
           AndroidVideoOutputPreference.values
               .where((item) => item.name == decoded['androidVideoOutput'])
@@ -344,7 +356,7 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 60,
+        'schemaVersion': 61,
         'appIcon': value.appIcon.name,
         'recommendations': value.recommendations.toJson(),
         'navigationBarMode': value.navigationBarMode.name,
@@ -421,6 +433,8 @@ class SqliteSettingsRepository implements SettingsRepository {
         'preferredVideoCodec': value.preferredVideoCodec.name,
         'mediaCdn': value.mediaCdn.name,
         'videoDecoding': value.videoDecoding.name,
+        'androidAudioDriver': value.androidAudioOutput.driver.name,
+        'openSlPerformanceMode': value.androidAudioOutput.mode.name,
         'androidVideoOutput': value.androidVideoOutput.name,
         'videoForwardCacheMiB': value.playbackCache.videoForwardMiB,
         'videoBackwardCacheMiB': value.playbackCache.videoBackwardMiB,

@@ -13,6 +13,34 @@ void main() {
   );
 
   test(
+    'OpenSL readback belongs to the active output, independent of the request',
+    () async {
+      final props = {
+        'ao': 'opensles,aaudio,audiotrack',
+        'current-ao': 'opensles',
+        'opensles-performance-mode': 'LATENCY',
+        'current-opensles-performance-mode': 'NONE',
+      };
+      Future<PlayerPlaybackInformation> sample() =>
+          sampleNativePlaybackInformation(
+            android: true,
+            diagnostics: diagnostics,
+            audioGainDb: 0,
+            read: (key) async => props[key],
+          );
+      final info = (await sample()).withGeneration(8);
+      expect(info.requestedAudioDriver, AndroidAudioDriver.auto);
+      expect(info.requestedOpenSlMode, OpenSlPerformanceMode.latency);
+      expect(info.actualOpenSlMode, OpenSlPerformanceMode.none);
+      props['current-ao'] = 'aaudio';
+      expect((await sample()).actualOpenSlMode, isNull);
+      props['current-ao'] = 'opensles';
+      props.remove('current-opensles-performance-mode');
+      expect((await sample()).actualOpenSlMode, isNull);
+    },
+  );
+
+  test(
     'native information preserves units, signed sync and zero drops',
     () async {
       final properties = {

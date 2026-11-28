@@ -1,3 +1,5 @@
+import 'package:bili_player/android_audio_output.dart';
+export 'package:bili_player/android_audio_output.dart';
 import 'package:bili_player/playback_cache_limits.dart';
 
 import '../../../domain/playback_rates.dart';
@@ -161,6 +163,7 @@ final class AppSettings {
     this.videoDecoding = VideoDecodingPreference.automatic,
     this.playbackBackend = PlaybackBackendPreference.mediaKit,
     this.androidVideoOutput = AndroidVideoOutputPreference.renderedTexture,
+    this.androidAudioOutput = defaultAndroidAudioOutput,
     this.playbackCache = defaultPlaybackCache,
     this.defaultPlaybackRate = 1.0,
     List<double> playbackRates = PlaybackRates.values,
@@ -264,6 +267,7 @@ final class AppSettings {
        videoDecoding = VideoDecodingPreference.automatic,
        playbackBackend = PlaybackBackendPreference.mediaKit,
        androidVideoOutput = AndroidVideoOutputPreference.renderedTexture,
+       androidAudioOutput = defaultAndroidAudioOutput,
        playbackCache = defaultPlaybackCache,
        defaultPlaybackRate = 1.0,
        playbackRates = PlaybackRates.values,
@@ -361,6 +365,7 @@ final class AppSettings {
   final PlaybackBackendPreference playbackBackend;
 
   final AndroidVideoOutputPreference androidVideoOutput;
+  final AndroidAudioOutput androidAudioOutput;
   final PlaybackCacheSettings playbackCache;
 
   PlaybackCacheLimits playbackCacheLimits({required bool live}) => live
@@ -475,6 +480,7 @@ final class AppSettings {
     VideoDecodingPreference? videoDecoding,
     PlaybackBackendPreference? playbackBackend,
     AndroidVideoOutputPreference? androidVideoOutput,
+    AndroidAudioOutput? androidAudioOutput,
     PlaybackCacheSettings? playbackCache,
     double? defaultPlaybackRate,
     List<double>? playbackRates,
@@ -590,6 +596,7 @@ final class AppSettings {
     videoDecoding: videoDecoding ?? this.videoDecoding,
     playbackBackend: playbackBackend ?? this.playbackBackend,
     androidVideoOutput: androidVideoOutput ?? this.androidVideoOutput,
+    androidAudioOutput: androidAudioOutput ?? this.androidAudioOutput,
     playbackCache: playbackCache ?? this.playbackCache,
     defaultPlaybackRate: defaultPlaybackRate ?? this.defaultPlaybackRate,
     playbackRates: playbackRates ?? this.playbackRates,

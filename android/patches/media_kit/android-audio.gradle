@@ -1,0 +1,38 @@
+// Compile once per ABI and recipe. Flutter supplies the remaining Native Assets
+// (including the event loop and JNI helper) in the same staging task.
+def recipe = rootProject.file('native/mpv')
+def abis = ['android-arm64': 'arm64-v8a', 'android-arm': 'armeabi-v7a',
+            'android-x64': 'x86_64', 'android-x86': 'x86']
+def builds = abis.collectEntries { platform, abi ->
+    def output = layout.buildDirectory.dir("bilisail-mpv/${abi}")
+    def build = tasks.register("buildBilisailMpv${abi.replace('-', '').capitalize()}", Exec) {
+        inputs.dir(recipe).withPropertyName('sourceRecipe')
+        inputs.property('abi', abi)
+        outputs.file(output.map { it.file('libmpv.so') })
+        commandLine 'docker', 'buildx', 'build', '--platform', 'linux/amd64',
+            '--build-arg', "ABI=${abi}", '--output', "type=local,dest=${output.get().asFile}", recipe
+    }
+    [(platform): build]
+}
+
+tasks.matching { it.name.startsWith('copyJniLibsflutterBuild') }.configureEach { stage ->
+    // targetPlatforms comes from Flutter's --target-platform, including split APKs.
+    def selected = stage.targetPlatforms.map { platforms ->
+        platforms.collect { platform ->
+            if (!builds.containsKey(platform)) throw new GradleException("Unknown Android ABI: ${platform}")
+            builds[platform]
+        }
+    }
+    stage.inputs.files(selected).withPropertyName('bilisailMpvLibraries')
+    stage.dependsOn(selected)
+    stage.doLast {
+        stage.targetPlatforms.get().each { platform ->
+            def abi = abis[platform]
+            def bundled = stage.destinationDir.file("${abi}/libmpv.so").get().asFile
+            if (!bundled.isFile()) throw new GradleException("Flutter did not stage libmpv for ${abi}")
+            def patched = builds[platform].get().outputs.files.singleFile
+            java.nio.file.Files.copy(patched.toPath(), bundled.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        }
+    }
+}

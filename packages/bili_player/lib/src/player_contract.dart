@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../android_audio_output.dart';
 import '../playback_cache_limits.dart';
 
 /// Headers are held only for the active source. Do not log or serialize this.
@@ -102,6 +103,7 @@ final class OpenOptions {
     this.androidVideoOutput = AndroidVideoOutputMode.renderedTexture,
     this.openTimeout = const Duration(seconds: 35),
     Duration? maxBufferAhead,
+    this.androidAudioOutput = defaultAndroidAudioOutput,
     this.cacheLimits,
     this.retainPresentation = false,
   }) : requestedBufferAhead = maxBufferAhead;
@@ -125,6 +127,7 @@ final class OpenOptions {
   /// An unset live window leaves the time policy to mpv.
   final Duration? requestedBufferAhead;
   final PlaybackCacheLimits? cacheLimits;
+  final AndroidAudioOutput androidAudioOutput;
 
   /// Reopening the same content after interruption keeps its last frame and
   /// timeline until both replacement tracks are ready. Never use for new media.
@@ -305,6 +308,10 @@ abstract interface class PlayerEngine {
 /// Optional native gain control; changing gain must not reopen media.
 abstract interface class AudioGainControl {
   Future<void> setAudioGain(double gainDb);
+}
+
+abstract interface class AndroidAudioOutputControl {
+  Future<void> setAndroidAudioOutput(AndroidAudioOutput output);
 }
 
 abstract interface class PlaybackCacheControl {

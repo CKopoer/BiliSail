@@ -1,3 +1,4 @@
+import '../android_audio_output.dart';
 import 'player_diagnostics.dart';
 
 /// Optional, read-only sampling. It must not open media or change playback.
@@ -33,6 +34,9 @@ final class PlayerPlaybackInformation {
     this.transferFunction,
     this.videoOutput,
     this.audioOutput,
+    this.actualOpenSlMode,
+    this.requestedOpenSlMode,
+    this.requestedAudioDriver,
     this.avSyncSeconds,
     this.audioPositionSeconds,
     this.videoPositionSeconds,
@@ -64,6 +68,8 @@ final class PlayerPlaybackInformation {
   final String? pixelFormat, colorMatrix, colorPrimaries, transferFunction;
   final String? hardwarePixelFormat, colorLevels;
   final String? videoOutput, audioOutput;
+  final AndroidAudioDriver? requestedAudioDriver;
+  final OpenSlPerformanceMode? requestedOpenSlMode, actualOpenSlMode;
 
   /// Native A−V difference and per-track timestamps, in seconds.
   final double? avSyncSeconds, audioPositionSeconds, videoPositionSeconds;
@@ -117,6 +123,9 @@ final class PlayerPlaybackInformation {
         transferFunction: transferFunction,
         videoOutput: videoOutput,
         audioOutput: audioOutput,
+        actualOpenSlMode: actualOpenSlMode,
+        requestedOpenSlMode: requestedOpenSlMode,
+        requestedAudioDriver: requestedAudioDriver,
         avSyncSeconds: avSyncSeconds,
         audioPositionSeconds: audioPositionSeconds,
         videoPositionSeconds: videoPositionSeconds,

@@ -140,6 +140,7 @@ final class ValidatedSource {
             videoDecoding: options.videoDecoding,
             androidVideoOutput: androidOutput,
             openTimeout: options.openTimeout,
+            androidAudioOutput: options.androidAudioOutput,
             cacheLimits: options.cacheLimits,
             retainPresentation: options.retainPresentation,
             maxBufferAhead: source is DashVideoSource

@@ -42,6 +42,46 @@ import '../../support/video_card_fake_engine.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   test(
+    'Android audio changes during opening and playback preserve the source',
+    () async {
+      final engine = _FakeEngine();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(),
+        contentRepository: _FakeContentRepository(),
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+      );
+      addTearDown(session.close);
+      const first = (
+        driver: AndroidAudioDriver.opensles,
+        mode: OpenSlPerformanceMode.none,
+      );
+      const second = (
+        driver: AndroidAudioDriver.auto,
+        mode: OpenSlPerformanceMode.latencyEffects,
+      );
+      session.configureSettings(AppSettings(androidAudioOutput: first));
+      final gate = engine.nextOpen = Completer<void>();
+      final opening = session.open(
+        null,
+        null,
+        target: const PgcPlaybackTarget('7'),
+      );
+      await _flush();
+      expect(engine.openOptions.single.androidAudioOutput, first);
+      session.configureSettings(AppSettings(androidAudioOutput: second));
+      expect(engine.audioOutputUpdates, isEmpty);
+      gate.complete();
+      await opening;
+      expect(engine.audioOutputUpdates, [second]);
+      session.configureSettings(AppSettings(androidAudioOutput: first));
+      await _flush();
+      expect(engine.audioOutputUpdates, [second, first]);
+      expect(engine.openOptions, hasLength(1));
+    },
+  );
+  test(
     'cache preferences apply on open and update without reopening',
     () async {
       final engine = _FakeEngine();
@@ -7962,7 +8002,11 @@ final class _FakeProgress implements PlaybackProgressStore {
 }
 
 final class _FakeEngine
-    implements PlayerEngine, AudioGainControl, PlaybackCacheControl {
+    implements
+        PlayerEngine,
+        AudioGainControl,
+        PlaybackCacheControl,
+        AndroidAudioOutputControl {
   _FakeEngine({this.openDuration = const Duration(minutes: 2)});
   final Duration openDuration;
   final _snapshots = StreamController<PlaybackSnapshot>.broadcast(sync: true);
@@ -7982,6 +8026,12 @@ final class _FakeEngine
   int _playRevision = 0;
   final openedUris = <Uri>[];
   final openOptions = <OpenOptions>[];
+  final audioOutputUpdates = <AndroidAudioOutput>[];
+  @override
+  Future<void> setAndroidAudioOutput(AndroidAudioOutput output) async {
+    audioOutputUpdates.add(output);
+  }
+
   final cacheUpdates = <PlaybackCacheLimits>[];
   bool rejectCacheUpdate = false;
 

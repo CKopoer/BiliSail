@@ -11,6 +11,7 @@ import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/retained_tab_view.dart';
 import '../../../shared/ui/system_font_picker.dart';
 import '../../../shared/ui/danmaku_settings_controls.dart';
+import '../../../shared/ui/android_audio_output_settings.dart';
 import '../../../shared/ui/player_controls_mode_setting.dart';
 import '../../../shared/ui/app_notice.dart';
 import '../../../shared/ui/app_dialog.dart';
@@ -740,6 +741,30 @@ final class _SettingsCategoryPageState
                             controller.setVideoCardHoverPlayback,
                             '鼠标停留在视频卡或直播卡上时静音播放预览，关闭可减少资源和流量占用',
                           ),
+                          if (defaultTargetPlatform == TargetPlatform.android)
+                            AndroidAudioOutputSettings(
+                              value: s.androidAudioOutput,
+                              onDriver: (driver) => _save(
+                                () => controller.update(
+                                  (c) => c.copyWith(
+                                    androidAudioOutput: (
+                                      driver: driver,
+                                      mode: c.androidAudioOutput.mode,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              onMode: (mode) => _save(
+                                () => controller.update(
+                                  (c) => c.copyWith(
+                                    androidAudioOutput: (
+                                      driver: c.androidAudioOutput.driver,
+                                      mode: mode,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                           PlaybackCacheSettingsTile(
                             value: s.playbackCache,
                             save: (value) => _save(

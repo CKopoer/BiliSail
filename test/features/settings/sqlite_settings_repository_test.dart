@@ -13,6 +13,46 @@ void main() {
   late AppDatabase database;
   late SqliteSettingsRepository repository;
   test(
+    'Android audio selections restore, persist and default independently',
+    () async {
+      expect(
+        (await repository.load()).androidAudioOutput,
+        defaultAndroidAudioOutput,
+      );
+      for (final driver in AndroidAudioDriver.values) {
+        for (final mode in OpenSlPerformanceMode.values) {
+          final selection = (driver: driver, mode: mode);
+          await repository.save(
+            (await repository.load()).copyWith(androidAudioOutput: selection),
+          );
+          expect(
+            (await SqliteSettingsRepository(
+              database,
+            ).load()).androidAudioOutput,
+            selection,
+          );
+        }
+      }
+      await database.writeSetting(
+        'preferences.v1',
+        '{"schemaVersion":60,"androidAudioDriver":false,"openSlPerformanceMode":"none"}',
+      );
+      expect((await repository.load()).androidAudioOutput, (
+        driver: AndroidAudioDriver.auto,
+        mode: OpenSlPerformanceMode.none,
+      ));
+      await database.writeSetting(
+        'preferences.v1',
+        '{"androidAudioDriver":"audiotrack","openSlPerformanceMode":"future"}',
+      );
+      expect((await repository.load()).androidAudioOutput, (
+        driver: AndroidAudioDriver.audiotrack,
+        mode: OpenSlPerformanceMode.latency,
+      ));
+    },
+  );
+
+  test(
     'playback cache falls back per field and persists custom sizes',
     () async {
       const defaults = (
@@ -131,7 +171,7 @@ void main() {
         final snapshot = jsonDecode(
           (await database.readSetting('preferences.v1'))!,
         ) as Map<String, Object?>;
-        expect(snapshot['schemaVersion'], 60);
+        expect(snapshot['schemaVersion'], 61);
         expect(snapshot['wheelScrollAnimation'], mode.name);
       }
       expect(database.schemaVersion, 4);

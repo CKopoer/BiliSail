@@ -1,3 +1,4 @@
+import '../android_audio_output.dart';
 import 'player_diagnostics.dart';
 import 'player_playback_information.dart';
 import 'dolby_audio_output.dart';
@@ -8,6 +9,7 @@ Future<PlayerPlaybackInformation> sampleNativePlaybackInformation({
   required PlayerDiagnostics diagnostics,
   required double audioGainDb,
   bool appleJoc = false,
+  bool android = false,
 }) async {
   final properties = [
     if (appleJoc) 'apple-joc-rendered-packets',
@@ -29,6 +31,11 @@ Future<PlayerPlaybackInformation> sampleNativePlaybackInformation({
     'video-params/gamma',
     'current-vo',
     'current-ao',
+    if (android) ...[
+      'ao',
+      'opensles-performance-mode',
+      'current-opensles-performance-mode',
+    ],
     'avsync',
     'audio-pts',
     'video-pts',
@@ -100,6 +107,20 @@ Future<PlayerPlaybackInformation> sampleNativePlaybackInformation({
     transferFunction: identifier('video-params/gamma'),
     videoOutput: identifier('current-vo'),
     audioOutput: identifier('current-ao'),
+    requestedAudioDriver: AndroidAudioDriver.values
+        .where((driver) => driver.mpvValue == data['ao'])
+        .firstOrNull,
+    requestedOpenSlMode: OpenSlPerformanceMode.values
+        .where((mode) => mode.label == data['opensles-performance-mode'])
+        .firstOrNull,
+    actualOpenSlMode: data['current-ao'] == 'opensles'
+        ? OpenSlPerformanceMode.values
+              .where(
+                (mode) =>
+                    mode.label == data['current-opensles-performance-mode'],
+              )
+              .firstOrNull
+        : null,
     avSyncSeconds: number('avsync', signed: true),
     audioPositionSeconds: number('audio-pts'),
     videoPositionSeconds: number('video-pts'),

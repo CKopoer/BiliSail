@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import '../android_audio_output.dart';
 import '../playback_cache_limits.dart';
 import 'native_readiness.dart';
 import 'playback_backend.dart';
@@ -19,6 +20,7 @@ class SharedPlayerEngine
         VideoOutputSource,
         AudioGainControl,
         PlaybackCacheControl,
+        AndroidAudioOutputControl,
         PlayerInformationSource {
   SharedPlayerEngine({
     required this.createBackend,
@@ -1044,6 +1046,18 @@ class SharedPlayerEngine
       if (identical(operation, _seekOperation)) _seekOperation = null;
     }
   }
+
+  @override
+  Future<void> setAndroidAudioOutput(AndroidAudioOutput output) => _control(
+    _generation,
+    (backend) async {
+      if (backend case final AndroidAudioOutputControl control) {
+        await control.setAndroidAudioOutput(output);
+      }
+    },
+    allowed: () => !_opening && !_terminal,
+    nonFatalErrorMessage: '当前播放的音频输出更新失败',
+  );
 
   @override
   Future<void> setCacheLimits(PlaybackCacheLimits limits) {

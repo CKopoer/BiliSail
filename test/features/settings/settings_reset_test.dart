@@ -73,6 +73,10 @@ void main() {
           wheelScrollDistanceMultiplier: 4,
           wheelScrollDurationMultiplier: 3,
           autoPlay: false,
+          androidAudioOutput: (
+            driver: AndroidAudioDriver.audiotrack,
+            mode: OpenSlPerformanceMode.none,
+          ),
           playbackCache: (
             videoForwardMiB: 32,
             videoBackwardMiB: 0,
@@ -156,6 +160,7 @@ void main() {
         expect(settings.danmakuFontScale, defaults.danmakuFontScale);
         expect(settings.danmakuFont, DanmakuFontPreference.harmonyOsSans);
         expect(settings.danmakuFontFamily, 'HarmonyOS Sans');
+        expect(settings.androidAudioOutput, defaultAndroidAudioOutput);
         expect(settings.playerControlsMode, defaults.playerControlsMode);
         expect(
           settings.videoCardHoverPlayback,

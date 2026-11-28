@@ -1,10 +1,53 @@
 import 'dart:async';
 
+import 'package:bili_player/android_audio_output.dart';
 import 'package:bili_player/src/native_playback_policy.dart';
 import 'package:bili_player/src/native_readiness.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('changing the driver or an active OpenSL mode reloads once', () async {
+    final properties = {
+      'ao': 'opensles,aaudio,audiotrack',
+      'current-ao': 'opensles',
+      'opensles-performance-mode': 'LATENCY',
+    };
+    final changes = <String>[];
+    Future<void> apply(
+      AndroidAudioDriver driver,
+      OpenSlPerformanceMode mode,
+    ) async {
+      changes.clear();
+      await applyAndroidAudioOutput(
+        (driver: driver, mode: mode),
+        read: (k) => properties[k]!,
+        write: (k, v) {
+          properties[k] = v;
+          changes.add('$k=$v');
+        },
+        reload: () async => changes.add('reload'),
+      );
+    }
+
+    await apply(AndroidAudioDriver.auto, OpenSlPerformanceMode.latency);
+    expect(changes, isEmpty);
+    await apply(AndroidAudioDriver.auto, OpenSlPerformanceMode.none);
+    expect(changes, ['opensles-performance-mode=NONE', 'reload']);
+    for (final driver in [
+      AndroidAudioDriver.aaudio,
+      AndroidAudioDriver.audiotrack,
+      AndroidAudioDriver.opensles,
+      AndroidAudioDriver.auto,
+    ]) {
+      await apply(driver, OpenSlPerformanceMode.powerSaving);
+      expect(changes.last, 'ao=${driver.mpvValue}');
+      expect(changes, isNot(contains('reload')));
+    }
+    properties['current-ao'] = 'aaudio';
+    await apply(AndroidAudioDriver.auto, OpenSlPerformanceMode.latencyEffects);
+    expect(changes, ['opensles-performance-mode=LATENCY_EFFECTS']);
+  });
+
   for (final platform in ['android', 'macos', 'other']) {
     final android = platform == 'android';
     for (final curl in ['', 'yes', 'no']) {

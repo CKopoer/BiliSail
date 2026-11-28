@@ -1,11 +1,13 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/ui/app_dialog.dart';
 import '../../../shared/ui/playback_rate_options_setting.dart';
 import '../../../shared/ui/danmaku_settings_controls.dart';
+import '../../../shared/ui/android_audio_output_settings.dart';
 import '../../../shared/ui/player_controls_mode_setting.dart';
 import '../../settings/application/settings_controller.dart';
 import '../../settings/domain/app_settings.dart';
@@ -356,6 +358,30 @@ class _PlayerSettingsDialogState extends ConsumerState<_PlayerSettingsDialog> {
                             },
                           ),
                         ),
+                        if (defaultTargetPlatform == TargetPlatform.android)
+                          AndroidAudioOutputSettings(
+                            value: s.androidAudioOutput,
+                            onDriver: (driver) => unawaited(
+                              _update(
+                                (c) => c.copyWith(
+                                  androidAudioOutput: (
+                                    driver: driver,
+                                    mode: c.androidAudioOutput.mode,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            onMode: (mode) => unawaited(
+                              _update(
+                                (c) => c.copyWith(
+                                  androidAudioOutput: (
+                                    driver: c.androidAudioOutput.driver,
+                                    mode: mode,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
                         ListTile(
                           title: const Text('音量均衡'),
                           subtitle: DropdownButton<AudioNormalizationMode>(

@@ -1,5 +1,6 @@
 library;
 
+export 'android_audio_output.dart';
 export 'playback_cache_limits.dart';
 export 'src/player_contract.dart';
 export 'src/player_diagnostics.dart';

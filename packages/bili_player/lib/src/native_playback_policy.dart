@@ -1,6 +1,24 @@
 import 'dart:async';
 
+import '../android_audio_output.dart';
 import 'native_readiness.dart';
+
+/// The ao option itself reloads mpv's output. A mode-only change needs an
+/// explicit reload only while an OpenSL ES output is active.
+Future<void> applyAndroidAudioOutput(
+  AndroidAudioOutput output, {
+  required String Function(String) read,
+  required void Function(String, String) write,
+  required Future<void> Function() reload,
+}) async {
+  final changeMode = read('opensles-performance-mode') != output.mode.label;
+  if (changeMode) write('opensles-performance-mode', output.mode.label);
+  if (read('ao') != output.driver.mpvValue) {
+    write('ao', output.driver.mpvValue);
+  } else if (changeMode && read('current-ao') == 'opensles') {
+    await reload();
+  }
+}
 
 /// Native playback defaults, independent of source and playback rate.
 /// Pitch correction, audio buffering and decoder queues remain owned by mpv.
@@ -38,7 +56,7 @@ Future<void> configureNativePlaybackPolicy({
     'stream-lavf-o': 'rw_timeout=5000000',
     'video-sync': 'display-resample',
     'autosync': '${experimentalAutosync ?? (isAndroid ? 30 : 0)}',
-    if (isAndroid) 'ao': 'opensles,aaudio,audiotrack',
+    if (isAndroid) 'ao': defaultAndroidAudioOutput.driver.mpvValue,
     // CoreAudio can reject 48 kHz planar float when setting the channel layout.
     // mpv applies this option only to decoded PCM, including fallback from JOC.
     if (isMacOS) 'audio-format': 'float',

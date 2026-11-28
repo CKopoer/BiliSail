@@ -1325,6 +1325,7 @@ class PlaybackSession extends ChangeNotifier {
         isLive: isLive,
         requestedLiveLine: requestedLiveLine,
       );
+      late final AndroidAudioOutput openedAudioOutput;
       late final PlaybackCacheLimits openedCacheLimits;
       Future<void> openSource() async {
         if (!isCurrent()) return;
@@ -1338,6 +1339,7 @@ class PlaybackSession extends ChangeNotifier {
           if (!isCurrent()) return;
         }
         if (isLive) _openingLiveGeneration = generation;
+        openedAudioOutput = _settings.androidAudioOutput;
         openedCacheLimits = _settings.playbackCacheLimits(live: isLive);
         await engine.open(
           source,
@@ -1359,6 +1361,7 @@ class PlaybackSession extends ChangeNotifier {
                 AndroidVideoOutputMode.directTexture,
             },
             openTimeout: openBudget,
+            androidAudioOutput: openedAudioOutput,
             cacheLimits: openedCacheLimits,
             retainPresentation: retryMedia != null,
           ),
@@ -1405,6 +1408,10 @@ class PlaybackSession extends ChangeNotifier {
       _mediaGeneration = generation;
       _resolving = false;
       final cacheLimits = _settings.playbackCacheLimits(live: isLive);
+      if (openedAudioOutput != _settings.androidAudioOutput) {
+        await _applyAndroidAudioOutput(_settings.androidAudioOutput);
+        if (!isCurrent()) return;
+      }
       if (cacheLimits != openedCacheLimits) {
         await _applyCacheLimits(cacheLimits);
         if (!isCurrent()) return;
@@ -1909,6 +1916,10 @@ class PlaybackSession extends ChangeNotifier {
       if (!_resolving &&
           cacheLimits != previous.playbackCacheLimits(live: isLive)) {
         unawaited(_applyCacheLimits(cacheLimits));
+      }
+      if (!_resolving &&
+          previous.androidAudioOutput != _settings.androidAudioOutput) {
+        unawaited(_applyAndroidAudioOutput(_settings.androidAudioOutput));
       }
       if (previous.audioNormalization != _settings.audioNormalization) {
         unawaited(_applyAudioGain());
@@ -2806,6 +2817,24 @@ class PlaybackSession extends ChangeNotifier {
         );
       }),
     );
+  }
+
+  Future<void> _applyAndroidAudioOutput(AndroidAudioOutput output) async {
+    if (engine case final AndroidAudioOutputControl control
+        when !_closing && !_disposed) {
+      final generation = _generation;
+      try {
+        await control.setAndroidAudioOutput(output);
+      } on PlayerFailure catch (failure) {
+        if (generation == _generation &&
+            !_disposed &&
+            !_closing &&
+            output == _settings.androidAudioOutput) {
+          auxiliaryMessage = failure.message;
+          _notify();
+        }
+      }
+    }
   }
 
   Future<void> _applyCacheLimits(PlaybackCacheLimits limits) async {
