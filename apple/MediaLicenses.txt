@@ -1,6 +1,6 @@
 BiliSail Apple media dependency notices
 
-https://github.com/CKopoer/libmpv-darwin-build/releases/tag/apple-joc-spatial-audio-2026-11-28
+https://github.com/CKopoer/libmpv-darwin-build/releases/tag/apple-joc-dependent-2026-11-28
 
 SOURCES.md
 

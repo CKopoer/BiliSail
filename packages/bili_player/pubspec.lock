@@ -289,8 +289,8 @@ packages:
     dependency: "direct main"
     description:
       path: media_kit
-      ref: "0a5d8eb3f40aa47e74658f1ec97abfddd7104d5f"
-      resolved-ref: "0a5d8eb3f40aa47e74658f1ec97abfddd7104d5f"
+      ref: ccf5fafaa1c78c8c1ab65d4ce62728c2a5d1eb5b
+      resolved-ref: ccf5fafaa1c78c8c1ab65d4ce62728c2a5d1eb5b
       url: "https://github.com/CKopoer/media-kit.git"
     source: git
     version: "1.1.11"
@@ -298,8 +298,8 @@ packages:
     dependency: "direct main"
     description:
       path: media_kit_video
-      ref: "0a5d8eb3f40aa47e74658f1ec97abfddd7104d5f"
-      resolved-ref: "0a5d8eb3f40aa47e74658f1ec97abfddd7104d5f"
+      ref: ccf5fafaa1c78c8c1ab65d4ce62728c2a5d1eb5b
+      resolved-ref: ccf5fafaa1c78c8c1ab65d4ce62728c2a5d1eb5b
       url: "https://github.com/CKopoer/media-kit.git"
     source: git
     version: "1.2.5"

@@ -2,7 +2,7 @@
 
 ## 视频
 
-macOS 和 iOS 共用 BiliSail 的 media_kit 播放会话、分轨请求、缓冲、seek 和音频时钟。选中的视频轨为 Dolby Vision Profile 5、Profile 8、HDR10 或 HLG 时，Flutter 平台视图承载独立的 CAMetalLayer。mpv 的 gpu-next 和 libplacebo 通过 MoltenVK 向该层提交画面。普通 SDR 源沿用原有纹理。Apple 原生依赖包含可重建配方、源码版本、补丁和许可。[应用显示面](../../apple/AppleVideoSurface.swift) · [固定依赖及校验值](https://github.com/CKopoer/libmpv-darwin-build/releases/tag/apple-joc-spatial-audio-2026-11-28)
+macOS 和 iOS 共用 BiliSail 的 media_kit 播放会话、分轨请求、缓冲、seek 和音频时钟。选中的视频轨为 Dolby Vision Profile 5、Profile 8、HDR10 或 HLG 时，Flutter 平台视图承载独立的 CAMetalLayer。mpv 的 gpu-next 和 libplacebo 通过 MoltenVK 向该层提交画面。普通 SDR 源沿用原有纹理。Apple 原生依赖包含可重建配方、源码版本、补丁和许可。[应用显示面](../../apple/AppleVideoSurface.swift) · [固定依赖及校验值](https://github.com/CKopoer/libmpv-darwin-build/releases/tag/apple-joc-dependent-2026-11-28)
 
 | 源与设备 | 接入行为 | 如何判读 |
 | --- | --- | --- |
@@ -28,9 +28,21 @@ macOS Release 上，1920×1080 的 P5 从 320×180 点放大至 1024×576 点，
 
 ## 正式播放器的 JOC 输出
 
-在线 DASH、离线分轨和本地 MP4／MKV 都使用现有 media_kit 会话。mpv 检查选中音轨的实际 E-AC-3 profile，将确认的 JOC 原始压缩包交给 `apple-joc` 音频输出。输出驱动从码流重建带 `dec3` 的格式描述，并确认 Apple 返回 `ec+3`。随后由 `AVSampleBufferAudioRenderer` 消费压缩样本，队列延迟反馈给 mpv 音频时钟。请求头、Range、缓存和视频仍由同一次打开操作管理。[原生输出源码](https://github.com/CKopoer/libmpv-darwin-build/blob/38c376b0885ae3a209b6a22607b6a1629980c3cf/bilisail/ao_apple_joc.m) · [播放器回归入口](../../tool/validation/apple_joc_playback.dart)
+在线 DASH、离线分轨和本地 MP4／MKV 都使用现有 media_kit 会话。mpv 检查选中音轨的实际 E-AC-3 profile，将确认的 JOC 原始压缩包交给 `apple-joc` 音频输出。输出驱动从码流重建带 `dec3` 的格式描述，并确认 Apple 返回 `ec+3`。随后由 `AVSampleBufferAudioRenderer` 消费压缩样本，队列延迟反馈给 mpv 音频时钟。请求头、Range、缓存和视频仍由同一次打开操作管理。[原生输出源码](https://github.com/CKopoer/libmpv-darwin-build/blob/17b615f65b44e674d4d896a2f67e02a010884e78/bilisail/ao_apple_joc.m) · [播放器回归入口](../../tool/validation/apple_joc_playback.dart)
 
 在 1×、0 dB 时自动选择 JOC 输出。音量和静音作用于系统渲染器。变速、额外增益使用 PCM，恢复设置后可以重新启用 JOC。普通 DD+、AAC 走已有解码输出。播放信息在当前音频输出为 `apple-joc` 且 Apple 渲染器进入 rendering 并收到样本后，显示「Apple 系统渲染 JOC」。耳机、扬声器及 HDMI 的最终输出取决于系统和当前路由。[Apple 音频渲染接口](https://developer.apple.com/documentation/avfoundation/avsamplebufferaudiorenderer)
+
+### 带 AC-3 核心的 7.1 Atmos 无声（2026-11-28）
+
+样片是 48 kHz、1,664 kbps 的 7.1 E-AC-3 JOC。整段的 10,872 个音频包均由 2,560 字节的 AC-3 核心和 4,096 字节的 E-AC-3 依赖帧组成。后者携带后环绕声道位置与值为 16 的 JOC 复杂度。旧驱动用 FFmpeg 的 MP4 封装器生成 Apple 格式描述，得到的 `dec3` 只计入核心的 640 kbps，声道位置错误，同时缺少 JOC 扩展。Apple 将其识别为普通 DD+。旧驱动已选择压缩输出，首个样本创建失败后，8 秒片段在 macOS 实测提交 0 包，左右声道回录全为零。[修复前回录与格式对照](https://github.com/CKopoer/BiliSail/actions/runs/46126977751/job/140923625772)
+
+解码器现在按同步帧边界读取依赖帧的声道映射和 JOC 扩展，用整个音频包计算码率，再将修正后的描述交给 Apple。确认支持 `ec+3` 后，播放器提交原始压缩包。若协商失败，播放器直接使用已经解出的 PCM，可从首帧发声。[原生驱动与测试](https://github.com/CKopoer/libmpv-darwin-build/tree/17b615f65b44e674d4d896a2f67e02a010884e78/bilisail) · [ETSI TS 102 366 的依赖帧与声道位置定义](https://www.etsi.org/deliver/etsi_ts/102300_102399/102366/01.03.01_60/ts_102366v010301p.pdf)
+
+macOS 播放同一段 8 秒原始音频，观测到 `apple-joc` 提交 231 包，双声道系统回录 RMS 分别为 2,604 和 2,622（16 位 PCM）。与直接通过 Apple 渲染已修正格式描述的同一码流相比，左声道 64/67、右声道 65/68 个有声窗口的相关系数达到 0.95。测试另行让 Core Media 拒绝压缩格式，播放器切到 `coreaudio`，JOC 计数为 0，双声道 RMS 为 2,606 和 2,624。[修复后回录和回退实测](https://github.com/CKopoer/BiliSail/actions/runs/46127757802/job/140926029240)
+
+macOS Release 和 iPhone 模拟器使用同一条 7.1 音轨验证了在线 DASH、离线分轨、MKV 和 MP4。四条路径在暂停、跳转后都恢复 JOC，MP4 继续播放约三秒时又分别提交了 95 和 94 包。普通 DD+ 和 AAC 仍走 PCM。macOS 另用原有 5.1 样片测试正常和延迟就绪两种条件，双声道均为 60/60 个有声窗口匹配。[macOS 应用与 5.1 回录](https://github.com/CKopoer/BiliSail/actions/runs/46127757802/job/140926029550) · [iPhone 模拟器应用](https://github.com/CKopoer/BiliSail/actions/runs/46127757802/job/140926029455)
+
+iPhone 模拟器也使用正式 iOS 驱动播放原始片段，宿主机从模拟扬声器输出回录。同步录音与播放起点后，观测到 231 个 JOC 包，左右声道 RMS 分别为 972 和 954。对照同一模拟器的 Apple 参考渲染，左声道 68/70、右声道 69/71 个有声窗口匹配。实体 iPhone、AirPods 和 HDMI 接收端仍需分别试听。[iPhone 模拟器双声道回录](https://github.com/CKopoer/BiliSail/actions/runs/46129181482/job/140930391282)
 
 ### AirPods 切换固定与头部追踪（2026-11-28）
 
