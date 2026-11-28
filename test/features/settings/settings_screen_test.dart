@@ -10,6 +10,7 @@ import 'package:bilisail/features/settings/domain/settings_repository.dart';
 import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
 import 'package:bilisail/features/settings/presentation/settings_screen.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
+import 'package:bilisail/shared/ui/android_audio_output_settings.dart';
 import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -80,6 +81,68 @@ void main() {
         tester.widget<DropdownButton<OpenSlPerformanceMode>>(mode).onChanged,
         isNotNull,
       );
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
+  testWidgets(
+    'Android audio choices align with neighbouring playback settings on narrow screens',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(393, 800);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final repository = _SettingsRepository();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [settingsRepositoryProvider.overrideWithValue(repository)],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: SettingsScreen(category: SettingsCategory.playback),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final scroll = find
+          .descendant(
+            of: find.byType(ListView).first,
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      await tester.scrollUntilVisible(
+        find.text('音频输出'),
+        250,
+        scrollable: scroll,
+      );
+      final left = tester.getTopLeft(find.text('播放缓存大小')).dx;
+      for (final label in [
+        '卡片悬停播放',
+        '音频输出',
+        'OpenSL ES 性能模式',
+        defaultAndroidAudioOutput.driverHint,
+        defaultAndroidAudioOutput.modeHint,
+      ]) {
+        expect(tester.getTopLeft(find.text(label)).dx, left, reason: label);
+      }
+      Finder chip(String label) => find.widgetWithText(ChoiceChip, label);
+      final none = chip('NONE');
+      await tester.ensureVisible(none);
+      await tester.pumpAndSettle();
+      await tester.tap(none);
+      await tester.pumpAndSettle();
+      expect(tester.widget<ChoiceChip>(none).selected, isTrue);
+      final track = chip('AudioTrack');
+      await tester.ensureVisible(track);
+      await tester.pumpAndSettle();
+      await tester.tap(track);
+      await tester.pumpAndSettle();
+      expect(tester.widget<ChoiceChip>(none).onSelected, isNull);
+      expect(repository.settings.androidAudioOutput, (
+        driver: AndroidAudioDriver.audiotrack,
+        mode: OpenSlPerformanceMode.none,
+      ));
+      expect(tester.takeException(), isNull);
     },
     variant: TargetPlatformVariant.only(TargetPlatform.android),
   );

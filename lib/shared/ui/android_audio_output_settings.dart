@@ -1,6 +1,24 @@
 import 'package:bili_player/android_audio_output.dart';
 import 'package:material_ui/material_ui.dart';
 
+extension AndroidAudioOutputDescriptions on AndroidAudioOutput {
+  String get driverHint => switch (driver) {
+    AndroidAudioDriver.auto => '依次尝试 OpenSL ES、AAudio、AudioTrack。',
+    AndroidAudioDriver.opensles => '固定使用 OpenSL ES，可调整下方性能模式。',
+    AndroidAudioDriver.aaudio => '固定使用 Android 原生 AAudio 输出。',
+    AndroidAudioDriver.audiotrack => '固定使用系统 AudioTrack 输出。',
+  };
+
+  String get modeHint => driver.mayUseOpenSl
+      ? switch (mode) {
+          OpenSlPerformanceMode.latency => '优先低延迟，系统音效可能受限。',
+          OpenSlPerformanceMode.none => '允许设备音效，外放低频偏少时可尝试。',
+          OpenSlPerformanceMode.latencyEffects => '兼顾低延迟和系统音效，取决于设备支持。',
+          OpenSlPerformanceMode.powerSaving => '优先省电，允许系统音效。',
+        }
+      : '仅在实际使用 OpenSL ES 时生效。';
+}
+
 class AndroidAudioOutputSettings extends StatelessWidget {
   const AndroidAudioOutputSettings({
     super.key,
@@ -21,12 +39,7 @@ class AndroidAudioOutputSettings extends StatelessWidget {
         value.driver,
         AndroidAudioDriver.values,
         (d) => d.label,
-        switch (value.driver) {
-          AndroidAudioDriver.auto => '依次尝试 OpenSL ES、AAudio、AudioTrack。',
-          AndroidAudioDriver.opensles => '固定使用 OpenSL ES，可调整下方性能模式。',
-          AndroidAudioDriver.aaudio => '固定使用 Android 原生 AAudio 输出。',
-          AndroidAudioDriver.audiotrack => '固定使用系统 AudioTrack 输出。',
-        },
+        value.driverHint,
         onDriver,
       ),
       _choice(
@@ -34,14 +47,7 @@ class AndroidAudioOutputSettings extends StatelessWidget {
         value.mode,
         OpenSlPerformanceMode.values,
         (m) => m.label,
-        value.driver.mayUseOpenSl
-            ? switch (value.mode) {
-                OpenSlPerformanceMode.latency => '优先低延迟，系统音效可能受限。',
-                OpenSlPerformanceMode.none => '允许设备音效，外放低频偏少时可尝试。',
-                OpenSlPerformanceMode.latencyEffects => '兼顾低延迟和系统音效，取决于设备支持。',
-                OpenSlPerformanceMode.powerSaving => '优先省电，允许系统音效。',
-              }
-            : '仅在实际使用 OpenSL ES 时生效。',
+        value.modeHint,
         value.driver.mayUseOpenSl ? onMode : null,
       ),
     ],

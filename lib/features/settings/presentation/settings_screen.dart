@@ -741,30 +741,50 @@ final class _SettingsCategoryPageState
                             controller.setVideoCardHoverPlayback,
                             '鼠标停留在视频卡或直播卡上时静音播放预览，关闭可减少资源和流量占用',
                           ),
-                          if (defaultTargetPlatform == TargetPlatform.android)
-                            AndroidAudioOutputSettings(
-                              value: s.androidAudioOutput,
-                              onDriver: (driver) => _save(
-                                () => controller.update(
-                                  (c) => c.copyWith(
-                                    androidAudioOutput: (
-                                      driver: driver,
-                                      mode: c.androidAudioOutput.mode,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              onMode: (mode) => _save(
-                                () => controller.update(
-                                  (c) => c.copyWith(
-                                    androidAudioOutput: (
-                                      driver: c.androidAudioOutput.driver,
-                                      mode: mode,
-                                    ),
+                          if (defaultTargetPlatform ==
+                              TargetPlatform.android) ...[
+                            _choices(
+                              '音频输出',
+                              s.androidAudioOutput.driver,
+                              {
+                                for (final driver in AndroidAudioDriver.values)
+                                  driver: driver.label,
+                              },
+                              (driver) => controller.update(
+                                (c) => c.copyWith(
+                                  androidAudioOutput: (
+                                    driver: driver,
+                                    mode: c.androidAudioOutput.mode,
                                   ),
                                 ),
                               ),
                             ),
+                            Text(
+                              s.androidAudioOutput.driverHint,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            _choices(
+                              'OpenSL ES 性能模式',
+                              s.androidAudioOutput.mode,
+                              {
+                                for (final mode in OpenSlPerformanceMode.values)
+                                  mode: mode.label,
+                              },
+                              (mode) => controller.update(
+                                (c) => c.copyWith(
+                                  androidAudioOutput: (
+                                    driver: c.androidAudioOutput.driver,
+                                    mode: mode,
+                                  ),
+                                ),
+                              ),
+                              enabled: s.androidAudioOutput.driver.mayUseOpenSl,
+                            ),
+                            Text(
+                              s.androidAudioOutput.modeHint,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
                           PlaybackCacheSettingsTile(
                             value: s.playbackCache,
                             save: (value) => _save(
