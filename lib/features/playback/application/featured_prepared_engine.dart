@@ -33,14 +33,14 @@ final class FeaturedPreparedEngine {
   bool _previewChangeQueued = false;
 
   PlayerEngine? preview(Object key, {Object? owner}) {
-    final entry = _candidate;
-    if (entry == null ||
-        entry.key != key ||
-        !identical(entry.owner, owner) ||
-        !entry.ready.isCompleted) {
-      return null;
+    for (final entry in [?_candidate, ?_claim]) {
+      if (entry.key == key &&
+          identical(entry.owner, owner) &&
+          entry.ready.isCompleted) {
+        return entry.engine;
+      }
     }
-    return entry.engine;
+    return null;
   }
 
   void _notifyPreviewChange() {

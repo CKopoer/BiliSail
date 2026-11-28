@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:ui' as ui;
+
 import 'package:bili_player/bili_player.dart';
 import 'package:bilisail/features/playback/application/featured_prepared_engine.dart';
 import 'package:bilisail/features/playback/application/playback_manager.dart';
@@ -16,10 +19,12 @@ import 'package:bilisail/features/video/application/video_controller.dart';
 import 'package:bilisail/features/video/domain/video_repository.dart';
 import 'package:bilisail/features/video/presentation/featured_video_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../support/input_test_app.dart';
+import '../../support/fake_video_output.dart';
 import '../../support/system_media_playback_fixture.dart';
 import '../../support/video_card_fake_engine.dart';
 import '../../support/window_service_fake.dart';
@@ -70,6 +75,15 @@ class _Videos implements VideoRepository, FeaturedFeedRepository {
 }
 
 class _PagingEngine extends CardFakeEngine {
+  _PagingEngine(this.color);
+  final Color color;
+  Completer<void>? pauseBarrier;
+  late final _output = FakeVideoOutput(
+    () => ColoredBox(key: ObjectKey(this), color: color),
+  );
+  @override
+  VideoOutput get videoOutput => _output;
+
   @override
   Future<void> setVolume(double volume) async =>
       publish(snapshot.copyWith(volume: volume));
@@ -78,9 +92,12 @@ class _PagingEngine extends CardFakeEngine {
     snapshot.copyWith(phase: PlaybackPhase.playing, desiredPlaying: true),
   );
   @override
-  Future<void> pause() async => publish(
-    snapshot.copyWith(phase: PlaybackPhase.paused, desiredPlaying: false),
-  );
+  Future<void> pause() async {
+    publish(
+      snapshot.copyWith(phase: PlaybackPhase.paused, desiredPlaying: false),
+    );
+    await pauseBarrier?.future;
+  }
 }
 
 void main() {
@@ -152,10 +169,11 @@ void main() {
   );
 
   testWidgets(
-    'swiping the actual player adopts the silent neighbor without a second DASH open',
+    'swiping the actual player keeps the prepared frame visible through forward and reverse handoff',
     (tester) async {
       final videos = _Videos();
-      final primary = _PagingEngine();
+      final capture = GlobalKey();
+      final primary = _PagingEngine(const Color(0xff206ba0));
       final spares = <_PagingEngine>[];
       final repo = SystemMediaFixtureRepository();
       final session = PlaybackSession(
@@ -165,7 +183,7 @@ void main() {
         accountScope: () => 'guest',
         featuredStandby: FeaturedPreparedEngine(
           createEngine: () {
-            final engine = _PagingEngine();
+            final engine = _PagingEngine(const Color(0xffb54926));
             spares.add(engine);
             return engine;
           },
@@ -189,6 +207,79 @@ void main() {
         }
       }
 
+      Future<void> checkPixel(_PagingEngine target, String step) async {
+        final box =
+            capture.currentContext!.findRenderObject()!
+                as RenderRepaintBoundary;
+        final layer = box.debugLayer! as OffsetLayer;
+        final color = await tester.runAsync(() async {
+          final image = await layer.toImage(
+            Rect.fromLTWH(box.size.width / 2, box.size.height / 2, 1, 1),
+          );
+          try {
+            final rgba = (await image.toByteData(
+              format: ui.ImageByteFormat.rawRgba,
+            ))!;
+            return Color.fromARGB(
+              rgba.getUint8(3),
+              rgba.getUint8(0),
+              rgba.getUint8(1),
+              rgba.getUint8(2),
+            );
+          } finally {
+            image.dispose();
+          }
+        });
+        expect(
+          color,
+          target.color,
+          reason:
+              '$step (selected video ${session.detail?.summary.id}, '
+              'resolving ${session.isResolving}, '
+              'mounted target surfaces ${find.byKey(ObjectKey(target)).evaluate().length})',
+        );
+      }
+
+      Future<void> swipe(int direction, _PagingEngine target) async {
+        final pager = find.byType(PageView);
+        final leaving = session.engine as _PagingEngine;
+        final pause = leaving.pauseBarrier = Completer<void>();
+        final drag = await tester.startGesture(tester.getCenter(pager));
+        await drag.moveBy(Offset(0, -30.0 * direction));
+        await tester.pump();
+        await drag.moveBy(
+          Offset(0, -tester.getSize(pager).height * .7 * direction),
+        );
+        await tester.pump();
+        await checkPixel(target, 'incoming preview in direction $direction');
+        final surface = find.ancestor(
+          of: find.byKey(ObjectKey(target)),
+          matching: find.byType(VideoSurface),
+        );
+        final previewState = tester.state(surface);
+        await drag.up();
+        // Sample each animation frame across the change from preview to
+        // selected. Waiting for settle alone misses a one-frame black mask.
+        var resolvingFrames = 0;
+        var playingSurfaceFrames = 0;
+        for (var frame = 0; frame < 90 && playingSurfaceFrames < 4; frame++) {
+          await tester.pump(const Duration(milliseconds: 16));
+          await checkPixel(target, 'direction $direction, frame $frame');
+          if (session.isResolving &&
+              !pause.isCompleted &&
+              ++resolvingFrames == 4) {
+            pause.complete();
+            leaving.pauseBarrier = null;
+          }
+          if (identical(session.engine, target) && !session.isResolving) {
+            playingSurfaceFrames++;
+          }
+        }
+        expect(resolvingFrames, 4);
+        expect(playingSurfaceFrames, 4);
+        expect(tester.state(surface), same(previewState));
+      }
+
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
@@ -201,21 +292,26 @@ void main() {
           ],
           child: InputTestApp(
             home: Scaffold(
-              body: FeaturedVideoScreen(
-                createController: () => FeaturedFeedController(
-                  videos,
-                  FeaturedSource.desktop,
-                  RecommendationFilter(const RecommendationSettings.defaults()),
-                ),
-                splitWidth: 1000,
-                onLogin: () {},
-                onOpenUser: (_) {},
-                playerBuilder: (_, detail, part) => PlaybackPanel(
-                  detail: detail,
-                  part: part,
-                  settings: settings,
-                  window: window,
-                  onToggleComments: () {},
+              body: RepaintBoundary(
+                key: capture,
+                child: FeaturedVideoScreen(
+                  createController: () => FeaturedFeedController(
+                    videos,
+                    FeaturedSource.desktop,
+                    RecommendationFilter(
+                      const RecommendationSettings.defaults(),
+                    ),
+                  ),
+                  splitWidth: 1000,
+                  onLogin: () {},
+                  onOpenUser: (_) {},
+                  playerBuilder: (_, detail, part) => PlaybackPanel(
+                    detail: detail,
+                    part: part,
+                    settings: settings,
+                    window: window,
+                    onToggleComments: () {},
+                  ),
                 ),
               ),
             ),
@@ -227,18 +323,14 @@ void main() {
       expect(spares.single.currentSnapshot.volume, 0);
       expect(spares.single.currentSnapshot.desiredPlaying, isFalse);
       final prepared = spares.single;
-      await tester.fling(find.byType(PageView), const Offset(0, -350), 900);
-      await tester.pumpAndSettle();
-      await frames();
+      await swipe(1, prepared);
       expect(session.detail?.summary.id, videos.items[1].id);
       expect(session.engine, same(prepared));
       expect(prepared.opens, 1);
       expect(primary.disposals, 0);
       expect(primary.currentSnapshot.phase, PlaybackPhase.paused);
       expect(primary.currentSnapshot.volume, 0);
-      await tester.fling(find.byType(PageView), const Offset(0, 350), 900);
-      await tester.pumpAndSettle();
-      await frames();
+      await swipe(-1, primary);
       expect(session.detail?.summary.id, videos.items.first.id);
       expect(session.engine, same(primary));
       expect(primary.opens, 1);

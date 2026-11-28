@@ -108,7 +108,10 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   PlayerControlsMode? get _controlsModeOverride =>
       _isFeatured ? PlayerControlsMode.click : null;
   final _fullScreenExitCover = ValueNotifier(false);
-  final _picture = PlayerPictureController();
+  final _panelPicture = PlayerPictureController();
+  FeaturedInlinePicture? _featuredInline;
+  PlayerPictureController get _picture =>
+      _featuredInline?.controller ?? _panelPicture;
   late int _pictureGeneration;
   bool _fullScreen = false;
   bool _miniPlayer = false;
@@ -184,9 +187,11 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final isFeatured = FeaturedPagingScope.maybeOf(context) != null;
+    final featured = FeaturedPagingScope.maybeOf(context);
+    final isFeatured = featured != null;
     final featuredChanged = isFeatured != _isFeatured;
     _isFeatured = isFeatured;
+    _featuredInline = featured?.inlinePicture;
     final recommendation = RecommendationPlaybackScope.of(context);
     final recommendationChanged = recommendation != _recommendation;
     _recommendation = recommendation;
@@ -418,7 +423,9 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     _session.snapshots.removeListener(_onPlaybackCompleted);
     _dismissFullScreen();
     _session.removeListener(_syncPicture);
-    _picture.dispose();
+    final featured = _featuredInline;
+    if (featured != null) scheduleMicrotask(() => featured.setSuspended(false));
+    _panelPicture.dispose();
     _shortcuts.dispose();
     _session.detach(this);
     _settings.dispose();
@@ -863,6 +870,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
         _deviceOrientation == FullScreenOrientation.landscape ||
         (!widget.window.keepsBrowsePortrait && _isViewLandscape);
     setState(() => _fullScreen = true);
+    _syncFeaturedSurface();
     _syncDeviceOrientation();
     try {
       // Unmount the inline surface before the route surface is created.
@@ -991,6 +999,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
       if (mounted) {
         _fullScreenExitCover.value = false;
         setState(() => _fullScreen = false);
+        _syncFeaturedSurface();
         _syncDeviceOrientation();
       }
     }
@@ -1045,6 +1054,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
       if (!mounted || !_active || !identical(_miniRequest, request)) return;
       _systemPip = systemPip;
       setState(() => _miniPlayer = true);
+      _syncFeaturedSurface();
       await WidgetsBinding.instance.endOfFrame;
       if (!mounted || !_active || !identical(_miniRequest, request)) return;
       // A non-opaque overlay keeps the playback page subscribed to the next
@@ -1124,6 +1134,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
       await WidgetsBinding.instance.endOfFrame;
       if (mounted && _miniRequest == null) {
         setState(() => _miniPlayer = false);
+        _syncFeaturedSurface();
         _syncDeviceOrientation();
       }
     }
@@ -1138,6 +1149,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     _miniOverlay = null;
     _miniPlayer = false;
     _systemPip = false;
+    if (restore) _syncFeaturedSurface();
     if (restore && widget.window.hasDesktopWindow) {
       final window = widget.window;
       // Navigation callbacks run before the owner decides whether to close the
@@ -1156,6 +1168,18 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
             }),
       );
     }
+  }
+
+  void _syncFeaturedSurface() {
+    final inline = _featuredInline;
+    if (inline == null) return;
+    // Visibility can change while Flutter updates the workspace tree. Apply
+    // the new owner before the next painted frame, outside the build stack.
+    scheduleMicrotask(() {
+      if (mounted && identical(inline, _featuredInline)) {
+        inline.setSuspended(_fullScreen || _miniPlayer);
+      }
+    });
   }
 
   @override
@@ -1771,7 +1795,14 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    if (!widget.active) return const ColoredBox(color: Colors.black);
+    if (!widget.active) {
+      final inline =
+          !widget.fullScreen &&
+          FeaturedPagingScope.maybeOf(context)?.inlinePicture != null;
+      return inline
+          ? const SizedBox.expand()
+          : const ColoredBox(color: Colors.black);
+    }
     final view = ListenableBuilder(
       listenable: Listenable.merge([
         widget.controlsVisible,
@@ -1904,6 +1935,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
         ? null
         : FeaturedPagingScope.maybeOf(context);
     final controlsInset = featured?.onControlsInsetChanged;
+    final usesSlotPicture = featured?.inlinePicture != null;
     final maintainControlBarLayout = controlsInset != null;
     final overlayToggle = switch (featured) {
       FeaturedPagingScope(
@@ -2048,11 +2080,13 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
 
                       return ColoredBox(
                         key: _playerBoundsKey,
-                        color: Colors.black,
+                        color: usesSlotPicture
+                            ? Colors.transparent
+                            : Colors.black,
                         child: VideoCompositionScope.of(context).compose(
                           context,
                           layers: [
-                            if (widget.active)
+                            if (widget.active && !usesSlotPicture)
                               PlayerPicture(
                                 controller: widget.picture,
                                 child: VideoSurface(engine: session.engine),

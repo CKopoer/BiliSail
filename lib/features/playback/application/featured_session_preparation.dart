@@ -27,6 +27,8 @@ extension FeaturedSessionPreparation on PlaybackSession {
     _featuredOwner = owner;
     _featuredCurrent = current;
     _featuredNeighbor = neighbor;
+    // The feed may rebuild with the same card after clearing its history.
+    _restoreFeaturedPresentation(detail, part, contentTarget, notify: false);
     _prepareFeaturedNeighbor();
   }
 
@@ -44,6 +46,7 @@ extension FeaturedSessionPreparation on PlaybackSession {
     _featuredHistoryOwner = null;
     _featuredVisits.clear();
     _featuredPlaying = null;
+    _featuredPresentation = null;
     unawaited(featuredStandby?.clear(owner: this));
     _discardFeaturedPaused();
   }
@@ -82,6 +85,63 @@ extension FeaturedSessionPreparation on PlaybackSession {
             video,
             part,
           ), owner: this);
+  }
+
+  PlayerEngine? featuredSlotEngine(
+    Object owner,
+    VideoId video,
+    String? cid, {
+    required bool allowPreview,
+  }) {
+    if (cid == null || _audioOnly || _disposed || _closing) return null;
+    final active = _featuredPresentation;
+    if (active != null &&
+        identical(active.owner, owner) &&
+        active.scope == accountScope() &&
+        active.epoch == sessionEpoch() &&
+        active.clip == (video, cid) &&
+        identical(active.engine, engine)) {
+      return active.engine;
+    }
+    return allowPreview && identical(owner, _featuredOwner)
+        ? featuredPreview(video, cid)
+        : null;
+  }
+
+  void _markFeaturedPresentation((VideoId, String) clip, PlayerEngine player) {
+    if (_featuredHistoryOwner case final owner?) {
+      _featuredPresentation = (
+        owner: owner,
+        clip: clip,
+        scope: _scope,
+        epoch: _epoch,
+        engine: player,
+      );
+    }
+  }
+
+  void _restoreFeaturedPresentation(
+    VideoDetail? video,
+    VideoPart? selected,
+    ContentPlaybackTarget? target, {
+    bool notify = true,
+  }) {
+    if (target != null ||
+        _resolving ||
+        media == null ||
+        !sourceMatchesAccount ||
+        !_isFeaturedClip(video, selected)) {
+      return;
+    }
+    final clip = (video!.summary.id, selected!.cid);
+    if (_featuredPresentation?.clip == clip &&
+        identical(_featuredPresentation?.engine, engine) &&
+        identical(_featuredPresentation?.owner, _featuredHistoryOwner)) {
+      return;
+    }
+    // Re-entering the same loaded source can skip opening entirely.
+    _markFeaturedPresentation(clip, engine);
+    if (notify) _notify();
   }
 
   Object get _featuredProfile => (
@@ -364,6 +424,7 @@ extension FeaturedSessionPreparation on PlaybackSession {
       _retireFeaturedEngine(ready);
       return false;
     }
+    _markFeaturedPresentation((id, cid), ready);
     _replaceFeaturedEngine(ready, park);
     try {
       await ready.setVolume(options.volume).timeout(const Duration(seconds: 2));

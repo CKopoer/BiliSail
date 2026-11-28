@@ -235,6 +235,14 @@ class PlaybackSession extends ChangeNotifier {
   (VideoId, String)? _featuredNeighbor;
   final _featuredVisits = <(VideoId, String), _FeaturedVisit>{};
   ((VideoId, String), Object)? _featuredPlaying;
+  ({
+    Object owner,
+    (VideoId, String) clip,
+    String scope,
+    int epoch,
+    PlayerEngine engine,
+  })?
+  _featuredPresentation;
   _FeaturedPausedEngine? _featuredPaused;
   bool _featuredWaitingForPanel = false;
   Future<void>? _retiringEngine;
@@ -837,6 +845,7 @@ class PlaybackSession extends ChangeNotifier {
       if (wasVisible && !visible) _suspendCommentPresentation();
       if (!visible) _cancelHighEnergy();
       if (visible) unawaited(ensureHighEnergy());
+      _restoreFeaturedPresentation(video, selected, target);
       if (position != null) await seek(position);
       return;
     }
@@ -1093,12 +1102,14 @@ class PlaybackSession extends ChangeNotifier {
         part?.playbackKey == selected?.playbackKey &&
         contentTarget == target &&
         (_resolving || (error == null && media != null))) {
+      _restoreFeaturedPresentation(video, selected, target);
       return;
     }
     final openingFeatured = target == null && _isFeaturedClip(video, selected);
     final nextFeaturedClip = openingFeatured
         ? (video!.summary.id, selected!.cid)
         : null;
+    if (nextFeaturedClip == null) _featuredPresentation = null;
     final outgoingClip = _featuredPlaying?.$1;
     final canPark =
         nextFeaturedClip != null &&
@@ -1476,6 +1487,10 @@ class PlaybackSession extends ChangeNotifier {
           );
         }
         if (!isCurrent()) return;
+        if (nextFeaturedClip != null) {
+          _markFeaturedPresentation(nextFeaturedClip, engine);
+          _notify();
+        }
         try {
           await engine.open(source, options);
         } on PlayerFailure catch (failure) {
@@ -3390,6 +3405,7 @@ class PlaybackSession extends ChangeNotifier {
   }
 
   Future<void> stop({bool clearCheckpoints = true}) async {
+    _featuredPresentation = null;
     // Swiping can unmount the previous panel before the selected card's
     // delayed details arrive. Retain its prepared engine through that gap.
     if (clearCheckpoints || _featuredOwner == null) {

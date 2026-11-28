@@ -1,6 +1,7 @@
 import 'dart:async';
 
-import 'package:bili_player/bili_player.dart' show VideoSurface;
+import 'package:bili_player/bili_player.dart'
+    show VideoCompositionScope, VideoSurface;
 import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,6 +24,7 @@ import '../../../shared/ui/featured_paging_scope.dart';
 import '../../../shared/ui/featured_selection_scope.dart';
 import '../../../shared/ui/playback_navigation.dart';
 import '../../../shared/ui/playback_page_commands.dart';
+import '../../../shared/ui/player_picture.dart';
 import '../../../shared/ui/playback_split_layout.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../feed/application/featured_feed_controller.dart';
@@ -480,17 +482,35 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
 
   Widget _page(int index, AsyncValue<VideoDetail>? result) {
     final item = feed.at(index);
-    final detail = result?.value;
+    if (item == null) return const ColoredBox(color: Colors.black);
+    final selected = index == feed.selected;
+    final seed = refreshRevision == 0 && index == 0 && feed.seed != null;
+    final provider = videoDetailProvider(item.id);
+    final detail = selected
+        ? result?.value
+        : item.previewCid == null && ref.exists(provider)
+        ? ref.read(provider).value
+        : null;
+    final part = _partFor(item, detail, seed: seed);
+    final pictureCid = item.previewCid ?? part?.cid;
     return Listener(
       onPointerSignal: _wheel,
-      child: ColoredBox(
-        color: Colors.black,
-        child: index != feed.selected || item == null
-            ? _neighborPicture(item)
-            : Stack(
+      child: _FeaturedSlot(
+        key: ValueKey((index, item.id, item.previewCid)),
+        picture: (inline) => _slotPicture(item.id, pictureCid, inline),
+        foreground: !selected
+            ? null
+            : (inline) => Stack(
                 fit: StackFit.expand,
                 children: [
-                  _player(item, detail, failed: result?.hasError == true),
+                  _player(
+                    item,
+                    detail,
+                    part,
+                    inline,
+                    seed: seed,
+                    failed: result?.hasError == true,
+                  ),
                   if (active && _showVideoOverlays && detail != null)
                     FeaturedVideoOverlay(
                       key: ValueKey(detail.summary.id),
@@ -507,39 +527,50 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
     );
   }
 
-  Widget _neighborPicture(VideoSummary? item) {
+  Widget _slotPicture(
+    VideoId video,
+    String? cid,
+    FeaturedInlinePicture inline,
+  ) {
     final session = _preparingSession;
-    if (item == null || session == null || !active || !_appVisible) {
+    if (session == null || !active) {
       return const SizedBox.expand();
     }
     return AnimatedBuilder(
       animation: Listenable.merge([
         session,
         session.featuredStandby?.previewChanges,
+        inline.suspended,
       ]),
       builder: (_, _) {
-        final engine = session.featuredPreview(item.id, item.previewCid);
+        final engine = inline.suspended.value
+            ? null
+            : session.featuredSlotEngine(
+                this,
+                video,
+                cid,
+                allowPreview: _appVisible,
+              );
         return engine == null
             ? const SizedBox.expand()
-            : IgnorePointer(child: VideoSurface(engine: engine));
+            : IgnorePointer(
+                child: PlayerPicture(
+                  controller: inline.controller,
+                  child: VideoSurface(engine: engine),
+                ),
+              );
       },
     );
   }
 
   Widget _player(
     VideoSummary item,
-    VideoDetail? detail, {
+    VideoDetail? detail,
+    VideoPart? part,
+    FeaturedInlinePicture inline, {
+    required bool seed,
     required bool failed,
   }) {
-    final cid = item.previewCid;
-    final seed =
-        feed.refreshRevision == 0 && feed.selected == 0 && feed.seed != null;
-    final defaultPart = seed || detail?.parts.length == 1
-        ? detail?.parts.firstOrNull
-        : null;
-    final part = cid == null
-        ? defaultPart
-        : detail?.parts.where((part) => part.cid == cid).firstOrNull;
     if (detail == null && !failed) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -556,6 +587,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
             ? widget.seedLink
             : const ContentLink(),
         child: FeaturedPagingScope(
+          inlinePicture: _preparingSession == null ? null : inline,
           onControlsInsetChanged: _updateControlsInset,
           showVideoOverlays: _showVideoOverlays,
           onToggleVideoOverlays: _toggleVideoOverlays,
@@ -572,6 +604,19 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
         ),
       ),
     );
+  }
+
+  VideoPart? _partFor(
+    VideoSummary item,
+    VideoDetail? detail, {
+    required bool seed,
+  }) {
+    final parts = detail?.parts;
+    if (parts == null) return null;
+    if (item.previewCid case final cid?) {
+      return parts.where((part) => part.cid == cid).firstOrNull;
+    }
+    return seed ? parts.firstOrNull : parts.singleOrNull;
   }
 
   void _toggleVideoOverlays() =>
@@ -623,6 +668,35 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
                 ),
         ),
       ],
+    ),
+  );
+}
+
+final class _FeaturedSlot extends StatefulWidget {
+  const _FeaturedSlot({super.key, required this.picture, this.foreground});
+
+  final Widget Function(FeaturedInlinePicture) picture;
+  final Widget Function(FeaturedInlinePicture)? foreground;
+
+  @override
+  State<_FeaturedSlot> createState() => _FeaturedSlotState();
+}
+
+final class _FeaturedSlotState extends State<_FeaturedSlot> {
+  final _inline = FeaturedInlinePicture();
+
+  @override
+  void dispose() {
+    _inline.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => ColoredBox(
+    color: Colors.black,
+    child: VideoCompositionScope.of(context).compose(
+      context,
+      layers: [widget.picture(_inline), ?widget.foreground?.call(_inline)],
     ),
   );
 }

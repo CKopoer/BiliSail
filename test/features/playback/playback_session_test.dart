@@ -41,6 +41,137 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../support/video_card_fake_engine.dart';
 
 void main() {
+  test('featured slots use the target engine while foreground resolution is pending', () async {
+    final primary = _FakeEngine();
+    final spare = _FakeEngine();
+    final repository = _FakeRepository(autoResolve: true);
+    final preparer = _FakeRepository(autoResolve: true);
+    final screen = Object();
+    var epoch = 0;
+    final session = PlaybackSession(
+      engine: primary,
+      repository: repository,
+      progress: _FakeProgress(),
+      accountScope: () => 'guest',
+      sessionEpoch: () => epoch,
+      featuredStandby: FeaturedPreparedEngine(createEngine: () => spare),
+      resolveFeatured: preparer.resolve,
+    );
+    addTearDown(session.close);
+    final a = _detail('11'), b = _detail('22');
+    final panel = Object();
+    session.attach(panel);
+    session.setFeaturedNeighbor(
+      screen,
+      (a.summary.id, '11'),
+      (b.summary.id, '22'),
+    );
+    await session.activate(panel, a, a.parts.single);
+    await _flush();
+
+    repository.autoResolve = false;
+    session.setFeaturedNeighbor(screen, (b.summary.id, null), null);
+    final opening = session.activate(panel, b, b.parts.single);
+    await _flush();
+    expect(session.isResolving, isTrue);
+    expect(session.engine, same(primary));
+    expect(
+      session.featuredSlotEngine(
+        screen,
+        a.summary.id,
+        '11',
+        allowPreview: true,
+      ),
+      same(primary),
+    );
+    expect(
+      session.featuredSlotEngine(
+        screen,
+        b.summary.id,
+        '22',
+        allowPreview: true,
+      ),
+      same(spare),
+    );
+    expect(
+      session.featuredSlotEngine(
+        screen,
+        b.summary.id,
+        '11',
+        allowPreview: true,
+      ),
+      isNull,
+    );
+    expect(
+      session.featuredSlotEngine(
+        Object(),
+        b.summary.id,
+        '22',
+        allowPreview: true,
+      ),
+      isNull,
+    );
+
+    repository.completeResolve('22');
+    await opening;
+    expect(session.engine, same(spare));
+    expect(
+      session.featuredSlotEngine(
+        screen,
+        b.summary.id,
+        '22',
+        allowPreview: true,
+      ),
+      same(spare),
+    );
+    session.clearFeaturedVisits(screen);
+    session.setFeaturedNeighbor(screen, (b.summary.id, null), null);
+    expect(
+      session.featuredSlotEngine(
+        screen,
+        b.summary.id,
+        '22',
+        allowPreview: true,
+      ),
+      same(spare),
+    );
+    await session.activate(panel, b, b.parts.single);
+    expect(session.engine, same(spare));
+    expect(spare.sources, hasLength(1));
+    expect(
+      session.featuredSlotEngine(
+        screen,
+        b.summary.id,
+        '22',
+        allowPreview: true,
+      ),
+      same(spare),
+    );
+    repository.autoResolve = true;
+    await session.setAudioOnly(true);
+    expect(session.audioOnly, isTrue);
+    expect(
+      session.featuredSlotEngine(
+        screen,
+        b.summary.id,
+        '22',
+        allowPreview: true,
+      ),
+      isNull,
+    );
+    await session.setAudioOnly(false);
+    epoch++;
+    expect(
+      session.featuredSlotEngine(
+        screen,
+        b.summary.id,
+        '22',
+        allowPreview: true,
+      ),
+      isNull,
+    );
+  });
+
   test('featured navigation adopts the already opened DASH engine, retaining one session and playback intent', () async {
     final primary = _FakeEngine();
     final spare = _FakeEngine();
