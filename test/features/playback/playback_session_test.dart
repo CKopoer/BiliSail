@@ -287,9 +287,14 @@ void main() {
     },
   );
 
-  for (final audioOnly in [false, true]) {
+  for (final (mode, audioOnly) in [
+    (WorkspaceNavigationMode.multipleTabs, false),
+    (WorkspaceNavigationMode.multipleTabs, true),
+    (WorkspaceNavigationMode.singlePage, false),
+    (WorkspaceNavigationMode.dualTabs, false),
+  ]) {
     test(
-      'featured retains sixteen visits and reopens cold clips with cached tracks (audioOnly=$audioOnly)',
+      'featured retains eight visits and reopens cold clips with cached tracks ($mode, audioOnly=$audioOnly)',
       () async {
         final repository = _FakeRepository(autoResolve: true);
         var epoch = 0;
@@ -309,11 +314,7 @@ void main() {
         );
         addTearDown(session.close);
         final panel = Object();
-        session.configureSettings(
-          const AppSettings.defaults(
-            navigationMode: WorkspaceNavigationMode.multipleTabs,
-          ),
-        );
+        session.configureSettings(AppSettings.defaults(navigationMode: mode));
         session.attach(panel);
         Future<void> select(int i) async {
           final cid = '$i';
@@ -322,12 +323,12 @@ void main() {
           await session.activate(panel, video, video.parts.single);
         }
 
-        for (var i = 1; i <= 17; i++) {
+        for (var i = 1; i <= 9; i++) {
           await select(i);
           await session.seek(Duration(seconds: i));
         }
         expect(session.hasFeaturedVisit(_detail('1').summary.id, '1'), isFalse);
-        for (var i = 2; i <= 17; i++) {
+        for (var i = 2; i <= 9; i++) {
           expect(
             session.hasFeaturedVisit(_detail('$i').summary.id, '$i'),
             isTrue,
@@ -338,11 +339,14 @@ void main() {
         expect(repository.qualities, hasLength(resolutions));
         expect(session.audioOnly, audioOnly);
         expect(session.snapshots.value.position, const Duration(seconds: 2));
+        await select(1);
+        expect(repository.qualities, hasLength(resolutions + 1));
+        expect(session.snapshots.value.position, Duration.zero);
         epoch++;
         expect(session.hasFeaturedVisit(_detail('2').summary.id, '2'), isFalse);
         session.clearFeaturedVisits(screen);
         await select(3);
-        expect(repository.qualities, hasLength(resolutions + 1));
+        expect(repository.qualities, hasLength(resolutions + 2));
       },
     );
   }

@@ -1,6 +1,6 @@
 part of 'playback_session.dart';
 
-const featuredPlaybackHistoryLimit = 16;
+const featuredPlaybackHistoryLimit = 8;
 
 typedef FeaturedMediaResolver = Future<PlaybackMedia> Function(
   VideoId video,

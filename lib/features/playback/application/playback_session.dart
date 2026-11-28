@@ -800,7 +800,9 @@ class PlaybackSession extends ChangeNotifier {
     );
     _checkpoints[owner] = checkpoint;
     _rememberFeaturedVisit(checkpoint);
-    if (_settings.navigationMode != WorkspaceNavigationMode.multipleTabs) {
+    if (_settings.navigationMode != WorkspaceNavigationMode.multipleTabs &&
+        _featuredPlaying == null &&
+        !_isFeaturedClip(video, selected)) {
       final key = (video?.summary.id, selected?.playbackKey, contentTarget);
       _navigationCheckpoints.remove(key);
       _navigationCheckpoints[key] = checkpoint;
@@ -865,17 +867,20 @@ class PlaybackSession extends ChangeNotifier {
     final sameKind = contentTarget.runtimeType == target.runtimeType;
     _captureOwner();
     final owned = _checkpoints[owner];
+    final openingFeatured = target == null && _isFeaturedClip(video, selected);
     final saved =
         owned?.videoId == video?.summary.id &&
             owned?.partKey == selected?.playbackKey &&
             owned?.target == target
         ? owned
+        : openingFeatured
+        ? null
         : _navigationCheckpoints[(
             video?.summary.id,
             selected?.playbackKey,
             target,
           )];
-    final featuredVisit = target == null && _isFeaturedClip(video, selected)
+    final featuredVisit = openingFeatured
         ? _featuredVisits[(video!.summary.id, selected!.cid)]
         : null;
     final remembered = featuredVisit?.checkpoint ?? saved;

@@ -102,9 +102,9 @@ class _PagingEngine extends CardFakeEngine {
 
 void main() {
   testWidgets(
-    'the feed retains details for the last 16 visited parts across navigation',
+    'the feed retains details for the last 8 visited parts across navigation',
     (tester) async {
-      final videos = _Videos(count: 18);
+      final videos = _Videos(count: 10);
       final visible = ValueNotifier(true);
       addTearDown(visible.dispose);
       final feed = FeaturedFeedController(
@@ -155,15 +155,15 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         tester.widget<PageView>(find.byType(PageView)).controller!.page,
-        17,
+        9,
       );
-      expect(find.text(videos.items[17].id.value), findsOneWidget);
-      for (var i = 16; i >= 2; i--) {
+      expect(find.text(videos.items[9].id.value), findsOneWidget);
+      for (var i = 8; i >= 2; i--) {
         await visit(i);
       }
-      expect(videos.reads, hasLength(18));
+      expect(videos.reads, hasLength(10));
       await visit(1);
-      expect(videos.reads, hasLength(19));
+      expect(videos.reads, hasLength(11));
       expect(videos.reads.last, videos.items[1].id);
     },
   );
