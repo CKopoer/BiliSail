@@ -26,6 +26,7 @@ import '../../../shared/ui/app_network_image.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../feed/application/featured_feed_controller.dart';
 import '../application/video_controller.dart';
+import '../application/featured_video_preparation.dart';
 import 'featured_video_overlay.dart';
 import 'video_comments_panel.dart';
 import 'video_screen.dart' show VideoPlayerBuilder;
@@ -156,12 +157,15 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen> {
       ModalRoute.of(context)?.isCurrent != false;
 
   void _settle(int index) {
+    final selected = feed.at(index);
     if (!active ||
         resettingPage ||
         index == feed.selected ||
-        feed.at(index) == null) {
+        selected == null) {
       return;
     }
+    final detail = videoDetailProvider(selected.id);
+    if (ref.exists(detail) && ref.read(detail).hasError) ref.invalidate(detail);
     seedPositionPending = false;
     feed.select(index);
   }
@@ -222,6 +226,14 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen> {
     final detail = current == null
         ? null
         : ref.watch(videoDetailProvider(current.id));
+    if (active) {
+      watchFeaturedVideoPreparation(
+        ref,
+        current: current,
+        previous: feed.at(feed.selected - 1),
+        next: feed.at(feed.selected + 1),
+      );
+    }
     return CommandTargetScope<Object>(
       scope: CommandScope.page,
       active: active && panel == null,
@@ -392,7 +404,14 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen> {
         ? defaultPart
         : detail?.parts.where((part) => part.cid == cid).firstOrNull;
     if (detail == null && !failed) {
-      return const Center(child: CircularProgressIndicator());
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          if (item.coverUrl.isNotEmpty)
+            AppNetworkImage(url: item.coverUrl, fit: BoxFit.contain),
+          const Center(child: CircularProgressIndicator()),
+        ],
+      );
     }
     if (detail == null || part == null) {
       return StateView.error(

@@ -11,6 +11,33 @@ import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('foreground DASH selection reuses the featured request once, including its audio track', () async {
+    final transport = _Transport('original');
+    final requests = ApiRequests();
+    final api = BiliApiClient(transport: transport, sessionProvider: requests);
+    addTearDown(api.close);
+    final repository = ApiPlaybackRepository(api, requests);
+    const id = VideoId('BV1xx411c7mD');
+    final release = repository.featuredPlayInfo.prepare(id, '2');
+    final media = await repository.resolve(
+      id,
+      '2',
+      quality: 80,
+      cancellation: RequestCancellation(),
+    );
+    release();
+    expect(transport.playReads, 1);
+    expect(media.video.urls.single.path, '/video/en');
+    expect(media.audio?.urls.single.path, '/audio/en');
+    await repository.resolve(
+      id,
+      '2',
+      quality: 80,
+      cancellation: RequestCancellation(),
+    );
+    expect(transport.playReads, 2);
+  });
+
   for (final response in ['selected', 'original', 'missing-capability']) {
     test(
       'voice repository verifies the returned media language: $response',
@@ -68,6 +95,7 @@ final class _Transport implements ApiTransport {
   _Transport(this.response);
   final String response;
   Uri? playRequest;
+  int playReads = 0;
   @override
   Future<ApiHttpResponse> get(
     Uri uri, {
@@ -85,6 +113,7 @@ final class _Transport implements ApiTransport {
       };
     } else {
       playRequest = uri;
+      playReads++;
       data = {
         'cur_language': response == 'original' ? '' : 'en',
         'cur_production_type': response == 'original' ? 0 : 2,

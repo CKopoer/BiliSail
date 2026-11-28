@@ -1,0 +1,120 @@
+import 'package:bili_api/bili_api.dart';
+
+import '../../../core/network/api_requests.dart';
+import '../../../domain/request_cancellation.dart';
+import '../../../domain/app_failure.dart';
+import '../../../domain/video.dart';
+
+/// Holds only speculative original-language playurl responses. Track selection
+/// and the normal playurl fallback still run with the foreground preferences.
+final class FeaturedPlayInfoCache {
+  FeaturedPlayInfoCache(this.requests, this.load, {DateTime Function()? now})
+    : _now = now ?? DateTime.now;
+
+  final ApiRequests requests;
+  final Future<ApiPlayInfo> Function(VideoId, String, RequestCancellation) load;
+  final DateTime Function() _now;
+  final _entries = <(VideoId, String), _PreparedInfo>{};
+
+  /// The returned lease belongs to the visible feed while the card is in its three-card window.
+  void Function() prepare(VideoId video, String cid, {bool neighbor = false}) {
+    final key = (video, cid);
+    var entry = _entries[key];
+    if (entry != null && _stale(entry)) {
+      entry.token.cancel();
+      entry = null;
+    }
+    if (entry == null) {
+      // Two visible windows may each hold the current and both neighbors.
+      if (_entries.length >= 6) _entries.values.first.token.cancel();
+      final created = _PreparedInfo(_now());
+      _entries[key] = created;
+      final untrack = requests.trackLifetime(created.token);
+      created.token.onCancel(() {
+        if (identical(_entries[key], created)) _entries.remove(key);
+        untrack();
+      });
+      created.info = _load(video, cid, created.token);
+      // The prefetch may leave the visible window before selection.
+      created.info.ignore();
+      entry = created;
+    }
+    // Moving away makes the same result available for a quick reverse swipe.
+    // Within one visit a retry or quality change must resolve a fresh playurl.
+    if (neighbor) entry.claimed = false;
+    final leased = entry;
+    leased.leases++;
+    return () {
+      if (--leased.leases == 0) {
+        leased.token.cancel();
+      }
+    };
+  }
+
+  Future<ApiPlayInfo?> _load(
+    VideoId video,
+    String cid,
+    RequestCancellation token,
+  ) async {
+    try {
+      return await load(video, cid, token);
+    } on AppFailure {
+      // A speculative read has no error UI. Selection uses the foreground
+      // request and its normal authentication, risk-control and retry policy.
+      return null;
+    }
+  }
+
+  bool _stale(_PreparedInfo entry) =>
+      _now().difference(entry.started) >= const Duration(minutes: 1);
+
+  Future<ApiPlayInfo?>? take(
+    VideoId video,
+    String cid,
+    ApiCancellation? cancellation,
+  ) {
+    final entry = _entries[(video, cid)];
+    if (entry == null || entry.claimed) return null;
+    entry.claimed = true;
+    entry.leases++;
+    return _consume(entry, cancellation);
+  }
+
+  Future<ApiPlayInfo?> _consume(
+    _PreparedInfo entry,
+    ApiCancellation? cancellation,
+  ) async {
+    final detach = cancellation?.onCancel(entry.token.cancel);
+    try {
+      if (_stale(entry)) return null;
+      final info = await entry.info;
+      if (info == null || entry.token.isCancelled || _stale(entry)) return null;
+      final minimumDeadline =
+          _now().add(const Duration(seconds: 15)).millisecondsSinceEpoch ~/
+          1000;
+      for (final track in [
+        ...info.dashVideo,
+        ...info.dashAudio,
+        ?info.progressive,
+      ]) {
+        for (final url in [track.url, ...track.backupUrls]) {
+          final deadline = int.tryParse(url.queryParameters['deadline'] ?? '');
+          if (deadline != null && deadline <= minimumDeadline) return null;
+        }
+      }
+      return info;
+    } finally {
+      detach?.call();
+      if (--entry.leases == 0) entry.token.cancel();
+    }
+  }
+}
+
+final class _PreparedInfo {
+  _PreparedInfo(this.started);
+  final DateTime started;
+  final token = RequestCancellation();
+  late final Future<ApiPlayInfo?> info;
+  int leases = 0;
+  bool claimed = false;
+}

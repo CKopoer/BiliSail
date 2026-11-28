@@ -45,6 +45,7 @@ import '../features/downloads/data/native_download_muxer.dart';
 import '../features/downloads/data/http_download_transfer.dart';
 import '../features/downloads/data/mobile_download_execution.dart';
 import '../features/playback/data/offline_playback_repository.dart';
+import '../features/video/application/featured_video_preparation.dart';
 import '../core/platform/external_links.dart';
 import '../core/platform/system_font_catalog.dart';
 import '../core/storage/app_database.dart';
@@ -153,6 +154,7 @@ class AppDependencies {
     this.session,
     this.library,
     this.playback,
+    this._playbackRepository,
     this.playbackRateMemory,
     this.playbackVolumeMemory,
     this.window,
@@ -184,6 +186,7 @@ class AppDependencies {
     sessionCredentials: session,
   );
   final SqliteLibraryRepository library;
+  final ApiPlaybackRepository _playbackRepository;
   final PlaybackManager playback;
   final PlaybackRateMemory playbackRateMemory;
   final PlaybackVolumeMemory playbackVolumeMemory;
@@ -486,6 +489,7 @@ class AppDependencies {
       session,
       library,
       playback,
+      playbackRepository,
       playbackRateMemory,
       playbackVolumeMemory,
       window,
@@ -540,9 +544,7 @@ class AppDependencies {
           DlnaCastRepository.new,
         ),
         castLifetimeTrackerProvider.overrideWithValue(requests.trackLifetime),
-        playbackViewerRepositoryProvider.overrideWithValue(
-          ApiPlaybackRepository(api, requests),
-        ),
+        playbackViewerRepositoryProvider.overrideWithValue(_playbackRepository),
         appUpdateRepositoryProvider.overrideWithValue(updates),
         updateCheckStoreProvider.overrideWithValue(
           SqliteUpdateCheckStore(database),
@@ -699,6 +701,9 @@ class AppDependencies {
             requests,
             accountScope: () => session.accountScope,
           ),
+        ),
+        featuredPlayInfoPreparationProvider.overrideWithValue(
+          _playbackRepository.featuredPlayInfo.prepare,
         ),
         videoRepositoryProvider.overrideWithValue(videos),
         interactiveVideoRepositoryProvider.overrideWithValue(videos),

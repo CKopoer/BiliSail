@@ -13,6 +13,7 @@ import '../../../domain/app_failure.dart';
 import '../domain/playback_repository.dart';
 import '../domain/high_energy_trend.dart';
 import 'high_energy_cache.dart';
+import 'featured_play_info_cache.dart';
 import 'dash_media_selection.dart';
 
 class ApiPlaybackRepository
@@ -34,6 +35,14 @@ class ApiPlaybackRepository
   final Future<MediaCdnPreference> Function()? cdnPreference;
   final Future<AudioQualityPreference> Function()? audioQualityPreference;
   final Future<({int width, int height})> Function(Uri)? imageDimensions;
+  late final featuredPlayInfo = FeaturedPlayInfoCache(
+    requests,
+    (video, cid, token) => requests.run(
+      (context) => api.getPlayInfo(video.value, cid, qn: 129, context: context),
+      cancellation: token,
+    ),
+  );
+
   late final _highEnergyCache = HighEnergyCache(requests);
 
   @override
@@ -235,14 +244,20 @@ class ApiPlaybackRepository
   }) => requests.run((context) async {
     // Discover the full entitled DASH ladder before applying the preference.
     // Some responses omit a lower representation until it is requested alone.
-    var info = await api.getPlayInfo(
-      video.value,
-      cid,
-      qn: 129,
-      language: voice.languageCode,
-      productionType: voice.productionType,
-      context: context,
-    );
+    final pending = voice.isOriginal
+        ? featuredPlayInfo.take(video, cid, context.cancellation)
+        : null;
+    final prepared = pending == null ? null : await pending;
+    var info =
+        prepared ??
+        await api.getPlayInfo(
+          video.value,
+          cid,
+          qn: 129,
+          language: voice.languageCode,
+          productionType: voice.productionType,
+          context: context,
+        );
     if (info.dashVideo.any((track) => track.id > quality) &&
         info.acceptQuality.contains(quality) &&
         !info.dashVideo.any((track) => track.id == quality)) {
