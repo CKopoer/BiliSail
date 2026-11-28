@@ -5,6 +5,7 @@ import 'package:bili_player/bili_player.dart';
 import 'package:bilisail/features/playback/application/featured_prepared_engine.dart';
 import 'package:bilisail/features/playback/application/playback_manager.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
+import 'package:bilisail/features/playback/domain/playback_repository.dart';
 import 'package:bilisail/features/playback/presentation/playback_panel.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/core/presentation/workspace_activity.dart';
@@ -72,6 +73,24 @@ class _Videos implements VideoRepository, FeaturedFeedRepository {
       ],
     );
   }
+}
+
+class _PagingRepository extends SystemMediaFixtureRepository {
+  @override
+  Future<List<TimedComment>> comments(
+    String cid,
+    int segment, {
+    required RequestCancellation cancellation,
+  }) async => [
+    TimedComment(
+      id: cid,
+      position: Duration.zero,
+      text: 'MMMM',
+      mode: 5,
+      color: cid == '1' ? 0x00ff00 : 0xff00ff,
+      fontSize: 24,
+    ),
+  ];
 }
 
 class _PagingEngine extends CardFakeEngine {
@@ -169,13 +188,13 @@ void main() {
   );
 
   testWidgets(
-    'swiping the actual player keeps the prepared frame visible through forward and reverse handoff',
+    'forward and reverse handoff preserve the prepared frame and paint only the displayed clip danmaku',
     (tester) async {
       final videos = _Videos();
       final capture = GlobalKey();
       final primary = _PagingEngine(const Color(0xff206ba0));
       final spares = <_PagingEngine>[];
-      final repo = SystemMediaFixtureRepository();
+      final repo = _PagingRepository();
       final session = PlaybackSession(
         engine: primary,
         repository: repo,
@@ -198,13 +217,56 @@ void main() {
       );
       final settings = const AppSettings.defaults().copyWith(
         autoPlay: false,
-        danmakuEnabled: false,
+        danmakuEnabled: true,
+        danmakuOpacity: 1,
       );
       Future<void> frames() async {
         for (var i = 0; i < 7; i++) {
           await tester.runAsync(() => Future<void>.delayed(Duration.zero));
           await tester.pump(const Duration(milliseconds: 16));
         }
+      }
+
+      // The fixed layer is retained between paint ticks. Inspect its actual
+      // pixels so a stale first paint cannot pass on controller identity alone.
+      Future<String?> checkDanmaku(String step) async {
+        final fixed = find.byKey(const ValueKey('danmaku-fixed-layer'));
+        if (fixed.evaluate().isEmpty) return null;
+        final panel = tester.widget<PlaybackPanel>(
+          find.ancestor(of: fixed, matching: find.byType(PlaybackPanel)),
+        );
+        final box = tester.renderObject<RenderRepaintBoundary>(fixed);
+        final layer = box.debugLayer! as OffsetLayer;
+        final colors = await tester.runAsync(() async {
+          final image = await layer.toImage(
+            Rect.fromLTWH(box.size.width / 2 - 40, 0, 80, 48),
+          );
+          try {
+            final rgba = (await image.toByteData(
+              format: ui.ImageByteFormat.rawRgba,
+            ))!;
+            final cids = <String>{};
+            for (var i = 0; i < rgba.lengthInBytes; i += 4) {
+              if (rgba.getUint8(i + 1) > 220 && rgba.getUint8(i) < 30) {
+                cids.add('1');
+              }
+              if (rgba.getUint8(i) > 220 &&
+                  rgba.getUint8(i + 1) < 30 &&
+                  rgba.getUint8(i + 2) > 220) {
+                cids.add('2');
+              }
+            }
+            return cids;
+          } finally {
+            image.dispose();
+          }
+        });
+        expect(
+          colors!.difference({panel.part!.cid}),
+          isEmpty,
+          reason: '$step, visible CID ${panel.part!.cid}',
+        );
+        return colors.firstOrNull;
       }
 
       Future<void> checkPixel(_PagingEngine target, String step) async {
@@ -252,6 +314,7 @@ void main() {
         );
         await tester.pump();
         await checkPixel(target, 'incoming preview in direction $direction');
+        await checkDanmaku('incoming preview in direction $direction');
         final surface = find.ancestor(
           of: find.byKey(ObjectKey(target)),
           matching: find.byType(VideoSurface),
@@ -262,9 +325,18 @@ void main() {
         // selected. Waiting for settle alone misses a one-frame black mask.
         var resolvingFrames = 0;
         var playingSurfaceFrames = 0;
+        final targetCid = direction == 1 ? '2' : '1';
+        var paintedTarget = false;
         for (var frame = 0; frame < 90 && playingSurfaceFrames < 4; frame++) {
           await tester.pump(const Duration(milliseconds: 16));
           await checkPixel(target, 'direction $direction, frame $frame');
+          final painted = await checkDanmaku(
+            'direction $direction, frame $frame',
+          );
+          if (paintedTarget) {
+            expect(painted, targetCid, reason: 'target danmaku disappeared');
+          }
+          if (painted == targetCid) paintedTarget = true;
           if (session.isResolving &&
               !pause.isCompleted &&
               ++resolvingFrames == 4) {
@@ -277,6 +349,7 @@ void main() {
         }
         expect(resolvingFrames, 4);
         expect(playingSurfaceFrames, 4);
+        expect(paintedTarget, isTrue);
         expect(tester.state(surface), same(previewState));
       }
 
@@ -319,6 +392,7 @@ void main() {
         ),
       );
       await frames();
+      expect(await checkDanmaku('initial card'), '1');
       expect(primary.opens, 1);
       expect(spares.single.currentSnapshot.volume, 0);
       expect(spares.single.currentSnapshot.desiredPlaying, isFalse);

@@ -7,6 +7,36 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'clearing a VOD source drops both prepared layers before the next tick',
+    () {
+      final scene = _Scene(false);
+      addTearDown(scene.dispose);
+      final controller = scene.vod;
+      controller.setViewport(width: 800, height: 400);
+      scene.add();
+      controller.preparePaintLayers();
+
+      int paint(bool scrolling) {
+        final recorder = ui.PictureRecorder();
+        final before = scene.statistics.totalPaints;
+        controller.paintLayers.paint(
+          Canvas(recorder),
+          scrolling: scrolling,
+          pixelRatio: 1,
+        );
+        recorder.endRecording().dispose();
+        return scene.statistics.totalPaints - before;
+      }
+
+      expect(paint(true), 1);
+      expect(paint(false), 1);
+      controller.replaceEvents(const []);
+      expect(paint(true), 0);
+      expect(paint(false), 0);
+    },
+  );
+
   for (final live in [false, true]) {
     final kind = live ? 'live' : 'VOD';
     testWidgets('$kind keeps fixed pictures while scrolling paints', (

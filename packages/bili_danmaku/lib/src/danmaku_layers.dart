@@ -113,10 +113,8 @@ final class DanmakuPaintLayers {
   }
 
   void clear() {
-    _scrolling.clear();
-    _fixed.clear();
-    _scrollingRevision++;
-    _fixedRevision++;
+    beginFrame();
+    endFrame();
   }
 }
 

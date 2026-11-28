@@ -347,6 +347,11 @@ final class DanmakuController extends ChangeNotifier
       final next = supplied[item.event.id];
       return next == null || !_sameEvent(item.event, next);
     });
+    if (ordered.isEmpty) {
+      // A new surface can paint before its first ticker frame. Clearing the
+      // event window must also discard both layers prepared for the old clip.
+      paintLayers.clear();
+    }
     // Active IDs may sit outside the trimmed queue. Keep them consumed until
     // they expire so a later refresh cannot admit a second copy.
     _consumedIds.addAll(_active.map((item) => item.event.id));
