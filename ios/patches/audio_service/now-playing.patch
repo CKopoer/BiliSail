@@ -1,0 +1,107 @@
+--- a/darwin/audio_service/Sources/audio_service/AudioServicePlugin.m
++++ b/darwin/audio_service/Sources/audio_service/AudioServicePlugin.m
+@@ -1,6 +1,7 @@
+ #import "./include/audio_service/AudioServicePlugin.h"
+ #import <AVFoundation/AVFoundation.h>
+ #import <MediaPlayer/MediaPlayer.h>
++#import <UIKit/UIKit.h>
+ 
+ // If you'd like to help, please see the TODO comments below, then open a
+ // GitHub issue to announce your intention to work on a particular feature, and
+@@ -28,6 +29,13 @@
+ static NSNumber *rewindInterval = nil;
+ static MPMediaItemArtwork* artwork = nil;
+ static NSMutableDictionary *nowPlayingInfo = nil;
++static BOOL appInBackground = NO;
++
++static void publishBackgroundNowPlayingInfo(void) {
++    if (appInBackground && processingState != ApsIdle && nowPlayingInfo.count > 0) {
++        [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = nowPlayingInfo;
++    }
++}
+ 
+ @implementation AudioServicePlugin {
+     FlutterMethodChannel *_channel;
+@@ -51,11 +59,26 @@
+             repeatMode = @(0);
+             shuffleMode = @(0);
+             nowPlayingInfo = [NSMutableDictionary new];
++            appInBackground = UIApplication.sharedApplication.applicationState == UIApplicationStateBackground;
++            NSNotificationCenter *notifications = [NSNotificationCenter defaultCenter];
++            [notifications addObserver:self selector:@selector(applicationVisibilityChanged:)
++                                  name:UIApplicationDidEnterBackgroundNotification object:nil];
++            [notifications addObserver:self selector:@selector(applicationVisibilityChanged:)
++                                  name:UIApplicationWillEnterForegroundNotification object:nil];
+             handlerChannel = [FlutterMethodChannel
+                 methodChannelWithName:@"com.ryanheise.audio_service.handler.methods"
+                       binaryMessenger:[registrar messenger]];
+             [registrar addMethodCallDelegate:instance channel:handlerChannel];
+         }
++    }
++}
++
+++ (void)applicationVisibilityChanged:(NSNotification *)notification {
++    appInBackground = [notification.name isEqualToString:UIApplicationDidEnterBackgroundNotification];
++    if (appInBackground) {
++        publishBackgroundNowPlayingInfo();
++    } else {
++        [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = nil;
+     }
+ }
+ 
+@@ -165,6 +188,7 @@
+             int actionCode = 1 << [actionIndex intValue];
+             actionBits |= actionCode;
+         }
++        BOOL wasIdle = processingState == ApsIdle;
+         processingState = [stateMap[@"processingState"] intValue];
+         BOOL oldPlaying = playing;
+         NSNumber *oldSpeed = speed;
+@@ -183,7 +207,7 @@
+             [self activateCommandCenter];
+         }
+         [self updateControls];
+-        if (playing != oldPlaying ||
++        if (wasIdle || playing != oldPlaying ||
+             speed.doubleValue != oldSpeed.doubleValue ||
+             position.longLongValue != oldPosition.longLongValue) {
+             [self updateNowPlayingInfo];
+@@ -232,6 +256,9 @@
+         [commandCenter.togglePlayPauseCommand setEnabled:NO];
+         [commandCenter.togglePlayPauseCommand removeTarget:nil];
+         [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = nil;
++        [nowPlayingInfo removeAllObjects];
++        mediaItem = nil;
++        artwork = nil;
+         processingState = ApsIdle;
+         actionBits = 0;
+         [self updateControls];
+@@ -269,6 +296,8 @@
+ }
+ 
+ - (void) updateNowPlayingInfo {
++    // Metadata and artwork may arrive before playback starts or after it stops.
++    if (processingState == ApsIdle || !mediaItem) return;
+     BOOL updated = NO;
+     if (mediaItem) {
+         updated |= [self updateNowPlayingField:MPMediaItemPropertyTitle value:mediaItem[@"title"]];
+@@ -288,8 +317,8 @@
+     updated |= [self updateNowPlayingField:MPNowPlayingInfoPropertyPlaybackRate value:(playing ? speed : [NSNumber numberWithDouble: 0.0])];
+     updated |= [self updateNowPlayingField:MPNowPlayingInfoPropertyDefaultPlaybackRate value:(playing ? speed : [NSNumber numberWithDouble: 0.0])];
+     updated |= [self updateNowPlayingField:MPNowPlayingInfoPropertyElapsedPlaybackTime value:[NSNumber numberWithDouble:([position doubleValue] / 1000)]];
++#if TARGET_OS_OSX
+     MPNowPlayingInfoCenter *center = [MPNowPlayingInfoCenter defaultCenter];
+-#if TARGET_OS_OSX
+     if (@available(iOS 13.0, macOS 10.12.2, *)) {
+         center.playbackState = playing ? MPNowPlayingPlaybackStatePlaying : MPNowPlayingPlaybackStatePaused;
+     }
+@@ -298,8 +327,7 @@
+         updated |= [self updateNowPlayingField:MPNowPlayingInfoPropertyIsLiveStream value:mediaItem[@"isLive"]];
+     }
+     if (updated) {
+-        //NSLog(@"### updating nowPlayingInfo");
+-        center.nowPlayingInfo = nowPlayingInfo;
++        publishBackgroundNowPlayingInfo();
+     }
+   
+     // TODO: List of all unused "nowPlayingInfo" keys, we might want to use these at some point:

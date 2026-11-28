@@ -2,6 +2,14 @@
 
 日期：2026-10-30。
 
+## iOS 灵动岛的前后台切换（2026-11-28）
+
+前台播放也出现媒体灵动岛，原因是 `audio_service` 0.18.19 的 Apple 实现会在播放进度、曲目信息和异步封面更新时写入系统“正在播放”，原有写入路径没有判断应用是否在后台。
+
+iOS 现在在前台缓存最新曲目和进度，进入后台时立即发布，返回前台时清空系统条目。控制中心也使用这份信息，从应用内下拉控制中心属于短暂失焦，仍沿用前台状态。停止后缓存随会话清理，迟到的封面无法单独恢复展示。补丁仅应用到 iOS 的 CocoaPods 构建副本，沿用现有播放器、音频焦点和媒体键处理。[iOS 原生补丁](../../ios/patches/audio_service/now-playing.patch) · [Apple 的清除接口](https://developer.apple.com/documentation/mediaplayer/mpnowplayinginfocenter/nowplayinginfo)
+
+本轮在 Windows 验证固定依赖的补丁应用及重复安装准备流程。iOS 回归用例覆盖前台、短暂失焦、后台、暂停后返回与停止后的迟到元数据。Xcode 构建、iOS 用例执行和实际灵动岛、锁屏显示留待设备验证。[Pod 准备回归](../../tool/test_ios_audio_service.py) · [iOS 生命周期用例](../../ios/RunnerTests/RunnerTests.swift)
+
 ## 移动端音频中断（2026-11-26）
 
 其他应用取得音频焦点后，原生输出可能已经停止，而听视频按钮和媒体卡片仍按会话的播放意图显示暂停。此时第一次点击只会发送暂停，第二次才会重新播放。

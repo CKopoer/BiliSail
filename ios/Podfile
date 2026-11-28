@@ -27,6 +27,9 @@ target 'Runner' do
   unless system('python3', File.expand_path('../tool/prepare-media-kit-apple.py', __dir__), 'ios')
     raise 'Could not stage media-kit CocoaPods headers'
   end
+  unless system('python3', File.expand_path('../tool/prepare_ios_audio_service.py', __dir__))
+    raise 'Could not stage iOS Now Playing lifecycle patch'
+  end
   target 'RunnerTests' do
     inherit! :search_paths
   end

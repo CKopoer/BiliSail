@@ -3,5 +3,6 @@ tool/*.sh text eol=lf
 linux/packaging/AppRun text eol=lf
 linux/packaging/flatpak-launcher text eol=lf
 tool/media-kit-patches/*.patch text eol=lf whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab
+ios/patches/audio_service/*.patch text eol=lf whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab
 android/native/mpv/*.patch text eol=lf whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab
 android/native/mpv/Dockerfile text eol=lf

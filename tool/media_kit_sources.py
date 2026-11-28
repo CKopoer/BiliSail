@@ -22,12 +22,12 @@ def package_source(name):
     return Path(url2pathname(uri.path)).resolve(strict=True)
 
 
-def apply_patches(destination, platforms):
+def apply_patches(destination, patch_names, patch_dir=PATCHES):
     # Run outside any enclosing Git worktree so patch paths are relative
     # to the copied plugin, even in CocoaPods' build directory.
     env = dict(os.environ, GIT_CEILING_DIRECTORIES=str(destination.parent.resolve()))
-    for platform in platforms:
-        patch = PATCHES / f"{platform}.patch"
+    for name in patch_names:
+        patch = patch_dir / f"{name}.patch"
         subprocess.run(["git", "-c", "core.autocrlf=false", "apply",
                         "--ignore-space-change", "--whitespace=nowarn", str(patch)],
                        cwd=destination, env=env, check=True, timeout=30)
