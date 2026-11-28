@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>哔帆 · 精选视频流样式稿</title>
+<link rel="icon" href="../../assets/branding/app_icon.png">
+<style>
+  @font-face { font-family: BiliIcons; src: url("../../assets/fonts/biliicon.ttf") format("truetype"); }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  :root { --accent: #d94b68; --muted: #66778a; --border: #e1e9f1; }
+  body { margin: 0; color: #18191c; background: #edf3f9; font: 15px/1.5 "Microsoft YaHei", system-ui, sans-serif; }
+  button { font: inherit; color: inherit; border: 0; background: transparent; cursor: pointer; }
+  button:disabled { cursor: default; }
+  button:focus-visible, a:focus-visible { outline: 3px solid #e46987; outline-offset: -3px; }
+  .icon { font: normal 1.37em/1 BiliIcons; }
+  .sheet { max-width: 1900px; margin: auto; padding: 22px clamp(12px, 3vw, 52px); }
+  .sheet-head, .appbar, .row, .controls, .metadata { display: flex; align-items: center; gap: 12px; }
+  .sheet-head { justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; }
+  h1, h2, h3, p { margin: 0; }
+  h1 { font-size: clamp(19px, 2.5vw, 29px); letter-spacing: -.05em; }
+  .switcher { display: flex; border-radius: 9px; background: #dfe8f0; padding: 3px; }
+  .switcher button { min-width: 66px; border-radius: 7px; padding: 6px 14px; font-size: 13px; }
+  .switcher button[aria-pressed=true] { background: white; box-shadow: 0 1px 4px #22334426; }
+  .frame { container: shell / inline-size; overflow: hidden; margin: auto; background: white; border: 1px solid #ccd8e2; border-radius: 12px; box-shadow: 0 14px 38px #37485714; }
+  .frame.phone { max-width: 390px; }
+  .shell { display: flex; height: clamp(420px, 74dvh, 860px); }
+  .rail { display: flex; flex-direction: column; width: 76px; align-items: stretch; gap: 2px; padding: 15px 6px 7px; border-right: 1px solid var(--border); overflow-y: auto; }
+  .brand { display: flex; align-items: center; justify-content: center; gap: 9px; margin: 4px 0 22px; }
+  .brand img { width: 34px; height: 34px; }
+  .brand b { display: none; }
+  .nav { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 3px; padding: 6px 2px; min-height: 52px; border-radius: 7px; color: #465363; font-size: 12px; }
+  .nav .icon { font-size: 20px; }
+  .nav[aria-current=page] { background: #ffeff2; color: #bb3453; font-weight: 700; }
+  .featured-icon { display: inline-block; width: 18px; height: 16px; border: 1.5px solid currentColor; border-radius: 4px; position: relative; margin: 2px; }
+  .featured-icon::before { content: ""; position: absolute; top: -4px; left: 2px; right: 2px; border-top: 1.5px solid currentColor; }
+  .featured-icon::after { content: ""; position: absolute; top: 3px; left: 6px; border-block: 4px solid transparent; border-left: 6px solid currentColor; }
+  .tools { margin-top: auto; display: grid; }
+  .main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+  .appbar { height: 56px; flex-shrink: 0; padding: 0 20px; justify-content: space-between; }
+  .appbar h2 { font-size: 18px; }
+  .plain { background: #f2f6fa; border-radius: 8px; padding: 7px 12px; font-size: 14px; }
+  .avatar { background: #fbe5e9; color: #96334d; border-radius: 50%; width: 36px; height: 36px; font-weight: 700; }
+  .body { position: relative; flex: 1; min-height: 0; }
+  .viewer { display: flex; height: 100%; position: relative; container: viewer / inline-size; background: #111417; overflow: hidden; }
+  .stage { flex: 1; min-width: 0; position: relative; color: white; isolation: isolate; overflow: hidden; touch-action: pan-x; }
+  .stage canvas { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .stage::after { content: ""; position: absolute; z-index: 0; inset: 0; pointer-events: none; background: linear-gradient(0deg,#050a13df,transparent 36%); }
+  .caption { position: absolute; z-index: 1; bottom: 20px; left: 24px; right: 88px; max-width: 720px; text-shadow: 0 1px 5px #0009; }
+  .metadata { font-size: 13px; opacity: .88; gap: 7px; }
+  .caption h3 { font-size: clamp(18px, 2.2vw, 28px); line-height: 1.35; margin: 6px 0 8px; }
+  .caption .details { font-size: 13px; padding: 0; color: #f8e8ec; }
+  .progress { height: 3px; background: #ffffff68; border-radius: 3px; margin-top: 12px; }
+  .progress::before { content: ""; display: block; background: #f48ba2; width: 21%; height: 100%; }
+  .actions { position: absolute; z-index: 1; right: 14px; bottom: 18px; display: grid; gap: 4px; }
+  .actions button { color: white; display: grid; justify-items: center; align-content: center; width: 48px; height: 48px; text-shadow: 0 1px 6px #10151dbf; }
+  .actions small { font-size: 11px; }
+  .actions button[aria-pressed=true] { color: #ff94ae; }
+  .arrows { position: absolute; right: 17px; top: 13px; display: grid; z-index: 1; gap: 5px; }
+  .arrows button { background: #172027a6; color: white; border: 1px solid #ffffff44; border-radius: 50%; width: 38px; height: 38px; font-size: 19px; }
+  .arrows button:disabled { opacity: .35; }
+  .panel { background: white; width: 380px; max-width: 100%; padding: 18px; overflow: auto; }
+  .panel header, .page header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .close { min-width: 42px; min-height: 42px; font-size: 23px; color: #586979; }
+  .comment { padding: 14px 0; border-top: 1px solid var(--border); }
+  .comment strong { color: var(--muted); font-size: 13px; }
+  .comment p { margin-top: 4px; }
+  .page { background: #f4f7fb; height: 100%; padding: 20px; overflow: auto; }
+  .card, .menu { max-width: 480px; background: white; border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .card p { color: var(--muted); margin: 6px 0 14px; }
+  .menu { position: absolute; z-index: 3; top: 8px; right: 12px; width: min(300px,90%); box-shadow: 0 12px 35px #20334d30; }
+  .menu button, .listrow { text-align: left; display: block; padding: 10px; width: 100%; }
+  .menu h3 { padding: 4px 10px 10px; }
+  .bottom { display: none; }
+  footer { text-align: center; margin-top: 13px; font-size: 13px; color: #526376; }
+  @container viewer (max-width: 999px) {
+    .panel { position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; width: 100%; max-height: 66%; border-radius: 15px 15px 0 0; box-shadow: 0 -7px 32px #0005; }
+  }
+  @container shell (max-width: 599px) {
+    .shell { flex-direction: column; height: min(715px, 78dvh); min-height: 420px; }
+    .rail { display: none; }
+    .appbar { height: 46px; padding: 0 14px; }
+    .appbar h2 { font-size: 16px; }
+    .bottom { display: flex; min-height: 52px; border-top: 1px solid var(--border); }
+    .bottom .nav { flex: 1; min-width: 0; border-radius: 0; }
+    .bottom .nav[aria-current=page] { background: white; }
+    .caption { left: 14px; right: 65px; bottom: 18px; }
+    .actions { right: 5px; bottom: 14px; }
+    .arrows { right: 8px; top: 10px; }
+  }
+  @container shell (min-width: 1600px) {
+    .rail { width: 164px; }
+    .brand b { display: inline; }
+    .rail .nav { flex-direction: row; justify-content: start; gap: 12px; padding-left: 18px; font-size: 14px; }
+  }
+  @container shell (min-width: 600px) {
+    .appbar[data-page="我的"] #header-action { display: none; }
+  }
+  @media (max-width: 480px) {
+    .sheet { padding: 10px 6px; }
+    .sheet-head { margin: 0 4px 10px; gap: 6px; }
+    .switcher button { min-width: 48px; padding: 5px 8px; }
+  }
+</style>
+<main class="sheet">
+  <div class="sheet-head"><h1>精选视频流 · 样式稿</h1>
+    <div class="switcher" aria-label="预览宽度">
+      <button data-width="auto" aria-pressed="true">随窗口</button>
+      <button data-width="phone" aria-pressed="false">窄屏</button>
+    </div>
+  </div>
+  <section class="frame" aria-label="哔帆预览">
+    <div class="shell">
+      <nav class="rail" aria-label="侧边栏">
+        <div class="brand"><img src="../../assets/branding/app_icon.png" alt="哔帆"><b>哔帆</b></div>
+        <div id="side-links" style="display:grid"></div>
+        <div id="tools" class="tools"></div>
+      </nav>
+      <div class="main">
+        <header class="appbar"><div class="row"><button class="plain" id="back" hidden>‹ 返回</button><h2 id="page-title">精选</h2></div>
+          <button id="header-action" class="plain">换一批</button></header>
+        <div class="body">
+          <div class="viewer" id="viewer">
+            <section class="stage" tabindex="0" aria-label="视频画面，上下方向键切换示例">
+              <canvas id="poster" aria-label="原创山景示意画面"></canvas>
+              <div class="arrows"><button id="prev" aria-label="上一条">↑</button><button id="next" aria-label="下一条">↓</button></div>
+              <div class="caption"><div class="metadata"><span class="icon" aria-hidden="true">&#xe66e;</span><span id="author"></span><span id="timing"></span></div>
+                <h3 id="clip-title"></h3><button class="details" data-panel="简介">展开视频信息 ›</button><div class="progress"></div></div>
+              <div class="actions">
+                <button id="like" aria-label="点赞示意" aria-pressed="false"><span class="icon">&#xe6c6;</span><small>点赞</small></button>
+                <button data-panel="评论"><span class="icon" aria-hidden="true">&#xe6b8;</span><small>评论</small></button>
+                <button id="save" aria-label="收藏示意" aria-pressed="false"><span class="icon">&#xe673;</span><small>收藏</small></button>
+                <button data-panel="更多"><b>•••</b><small>更多</small></button>
+              </div>
+            </section>
+            <aside class="panel" id="panel" hidden><header><h3 id="panel-title"></h3><button class="close" aria-label="关闭面板">×</button></header><div id="panel-body"></div></aside>
+          </div>
+          <section class="page" id="page" hidden></section>
+          <section class="menu" id="menu" aria-label="账号菜单" hidden><h3>我的账号</h3><div class="listrow">历史记录</div><div class="listrow">我的收藏</div><button class="plain" data-go="设置">⚙　设置</button></section>
+        </div>
+        <nav class="bottom" id="bottom" aria-label="底栏"></nav>
+      </div>
+    </div>
+  </section>
+  <footer>滚轮、上下方向键或箭头切换横竖画面。样式稿使用本地示例，点赞和收藏仅在预览内生效。</footer>
+</main>
+<script>
+  const $ = selector => document.querySelector(selector);
+  const clips = [
+    { title: '翻过雪线，看清晨的第一束光', author: '山野手记', time: '00:24 / 01:56', portrait: false },
+    { title: '雾从杉林升起的三十秒', author: '森林拾音', time: '00:06 / 00:32', portrait: true },
+    { title: '日落之后，山脊仍在发光', author: '山野手记', time: '00:18 / 01:28', portrait: false }
+  ];
+  const glyphs = { 首页: 'e661', 动态: 'e666', 直播: 'e66c', 我的: 'e667', 消息: 'e6b8', 下载: 'e672', 设置: 'e685' };
+  const state = { page: '精选', index: 0, origin: '首页', seeded: false, liked: new Set(), saved: new Set() };
+  const nav = name => {
+    const icon = name === '精选' ? '<i class="featured-icon" aria-hidden="true"></i>' : '<i class="icon" aria-hidden="true">&#x' + glyphs[name] + ';</i>';
+    const inactive = ['动态','直播','消息','下载'].includes(name);
+    return '<button class="nav" data-go="' + name + '"' + (inactive ? ' disabled' : '') + '>' + icon + name + '</button>';
+  };
+  $('#side-links').innerHTML = ['首页','精选','动态','直播','我的'].map(nav).join('');
+  $('#tools').innerHTML = ['消息','下载','设置'].map(nav).join('');
+  $('#bottom').innerHTML = ['首页','精选','动态','我的'].map(nav).join('');
+
+  // Draw each fictional clip at its native aspect ratio. The player fits that frame.
+  function paint(index) {
+    const portrait = clips[index].portrait;
+    const canvas = $('#poster');
+    const w = canvas.width = portrait ? 540 : 1280;
+    const h = canvas.height = portrait ? 960 : 720;
+    const ctx = canvas.getContext('2d');
+    const colors = [
+      ['#627ca0','#ffb591','#ffe8c0','#8592aa','#5d748e','#3c566c','#213d51','#152b39'],
+      ['#718e94','#dfc99e','#ffedc4','#829b92','#627e78','#415c59','#294946','#163735'],
+      ['#776882','#d38a81','#ffd2a3','#a07c88','#826674','#624f65','#443c52','#2c3042']
+    ][index];
+    const sky = ctx.createLinearGradient(0,0,0,h * .78);
+    sky.addColorStop(0,colors[0]); sky.addColorStop(.78,colors[1]); sky.addColorStop(1,colors[2]);
+    ctx.fillStyle = sky; ctx.fillRect(0,0,w,h);
+    ctx.fillStyle = colors[2]; ctx.beginPath(); ctx.arc(w * .69,h * .30,Math.min(w,h) * .074,0,Math.PI * 2); ctx.fill();
+    const horizon = [[0,.61],[.12,.49],[.19,.54],[.29,.40],[.34,.44],[.42,.29],[.47,.34],[.51,.31],[.64,.49],[.75,.45],[.81,.51],[.90,.40],[1,.48]];
+    function polygon(points, color) {
+      ctx.fillStyle = color; ctx.beginPath(); points.forEach(([x,y],i) => i ? ctx.lineTo(x*w,y*h) : ctx.moveTo(x*w,y*h)); ctx.closePath(); ctx.fill();
+    }
+    polygon([...horizon,[1,1],[0,1]],colors[3]);
+    for (const [x,y,size] of [[.42,.29,.15],[.51,.31,.10],[.29,.40,.08],[.90,.40,.07]]) {
+      polygon([[x,y],[x+size*.52,y+size*.65],[x+size*.32,y+size*.55],[x+size*.37,y+size*.80],[x+size*.10,y+size*.47],[x-size*.12,y+size*.57]],colors[2]);
+    }
+    for (let layer=0; layer<4; layer++) {
+      const ridge = x => .56 + layer*.09 + Math.sin(x*6.2 + layer*1.5)*.065 + Math.cos(x*12 + layer)*.026 + Math.sin(x*48+layer)*.008;
+      const path = []; for(let step=0;step<=160;step++) path.push([step/160,ridge(step/160)]);
+      polygon([...path,[1,1],[0,1]],colors[layer+4]);
+      if (layer<2) continue;
+      for(let tree=0;tree<120;tree++) {
+        const x=tree/118, y=ridge(x)+.005;
+        const size=(.012+.026*(.5+.5*Math.sin(tree*32.7)))*(layer-1);
+        polygon([[x-size*.14,y],[x,y-size],[x+size*.14,y]],colors[layer+4]);
+      }
+    }
+  }
+  function renderClip() {
+    const c = clips[state.index];
+    paint(state.index);
+    $('#author').textContent = c.author; $('#timing').textContent = c.time;
+    $('#clip-title').textContent = c.title;
+    $('#prev').disabled = state.index === 0; $('#next').disabled = state.index === clips.length-1;
+    $('#like').setAttribute('aria-pressed',state.liked.has(state.index));
+    $('#save').setAttribute('aria-pressed',state.saved.has(state.index));
+  }
+  function step(direction) {
+    if (state.page !== '精选' || !$('#panel').hidden) return;
+    state.index = Math.max(0,Math.min(clips.length-1,state.index+direction)); renderClip();
+  }
+  let lastPanelTrigger = null;
+  function closePanel() {
+    $('#panel').hidden=true;
+    if (lastPanelTrigger?.isConnected) lastPanelTrigger.focus();
+  }
+  function openPanel(name, trigger) {
+    lastPanelTrigger = trigger;
+    $('#panel-title').textContent = name;
+    const sample = name === '评论'
+      ? [['一只候鸟','喜欢光线刚刚越过山脊的那一刻。'],['林间来信','留着周末再看一遍。']]
+      : name === '简介' ? [[clips[state.index].author, clips[state.index].title]] : [['播放选项','画质　 ·　倍速　 ·　弹幕']];
+    $('#panel-body').replaceChildren();
+    for (const [author,body] of sample) {
+      const box = document.createElement('div'); box.className='comment';
+      const who = document.createElement('strong'); who.textContent=author;
+      const p = document.createElement('p'); p.textContent=body; box.append(who,p); $('#panel-body').append(box);
+    }
+    $('#panel').hidden=false; $('#panel .close').focus();
+  }
+  function showPage(name, seeded = false) {
+    if (name === '设置' && state.page !== '设置') state.origin = state.page;
+    state.page = name; state.seeded = seeded;
+    $('.appbar').dataset.page = name;
+    $('#page-title').textContent = name; $('#menu').hidden=true; $('#panel').hidden=true;
+    $('#viewer').hidden = name !== '精选'; $('#page').hidden = name === '精选';
+    $('#bottom').hidden = seeded; $('#back').hidden = !(seeded || name === '设置');
+    const action = $('#header-action');
+    action.hidden = name === '设置';
+    action.textContent = ({ 首页:'帆', 精选:'换一批', 我的:'⚙　设置' })[name] || '';
+    action.className = name === '首页' ? 'avatar' : 'plain';
+    action.setAttribute('aria-label', name === '首页' ? '打开首页头像菜单' : action.textContent);
+    document.querySelectorAll('.nav').forEach(el => {
+      if (el.dataset.go === name) el.setAttribute('aria-current','page'); else el.removeAttribute('aria-current');
+    });
+    if (name === '精选') { renderClip(); return; }
+    $('#page').innerHTML = ({
+      首页:'<div class="card"><h3>翻过雪线，看清晨的第一束光</h3><p>山野手记 · Story 视频</p><button class="plain" id="seed">上下滑观看</button></div>',
+      我的:'<div class="card"><h3>我的账号</h3><p>个人空间</p><div class="listrow">历史记录　 稍后再看　 收藏　 下载</div></div>',
+      设置:'<div class="card"><h3>设置</h3><div class="listrow">外观</div><div class="listrow">播放</div><div class="listrow">推荐流</div></div>'
+    })[name];
+  }
+  document.addEventListener('click', e => {
+    const el=e.target.closest('button'); if (!el) return;
+    if (el.dataset.width) {
+      $('.frame').classList.toggle('phone',el.dataset.width==='phone');
+      document.querySelectorAll('[data-width]').forEach(b=>b.setAttribute('aria-pressed',b===el)); return;
+    }
+    if (el.dataset.go) { showPage(el.dataset.go); return; }
+    if (el.dataset.panel) { openPanel(el.dataset.panel,el); return; }
+    if (el.matches('.close')) { closePanel(); return; }
+    if (el.id === 'prev' || el.id === 'next') step(el.id === 'prev' ? -1 : 1);
+    if (el.id === 'like' || el.id === 'save') {
+      const selections = el.id === 'like' ? state.liked : state.saved;
+      if (selections.has(state.index)) selections.delete(state.index); else selections.add(state.index);
+      renderClip();
+    }
+    if (el.id === 'seed') { state.index=0; showPage('精选',true); }
+    if (el.id === 'back') showPage(state.seeded ? '首页' : state.origin);
+    if (el.id === 'header-action') {
+      if (state.page==='首页') $('#menu').hidden=!$('#menu').hidden;
+      if (state.page==='我的') showPage('设置');
+      if (state.page==='精选') { $('#panel').hidden=true; state.index=(state.index+1)%clips.length; renderClip(); }
+    }
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !$('#panel').hidden) { closePanel(); return; }
+    if (e.key === 'Escape' && !$('#menu').hidden) { $('#menu').hidden=true; $('#header-action').focus(); return; }
+    if (!e.target.closest('.stage') || !['ArrowUp','ArrowDown'].includes(e.key)) return;
+    e.preventDefault(); step(e.key==='ArrowDown' ? 1 : -1);
+  });
+  const stage=$('.stage');
+  let wheelTimer, accumulated=0, switched=false;
+  stage.addEventListener('wheel',e=>{
+    if (!$('#panel').hidden || Math.abs(e.deltaY)<=Math.abs(e.deltaX)) return;
+    e.preventDefault(); clearTimeout(wheelTimer);
+    accumulated+=e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?stage.clientHeight:1);
+    if (!switched && Math.abs(accumulated)>=35) { step(Math.sign(accumulated)); switched=true; }
+    wheelTimer=setTimeout(()=>{accumulated=0;switched=false;},180);
+  },{passive:false});
+  let touchStart=null;
+  stage.addEventListener('touchstart',e=>{
+    const touch=e.touches[0], rect=stage.getBoundingClientRect(), x=(touch.clientX-rect.left)/rect.width;
+    touchStart=e.touches.length===1 && x>1/3 && x<2/3 ? [touch.clientX,touch.clientY] : null;
+  },{passive:true});
+  stage.addEventListener('touchcancel',()=>{touchStart=null;});
+  stage.addEventListener('touchend',e=>{
+    if (!touchStart) return;
+    const t=e.changedTouches[0], dy=touchStart[1]-t.clientY, dx=touchStart[0]-t.clientX;
+    if (Math.abs(dy)>45 && Math.abs(dy)>Math.abs(dx)) step(Math.sign(dy));
+    touchStart=null;
+  });
+  showPage('精选');
+</script>
+</html>
