@@ -2455,6 +2455,10 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                             Positioned.fill(
                               child: _BottomPlayerLayers(
                                 controlsVisible: controls && widget.active,
+                                onControlsInsetChanged: widget.fullScreen
+                                    ? null
+                                    : FeaturedPagingScope.maybeOf(context)
+                                          ?.onControlsInsetChanged,
                                 subtitleBottomPadding:
                                     settings.subtitleBottomPadding,
                                 sponsorBlockBottomPadding:
@@ -2779,12 +2783,14 @@ enum _BottomPlayerSlot { controls, subtitle, subtitleMessage, sponsor }
 class _BottomPlayerLayers extends StatelessWidget {
   const _BottomPlayerLayers({
     required this.controlsVisible,
+    required this.onControlsInsetChanged,
     required this.subtitleBottomPadding,
     required this.sponsorBlockBottomPadding,
     required this.children,
   });
 
   final bool controlsVisible;
+  final ValueChanged<double>? onControlsInsetChanged;
   final double subtitleBottomPadding;
   final double sponsorBlockBottomPadding;
   final List<Widget> children;
@@ -2794,6 +2800,7 @@ class _BottomPlayerLayers extends StatelessWidget {
     child: CustomMultiChildLayout(
       delegate: _BottomPlayerLayout(
         controlsVisible: controlsVisible,
+        onControlsInsetChanged: onControlsInsetChanged,
         subtitleBottomPadding: subtitleBottomPadding,
         sponsorBlockBottomPadding: sponsorBlockBottomPadding,
       ),
@@ -2805,11 +2812,13 @@ class _BottomPlayerLayers extends StatelessWidget {
 class _BottomPlayerLayout extends MultiChildLayoutDelegate {
   _BottomPlayerLayout({
     required this.controlsVisible,
+    required this.onControlsInsetChanged,
     required this.subtitleBottomPadding,
     required this.sponsorBlockBottomPadding,
   });
 
   final bool controlsVisible;
+  final ValueChanged<double>? onControlsInsetChanged;
   final double subtitleBottomPadding;
   final double sponsorBlockBottomPadding;
 
@@ -2826,6 +2835,7 @@ class _BottomPlayerLayout extends MultiChildLayoutDelegate {
         Offset(0, size.height - controlsHeight),
       );
     }
+    onControlsInsetChanged?.call(controlsHeight);
     // The setting measures from the player edge. Lift only when needed to
     // clear the actual bar, including wrapped time and the expanded editor.
     final bottom = controlsVisible && controlsHeight + 8 > subtitleBottomPadding
@@ -2872,6 +2882,7 @@ class _BottomPlayerLayout extends MultiChildLayoutDelegate {
   @override
   bool shouldRelayout(_BottomPlayerLayout oldDelegate) =>
       controlsVisible != oldDelegate.controlsVisible ||
+      onControlsInsetChanged != oldDelegate.onControlsInsetChanged ||
       subtitleBottomPadding != oldDelegate.subtitleBottomPadding ||
       sponsorBlockBottomPadding != oldDelegate.sponsorBlockBottomPadding;
 }

@@ -26,7 +26,7 @@ import '../../../shared/ui/app_network_image.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../feed/application/featured_feed_controller.dart';
 import '../application/video_controller.dart';
-import 'video_actions_bar.dart';
+import 'featured_video_overlay.dart';
 import 'video_comments_panel.dart';
 import 'video_screen.dart' show VideoPlayerBuilder;
 
@@ -60,6 +60,8 @@ class FeaturedVideoScreen extends ConsumerStatefulWidget {
 class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen> {
   late final feed = widget.createController()..addListener(_changed);
   final pages = PageController(keepPage: false);
+  final controlsInset = ValueNotifier(0.0);
+  double? pendingControlsInset;
   _Info? panel;
   Timer? wheelIdle;
   double wheelDelta = 0;
@@ -110,6 +112,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen> {
   void dispose() {
     wheelIdle?.cancel();
     pages.dispose();
+    controlsInset.dispose();
     feed.dispose();
     super.dispose();
   }
@@ -358,29 +361,16 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen> {
                 fit: StackFit.expand,
                 children: [
                   _player(item, detail, failed: result?.hasError == true),
-                  if (detail != null)
-                    Positioned(
-                      left: 12,
-                      bottom: 74,
-                      right: 70,
-                      child: Align(
-                        alignment: Alignment.bottomLeft,
-                        child: TextButton(
-                          onPressed: () => _toggle(_Info.description),
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.white,
-                            backgroundColor: Colors.black54,
-                          ),
-                          child: Text(
-                            '${detail.summary.author}  ·  ${detail.summary.title}',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ),
+                  if (active && detail != null)
+                    FeaturedVideoOverlay(
+                      key: ValueKey(detail.summary.id),
+                      detail: detail,
+                      controlsInset: controlsInset,
+                      onLogin: widget.onLogin,
+                      onOpenUser: widget.onOpenUser,
+                      onShowDescription: () => _toggle(_Info.description),
+                      onShowComments: () => _toggle(_Info.comments),
                     ),
-                  if (detail != null)
-                    Positioned(right: 4, bottom: 62, child: _actions(detail)),
                 ],
               ),
       ),
@@ -417,6 +407,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen> {
             ? widget.seedLink
             : const ContentLink(),
         child: FeaturedPagingScope(
+          onControlsInsetChanged: _updateControlsInset,
           child: PlaybackPageCommands(
             previousPart: () => _step(-1),
             nextPart: () => _step(1),
@@ -434,27 +425,20 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen> {
     );
   }
 
-  Widget _actions(VideoDetail detail) => VideoActionsScope(
-    detail: detail,
-    onLogin: widget.onLogin,
-    child: Material(
-      color: Colors.black54,
-      borderRadius: BorderRadius.circular(12),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const VideoActionsBar(featured: true),
-          IconButton(
-            tooltip: '评论',
-            color: Colors.white,
-            icon: const Icon(Icons.chat_bubble_outline),
-            onPressed: () => _toggle(_Info.comments),
-          ),
-          const VideoActionsBar(menuOnly: true, featured: true),
-        ],
-      ),
-    ),
-  );
+  void _updateControlsInset(double height) {
+    if (pendingControlsInset != null) {
+      pendingControlsInset = height;
+      return;
+    }
+    if (controlsInset.value == height) return;
+    // The player measures during layout. Reposition the sibling next frame.
+    pendingControlsInset = height;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final inset = pendingControlsInset;
+      pendingControlsInset = null;
+      if (mounted && inset != null) controlsInset.value = inset;
+    });
+  }
 
   Widget _infoPanel(VideoDetail detail) => Material(
     color: Theme.of(context).colorScheme.surface,

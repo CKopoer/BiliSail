@@ -110,7 +110,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('playing-1')), findsOneWidget);
       expect(videos.details, [videos.items[0].id, videos.items[1].id]);
-      await tester.tap(find.text('作者  ·  片段 1'));
+      await tester.tap(find.text('片段 1'));
       await tester.pumpAndSettle();
       final wide = tester.getRect(find.text('视频信息'));
       expect(wide.left, greaterThan(800));

@@ -320,11 +320,12 @@ class VideoActionsBar extends StatelessWidget {
     this.menuOnly = false,
     this.onReload,
     this.onOpenStory,
-    this.featured = false,
+    this.menuIconColor,
     this.onDownload,
   });
   static const height = 36.0;
-  final bool menuOnly, featured;
+  final bool menuOnly;
+  final Color? menuIconColor;
   final VoidCallback? onOpenStory;
   final VoidCallback? onReload;
   final VoidCallback? onDownload;
@@ -341,7 +342,7 @@ class VideoActionsBar extends StatelessWidget {
     if (menuOnly) {
       return PopupMenuButton<String>(
         tooltip: '更多',
-        iconColor: featured ? Colors.white : null,
+        iconColor: menuIconColor,
         onSelected: (value) {
           if (value == 'story') onOpenStory?.call();
           if (value == 'download') onDownload?.call();
@@ -364,39 +365,6 @@ class VideoActionsBar extends StatelessWidget {
             child: Text(state.watchLaterAdded ? '已加入稍后再看' : '稍后再看'),
           ),
           const PopupMenuItem(value: 'reload', child: Text('重新加载')),
-        ],
-      );
-    }
-    if (featured) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            tooltip: '点赞',
-            color: state.interaction.liked
-                ? Theme.of(context).colorScheme.primary
-                : Colors.white,
-            icon: Icon(
-              state.interaction.liked
-                  ? Icons.thumb_up
-                  : Icons.thumb_up_outlined,
-            ),
-            onPressed: enabled('like', needsState: true)
-                ? () => owner._invoke(ShortcutAction.likeVideo)
-                : null,
-          ),
-          IconButton(
-            tooltip: '收藏',
-            color: state.interaction.favorited
-                ? Theme.of(context).colorScheme.primary
-                : Colors.white,
-            icon: Icon(
-              state.interaction.favorited ? Icons.star : Icons.star_outline,
-            ),
-            onPressed: enabled('favorite')
-                ? () => owner._invoke(ShortcutAction.favoriteVideo)
-                : null,
-          ),
         ],
       );
     }
@@ -503,6 +471,160 @@ class VideoActionsBar extends StatelessWidget {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class FeaturedVideoActions extends StatelessWidget {
+  const FeaturedVideoActions({
+    super.key,
+    required this.onShowComments,
+    required this.horizontal,
+  });
+
+  final VoidCallback onShowComments;
+  final bool horizontal;
+
+  static const width = 56.0;
+  static const horizontalWidth = width * 5;
+  static const _menuHeight = 44.0;
+
+  static double verticalHeight(BuildContext context) =>
+      actionHeight(context) * 4 + _menuHeight;
+
+  static double actionHeight(BuildContext context) =>
+      (34 + MediaQuery.textScalerOf(context).scale(11)).clamp(
+        48,
+        double.infinity,
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final view = context
+        .dependOnInheritedWidgetOfExactType<_VideoActionsView>();
+    if (view == null) return const SizedBox.shrink();
+    final interaction = view.state.interaction;
+    final detail = view.detail;
+    final owner = view.owner;
+    final height = actionHeight(context);
+
+    VoidCallback? onAction(
+      ShortcutAction action,
+      String name, {
+      bool needsState = false,
+    }) => owner._enabled(view.state, name, needsState: needsState)
+        ? () => owner._invoke(action)
+        : null;
+
+    Widget action({
+      required Widget icon,
+      required String label,
+      required int? count,
+      required VoidCallback? onPressed,
+      bool selected = false,
+    }) => SizedBox(
+      width: width,
+      height: height,
+      child: Semantics(
+        label: label,
+        selected: selected ? true : null,
+        child: Tooltip(
+          message: label,
+          excludeFromSemantics: true,
+          child: TextButton(
+            onPressed: onPressed,
+            style: TextButton.styleFrom(
+              foregroundColor: selected
+                  ? const Color(0xffff81a9)
+                  : Colors.white,
+              disabledForegroundColor: Colors.white60,
+              padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconTheme.merge(
+                  data: const IconThemeData(size: 24),
+                  child: icon,
+                ),
+                const SizedBox(height: 2),
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      compactCount(count),
+                      style: const TextStyle(fontSize: 11, height: 1),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    return Material(
+      color: Colors.black54,
+      borderRadius: BorderRadius.circular(18),
+      child: Flex(
+        direction: horizontal ? Axis.horizontal : Axis.vertical,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          action(
+            icon: Icon(
+              interaction.liked
+                  ? Icons.thumb_up_alt
+                  : Icons.thumb_up_alt_outlined,
+            ),
+            label: interaction.liked ? '已点赞' : '点赞',
+            count: detail.likeCount ?? detail.summary.likeCount,
+            onPressed: onAction(
+              ShortcutAction.likeVideo,
+              'like',
+              needsState: true,
+            ),
+            selected: interaction.liked,
+          ),
+          action(
+            icon: BiliCoinIcon(filled: interaction.coins > 0),
+            label: interaction.coins > 0 ? '已投 ${interaction.coins} 枚' : '投币',
+            count: detail.coinCount,
+            onPressed: onAction(
+              ShortcutAction.coinVideo,
+              'coin',
+              needsState: true,
+            ),
+            selected: interaction.coins > 0,
+          ),
+          action(
+            icon: Icon(
+              interaction.favorited
+                  ? BiliIcons.favoriteFilled
+                  : BiliIcons.favorite,
+            ),
+            label: interaction.favorited ? '已收藏' : '收藏',
+            count: detail.favoriteCount,
+            onPressed: onAction(ShortcutAction.favoriteVideo, 'favorite'),
+            selected: interaction.favorited,
+          ),
+          action(
+            icon: const Icon(Icons.chat_bubble_outline),
+            label: '评论',
+            count: detail.replyCount,
+            onPressed: onShowComments,
+          ),
+          SizedBox(
+            width: width,
+            height: horizontal ? height : _menuHeight,
+            child: const VideoActionsBar(
+              menuOnly: true,
+              menuIconColor: Colors.white,
+            ),
+          ),
+        ],
       ),
     );
   }
