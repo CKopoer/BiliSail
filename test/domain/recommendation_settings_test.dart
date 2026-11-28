@@ -40,6 +40,26 @@ void main() {
       );
     }
   });
+  test('Story cards use the feed by default and preserve a saved opt-out', () {
+    expect(
+      const RecommendationSettings.defaults().openStoryCardsInFeed,
+      isTrue,
+    );
+    expect(RecommendationSettings.fromJson({}).openStoryCardsInFeed, isTrue);
+    expect(
+      RecommendationSettings.fromJson({'openStoryCardsInFeed': 'false'})
+          .openStoryCardsInFeed,
+      isTrue,
+    );
+    final saved = RecommendationSettings().copyWith(
+      openStoryCardsInFeed: false,
+    );
+    expect(
+      RecommendationSettings.fromJson(saved.toJson()).openStoryCardsInFeed,
+      isFalse,
+    );
+    expect(saved.filterKey, RecommendationSettings().filterKey);
+  });
   test('custom thresholds persist and enforce numeric limits', () {
     final custom = RecommendationSettings(
       minimumLikeRatio: 7,

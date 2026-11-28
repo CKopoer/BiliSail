@@ -22,7 +22,6 @@ import '../../../shared/ui/content_link_scope.dart';
 import '../../../shared/ui/featured_navigation_scope.dart';
 import '../../../shared/ui/featured_paging_scope.dart';
 import '../../../shared/ui/featured_selection_scope.dart';
-import '../../../shared/ui/playback_navigation.dart';
 import '../../../shared/ui/playback_page_commands.dart';
 import '../../../shared/ui/player_picture.dart';
 import '../../../shared/ui/playback_split_layout.dart';
@@ -46,6 +45,7 @@ class FeaturedVideoScreen extends ConsumerStatefulWidget {
     required this.onLogin,
     required this.onOpenUser,
     required this.splitWidth,
+    this.onOpenDetails,
     this.onReturnToVideo,
     this.seedAttribution,
     this.seedLink = const ContentLink(),
@@ -55,6 +55,8 @@ class FeaturedVideoScreen extends ConsumerStatefulWidget {
   final VoidCallback onLogin;
   final ValueChanged<UserId> onOpenUser;
   final int splitWidth;
+  final void Function(VideoId id, String? cid, Duration? position)?
+  onOpenDetails;
   final VoidCallback? onReturnToVideo;
   final ContentLink seedLink;
   final RecommendationPlaybackContext? seedAttribution;
@@ -413,6 +415,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
 
   Widget _viewer(VideoSummary? current, AsyncValue<VideoDetail>? detail) {
     final navigation = FeaturedNavigationScope.maybeOf(context);
+    final showDetailsButton = current != null && widget.onOpenDetails != null;
     return PageBackHandler(
       enabled: active && (panel != null || widget.onReturnToVideo != null),
       onBack: () {
@@ -495,7 +498,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
           if (feed.error case final message?
               when current != null && panel == null)
             PositionedDirectional(
-              start: feed.seed == null ? 8 : 64,
+              start: showDetailsButton ? 64 : 8,
               end: 8,
               top: 8,
               child: Align(
@@ -522,29 +525,41 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
                 child: FeaturedNavigationToggle(color: Colors.white),
               ),
             ),
-          if (feed.seed != null)
+          if (showDetailsButton)
             PositionedDirectional(
               start: 8,
               top: 8,
-              child: BackButton(
+              child: IconButton(
+                tooltip: '进入视频详情',
                 style: IconButton.styleFrom(
                   foregroundColor: Colors.white,
                   backgroundColor: Colors.black54,
                 ),
-                onPressed: () {
-                  if (panel != null) {
-                    setState(() => panel = null);
-                  } else {
-                    (widget.onReturnToVideo ??
-                            PlaybackNavigation.maybeOf(context)?.onBack)
-                        ?.call();
-                  }
-                },
+                onPressed: () => _openDetails(current, detail?.value),
+                icon: const Icon(Icons.article_outlined),
               ),
             ),
         ],
       ),
     );
+  }
+
+  void _openDetails(VideoSummary item, VideoDetail? detail) {
+    final seed =
+        refreshRevision == 0 && feed.selected == 0 && feed.seed != null;
+    final cid = _partFor(item, detail, seed: seed)?.cid ?? item.previewCid;
+    final session = ref.read(playbackManagerProvider) == null
+        ? null
+        : ref.read(playbackSessionProvider);
+    final position =
+        session != null &&
+            session.detail?.summary.id == item.id &&
+            session.part?.cid == cid
+        ? session.snapshots.value.position
+        : seed && seedPositionPending
+        ? widget.seedLink.position
+        : null;
+    widget.onOpenDetails?.call(item.id, cid, position);
   }
 
   Widget _page(int index, AsyncValue<VideoDetail>? result) {

@@ -599,6 +599,17 @@ final class _WorkspacePage extends ConsumerWidget {
         playerBuilder: playerBuilder,
         seedLink: ContentLink.fromUri(location),
         seedAttribution: recommendation,
+        onOpenDetails: (id, cid, position) => context.openWorkspaceLink(
+          Uri(
+            path: '/video/${id.value}',
+            queryParameters: {
+              'cid': ?cid,
+              'start_progress': ?position?.inMilliseconds.toString(),
+              if (seed?.video == id && recommendation != null)
+                'recommendation': ?query['recommendation'],
+            },
+          ).toString(),
+        ),
         onOpenUser: (user) => context.openWorkspaceLink('/user/${user.value}'),
         onLogin: () => showAppDialog<void>(
           context: context,

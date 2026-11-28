@@ -10,6 +10,7 @@ final class RecommendationSettings {
   RecommendationSettings({
     this.source = RecommendationSource.web,
     this.featuredSource = FeaturedSource.automatic,
+    this.openStoryCardsInFeed = _defaultOpenStoryCardsInFeed,
     this.reportInteractions = _defaultReportInteractions,
     this.keepPrevious = false,
     this.showPreviousMarker = true,
@@ -39,7 +40,8 @@ final class RecommendationSettings {
   const RecommendationSettings.defaults({
     this.source = RecommendationSource.web,
     this.featuredSource = FeaturedSource.automatic,
-  }) : reportInteractions = _defaultReportInteractions,
+  }) : openStoryCardsInFeed = _defaultOpenStoryCardsInFeed,
+       reportInteractions = _defaultReportInteractions,
        keepPrevious = false,
        showPreviousMarker = true,
        minimumLikeRatio = 0,
@@ -50,6 +52,7 @@ final class RecommendationSettings {
        exemptFollowed = true,
        filterRelated = true;
 
+  static const _defaultOpenStoryCardsInFeed = true;
   static const _defaultReportInteractions = true;
   static const likeRatios = [0, 1, 2, 3, 4];
   static const durations = [0, 30, 60, 90, 120];
@@ -60,7 +63,7 @@ final class RecommendationSettings {
   static const maximumDurationSeconds = 604800;
   static const maximumPlayCount = 2147483647;
 
-  final bool reportInteractions;
+  final bool openStoryCardsInFeed, reportInteractions;
   final bool keepPrevious, showPreviousMarker, exemptFollowed, filterRelated;
   final RecommendationSource source;
   final FeaturedSource featuredSource;
@@ -117,6 +120,10 @@ final class RecommendationSettings {
               .where((s) => s.name == value['featuredSource'])
               .firstOrNull ??
           FeaturedSource.automatic,
+      openStoryCardsInFeed: flag(
+        'openStoryCardsInFeed',
+        _defaultOpenStoryCardsInFeed,
+      ),
       reportInteractions: flag(
         'reportInteractions',
         _defaultReportInteractions,
@@ -136,6 +143,7 @@ final class RecommendationSettings {
   Map<String, Object?> toJson() => {
     'source': source.name,
     'featuredSource': featuredSource.name,
+    'openStoryCardsInFeed': openStoryCardsInFeed,
     'reportInteractions': reportInteractions,
     'keepPrevious': keepPrevious,
     'showPreviousMarker': showPreviousMarker,
@@ -151,6 +159,7 @@ final class RecommendationSettings {
   RecommendationSettings copyWith({
     RecommendationSource? source,
     FeaturedSource? featuredSource,
+    bool? openStoryCardsInFeed,
     bool? reportInteractions,
     bool? keepPrevious,
     bool? showPreviousMarker,
@@ -164,6 +173,7 @@ final class RecommendationSettings {
   }) => RecommendationSettings(
     source: source ?? this.source,
     featuredSource: featuredSource ?? this.featuredSource,
+    openStoryCardsInFeed: openStoryCardsInFeed ?? this.openStoryCardsInFeed,
     reportInteractions: reportInteractions ?? this.reportInteractions,
     keepPrevious: keepPrevious ?? this.keepPrevious,
     showPreviousMarker: showPreviousMarker ?? this.showPreviousMarker,

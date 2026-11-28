@@ -1,6 +1,7 @@
 import 'package:bilisail/app/shell.dart';
 import 'package:bilisail/app/workspace_root_page.dart';
 import 'package:bilisail/core/presentation/input_scope.dart';
+import 'package:bilisail/core/presentation/page_back_scope.dart';
 import 'package:bilisail/domain/page_result.dart';
 import 'package:bilisail/domain/recommendation_settings.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
@@ -440,26 +441,45 @@ void main() {
     },
   );
 
-  testWidgets('seeded viewing retains an on-screen return button', (
-    tester,
-  ) async {
-    _size(tester, 390);
-    final videos = _Videos();
-    var returns = 0;
-    await tester.pumpWidget(
-      _withVideos(
-        videos,
-        InputTestApp(
-          home: Scaffold(
-            body: _screen(videos, onReturnToVideo: () => returns++),
+  for (final seeded in [false, true]) {
+    testWidgets(
+      'opens details for the current featured card (seeded: $seeded)',
+      (tester) async {
+        _size(tester, 390);
+        final videos = _Videos();
+        final back = PageBackController();
+        addTearDown(back.dispose);
+        var returns = 0;
+        final opened = <(VideoId, String?)>[];
+        await tester.pumpWidget(
+          _withVideos(
+            videos,
+            InputTestApp(
+              home: PageBackScope(
+                controller: back,
+                child: Scaffold(
+                  body: _screen(
+                    videos,
+                    onOpenDetails: (id, cid, _) => opened.add((id, cid)),
+                    onReturnToVideo: seeded ? () => returns++ : null,
+                  ),
+                ),
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+        await tester.pumpAndSettle();
+        final details = findMaterialTooltip('进入视频详情');
+        await tester.tap(details);
+        await tester.drag(find.byType(PageView), const Offset(0, -480));
+        await tester.pumpAndSettle();
+        await tester.tap(details);
+        expect(opened, [(videos.items[0].id, '1'), (videos.items[1].id, '2')]);
+        expect(back.goBack(), seeded);
+        expect(returns, seeded ? 1 : 0);
+      },
     );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byType(BackButton));
-    expect(returns, 1);
-  });
+  }
 }
 
 void _size(WidgetTester tester, double width) {
@@ -482,8 +502,10 @@ Widget _screen(
   _Videos videos, {
   bool withEditor = false,
   bool withNavigationToggle = false,
+  void Function(VideoId id, String? cid, Duration? position)? onOpenDetails,
   VoidCallback? onReturnToVideo,
 }) => FeaturedVideoScreen(
+  onOpenDetails: onOpenDetails,
   onReturnToVideo: onReturnToVideo,
   createController: () => FeaturedFeedController(
     videos,

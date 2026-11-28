@@ -1,9 +1,11 @@
 import 'package:bilisail/core/platform/external_links.dart';
 import 'package:bilisail/domain/recommendation_playback_context.dart';
+import 'package:bilisail/domain/recommendation_settings.dart';
 import 'package:bilisail/features/playback/application/recommendation_playback_registry.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/feed/domain/home_channel.dart';
 import 'package:bilisail/features/feed/presentation/feed_video_grid.dart';
+import 'package:bilisail/shared/application/recommendation_filter_provider.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -113,6 +115,65 @@ void main() {
     });
   }
 
+  for (final (platform, enabled, opensStory) in [
+    (TargetPlatform.android, true, true),
+    (TargetPlatform.android, false, false),
+    (TargetPlatform.iOS, true, true),
+    (TargetPlatform.iOS, false, false),
+    (TargetPlatform.windows, true, false),
+  ]) {
+    testWidgets('Story card opens the expected page on $platform ($enabled)', (
+      tester,
+    ) async {
+      const id = 'BV17x411w7KC';
+      final router = GoRouter(
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (_, _) => _grid(
+              const RecommendationTarget(
+                kind: RecommendationTargetKind.video,
+                id: id,
+                story: true,
+                storyAid: '170001',
+              ),
+              cid: '123',
+            ),
+          ),
+          for (final path in ['/story/:id', '/video/:id'])
+            GoRoute(
+              path: path,
+              builder: (_, _) => const Scaffold(body: Text('视频')),
+            ),
+        ],
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            recommendationSettingsProvider.overrideWithValue(
+              RecommendationSettings(openStoryCardsInFeed: enabled),
+            ),
+          ],
+          child: MaterialApp.router(
+            theme: ThemeData(platform: platform),
+            routerConfig: router,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      tester.widget<VideoCard>(find.byType(VideoCard)).onTap();
+      await tester.pumpAndSettle();
+      final uri = router.routeInformationProvider.value.uri;
+      expect(uri.path, opensStory ? '/story/$id' : '/video/$id');
+      expect(uri.queryParameters, {
+        'cid': '123',
+        if (opensStory) 'aid': '170001',
+      });
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('dynamic recommendation uses the explicit link opener', (
     tester,
   ) async {
@@ -144,7 +205,7 @@ void main() {
   });
 }
 
-Widget _grid(RecommendationTarget target) => Scaffold(
+Widget _grid(RecommendationTarget target, {String? cid}) => Scaffold(
   body: CustomScrollView(
     slivers: [
       FeedVideoGrid(
@@ -155,6 +216,7 @@ Widget _grid(RecommendationTarget target) => Scaffold(
             coverUrl: '',
             author: '',
             duration: Duration.zero,
+            previewCid: cid,
             recommendationTarget: target,
           ),
         ],

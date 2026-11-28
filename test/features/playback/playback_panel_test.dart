@@ -5293,7 +5293,7 @@ void main() {
             placement == FeaturedNavigationPlacement.bottom
             ? findsNothing
             : findsOneWidget;
-        expect(back.hitTestable(), workspaceNavigation);
+        expect(back.hitTestable(), findsNothing);
         expect(home.hitTestable(), workspaceNavigation);
         expect(hide.hitTestable(), findsOneWidget);
         expect(icon(hide, Icons.zoom_out_map_rounded), findsOneWidget);
@@ -5309,7 +5309,7 @@ void main() {
 
         await session.setAudioOnly(true);
         await _pumpFrames(tester);
-        expect(back.hitTestable(), workspaceNavigation);
+        expect(back.hitTestable(), findsNothing);
         expect(home.hitTestable(), workspaceNavigation);
         expect(show.hitTestable(), findsOneWidget);
         await tester.tap(show);

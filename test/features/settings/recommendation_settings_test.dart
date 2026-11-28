@@ -139,6 +139,7 @@ void main() {
         const RecommendationSettings.defaults().toJson(),
       );
       final selected = RecommendationSettings(
+        openStoryCardsInFeed: false,
         reportInteractions: false,
         keepPrevious: true,
         minimumLikeRatio: 3,
@@ -171,7 +172,7 @@ void main() {
         jsonDecode(
           (await database.readSetting('preferences.v1'))!,
         )['schemaVersion'],
-        greaterThanOrEqualTo(29),
+        62,
       );
     },
   );
@@ -211,13 +212,21 @@ void main() {
           repository.value.recommendations.source,
           failSave ? RecommendationSource.web : RecommendationSource.desktop,
         );
+        final story = find.widgetWithText(SwitchListTile, '首页 Story 卡进入上下滑模式');
+        expect(tester.widget<SwitchListTile>(story).value, isTrue);
+        await tester.tap(story);
+        await tester.pumpAndSettle();
+        expect(repository.value.recommendations.openStoryCardsInFeed, failSave);
+        expect(tester.widget<SwitchListTile>(story).value, failSave);
         final reporting = find.widgetWithText(SwitchListTile, '上报推荐卡片曝光和点击');
+        await tester.ensureVisible(reporting);
         expect(tester.widget<SwitchListTile>(reporting).value, isTrue);
         await tester.tap(reporting);
         await tester.pumpAndSettle();
         expect(repository.value.recommendations.reportInteractions, failSave);
         expect(tester.widget<SwitchListTile>(reporting).value, failSave);
         final toggle = find.widgetWithText(SwitchListTile, '保留首页推荐刷新');
+        await tester.ensureVisible(toggle);
         expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
         final marker = find.widgetWithText(SwitchListTile, '显示上次看到位置提示');
         expect(tester.widget<SwitchListTile>(marker).onChanged, isNull);
@@ -239,6 +248,7 @@ void main() {
             RecommendationSource.app,
           );
           expect(repository.value.recommendations.keepPrevious, isFalse);
+          expect(repository.value.recommendations.openStoryCardsInFeed, isTrue);
           expect(repository.value.theme, AppThemePreference.dark);
         }
         expect(tester.takeException(), isNull);

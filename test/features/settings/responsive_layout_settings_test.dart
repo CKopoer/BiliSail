@@ -352,7 +352,7 @@ void main() {
           isA<Map<String, Object?>>().having(
             (map) => map['schemaVersion'],
             'schema version',
-            61,
+            62,
           ),
         );
         expect(database.schemaVersion, 4);

@@ -1,6 +1,8 @@
 import '../support/material_tooltip_finder.dart';
 import '../support/playback_info_finder.dart';
 
+import 'package:bilisail/shared/ui/content_link_scope.dart';
+
 import 'package:bilisail/features/video/application/video_author_controller.dart';
 import 'package:bilisail/features/video/presentation/video_author_header.dart';
 import 'package:bilisail/shared/ui/network_avatar.dart';
@@ -195,6 +197,17 @@ void main() {
           await select('featured');
           expect(feed.refreshes, [false, true]);
           expect(session.detail?.summary.id, first);
+
+          (session.engine as _WindowPlaybackEngine).advance(position);
+          await tester.tap(findMaterialTooltip('进入视频详情'));
+          await settle();
+          final details = find.byType(VideoScreen);
+          expect(tester.widget<VideoScreen>(details).id, first);
+          expect(tester.widget<VideoScreen>(details).initialCid, '1');
+          expect(
+            ContentLinkScope.of(tester.element(details)).position,
+            position,
+          );
         } finally {
           await tester.pumpWidget(const SizedBox());
           await settle();

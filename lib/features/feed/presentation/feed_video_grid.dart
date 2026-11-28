@@ -15,6 +15,7 @@ import '../../../shared/ui/app_notice.dart';
 import '../../../domain/video.dart';
 import '../../../domain/course_address.dart';
 import '../../../domain/responsive_layout_settings.dart';
+import '../../../shared/application/recommendation_filter_provider.dart';
 import '../../../shared/ui/responsive_card_grid.dart';
 import '../../../shared/ui/responsive_layout_scope.dart';
 import '../../../shared/ui/video_card.dart';
@@ -177,18 +178,19 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
       );
       return;
     }
+    final opensStory =
+        target.story &&
+        (Theme.of(context).platform == TargetPlatform.android ||
+            Theme.of(context).platform == TargetPlatform.iOS) &&
+        ref.read(recommendationSettingsProvider).openStoryCardsInFeed;
     final route = switch (target.kind) {
-      RecommendationTargetKind.video
-          when target.story &&
-              (Theme.of(context).platform == TargetPlatform.android ||
-                  Theme.of(context).platform == TargetPlatform.iOS) =>
-        Uri(
-          path: '/story/${target.id}',
-          queryParameters: {
-            'aid': ?target.storyAid,
-            'cid': ?widget.video.previewCid,
-          },
-        ).toString(),
+      RecommendationTargetKind.video when target.story => Uri(
+        path: opensStory ? '/story/${target.id}' : '/video/${target.id}',
+        queryParameters: {
+          if (opensStory) 'aid': ?target.storyAid,
+          'cid': ?widget.video.previewCid,
+        },
+      ).toString(),
       RecommendationTargetKind.video => '/video/${target.id}',
       RecommendationTargetKind.episode => '/pgc/episode/${target.id}',
       RecommendationTargetKind.season => '/pgc/season/${target.id}',

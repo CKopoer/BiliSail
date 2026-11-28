@@ -2051,10 +2051,13 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                         builder: (context, actions, _) => Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            if (featured != null)
+                              const SizedBox(width: _featuredDetailsInset),
                             if ((widget.fullScreen &&
                                     Theme.of(context).platform ==
                                         TargetPlatform.iOS) ||
-                                (!hideWorkspaceNavigation &&
+                                (featured == null &&
+                                    !hideWorkspaceNavigation &&
                                     (actions?.showInPlayer ?? false)))
                               IconButton(
                                 key: const ValueKey('player-back'),
@@ -2410,6 +2413,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                       child: _PlayerTopBar(
                                         navigation: widget.navigation,
                                         hideNavigation: hideWorkspaceNavigation,
+                                        featuredDetails: featured != null,
                                         smallWindow: smallWindow,
                                         showSleepTimer: !layout.compact,
                                         onMenuChanged: _onControlsMenuChanged,
@@ -4123,10 +4127,13 @@ class _PlayerRateButton extends StatelessWidget {
   );
 }
 
+const _featuredDetailsInset = 56.0;
+
 class _PlayerTopBar extends StatelessWidget {
   const _PlayerTopBar({
     required this.navigation,
     required this.hideNavigation,
+    required this.featuredDetails,
     required this.smallWindow,
     required this.showSleepTimer,
     required this.onMenuChanged,
@@ -4140,6 +4147,7 @@ class _PlayerTopBar extends StatelessWidget {
   });
   final ValueListenable<PlaybackNavigation?> navigation;
   final bool hideNavigation;
+  final bool featuredDetails;
   final bool smallWindow;
   final bool showSleepTimer;
   final ValueChanged<bool> onMenuChanged;
@@ -4177,7 +4185,12 @@ class _PlayerTopBar extends StatelessWidget {
         colors: [Colors.black54, Colors.transparent],
       ),
     ),
-    padding: const EdgeInsets.only(top: 2, right: 6, bottom: 2),
+    padding: EdgeInsetsDirectional.only(
+      start: featuredDetails ? _featuredDetailsInset : 0,
+      top: 2,
+      end: 6,
+      bottom: 2,
+    ),
     constraints: const BoxConstraints(minHeight: 52),
     child: SafeArea(
       top: fullScreen,
@@ -4190,7 +4203,7 @@ class _PlayerTopBar extends StatelessWidget {
           final showHomeButton =
               !hideNavigation && (actions?.showInPlayer ?? false);
           final showBackButton =
-              showHomeButton ||
+              (showHomeButton && !featuredDetails) ||
               (fullScreen && Theme.of(context).platform == TargetPlatform.iOS);
           final buttons = <Widget>[
             if (MiniPlayerActions.maybeOf(context) case final mini?)

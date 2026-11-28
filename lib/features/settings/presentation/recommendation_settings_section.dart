@@ -164,6 +164,12 @@ final class _RecommendationSettingsSectionState
           ],
         ),
         _toggle(
+          '首页 Story 卡进入上下滑模式',
+          '在 Android 和 iOS 上，关闭后点击首页 Story 卡会打开普通视频详情。',
+          s.openStoryCardsInFeed,
+          (current, value) => current.copyWith(openStoryCardsInFeed: value),
+        ),
+        _toggle(
           '上报推荐卡片曝光和点击',
           '向哔哩哔哩发送首页推荐中实际看到和点击的卡片，用于推荐反馈。',
           s.reportInteractions,
