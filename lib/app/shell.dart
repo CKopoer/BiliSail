@@ -37,6 +37,7 @@ import '../shared/ui/bili_icons.dart';
 import '../shared/ui/bottom_navigation_scroll_region.dart';
 import '../shared/ui/shortcut_hint.dart';
 import '../shared/ui/app_notice.dart';
+import '../shared/ui/featured_navigation_scope.dart';
 import '../shared/ui/featured_selection_scope.dart';
 import '../shared/ui/playback_navigation.dart';
 import '../shared/ui/workspace_link.dart';
@@ -1006,6 +1007,13 @@ final class _BiliAppShellState extends State<BiliAppShell>
                       featuredNavigationHeight:
                           bottomNavigation && tab.isFeatured
                           ? _bottomNavigationHeight
+                          : null,
+                      featuredSidebarNavigation: !compact && tab.isFeatured
+                          ? (
+                              placement: FeaturedNavigationPlacement.sidebar,
+                              visible: !_sidebarCollapsed,
+                              onToggle: _toggleSidebar,
+                            )
                           : null,
                       navigationBuilder: bottomNavigation
                           ? (context, visible) => _animatedBottomNavigation(

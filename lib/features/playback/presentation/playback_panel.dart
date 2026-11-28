@@ -21,7 +21,7 @@ import '../../../core/presentation/mobile_playback_status_bar.dart';
 import '../../../shared/ui/playback_page_commands.dart';
 import '../../../shared/ui/featured_paging_scope.dart';
 import '../../../shared/ui/playback_sidebar_toggle.dart';
-import '../../../shared/ui/featured_bottom_navigation_scope.dart';
+import '../../../shared/ui/featured_navigation_scope.dart';
 import '../../../shared/ui/playback_navigation.dart';
 import '../../../shared/ui/collapsed_playback_header.dart';
 import '../../../shared/ui/content_link_scope.dart';
@@ -1939,11 +1939,13 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
         : FeaturedPagingScope.maybeOf(context);
     final geometry = featured?.controlsGeometry;
     final usesSlotPicture = featured?.inlinePicture != null;
-    final hasFeaturedNavigation =
-        featured != null &&
-        FeaturedBottomNavigationScope.maybeOf(context) != null;
-    final infoToggle = hasFeaturedNavigation
-        ? const FeaturedBottomNavigationToggle()
+    final featuredNavigation = featured == null
+        ? null
+        : FeaturedNavigationScope.maybeOf(context);
+    final hideWorkspaceNavigation =
+        featuredNavigation?.placement == FeaturedNavigationPlacement.bottom;
+    final infoToggle = featuredNavigation != null
+        ? const FeaturedNavigationToggle()
         : PlaybackInfoScope.maybeOf(context) != null
         ? const PlaybackSidebarToggle()
         : null;
@@ -2036,7 +2038,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                             if ((widget.fullScreen &&
                                     Theme.of(context).platform ==
                                         TargetPlatform.iOS) ||
-                                (!hasFeaturedNavigation &&
+                                (!hideWorkspaceNavigation &&
                                     (actions?.showInPlayer ?? false)))
                               IconButton(
                                 key: const ValueKey('player-back'),
@@ -2048,7 +2050,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                     : () => widget.onNavigate(actions.onBack),
                                 icon: const Icon(Icons.arrow_back_rounded),
                               ),
-                            if (!hasFeaturedNavigation &&
+                            if (!hideWorkspaceNavigation &&
                                 (actions?.showInPlayer ?? false))
                               IconButton(
                                 key: const ValueKey('player-home'),
@@ -2391,7 +2393,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                       retainDynamicPress: true,
                                       child: _PlayerTopBar(
                                         navigation: widget.navigation,
-                                        hideNavigation: hasFeaturedNavigation,
+                                        hideNavigation: hideWorkspaceNavigation,
                                         smallWindow: smallWindow,
                                         showSleepTimer: !layout.compact,
                                         onMenuChanged: _onControlsMenuChanged,

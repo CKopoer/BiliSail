@@ -19,7 +19,7 @@ import '../../../shared/ui/recommendation_playback_scope.dart';
 import '../../../domain/user.dart';
 import '../../../domain/video.dart';
 import '../../../shared/ui/content_link_scope.dart';
-import '../../../shared/ui/featured_bottom_navigation_scope.dart';
+import '../../../shared/ui/featured_navigation_scope.dart';
 import '../../../shared/ui/featured_paging_scope.dart';
 import '../../../shared/ui/featured_selection_scope.dart';
 import '../../../shared/ui/playback_navigation.dart';
@@ -400,7 +400,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
   }
 
   Widget _viewer(VideoSummary? current, AsyncValue<VideoDetail>? detail) {
-    final navigation = FeaturedBottomNavigationScope.maybeOf(context);
+    final navigation = FeaturedNavigationScope.maybeOf(context);
     return PageBackHandler(
       enabled: active && (panel != null || widget.onReturnToVideo != null),
       onBack: () {
@@ -491,7 +491,8 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
                 ),
               ),
             ),
-          if (navigation?.visible == false &&
+          if (navigation?.placement == FeaturedNavigationPlacement.bottom &&
+              navigation?.visible == false &&
               (current == null ||
                   _partFor(current, detail?.value, seed: false) == null))
             const PositionedDirectional(
@@ -499,7 +500,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
               bottom: 8,
               child: Material(
                 color: Colors.black54,
-                child: FeaturedBottomNavigationToggle(color: Colors.white),
+                child: FeaturedNavigationToggle(color: Colors.white),
               ),
             ),
           if (feed.seed != null)

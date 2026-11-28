@@ -16,7 +16,7 @@ import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
 import 'package:bilisail/features/video/application/video_controller.dart';
 import 'package:bilisail/features/video/domain/video_repository.dart';
 import 'package:bilisail/features/video/presentation/featured_video_screen.dart';
-import 'package:bilisail/shared/ui/featured_bottom_navigation_scope.dart';
+import 'package:bilisail/shared/ui/featured_navigation_scope.dart';
 import 'package:bilisail/shared/ui/measured_list_view.dart';
 import 'package:bilisail/shared/ui/playback_page_commands.dart';
 import 'package:flutter/gestures.dart';
@@ -122,6 +122,90 @@ void main() {
     });
   }
 
+  testWidgets(
+    'featured shares the workspace sidebar controls and saved state',
+    (tester) async {
+      _size(tester, 1200);
+      final videos = _Videos();
+      final collapsed = ValueNotifier(true);
+      final changes = <bool>[];
+      addTearDown(collapsed.dispose);
+      await tester.pumpWidget(
+        _withVideos(
+          videos,
+          InputTestApp(
+            home: ValueListenableBuilder<bool>(
+              valueListenable: collapsed,
+              builder: (context, value, child) => BiliAppShell(
+                location: '/featured',
+                navigationMode: WorkspaceNavigationMode.singlePage,
+                sidebarCollapsed: value,
+                onSidebarCollapsedChanged: (value) {
+                  changes.add(value);
+                  collapsed.value = value;
+                },
+                pageBuilder: (_, _) =>
+                    _screen(videos, withNavigationToggle: true),
+                child: const SizedBox.shrink(),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final toolbar = find.byKey(const ValueKey('workspace-sidebar-toggle'));
+      final sidebar = find.byKey(const ValueKey('workspace-sidebar-region'));
+      final bar = find.byKey(const ValueKey('workspace-bottom-navigation'));
+      final player = find.byKey(const ValueKey('playing-1'));
+      final playerElement = tester.element(player);
+      Finder toggle(String tooltip) => find.descendant(
+        of: find.byType(FeaturedNavigationToggle),
+        matching: find.byTooltip(tooltip),
+      );
+
+      expect(tester.getSize(sidebar).width, 0);
+      expect(toggle('展开侧栏').hitTestable(), findsOneWidget);
+      await tester.tap(toggle('展开侧栏'));
+      await tester.pumpAndSettle();
+      expect(tester.getSize(sidebar).width, 76);
+      expect(toggle('收起侧栏').hitTestable(), findsOneWidget);
+      expect(changes, [false]);
+
+      await tester.tap(toolbar);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(sidebar).width, 0);
+      expect(toggle('展开侧栏').hitTestable(), findsOneWidget);
+      expect(changes, [false, true]);
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyB);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(sidebar).width, 76);
+      expect(toggle('收起侧栏').hitTestable(), findsOneWidget);
+      expect(changes, [false, true, false]);
+
+      tester.view.display.size = const Size(390, 800);
+      tester.view.physicalSize = const Size(390, 800);
+      await tester.pumpAndSettle();
+      expect(toggle('收起侧栏'), findsNothing);
+      await tester.tap(toggle('收起底栏'));
+      await tester.pumpAndSettle();
+      expect(bar, findsNothing);
+      expect(changes, [false, true, false]);
+
+      tester.view.display.size = const Size(1200, 800);
+      tester.view.physicalSize = const Size(1200, 800);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(sidebar).width, 76);
+      expect(toggle('收起侧栏').hitTestable(), findsOneWidget);
+      expect(tester.element(player), same(playerElement));
+      expect(videos.refreshes, [false]);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.windows),
+  );
+
   for (final comments in [true, false]) {
     testWidgets(
       'featured ${comments ? 'comments' : 'description'} scroll leaves the bottom navigation alone',
@@ -140,7 +224,7 @@ void main() {
                 location: '/featured',
                 navigationMode: WorkspaceNavigationMode.singlePage,
                 pageBuilder: (_, _) =>
-                    _screen(videos, withBottomNavigationToggle: true),
+                    _screen(videos, withNavigationToggle: true),
                 child: const SizedBox.shrink(),
               ),
             ),
@@ -248,8 +332,7 @@ void main() {
           home: BiliAppShell(
             location: '/featured',
             navigationMode: WorkspaceNavigationMode.singlePage,
-            pageBuilder: (_, _) =>
-                _screen(videos, withBottomNavigationToggle: true),
+            pageBuilder: (_, _) => _screen(videos, withNavigationToggle: true),
             child: const SizedBox.shrink(),
           ),
         ),
@@ -393,7 +476,7 @@ Widget _withVideos(_Videos videos, Widget child) => ProviderScope(
 Widget _screen(
   _Videos videos, {
   bool withEditor = false,
-  bool withBottomNavigationToggle = false,
+  bool withNavigationToggle = false,
   VoidCallback? onReturnToVideo,
 }) => FeaturedVideoScreen(
   onReturnToVideo: onReturnToVideo,
@@ -428,10 +511,10 @@ Widget _screen(
               ),
             ),
           )
-        : withBottomNavigationToggle
+        : withNavigationToggle
         ? const Align(
             alignment: Alignment.topCenter,
-            child: Material(child: FeaturedBottomNavigationToggle()),
+            child: Material(child: FeaturedNavigationToggle()),
           )
         : const SizedBox.expand(),
   ),

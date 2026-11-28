@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:bilisail/app/shell.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
-import 'package:bilisail/shared/ui/featured_bottom_navigation_scope.dart';
+import 'package:bilisail/shared/ui/featured_navigation_scope.dart';
 import 'package:bilisail/shared/ui/smooth_scroll_behavior.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
@@ -183,7 +183,7 @@ void main() {
                         Center(child: Text('第 $index 条')),
                         const Align(
                           alignment: Alignment.bottomRight,
-                          child: FeaturedBottomNavigationToggle(),
+                          child: FeaturedNavigationToggle(),
                         ),
                       ],
                     ),

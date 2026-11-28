@@ -4,7 +4,7 @@ import 'package:flutter/widgets.dart';
 
 import '../../core/presentation/input_scope.dart';
 import '../../core/presentation/workspace_activity.dart';
-import 'featured_bottom_navigation_scope.dart';
+import 'featured_navigation_scope.dart';
 
 class BottomNavigationScrollRegion extends StatefulWidget {
   const BottomNavigationScrollRegion({
@@ -14,6 +14,7 @@ class BottomNavigationScrollRegion extends StatefulWidget {
     required this.navigationBuilder,
     required this.child,
     this.featuredNavigationHeight,
+    this.featuredSidebarNavigation,
   });
 
   final Object destination;
@@ -21,6 +22,7 @@ class BottomNavigationScrollRegion extends StatefulWidget {
   final Widget Function(BuildContext, bool visible)? navigationBuilder;
   final Widget child;
   final double? featuredNavigationHeight;
+  final FeaturedNavigation? featuredSidebarNavigation;
 
   @override
   State<BottomNavigationScrollRegion> createState() =>
@@ -159,10 +161,14 @@ class _BottomNavigationScrollRegionState
         Column(
           children: [
             Expanded(
-              child: FeaturedBottomNavigationScope(
-                visible: _visible,
-                onToggle: _toggleFeaturedNavigation,
-                enabled: _usesFeaturedNavigation,
+              child: FeaturedNavigationScope(
+                navigation: _usesFeaturedNavigation
+                    ? (
+                        placement: FeaturedNavigationPlacement.bottom,
+                        visible: _visible,
+                        onToggle: _toggleFeaturedNavigation,
+                      )
+                    : widget.featuredSidebarNavigation,
                 child: NotificationListener<ScrollNotification>(
                   onNotification: _onScroll,
                   child: Listener(
