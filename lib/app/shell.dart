@@ -1008,7 +1008,8 @@ final class _BiliAppShellState extends State<BiliAppShell>
                           bottomNavigation && tab.isFeatured
                           ? _bottomNavigationHeight
                           : null,
-                      featuredSidebarNavigation: !compact && tab.isFeatured
+                      featuredSidebarNavigation:
+                          !compact && (tab.isFeatured || tab.isStory)
                           ? (
                               placement: FeaturedNavigationPlacement.sidebar,
                               visible: !_sidebarCollapsed,

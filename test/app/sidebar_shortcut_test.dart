@@ -7,14 +7,103 @@ import 'package:bilisail/app/shell.dart';
 import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
+import 'package:bilisail/shared/ui/featured_navigation_scope.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 final _region = find.byKey(const ValueKey('workspace-sidebar-region'));
 
 void main() {
+  for (final (mode, detached) in [
+    (NavigationBarMode.sidebar, false),
+    (NavigationBarMode.bottom, false),
+    (NavigationBarMode.sidebar, true),
+  ]) {
+    testWidgets(
+      'seeded Story inherits only an inline workspace sidebar ($mode, detached=$detached)',
+      (tester) async {
+        _wideView(tester);
+        const bvid = 'BV1234567891';
+        final video = Uri(path: '/video/$bvid');
+        final story = Uri(
+          path: '/story/$bvid',
+          queryParameters: {'cid': '1', 'returnTo': video.toString()},
+        );
+        final changes = <bool>[];
+        final router = GoRouter(
+          initialLocation: video.toString(),
+          routes: [
+            ShellRoute(
+              builder: (context, state, child) => BiliAppShell(
+                location: state.uri.toString(),
+                navigationMode: detached
+                    ? WorkspaceNavigationMode.dualTabs
+                    : WorkspaceNavigationMode.singlePage,
+                navigationBarMode: mode,
+                onSidebarCollapsedChanged: changes.add,
+                playbackWindowBuilder: detached ? _mountPlayback : null,
+                pageBuilder: (context, tab) => switch (tab.location.path) {
+                  '/video/$bvid' => Center(
+                    child: TextButton(
+                      onPressed: () =>
+                          WorkspacePageNavigation.maybeOf(context)
+                              ?.navigate(story),
+                      child: const Text('上下滑观看'),
+                    ),
+                  ),
+                  '/story/$bvid' => const Column(
+                    children: [Text('Story'), FeaturedNavigationToggle()],
+                  ),
+                  _ => const SizedBox.shrink(),
+                },
+                child: child,
+              ),
+              routes: [
+                for (final path in ['/', '/video/:bvid', '/story/:bvid'])
+                  GoRoute(path: path, builder: (_, _) => const SizedBox()),
+              ],
+            ),
+          ],
+        );
+        addTearDown(router.dispose);
+        await tester.pumpWidget(InputTestApp.router(routerConfig: router));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('上下滑观看'));
+        await tester.pumpAndSettle();
+        final location = router.routeInformationProvider.value.uri;
+        expect(location.path, story.path);
+        expect(location.queryParameters, containsPair('cid', '1'));
+        expect(
+          location.queryParameters,
+          containsPair('returnTo', video.toString()),
+        );
+        expect(find.text('Story'), findsOneWidget);
+
+        final collapse = find.byIcon(Icons.zoom_out_map_rounded);
+        if (detached || mode == NavigationBarMode.bottom) {
+          expect(collapse, findsNothing);
+          expect(changes, isEmpty);
+          return;
+        }
+
+        expect(tester.getSize(_region).width, 76);
+        await tester.tap(collapse);
+        await tester.pumpAndSettle();
+        expect(tester.getSize(_region).width, 0);
+        expect(changes, [true]);
+        await tester.tap(find.byIcon(Icons.zoom_in_map_rounded));
+        await tester.pumpAndSettle();
+        expect(tester.getSize(_region).width, 76);
+        expect(changes, [true, false]);
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.windows),
+    );
+  }
+
   for (final mode in WorkspaceNavigationMode.values) {
     testWidgets(
       'sidebar shortcut toggles once per press and retains the page: $mode',
@@ -178,6 +267,18 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 }
+
+Widget _mountPlayback(
+  BuildContext context, {
+  required Widget child,
+  required Widget? playback,
+  required bool keepPlaybackMounted,
+  required Object? activationToken,
+  required VoidCallback onClose,
+  required VoidCallback onBack,
+  required VoidCallback onHome,
+  required ValueChanged<Object> onError,
+}) => Stack(fit: StackFit.expand, children: [child, ?playback]);
 
 void _wideView(WidgetTester tester) {
   tester.view.devicePixelRatio = 1;
