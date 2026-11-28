@@ -274,6 +274,59 @@ void main() {
     }
   }
 
+  for (final touch in [false, true]) {
+    testWidgets(
+      'short reply preview starts at the top on ${touch ? 'touch' : 'desktop'}',
+      (tester) async {
+        const comment = CommentEntry(
+          id: '10',
+          author: '读者',
+          message: '页面放大后，能不能用鼠标拖动？',
+          likeCount: 2,
+          upReplied: true,
+          replyCount: 4,
+          replies: [
+            CommentEntry(
+              id: '11',
+              author: '作者',
+              message: '鼠标中键平移？',
+              isUpAuthor: true,
+            ),
+          ],
+        );
+        await _mount(
+          tester,
+          _Comments(root: comment),
+          width: 373,
+          touch: touch,
+        );
+
+        final replyCount = find.text('共 4 条回复 ›');
+        final card = tester.getRect(
+          find.ancestor(of: replyCount, matching: find.byType(Container)).first,
+        );
+        final content = tester.getRect(find.byType(CommentRichContent).last);
+        final replyButton = tester.getRect(
+          find.widgetWithIcon(TextButton, BiliIcons.reply),
+        );
+        final menuButtons = find.byType(CommentMoreButton);
+        final previewMenu = tester.getRect(menuButtons.last);
+
+        expect(card.top - replyButton.bottom, closeTo(2, .01));
+        expect(content.top - card.top, closeTo(10, .01));
+        expect(previewMenu.top, closeTo(content.top, .01));
+        if (touch) {
+          expect(previewMenu.height, greaterThanOrEqualTo(48));
+        } else {
+          expect(
+            tester.getTopLeft(replyCount).dy - content.bottom,
+            lessThanOrEqualTo(8),
+          );
+        }
+      },
+    );
+  }
+
   testWidgets('owner can pin roots, unpin and delete only after confirmation', (
     tester,
   ) async {

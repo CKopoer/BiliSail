@@ -12,19 +12,21 @@ class CommentActions extends StatelessWidget {
     required this.onLike,
     required this.onReply,
     required this.onMore,
+    this.hasReplyPreview = false,
   });
 
   final CommentEntry comment;
   final bool busy;
   final VoidCallback onLike, onReply;
   final ValueChanged<BuildContext>? onMore;
+  final bool hasReplyPreview;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final style = CommentTextStyles(theme).action;
     return Padding(
-      padding: const EdgeInsets.only(top: 4, bottom: 6),
+      padding: EdgeInsets.only(top: 4, bottom: hasReplyPreview ? 2 : 6),
       child: Row(
         children: [
           Expanded(
@@ -63,8 +65,13 @@ class CommentActions extends StatelessWidget {
 }
 
 class CommentMoreButton extends StatelessWidget {
-  const CommentMoreButton({super.key, required this.onMore});
+  const CommentMoreButton({
+    super.key,
+    required this.onMore,
+    this.compact = false,
+  });
   final ValueChanged<BuildContext>? onMore;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -74,7 +81,7 @@ class CommentMoreButton extends StatelessWidget {
       icon: const Icon(Icons.more_vert, size: 18),
       color: CommentTextStyles(Theme.of(context)).action.color,
       style: IconButton.styleFrom(
-        minimumSize: const Size(32, 32),
+        minimumSize: Size(32, compact ? 24 : 32),
         padding: EdgeInsets.zero,
       ),
       onPressed: open,

@@ -1396,6 +1396,8 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
   // while pagination can reuse the rich text, images and author header.
   Widget _buildContent(BuildContext context) {
     final theme = Theme.of(context), c = widget.comment;
+    final hasReplyPreview =
+        widget.preview && (c.replyCount > 0 || c.replies.isNotEmpty);
     final onOpenUser = widget.onOpenUser;
     final onOpenLink = widget.onOpenLink;
     final onSeek = widget.onSeek;
@@ -1434,6 +1436,7 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
                   CommentActions(
                     comment: c,
                     busy: true,
+                    hasReplyPreview: hasReplyPreview,
                     onLike: _like,
                     onReply: _reply,
                     onMore: null,
@@ -1445,14 +1448,14 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
                       return CommentActions(
                         comment: c,
                         busy: busy,
+                        hasReplyPreview: hasReplyPreview,
                         onLike: _like,
                         onReply: _reply,
                         onMore: (anchor) => widget.onMore(anchor, c),
                       );
                     },
                   ),
-                if (widget.preview &&
-                    (c.replyCount > 0 || c.replies.isNotEmpty))
+                if (hasReplyPreview)
                   _preview(
                     builder: (context, ref, child) => InkWell(
                       onTap: _busy(ref) ? null : _open,
@@ -1476,7 +1479,8 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
                                 (r) => Padding(
                                   padding: const EdgeInsets.only(bottom: 4),
                                   child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Expanded(
                                         child: Column(
@@ -1501,6 +1505,7 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
                                         ),
                                       ),
                                       CommentMoreButton(
+                                        compact: true,
                                         onMore: widget.layoutOnly
                                             ? null
                                             : (anchor) =>
