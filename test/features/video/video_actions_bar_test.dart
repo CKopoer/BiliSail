@@ -2,6 +2,7 @@ import '../../support/material_tooltip_finder.dart';
 
 import 'dart:async';
 
+import 'package:bilisail/core/platform/external_links.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
@@ -40,15 +41,115 @@ const testDetail = VideoDetail(
 
 void main() {
   for (final width in [320.0, 800.0, 1920.0]) {
-    testWidgets('action bar fits width $width at large text', (tester) async {
-      tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = Size(width, 900);
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      await pumpActions(tester, FakeActions(), signedIn: true, textScale: 2);
-      expect(tester.takeException(), isNull);
-    });
+    testWidgets(
+      'action captions align below icons at width $width and large text',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = Size(width, 900);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        const detail = VideoDetail(
+          summary: VideoSummary(
+            id: VideoId('BV1234567890'),
+            title: 'video',
+            coverUrl: '',
+            author: '',
+            duration: Duration.zero,
+            likeCount: 14000,
+          ),
+          description: '',
+          parts: [testPart],
+          aid: '11',
+          coinCount: 0,
+          favoriteCount: 123000000,
+          shareCount: 53,
+        );
+        var downloads = 0;
+        Uri? officialPage;
+        await pumpActions(
+          tester,
+          FakeActions(),
+          detail: detail,
+          signedIn: true,
+          textScale: 2,
+          onDownload: () => downloads++,
+          openLink: (uri) async {
+            officialPage = uri;
+            return true;
+          },
+        );
+        final styles = <TextStyle?>{};
+        final baselines = <double>{};
+        for (final (tooltip, caption) in [
+          ('点赞 1.4万', '1.4万'),
+          ('投币 0', '0'),
+          ('收藏 1.2亿', '1.2亿'),
+          ('分享', '53'),
+          ('官方页面', '官网'),
+          ('下载视频', '下载'),
+        ]) {
+          final button = findMaterialTooltip(tooltip);
+          await tester.ensureVisible(button);
+          final label = find.descendant(
+            of: button,
+            matching: find.text(caption),
+          );
+          final icon = find.descendant(of: button, matching: find.byType(Icon));
+          expect(label.hitTestable(), findsOneWidget);
+          expect(
+            tester.getTopLeft(label).dy,
+            greaterThanOrEqualTo(tester.getBottomLeft(icon).dy),
+          );
+          expect(
+            tester.getCenter(label).dx,
+            moreOrLessEquals(tester.getCenter(icon).dx),
+          );
+          baselines.add(tester.getTopLeft(label).dy);
+          styles.add(tester.widget<Text>(label).style);
+          if (caption == '官网' || caption == '下载') await tester.tap(label);
+        }
+        expect(styles, hasLength(1));
+        expect(baselines, hasLength(1));
+        expect(
+          officialPage.toString(),
+          'https://www.bilibili.com/video/BV1234567890',
+        );
+        expect(downloads, 1);
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
+  testWidgets(
+    'the share caption follows the latest detail and distinguishes zero from missing',
+    (tester) async {
+      final repo = FakeActions();
+      final share = findMaterialTooltip('分享');
+      await pumpActions(tester, repo);
+      expect(
+        find.descendant(of: share, matching: find.text('—')),
+        findsOneWidget,
+      );
+      for (final count in [0, 12]) {
+        await pumpActions(
+          tester,
+          repo,
+          detail: VideoDetail(
+            summary: testDetail.summary,
+            description: '',
+            parts: [testPart],
+            aid: testDetail.aid,
+            shareCount: count,
+          ),
+        );
+        expect(
+          find.descendant(of: share, matching: find.text('$count')),
+          findsOneWidget,
+        );
+      }
+      expect(repo.calls, isEmpty);
+    },
+  );
+
   testWidgets('watch later and reload are available only through more menu', (
     tester,
   ) async {
@@ -106,9 +207,10 @@ void main() {
       expect(repo.calls, ['load', 'coin:2']);
       expect(
         tester
-            .widget<IconButton>(
-              find.byWidgetPredicate(
-                (widget) => widget is IconButton && widget.tooltip == '投币 0',
+            .widget<TextButton>(
+              find.descendant(
+                of: findMaterialTooltip('投币 0'),
+                matching: find.byType(TextButton),
               ),
             )
             .onPressed,
@@ -156,14 +258,19 @@ Future<void> pumpActions(
   bool signedIn = false,
   VoidCallback? onLogin,
   double textScale = 1,
+  VideoDetail detail = testDetail,
   bool menuOnly = false,
   VoidCallback? onReload,
+  VoidCallback? onDownload,
+  Future<bool> Function(Uri)? openLink,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         authRepositoryProvider.overrideWithValue(FakeAuth(signedIn)),
         videoActionsRepositoryProvider.overrideWithValue(repo),
+        if (openLink != null)
+          externalLinkOpenerProvider.overrideWithValue(openLink),
       ],
       child: MaterialApp(
         builder: AppNoticeHost.builder,
@@ -171,9 +278,13 @@ Future<void> pumpActions(
           data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
           child: Scaffold(
             body: VideoActionsScope(
-              detail: testDetail,
+              detail: detail,
               onLogin: onLogin ?? () {},
-              child: VideoActionsBar(menuOnly: menuOnly, onReload: onReload),
+              child: VideoActionsBar(
+                menuOnly: menuOnly,
+                onReload: onReload,
+                onDownload: onDownload,
+              ),
             ),
           ),
         ),

@@ -801,7 +801,7 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
           if (actions != null) ...[
             if (below) const Divider(height: 12),
             measuring
-                ? const SizedBox(height: VideoActionsBar.height)
+                ? SizedBox(height: VideoActionsBar.heightFor(context))
                 : actions,
           ],
           if (!measuring)

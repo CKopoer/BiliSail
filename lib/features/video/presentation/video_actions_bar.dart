@@ -1,4 +1,3 @@
-import '../../../shared/ui/playback_split_layout.dart';
 import '../../../shared/ui/bili_icons.dart';
 import '../../../shared/ui/bili_coin_icon.dart';
 
@@ -323,7 +322,13 @@ class VideoActionsBar extends StatelessWidget {
     this.menuIconColor,
     this.onDownload,
   });
-  static const height = 36.0;
+  static const _captionStyle = TextStyle(fontSize: 12, height: 1.15);
+
+  static double heightFor(BuildContext context) =>
+      (32 + MediaQuery.textScalerOf(context).scale(12) * 1.15).clamp(
+        48,
+        double.infinity,
+      );
   final bool menuOnly;
   final Color? menuIconColor;
   final VoidCallback? onOpenStory;
@@ -368,44 +373,45 @@ class VideoActionsBar extends StatelessWidget {
         ],
       );
     }
-    final below = PlaybackSplitLayout.infoBelowOf(context);
     Widget action(
       Widget icon,
       String label,
+      String caption,
       VoidCallback? onTap, {
       bool selected = false,
-      String? caption,
     }) {
-      final color = selected
-          ? Theme.of(context).colorScheme.primary
-          : Theme.of(context).colorScheme.onSurfaceVariant;
-      if (below) {
-        return Tooltip(
-          message: label,
-          child: TextButton.icon(
-            onPressed: onTap,
-            icon: icon,
-            label: Text(caption ?? label),
-            style: TextButton.styleFrom(
-              foregroundColor: color,
-              iconSize: 18,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-            ),
+      final colors = Theme.of(context).colorScheme;
+      return Tooltip(
+        message: label,
+        child: TextButton(
+          onPressed: onTap,
+          style: TextButton.styleFrom(
+            foregroundColor: selected
+                ? colors.primary
+                : colors.onSurfaceVariant,
+            iconSize: 22,
+            minimumSize: const Size(48, 48),
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
-        );
-      }
-      return IconButton(
-        tooltip: label,
-        onPressed: onTap,
-        color: color,
-        iconSize: 22,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        icon: icon,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              icon,
+              const SizedBox(height: 2),
+              Text(caption, style: _captionStyle, maxLines: 1, softWrap: false),
+            ],
+          ),
+        ),
       );
     }
 
+    final detail = view.detail;
+    final likes = compactCount(detail.likeCount ?? detail.summary.likeCount);
+    final coins = compactCount(detail.coinCount);
+    final favorites = compactCount(detail.favoriteCount);
     return SizedBox(
-      height: height,
+      height: heightFor(context),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
@@ -416,24 +422,22 @@ class VideoActionsBar extends StatelessWidget {
                     ? Icons.thumb_up_alt
                     : Icons.thumb_up_alt_outlined,
               ),
-              state.interaction.liked
-                  ? '已点赞'
-                  : '点赞 ${compactCount(view.detail.likeCount)}',
+              state.interaction.liked ? '已点赞' : '点赞 $likes',
+              likes,
               enabled('like', needsState: true)
                   ? () => owner._invoke(ShortcutAction.likeVideo)
                   : null,
-              caption: '点赞',
               selected: state.interaction.liked,
             ),
             action(
               BiliCoinIcon(filled: state.interaction.coins > 0),
               state.interaction.coins > 0
                   ? '已投 ${state.interaction.coins} 枚'
-                  : '投币 ${compactCount(view.detail.coinCount)}',
+                  : '投币 $coins',
+              coins,
               enabled('coin', needsState: true)
                   ? () => owner._invoke(ShortcutAction.coinVideo)
                   : null,
-              caption: '投币',
               selected: state.interaction.coins > 0,
             ),
             action(
@@ -442,23 +446,32 @@ class VideoActionsBar extends StatelessWidget {
                     ? BiliIcons.favoriteFilled
                     : BiliIcons.favorite,
               ),
-              state.interaction.favorited
-                  ? '已收藏'
-                  : '收藏 ${compactCount(view.detail.favoriteCount)}',
+              state.interaction.favorited ? '已收藏' : '收藏 $favorites',
+              favorites,
               enabled('favorite')
                   ? () => owner._invoke(ShortcutAction.favoriteVideo)
                   : null,
-              caption: '收藏',
               selected: state.interaction.favorited,
             ),
             action(
               const Icon(BiliIcons.share),
               '分享',
+              compactCount(detail.shareCount),
               () => owner._invoke(ShortcutAction.shareVideo),
             ),
-            action(const Icon(Icons.open_in_new), '官方页面', owner._openOfficial),
+            action(
+              const Icon(Icons.open_in_new),
+              '官方页面',
+              '官网',
+              owner._openOfficial,
+            ),
             if (onDownload != null)
-              action(const Icon(Icons.download_outlined), '下载视频', onDownload),
+              action(
+                const Icon(Icons.download_outlined),
+                '下载视频',
+                '下载',
+                onDownload,
+              ),
             if (state.message case final String message when !state.busy)
               Tooltip(
                 message: message,
