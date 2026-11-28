@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:media_kit/media_kit.dart' as mk;
 
+import '../playback_cache_limits.dart';
 import 'player_contract.dart';
 import 'android_media_leases.dart';
 import 'player_diagnostics.dart';
@@ -27,7 +28,7 @@ import 'video_output.dart';
 
 /// mpv commands and observations for one source; owns no playback state.
 final class MediaKitBackend
-    implements PlaybackBackend, ReusablePlaybackBackend {
+    implements PlaybackBackend, ReusablePlaybackBackend, PlaybackCacheControl {
   MediaKitBackend({
     required this.snapshot,
     this.onDiagnostic,
@@ -77,6 +78,7 @@ final class MediaKitBackend
   bool _hdrHint = false;
   String? _appleCodecHint;
   OpenOptions? _lastOptions;
+  bool? _liveCache;
   int _generation = 0;
   int _seekRevision = 0;
   NativeReadinessStage? _readinessStage;
@@ -471,6 +473,10 @@ final class MediaKitBackend
     };
     final options = plan.options;
     final video = plan.media;
+    _liveCache = switch (video.uri.scheme) {
+      'file' || 'content' => null,
+      _ => plan.live,
+    };
     _hdrHint = video.isHdr;
     _appleCodecHint = video.codec;
     final audio = plan.audio;
@@ -596,7 +602,7 @@ final class MediaKitBackend
       'force-media-title': 'BiliSail',
       'user-agent': ?liveHeaders?.userAgent,
       'referrer': ?liveHeaders?.referer,
-      if (video.uri.scheme == 'file' || video.uri.scheme == 'content')
+      if (_liveCache == null)
         'cache': 'no'
       else
         ...nativeCacheOptions(
@@ -605,6 +611,7 @@ final class MediaKitBackend
               ? options.requestedBufferAhead
               : options.maxBufferAhead,
           rate: options.requestedBufferAhead == null ? options.rate : 1,
+          limits: options.cacheLimits,
         ),
     };
     final previousHook = _sourceOptionsHook;
@@ -1171,6 +1178,16 @@ final class MediaKitBackend
       }
     }
     if (restore) player.setProperty('time-pos', position);
+  }
+
+  @override
+  Future<void> setCacheLimits(PlaybackCacheLimits limits) async {
+    final live = _liveCache;
+    final player = _player;
+    if (live == null || player == null) return;
+    for (final entry in nativeCacheByteOptions(limits, live: live).entries) {
+      player.setProperty('file-local-options/${entry.key}', entry.value);
+    }
   }
 
   @override

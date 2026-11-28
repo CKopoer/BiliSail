@@ -1,5 +1,6 @@
 library;
 
+export 'playback_cache_limits.dart';
 export 'src/player_contract.dart';
 export 'src/player_diagnostics.dart';
 export 'src/player_playback_information.dart';

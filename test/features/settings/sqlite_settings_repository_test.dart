@@ -12,6 +12,44 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   late AppDatabase database;
   late SqliteSettingsRepository repository;
+  test(
+    'playback cache falls back per field and persists custom sizes',
+    () async {
+      const defaults = (
+        videoForwardMiB: 16,
+        videoBackwardMiB: 8,
+        liveForwardMiB: 16,
+      );
+      expect((await repository.load()).playbackCache, defaults);
+      await database.writeSetting(
+        'preferences.v1',
+        '{"schemaVersion":59,"theme":"dark"}',
+      );
+      expect((await repository.load()).playbackCache, defaults);
+
+      await database.writeSetting(
+        'preferences.v1',
+        '{"schemaVersion":60,"videoForwardCacheMiB":129,"videoBackwardCacheMiB":0,"liveForwardCacheMiB":"24"}',
+      );
+      final loaded = await repository.load();
+      expect(loaded.playbackCache, (
+        videoForwardMiB: 16,
+        videoBackwardMiB: 0,
+        liveForwardMiB: 16,
+      ));
+      const custom = (
+        videoForwardMiB: 32,
+        videoBackwardMiB: 0,
+        liveForwardMiB: 24,
+      );
+      await repository.save(loaded.copyWith(playbackCache: custom));
+      expect(
+        (await SqliteSettingsRepository(database).load()).playbackCache,
+        custom,
+      );
+      expect(database.schemaVersion, 4);
+    },
+  );
   test('wheel parameter legacy defaults, invalid values and every mode round trip', () async {
     for (final invalid in ['null', '"invalid"', 'true', '1e999']) {
       await database.writeSetting(
@@ -93,7 +131,7 @@ void main() {
         final snapshot = jsonDecode(
           (await database.readSetting('preferences.v1'))!,
         ) as Map<String, Object?>;
-        expect(snapshot['schemaVersion'], 59);
+        expect(snapshot['schemaVersion'], 60);
         expect(snapshot['wheelScrollAnimation'], mode.name);
       }
       expect(database.schemaVersion, 4);

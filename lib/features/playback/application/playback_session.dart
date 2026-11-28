@@ -1325,6 +1325,7 @@ class PlaybackSession extends ChangeNotifier {
         isLive: isLive,
         requestedLiveLine: requestedLiveLine,
       );
+      late final PlaybackCacheLimits openedCacheLimits;
       Future<void> openSource() async {
         if (!isCurrent()) return;
         var playLive =
@@ -1337,6 +1338,7 @@ class PlaybackSession extends ChangeNotifier {
           if (!isCurrent()) return;
         }
         if (isLive) _openingLiveGeneration = generation;
+        openedCacheLimits = _settings.playbackCacheLimits(live: isLive);
         await engine.open(
           source,
           OpenOptions(
@@ -1357,6 +1359,7 @@ class PlaybackSession extends ChangeNotifier {
                 AndroidVideoOutputMode.directTexture,
             },
             openTimeout: openBudget,
+            cacheLimits: openedCacheLimits,
             retainPresentation: retryMedia != null,
           ),
         );
@@ -1401,6 +1404,11 @@ class PlaybackSession extends ChangeNotifier {
       }
       _mediaGeneration = generation;
       _resolving = false;
+      final cacheLimits = _settings.playbackCacheLimits(live: isLive);
+      if (cacheLimits != openedCacheLimits) {
+        await _applyCacheLimits(cacheLimits);
+        if (!isCurrent()) return;
+      }
       // Settings may have changed while the native source was opening.
       // Apply the latest mode before restoring the user's play intent.
       await _applyAudioGain();
@@ -1897,6 +1905,11 @@ class PlaybackSession extends ChangeNotifier {
       _ensureComments(snapshots.value.position);
     }
     if (media != null) {
+      final cacheLimits = _settings.playbackCacheLimits(live: isLive);
+      if (!_resolving &&
+          cacheLimits != previous.playbackCacheLimits(live: isLive)) {
+        unawaited(_applyCacheLimits(cacheLimits));
+      }
       if (previous.audioNormalization != _settings.audioNormalization) {
         unawaited(_applyAudioGain());
       }
@@ -2793,6 +2806,24 @@ class PlaybackSession extends ChangeNotifier {
         );
       }),
     );
+  }
+
+  Future<void> _applyCacheLimits(PlaybackCacheLimits limits) async {
+    if (engine case final PlaybackCacheControl control
+        when !_closing && !_disposed) {
+      final generation = _generation;
+      try {
+        await control.setCacheLimits(limits);
+      } on PlayerFailure catch (failure) {
+        if (generation == _generation &&
+            !_disposed &&
+            !_closing &&
+            limits == _settings.playbackCacheLimits(live: isLive)) {
+          auxiliaryMessage = failure.message;
+          _notify();
+        }
+      }
+    }
   }
 
   double get commandRate => _rateTargetGeneration == _generation

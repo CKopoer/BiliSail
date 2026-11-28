@@ -1,3 +1,5 @@
+import 'package:bili_player/playback_cache_limits.dart';
+
 import '../../../domain/playback_rates.dart';
 import '../../../domain/app_orientation.dart';
 export '../../../domain/app_orientation.dart';
@@ -87,7 +89,19 @@ enum PlaybackBackendPreference { mediaKit }
 
 enum AndroidVideoOutputPreference { renderedTexture, directTexture }
 
+typedef PlaybackCacheSettings = ({
+  int videoForwardMiB,
+  int videoBackwardMiB,
+  int liveForwardMiB,
+});
+
 final class AppSettings {
+  static const defaultPlaybackCache = (
+    videoForwardMiB: defaultForwardCacheMiB,
+    videoBackwardMiB: defaultVodBackwardCacheMiB,
+    liveForwardMiB: defaultForwardCacheMiB,
+  );
+
   AppSettings({
     this.recommendations = const RecommendationSettings.defaults(),
     this.shortcuts = const ShortcutSettings.defaults(),
@@ -147,6 +161,7 @@ final class AppSettings {
     this.videoDecoding = VideoDecodingPreference.automatic,
     this.playbackBackend = PlaybackBackendPreference.mediaKit,
     this.androidVideoOutput = AndroidVideoOutputPreference.renderedTexture,
+    this.playbackCache = defaultPlaybackCache,
     this.defaultPlaybackRate = 1.0,
     List<double> playbackRates = PlaybackRates.values,
     this.rememberPlaybackRate = true,
@@ -249,6 +264,7 @@ final class AppSettings {
        videoDecoding = VideoDecodingPreference.automatic,
        playbackBackend = PlaybackBackendPreference.mediaKit,
        androidVideoOutput = AndroidVideoOutputPreference.renderedTexture,
+       playbackCache = defaultPlaybackCache,
        defaultPlaybackRate = 1.0,
        playbackRates = PlaybackRates.values,
        rememberPlaybackRate = true,
@@ -345,6 +361,15 @@ final class AppSettings {
   final PlaybackBackendPreference playbackBackend;
 
   final AndroidVideoOutputPreference androidVideoOutput;
+  final PlaybackCacheSettings playbackCache;
+
+  PlaybackCacheLimits playbackCacheLimits({required bool live}) => live
+      ? (forwardMiB: playbackCache.liveForwardMiB, backwardMiB: 0)
+      : (
+          forwardMiB: playbackCache.videoForwardMiB,
+          backwardMiB: playbackCache.videoBackwardMiB,
+        );
+
   final double defaultPlaybackRate;
   final List<double> playbackRates;
   final bool rememberPlaybackRate;
@@ -450,6 +475,7 @@ final class AppSettings {
     VideoDecodingPreference? videoDecoding,
     PlaybackBackendPreference? playbackBackend,
     AndroidVideoOutputPreference? androidVideoOutput,
+    PlaybackCacheSettings? playbackCache,
     double? defaultPlaybackRate,
     List<double>? playbackRates,
     bool? rememberPlaybackRate,
@@ -564,6 +590,7 @@ final class AppSettings {
     videoDecoding: videoDecoding ?? this.videoDecoding,
     playbackBackend: playbackBackend ?? this.playbackBackend,
     androidVideoOutput: androidVideoOutput ?? this.androidVideoOutput,
+    playbackCache: playbackCache ?? this.playbackCache,
     defaultPlaybackRate: defaultPlaybackRate ?? this.defaultPlaybackRate,
     playbackRates: playbackRates ?? this.playbackRates,
     rememberPlaybackRate: rememberPlaybackRate ?? this.rememberPlaybackRate,
@@ -643,7 +670,26 @@ final class AppSettings {
 
     double bounded(double value, double min, double max, double fallback) =>
         value.isFinite ? value.clamp(min, max) : fallback;
+    int cacheMiB(int value, int min, int fallback) =>
+        value >= min && value <= maximumPlaybackCacheMiB ? value : fallback;
     return copyWith(
+      playbackCache: (
+        videoForwardMiB: cacheMiB(
+          playbackCache.videoForwardMiB,
+          1,
+          defaultPlaybackCache.videoForwardMiB,
+        ),
+        videoBackwardMiB: cacheMiB(
+          playbackCache.videoBackwardMiB,
+          0,
+          defaultPlaybackCache.videoBackwardMiB,
+        ),
+        liveForwardMiB: cacheMiB(
+          playbackCache.liveForwardMiB,
+          1,
+          defaultPlaybackCache.liveForwardMiB,
+        ),
+      ),
       wheelDampingRatio: bounded(wheelDampingRatio, .5, 2, 1.3),
       wheelScrollDistanceMultiplier: bounded(
         wheelScrollDistanceMultiplier,

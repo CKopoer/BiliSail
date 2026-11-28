@@ -26,6 +26,7 @@ import 'app_icon_settings.dart';
 import 'recommendation_settings_section.dart';
 import 'responsive_layout_settings_controls.dart';
 import 'cdn_settings_tile.dart';
+import 'playback_cache_settings_tile.dart';
 import 'log_export_button.dart';
 
 const _usageNotice = <Widget>[
@@ -738,6 +739,15 @@ final class _SettingsCategoryPageState
                             s.videoCardHoverPlayback,
                             controller.setVideoCardHoverPlayback,
                             '鼠标停留在视频卡或直播卡上时静音播放预览，关闭可减少资源和流量占用',
+                          ),
+                          PlaybackCacheSettingsTile(
+                            value: s.playbackCache,
+                            save: (value) => _save(
+                              () => controller.update(
+                                (current) =>
+                                    current.copyWith(playbackCache: value),
+                              ),
+                            ),
                           ),
                           _toggle(
                             '高能进度条',

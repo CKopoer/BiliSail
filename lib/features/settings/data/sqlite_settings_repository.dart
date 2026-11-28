@@ -57,6 +57,8 @@ class SqliteSettingsRepository implements SettingsRepository {
     }
     bool boolean(String key, bool fallback) =>
         decoded[key] is bool ? decoded[key] as bool : fallback;
+    int integer(String key, int fallback) =>
+        decoded[key] is int ? decoded[key] as int : fallback;
     double number(String key, double fallback) {
       final value = decoded[key];
       return value is num ? value.toDouble() : fallback;
@@ -246,6 +248,20 @@ class SqliteSettingsRepository implements SettingsRepository {
               .where((item) => item.name == decoded['androidVideoOutput'])
               .firstOrNull ??
           AndroidVideoOutputPreference.renderedTexture,
+      playbackCache: (
+        videoForwardMiB: integer(
+          'videoForwardCacheMiB',
+          AppSettings.defaultPlaybackCache.videoForwardMiB,
+        ),
+        videoBackwardMiB: integer(
+          'videoBackwardCacheMiB',
+          AppSettings.defaultPlaybackCache.videoBackwardMiB,
+        ),
+        liveForwardMiB: integer(
+          'liveForwardCacheMiB',
+          AppSettings.defaultPlaybackCache.liveForwardMiB,
+        ),
+      ),
       defaultPlaybackRate: number('defaultPlaybackRate', 1.0),
       playbackRates: PlaybackRates.fromJson(decoded['playbackRates']),
       rememberPlaybackRate: boolean('rememberPlaybackRate', true),
@@ -328,7 +344,7 @@ class SqliteSettingsRepository implements SettingsRepository {
     return database.writeSetting(
       'preferences.v1',
       jsonEncode({
-        'schemaVersion': 59,
+        'schemaVersion': 60,
         'appIcon': value.appIcon.name,
         'recommendations': value.recommendations.toJson(),
         'navigationBarMode': value.navigationBarMode.name,
@@ -406,6 +422,9 @@ class SqliteSettingsRepository implements SettingsRepository {
         'mediaCdn': value.mediaCdn.name,
         'videoDecoding': value.videoDecoding.name,
         'androidVideoOutput': value.androidVideoOutput.name,
+        'videoForwardCacheMiB': value.playbackCache.videoForwardMiB,
+        'videoBackwardCacheMiB': value.playbackCache.videoBackwardMiB,
+        'liveForwardCacheMiB': value.playbackCache.liveForwardMiB,
         'playbackBackend': value.playbackBackend.name,
         'defaultPlaybackRate': value.defaultPlaybackRate,
         'playbackRates': value.playbackRates,

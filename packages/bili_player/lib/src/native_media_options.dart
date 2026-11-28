@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import '../playback_cache_limits.dart';
+
 /// The pinned backend takes User-Agent and Referer separately from header fields.
 ({String? userAgent, String? referer, Map<String, String> fields})
 nativeMediaHeaders(Map<String, String> headers) {
@@ -40,18 +42,30 @@ Map<String, String> nativeCacheOptions({
   required bool live,
   required Duration? window,
   required double rate,
+  PlaybackCacheLimits? limits,
 }) {
   final seconds = window == null ? null : window.inMicroseconds / 1e6 * rate;
-  const mib = 1024 * 1024;
+  final budget =
+      limits ?? (live ? defaultLiveCacheLimits : defaultVodCacheLimits);
   return {
     'cache': 'yes',
     'cache-on-disk': 'no',
-    'demuxer-max-bytes': (8 * mib).toString(),
-    'demuxer-max-back-bytes': (live ? 0 : 4 * mib).toString(),
+    ...nativeCacheByteOptions(budget, live: live),
     if (seconds != null) ...{
       'cache-secs': seconds.toStringAsFixed(3),
       'demuxer-hysteresis-secs': (seconds / 1.5).toStringAsFixed(3),
     },
+  };
+}
+
+Map<String, String> nativeCacheByteOptions(
+  PlaybackCacheLimits limits, {
+  required bool live,
+}) {
+  const mib = 1024 * 1024;
+  return {
+    'demuxer-max-bytes': (limits.forwardMiB * mib).toString(),
+    'demuxer-max-back-bytes': (live ? 0 : limits.backwardMiB * mib).toString(),
   };
 }
 

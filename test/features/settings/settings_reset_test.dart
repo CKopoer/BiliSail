@@ -73,6 +73,11 @@ void main() {
           wheelScrollDistanceMultiplier: 4,
           wheelScrollDurationMultiplier: 3,
           autoPlay: false,
+          playbackCache: (
+            videoForwardMiB: 32,
+            videoBackwardMiB: 0,
+            liveForwardMiB: 24,
+          ),
           autoCollapsePlaybackSidebar: true,
           videoCardHoverPlayback: !defaults.videoCardHoverPlayback,
           continuousPlayback: true,

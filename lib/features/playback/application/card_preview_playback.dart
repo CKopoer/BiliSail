@@ -104,6 +104,7 @@ final class CardPreviewPlayback {
                 volume: 0,
                 openTimeout: openTimeout,
                 maxBufferAhead: const Duration(seconds: 5),
+                cacheLimits: const (forwardMiB: 8, backwardMiB: 4),
               ),
             )
             .timeout(openTimeout);

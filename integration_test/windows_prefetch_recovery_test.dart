@@ -111,16 +111,34 @@ void main() {
           .widget<mkv.Video>(find.byType(mkv.Video))
           .controller
           .player;
-      expect(await player.getPropertyAsync('demuxer-max-bytes'), '8388608');
+      expect(await player.getPropertyAsync('demuxer-max-bytes'), '16777216');
       expect(
         await player.getPropertyAsync('demuxer-max-back-bytes'),
-        '4194304',
+        '8388608',
       );
       expect(double.parse(await player.getPropertyAsync('cache-secs')), 16);
       expect(
         double.parse(await player.getPropertyAsync('demuxer-hysteresis-secs')),
         closeTo(16 / 1.5, .001),
       );
+      session.configureSettings(
+        AppSettings(
+          autoPlay: true,
+          resumePlayback: false,
+          playbackCache: (
+            videoForwardMiB: 24,
+            videoBackwardMiB: 10,
+            liveForwardMiB: 16,
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(await player.getPropertyAsync('demuxer-max-bytes'), '25165824');
+      expect(
+        await player.getPropertyAsync('demuxer-max-back-bytes'),
+        '10485760',
+      );
+      expect(engine.currentSnapshot.generation, generation);
       // Exercise the pinned SDK's actual streams while native packets can play.
       // ignore: invalid_use_of_protected_member
       player.native.errorController.add('tcp: ffurl_read returned 0xffffff99');

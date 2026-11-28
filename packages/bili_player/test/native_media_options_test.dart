@@ -30,12 +30,31 @@ void main() {
     );
     expect(vod['cache-secs'], '32.000');
     expect(vod['demuxer-hysteresis-secs'], '21.333');
-    expect(vod['demuxer-max-bytes'], '8388608');
-    expect(vod['demuxer-max-back-bytes'], '4194304');
+    expect(vod['demuxer-max-bytes'], '16777216');
+    expect(vod['demuxer-max-back-bytes'], '8388608');
     final live = nativeCacheOptions(live: true, window: null, rate: 1);
     expect(live.containsKey('cache-secs'), false);
     expect(live.containsKey('demuxer-hysteresis-secs'), false);
-    expect(live['demuxer-max-bytes'], '8388608');
+    expect(live['demuxer-max-bytes'], '16777216');
+    expect(live['demuxer-max-back-bytes'], '0');
+  });
+  test('per-source limits use MiB and live discards backward data', () {
+    const limits = (forwardMiB: 24, backwardMiB: 9);
+    final vod = nativeCacheOptions(
+      live: false,
+      window: null,
+      rate: 1,
+      limits: limits,
+    );
+    final live = nativeCacheOptions(
+      live: true,
+      window: null,
+      rate: 1,
+      limits: limits,
+    );
+    expect(vod['demuxer-max-bytes'], '25165824');
+    expect(vod['demuxer-max-back-bytes'], '9437184');
+    expect(live['demuxer-max-bytes'], '25165824');
     expect(live['demuxer-max-back-bytes'], '0');
   });
   test(

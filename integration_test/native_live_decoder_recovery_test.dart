@@ -138,7 +138,7 @@ void main() {
           .widget<mkv.Video>(find.byType(mkv.Video))
           .controller
           .player;
-      expect(await player.getPropertyAsync('demuxer-max-bytes'), '8388608');
+      expect(await player.getPropertyAsync('demuxer-max-bytes'), '16777216');
       expect(await player.getPropertyAsync('demuxer-max-back-bytes'), '0');
       for (var n = 0; n < 2; n++) {
         // ignore: invalid_use_of_protected_member

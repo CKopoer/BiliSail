@@ -16,6 +16,58 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('playback cache validates and saves three independent sizes', (
+    tester,
+  ) async {
+    final repository = _SettingsRepository();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [settingsRepositoryProvider.overrideWithValue(repository)],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: SettingsScreen(category: SettingsCategory.playback),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final tile = find.widgetWithText(ListTile, '播放缓存大小');
+    await tester.scrollUntilVisible(
+      tile,
+      100,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView).first,
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.ensureVisible(tile);
+    await tester.pumpAndSettle();
+    await tester.tap(tile);
+    await tester.pumpAndSettle();
+    final fields = find.byType(TextFormField);
+    final save = find.widgetWithText(FilledButton, '保存');
+    expect(fields, findsNWidgets(3));
+    await tester.enterText(fields.at(0), '0');
+    await tester.enterText(fields.at(1), '0');
+    await tester.enterText(fields.at(2), '24');
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+    expect(find.text('请输入 1～128 的整数'), findsOneWidget);
+    expect(repository.settings.playbackCache, AppSettings.defaultPlaybackCache);
+
+    await tester.enterText(fields.at(0), '32');
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+    expect(repository.settings.playbackCache, (
+      videoForwardMiB: 32,
+      videoBackwardMiB: 0,
+      liveForwardMiB: 24,
+    ));
+    expect(find.text('点播前向 32 MiB · 后向 0 MiB\n直播前向 24 MiB'), findsOneWidget);
+  });
+
   for (final inPlayer in [false, true]) {
     testWidgets(
       'official PGC auto skip persists from settings entry: $inPlayer',

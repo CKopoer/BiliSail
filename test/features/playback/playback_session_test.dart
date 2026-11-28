@@ -42,6 +42,76 @@ import '../../support/video_card_fake_engine.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   test(
+    'cache preferences apply on open and update without reopening',
+    () async {
+      final engine = _FakeEngine();
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _FakeRepository(),
+        contentRepository: _FakeContentRepository(),
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+      );
+      addTearDown(session.close);
+      final settings = AppSettings(
+        playbackCache: (
+          videoForwardMiB: 32,
+          videoBackwardMiB: 10,
+          liveForwardMiB: 24,
+        ),
+      );
+      session.configureSettings(settings);
+      final openGate = engine.nextOpen = Completer<void>();
+      final opening = session.open(
+        null,
+        null,
+        target: const PgcPlaybackTarget('7'),
+      );
+      await _flush();
+      expect(engine.openOptions.single.cacheLimits, (
+        forwardMiB: 32,
+        backwardMiB: 10,
+      ));
+      final updated = settings.copyWith(
+        playbackCache: (
+          videoForwardMiB: 64,
+          videoBackwardMiB: 0,
+          liveForwardMiB: 24,
+        ),
+      );
+      session.configureSettings(updated);
+      expect(engine.cacheUpdates, isEmpty);
+      openGate.complete();
+      await opening;
+      expect(engine.cacheUpdates, [(forwardMiB: 64, backwardMiB: 0)]);
+
+      await session.open(null, null, target: const LivePlaybackTarget('8'));
+      expect(engine.openOptions.last.cacheLimits, (
+        forwardMiB: 24,
+        backwardMiB: 0,
+      ));
+      session.configureSettings(
+        updated.copyWith(
+          playbackCache: (
+            videoForwardMiB: 64,
+            videoBackwardMiB: 0,
+            liveForwardMiB: 48,
+          ),
+        ),
+      );
+      await _flush();
+      expect(engine.cacheUpdates.last, (forwardMiB: 48, backwardMiB: 0));
+      expect(engine.openOptions, hasLength(2));
+
+      engine.rejectCacheUpdate = true;
+      session.configureSettings(updated);
+      await _flush();
+      expect(session.auxiliaryMessage, '更新缓存失败');
+      expect(session.error, isNull);
+      expect(engine.openOptions, hasLength(2));
+    },
+  );
+  test(
     'foreground open waits for an already cancelled preview to dispose',
     () async {
       final releasing = Completer<void>();
@@ -7891,7 +7961,8 @@ final class _FakeProgress implements PlaybackProgressStore {
   }
 }
 
-final class _FakeEngine implements PlayerEngine, AudioGainControl {
+final class _FakeEngine
+    implements PlayerEngine, AudioGainControl, PlaybackCacheControl {
   _FakeEngine({this.openDuration = const Duration(minutes: 2)});
   final Duration openDuration;
   final _snapshots = StreamController<PlaybackSnapshot>.broadcast(sync: true);
@@ -7911,6 +7982,21 @@ final class _FakeEngine implements PlayerEngine, AudioGainControl {
   int _playRevision = 0;
   final openedUris = <Uri>[];
   final openOptions = <OpenOptions>[];
+  final cacheUpdates = <PlaybackCacheLimits>[];
+  bool rejectCacheUpdate = false;
+
+  @override
+  Future<void> setCacheLimits(PlaybackCacheLimits limits) async {
+    if (rejectCacheUpdate) {
+      throw PlayerFailure(
+        PlayerFailureKind.nativePlayback,
+        '更新缓存失败',
+        _current.generation,
+      );
+    }
+    cacheUpdates.add(limits);
+  }
+
   final sources = <ResolvedMediaSource>[];
   final seekTargets = <Duration>[];
   Completer<void>? nextRate;

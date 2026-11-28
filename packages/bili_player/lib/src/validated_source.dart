@@ -1,3 +1,4 @@
+import '../playback_cache_limits.dart';
 import 'player_contract.dart';
 
 /// In-memory preparation plan. Never serialize media addresses or headers.
@@ -32,6 +33,7 @@ final class ValidatedSource {
       String message, [
       PlayerFailureKind kind = PlayerFailureKind.invalidSource,
     ]) => throw PlayerFailure(kind, message, generation);
+    final cacheLimits = options.cacheLimits;
     if (options.startPosition < Duration.zero ||
         options.openTimeout <= Duration.zero ||
         !options.rate.isFinite ||
@@ -41,7 +43,8 @@ final class ValidatedSource {
         options.volume > 100 ||
         !validGain(options.audioGainDb) ||
         options.maxBufferAhead <= Duration.zero ||
-        options.maxBufferAhead > OpenOptions.maximumBufferAhead) {
+        options.maxBufferAhead > OpenOptions.maximumBufferAhead ||
+        (cacheLimits != null && !isValidPlaybackCacheLimits(cacheLimits))) {
       invalid('无效的播放参数');
     }
     final (
@@ -137,6 +140,7 @@ final class ValidatedSource {
             videoDecoding: options.videoDecoding,
             androidVideoOutput: androidOutput,
             openTimeout: options.openTimeout,
+            cacheLimits: options.cacheLimits,
             retainPresentation: options.retainPresentation,
             maxBufferAhead: source is DashVideoSource
                 ? previewWindow

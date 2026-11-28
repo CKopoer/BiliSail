@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import '../playback_cache_limits.dart';
 import 'native_readiness.dart';
 import 'playback_backend.dart';
 import 'playback_startup.dart';
@@ -17,6 +18,7 @@ class SharedPlayerEngine
         PlayerEngine,
         VideoOutputSource,
         AudioGainControl,
+        PlaybackCacheControl,
         PlayerInformationSource {
   SharedPlayerEngine({
     required this.createBackend,
@@ -174,6 +176,7 @@ class SharedPlayerEngine
     int generation,
     Future<void> Function(PlaybackBackend) work, {
     bool Function()? allowed,
+    String? nonFatalErrorMessage,
   }) {
     final source = _openOperation;
     final next = _controls.then((_) async {
@@ -194,6 +197,13 @@ class SharedPlayerEngine
         return;
       } on Object catch (error) {
         if (!_current(generation, backend)) return;
+        if (nonFatalErrorMessage != null) {
+          throw PlayerFailure(
+            PlayerFailureKind.nativePlayback,
+            nonFatalErrorMessage,
+            generation,
+          );
+        }
         if (_opening) rethrow;
         throw await _fail(
           error is PlayerFailure
@@ -1033,6 +1043,23 @@ class SharedPlayerEngine
       }
       if (identical(operation, _seekOperation)) _seekOperation = null;
     }
+  }
+
+  @override
+  Future<void> setCacheLimits(PlaybackCacheLimits limits) {
+    if (!isValidPlaybackCacheLimits(limits)) {
+      throw ArgumentError.value(limits, 'limits');
+    }
+    return _control(
+      _generation,
+      (backend) async {
+        if (backend case final PlaybackCacheControl control) {
+          await control.setCacheLimits(limits);
+        }
+      },
+      allowed: () => !_opening && !_terminal,
+      nonFatalErrorMessage: '当前播放的缓存大小更新失败',
+    );
   }
 
   @override
