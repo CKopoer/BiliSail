@@ -2105,9 +2105,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         tester
-            .widget<ChoiceChip>(
-              find.widgetWithText(ChoiceChip, 'HarmonyOS Sans'),
-            )
+            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '抖音美好体'))
             .selected,
         isTrue,
       );
@@ -2117,21 +2115,18 @@ void main() {
       await tester.tap(find.widgetWithText(ChoiceChip, '系统默认'));
       await tester.pumpAndSettle();
       expect(repository.settings.font, AppFontPreference.system);
-      expect(
-        BiliTheme.light().textTheme.bodyMedium?.fontFamily,
-        'HarmonyOS Sans',
-      );
-      expect(
-        BiliTheme.dark().textTheme.bodyMedium?.fontFamily,
-        'HarmonyOS Sans',
-      );
+      expect(BiliTheme.light().textTheme.bodyMedium?.fontFamily, 'Douyin Sans');
+      expect(BiliTheme.dark().textTheme.bodyMedium?.fontFamily, 'Douyin Sans');
       expect(
         BiliTheme.light(font: repository.settings.font)
             .textTheme
             .bodyMedium
             ?.fontFamily,
-        isNot('HarmonyOS Sans'),
+        isNot('Douyin Sans'),
       );
+      await tester.tap(find.widgetWithText(ChoiceChip, '抖音美好体'));
+      await tester.pumpAndSettle();
+      expect(repository.settings.font, AppFontPreference.douyinSans);
     },
   );
   testWidgets('default playback speed uses fixed choices including 3.0x', (

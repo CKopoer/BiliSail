@@ -518,6 +518,7 @@ final class _SettingsCategoryPageState
                             style: TextStyle(fontSize: 12),
                           ),
                           _choices('界面字体', s.font, const {
+                            AppFontPreference.douyinSans: '抖音美好体',
                             AppFontPreference.harmonyOsSans: 'HarmonyOS Sans',
                             AppFontPreference.system: '系统默认',
                           }, controller.setFont),

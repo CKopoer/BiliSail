@@ -4,18 +4,12 @@ import 'package:bilisail/features/comments/domain/comments_repository.dart';
 import 'package:bilisail/shared/ui/comment_rich_content.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../support/douyin_sans_test_font.dart';
+
 void main() {
-  setUpAll(() async {
-    await (FontLoader('HarmonyOS Sans')..addFont(
-          rootBundle.load(
-            'assets/fonts/harmonyos_sans/HarmonyOS_Sans_SC_Regular.ttf',
-          ),
-        ))
-        .load();
-  });
+  setUpAll(loadDouyinSansTestFont);
 
   for (final dark in [false, true]) {
     for (final compact in [false, true]) {
@@ -66,7 +60,8 @@ void main() {
             final style = paragraph.text.style!;
             final fontSize = compact ? 14.0 : 15.0;
             final lineHeight = compact ? 20.0 : 25.0;
-            expect(style.fontFamily, 'HarmonyOS Sans');
+            expect(style.fontFamily, 'Douyin Sans');
+            expect(style.fontFamilyFallback, ['HarmonyOS Sans']);
             expect(style.fontSize, fontSize);
             expect(style.fontWeight, FontWeight.w400);
             expect(style.color, Color(dark ? 0xFFE7E9EB : 0xFF18191C));
@@ -82,7 +77,7 @@ void main() {
               text: TextSpan(
                 text: '中文评论 Abc 123',
                 style: TextStyle(
-                  fontFamily: 'HarmonyOS Sans',
+                  fontFamily: 'Douyin Sans',
                   fontSize: fontSize,
                   fontWeight: FontWeight.w400,
                 ),

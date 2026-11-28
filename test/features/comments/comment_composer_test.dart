@@ -22,6 +22,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/dynamic_fakes.dart';
 import '../../support/detached_window_fake.dart';
+import '../../support/douyin_sans_test_font.dart';
 
 final _image = CommentLocalImage(
   base64Decode(
@@ -41,6 +42,7 @@ void main() {
   var pickerCalls = 0;
 
   setUpAll(() async {
+    await loadDouyinSansTestFont();
     await (FontLoader('HarmonyOS Sans')..addFont(
           rootBundle.load(
             'assets/fonts/harmonyos_sans/HarmonyOS_Sans_SC_Regular.ttf',

@@ -1244,7 +1244,7 @@ void main() {
       final settings = await repository.load();
       expect(settings.theme, AppThemePreference.dark);
       expect(settings.navigationMode, WorkspaceNavigationMode.dualTabs);
-      expect(settings.font, AppFontPreference.harmonyOsSans);
+      expect(settings.font, AppFontPreference.douyinSans);
       expect(settings.cacheImages, isTrue);
       expect(settings.danmakuEnabled, isFalse);
       expect(settings.danmakuOpacity, .7);
@@ -1326,29 +1326,31 @@ void main() {
     }
   });
   test(
-    'bundled and installed font choices survive reload independently',
+    'interface and danmaku font choices survive reload independently',
     () async {
-      for (final bundled in [true, false]) {
+      for (final (font, family) in [
+        (AppFontPreference.douyinSans, 'Douyin Sans'),
+        (AppFontPreference.harmonyOsSans, 'HarmonyOS Sans'),
+        (AppFontPreference.system, null),
+        (AppFontPreference.installed, 'Microsoft YaHei'),
+      ]) {
+        final installed = font == AppFontPreference.installed;
         await repository.save(
           AppSettings(
-            font: bundled
-                ? AppFontPreference.harmonyOsSans
-                : AppFontPreference.installed,
+            font: font,
             systemFontFamily: 'Microsoft YaHei',
-            danmakuFont: bundled
-                ? DanmakuFontPreference.harmonyOsSans
-                : DanmakuFontPreference.installed,
+            danmakuFont: installed
+                ? DanmakuFontPreference.installed
+                : DanmakuFontPreference.harmonyOsSans,
             danmakuSystemFontFamily: 'Segoe UI',
           ),
         );
         final loaded = await repository.load();
-        expect(
-          loaded.fontFamily,
-          bundled ? 'HarmonyOS Sans' : 'Microsoft YaHei',
-        );
+        expect(loaded.font, font);
+        expect(loaded.fontFamily, family);
         expect(
           loaded.danmakuFontFamily,
-          bundled ? 'HarmonyOS Sans' : 'Segoe UI',
+          installed ? 'Segoe UI' : 'HarmonyOS Sans',
         );
         expect(
           loaded.copyWith(font: AppFontPreference.system).fontFamily,
@@ -1380,8 +1382,8 @@ void main() {
         }),
       );
       final loaded = await repository.load();
-      expect(loaded.font, AppFontPreference.harmonyOsSans);
-      expect(loaded.fontFamily, 'HarmonyOS Sans');
+      expect(loaded.font, AppFontPreference.douyinSans);
+      expect(loaded.fontFamily, 'Douyin Sans');
       expect(loaded.danmakuFont, DanmakuFontPreference.harmonyOsSans);
       expect(loaded.danmakuFontFamily, 'HarmonyOS Sans');
       expect(loaded.systemFontFamily, 'Microsoft YaHei');
@@ -1393,7 +1395,7 @@ void main() {
       final snapshot = jsonDecode(
         (await database.readSetting('preferences.v1')) ?? '{}',
       ) as Map<String, Object?>;
-      expect(snapshot['font'], 'harmonyOsSans');
+      expect(snapshot['font'], 'douyinSans');
       expect(snapshot['danmakuFont'], 'harmonyOsSans');
       final reloaded = await repository.load();
       expect(reloaded.font, loaded.font);
@@ -1534,7 +1536,7 @@ void main() {
     );
     final s = await repository.load();
     expect(s.theme, AppThemePreference.system);
-    expect(s.font, AppFontPreference.harmonyOsSans);
+    expect(s.font, AppFontPreference.douyinSans);
     expect(s.autoPlay, isTrue);
     expect(s.preferredQuality, 80);
     expect(s.preferredVideoCodec, VideoCodecPreference.h264);

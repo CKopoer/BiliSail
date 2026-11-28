@@ -68,6 +68,9 @@ Future<void> main(List<String> arguments) async {
     };
   }
   LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks([
+      'Douyin Sans',
+    ], await rootBundle.loadString('assets/fonts/douyin_sans/OFL.txt'));
     final license = await rootBundle.loadString(
       'assets/fonts/harmonyos_sans/LICENSE.txt',
     );

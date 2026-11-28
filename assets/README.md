@@ -1,5 +1,11 @@
 # 本地视觉资源来源
 
+## 抖音美好体
+
+按用户指定原样复制 [`DouyinSansBold.ttf`](fonts/douyin_sans/DouyinSansBold.ttf)。文件版本为 1.01，SHA-256 为 `fbecfacdfac33982774e301073a8d357a09c698cd3134bb6ddec0f5bfc268fa1`，与[字节跳动官方仓库的字体文件](https://github.com/bytedance/fonts/blob/327565b61501d7a6d4902ed6ce417a7bd2ae54e6/DouyinSans/DouyinSansBold.ttf)一致。Flutter 字体族名为 `Douyin Sans`，唯一字型按字体的字重元数据注册为 400。
+
+字体使用 SIL Open Font License 1.1。[上游版权声明与许可证](https://github.com/bytedance/fonts/blob/327565b61501d7a6d4902ed6ce417a7bd2ae54e6/DouyinSans/OFL.txt)随应用打包，并在许可证页展示。仓库内的 [OFL.txt](fonts/douyin_sans/OFL.txt)整理了换行与行尾空白，保留版权声明和许可证全文。
+
 ## HarmonyOS Sans
 
 按用户指定，从 `C:\Users\14562\Desktop\HarmonyOS+Sans\HarmonyOS Sans\HarmonyOS_Sans_SC` 采用 `HarmonyOS_Sans_SC_Regular.ttf`、`HarmonyOS_Sans_SC_Medium.ttf`、`HarmonyOS_Sans_SC_Bold.ttf`，版本均为 1.0，分别注册 400、500、700 字重，应用字体族名为 `HarmonyOS Sans`。简体中文版本已核对中英文界面示例字符无缺字；字体文件原样复制，不做裁剪或修改。

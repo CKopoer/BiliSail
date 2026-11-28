@@ -20,6 +20,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../support/douyin_sans_test_font.dart';
+
 const _overview = AccountOverview(
   level: 5,
   currentExperience: 20500,
@@ -54,6 +56,7 @@ void main() {
 
   setUpAll(() async {
     // Geometry assertions use the same font metrics as the shipped theme.
+    await loadDouyinSansTestFont();
     await (FontLoader('HarmonyOS Sans')..addFont(
           rootBundle.load(
             'assets/fonts/harmonyos_sans/HarmonyOS_Sans_SC_Regular.ttf',

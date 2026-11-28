@@ -155,7 +155,7 @@ void main() {
             : repository.value.font,
         entry == 'appearance'
             ? DanmakuFontPreference.harmonyOsSans
-            : AppFontPreference.harmonyOsSans,
+            : AppFontPreference.douyinSans,
       );
       expect(tester.takeException(), isNull);
     });

@@ -24,6 +24,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'douyin_sans_test_font.dart';
 import 'input_test_app.dart';
 
 const dpiDetailTitle =
@@ -48,6 +49,7 @@ final dpiVideos = [
 ];
 
 Future<void> loadDpiTestFonts() async {
+  await loadDouyinSansTestFont();
   final fonts = FontLoader('HarmonyOS Sans');
   for (final weight in ['Regular', 'Medium', 'Bold']) {
     fonts.addFont(

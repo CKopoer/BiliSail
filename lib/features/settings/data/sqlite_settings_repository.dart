@@ -143,7 +143,7 @@ class SqliteSettingsRepository implements SettingsRepository {
           AppFontPreference.values
               .where((item) => item.name == decoded['font'])
               .firstOrNull ??
-          AppFontPreference.harmonyOsSans,
+          AppSettings.defaultFont,
       theme:
           AppThemePreference.values
               .where((item) => item.name == decoded['theme'])

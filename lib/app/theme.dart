@@ -8,15 +8,19 @@ abstract final class BiliTheme {
   static const ink = Color(0xFF18191C);
 
   static ThemeData light({
-    AppFontPreference font = AppFontPreference.harmonyOsSans,
+    AppFontPreference font = AppSettings.defaultFont,
     String systemFontFamily = '',
-  }) => _build(Brightness.light, font.resolveFamily(systemFontFamily));
+  }) => _build(Brightness.light, font, systemFontFamily);
   static ThemeData dark({
-    AppFontPreference font = AppFontPreference.harmonyOsSans,
+    AppFontPreference font = AppSettings.defaultFont,
     String systemFontFamily = '',
-  }) => _build(Brightness.dark, font.resolveFamily(systemFontFamily));
+  }) => _build(Brightness.dark, font, systemFontFamily);
 
-  static ThemeData _build(Brightness brightness, String? fontFamily) {
+  static ThemeData _build(
+    Brightness brightness,
+    AppFontPreference font,
+    String systemFontFamily,
+  ) {
     final dark = brightness == Brightness.dark;
     final surface = dark ? const Color(0xFF1C2530) : canvas;
     final foreground = dark ? const Color(0xFFE7E9EB) : ink;
@@ -61,7 +65,10 @@ abstract final class BiliTheme {
       useMaterial3: true,
       brightness: brightness,
       colorScheme: scheme,
-      fontFamily: fontFamily,
+      fontFamily: font.resolveFamily(systemFontFamily),
+      fontFamilyFallback: font == AppFontPreference.douyinSans
+          ? const ['HarmonyOS Sans']
+          : null,
       scaffoldBackgroundColor: dark
           ? const Color(0xFF141D27)
           : const Color(0xFFEDF3F9),

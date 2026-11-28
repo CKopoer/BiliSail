@@ -41,7 +41,7 @@ enum DynamicPageTab { dynamic, videoDynamic }
 
 enum PlayerControlsMode { click, dynamic }
 
-enum AppFontPreference { harmonyOsSans, system, installed }
+enum AppFontPreference { douyinSans, harmonyOsSans, system, installed }
 
 enum InterfaceScalePreference {
   automatic(null),
@@ -67,6 +67,7 @@ enum DanmakuFontPreference { system, harmonyOsSans, installed }
 
 extension AppFontFamily on AppFontPreference {
   String? resolveFamily(String installedFamily) => switch (this) {
+    AppFontPreference.douyinSans => 'Douyin Sans',
     AppFontPreference.harmonyOsSans => 'HarmonyOS Sans',
     AppFontPreference.system => null,
     AppFontPreference.installed =>
@@ -98,6 +99,8 @@ typedef PlaybackCacheSettings = ({
 });
 
 final class AppSettings {
+  static const defaultFont = AppFontPreference.douyinSans;
+
   static const defaultPlaybackCache = (
     videoForwardMiB: defaultForwardCacheMiB,
     videoBackwardMiB: defaultVodBackwardCacheMiB,
@@ -121,7 +124,7 @@ final class AppSettings {
     this.responsiveLayout = const ResponsiveLayoutSettings.defaults(),
     this.defaultDynamicTab = DynamicPageTab.dynamic,
     this.allowConcurrentPlayback = false,
-    this.font = AppFontPreference.harmonyOsSans,
+    this.font = defaultFont,
     this.interfaceScale = InterfaceScalePreference.automatic,
     this.systemFontFamily = '',
     this.cacheImages = true,
@@ -234,7 +237,7 @@ final class AppSettings {
     this.playerShrinkVideo = true,
   }) : theme = AppThemePreference.system,
        appIcon = AppIconPreference.bilisail,
-       font = AppFontPreference.harmonyOsSans,
+       font = defaultFont,
        interfaceScale = InterfaceScalePreference.automatic,
        systemFontFamily = '',
        cacheImages = true,

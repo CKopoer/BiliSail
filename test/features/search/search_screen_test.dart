@@ -33,8 +33,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../support/douyin_sans_test_font.dart';
+
 void main() {
   setUpAll(() async {
+    await loadDouyinSansTestFont();
     final loader = FontLoader('HarmonyOS Sans')
       ..addFont(
         rootBundle.load(

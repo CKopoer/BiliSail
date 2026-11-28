@@ -251,7 +251,7 @@
 | [快捷键重构实施记录](shortcut-system/implementation-results.md) | 单入口分发、页面能力、全屏／录制／图片作用域、异步媒体目标及验证边界 |
 | [音量提示与快捷键焦点](validation/keyboard-feedback-focus.md) | 音量百分比、标点键回退、评论焦点与关闭标签 |
 | [设置分类、侧键与字体](validation/settings-tabs-fonts.md) | 设置专属分类、关闭标签快捷键、鼠标侧键录制和默认 HarmonyOS Sans |
-| [内置与系统字体选择](validation/font-selection.md) | HarmonyOS Sans、Windows/macOS 已安装字体搜索、独立界面/弹幕偏好与普惠体移除 |
+| [内置与系统字体选择](validation/font-selection.md) | 默认抖音美好体、HarmonyOS Sans、Windows/macOS 已安装字体搜索与独立弹幕偏好 |
 | [关于页与每日更新检查](validation/app-updates.md) | GitHub 地址、手动检查、每日首次启动提醒与 Release 跳转 |
 | [视频编解码设置](validation/video-codec-settings.md) | H.264/HEVC/AV1 偏好、自动/软件解码、SDK 差异与验证边界 |
 | [视频 CDN 设置与测速](validation/video-cdn.md) | 自动／运营商与具体节点、点击展开测速、旧设置兼容、备用与取消 |

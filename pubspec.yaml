@@ -87,7 +87,12 @@ flutter:
     - assets/branding/bilibili_LICENSE.md
     - assets/licenses/scroll_animator_chromium.txt
     - assets/fonts/harmonyos_sans/LICENSE.txt
+    - assets/fonts/douyin_sans/OFL.txt
   fonts:
+    - family: Douyin Sans
+      fonts:
+        - asset: assets/fonts/douyin_sans/DouyinSansBold.ttf
+          weight: 400
     - family: HarmonyOS Sans
       fonts:
         - asset: assets/fonts/harmonyos_sans/HarmonyOS_Sans_SC_Regular.ttf
