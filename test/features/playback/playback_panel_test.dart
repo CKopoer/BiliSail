@@ -50,6 +50,7 @@ import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
 import 'package:bilisail/features/playback/application/playback_manager.dart';
 import 'package:bilisail/features/playback/domain/playback_repository.dart';
+import 'package:bilisail/features/playback/domain/high_energy_trend.dart';
 import 'package:bilisail/features/playback/domain/sponsor_repository.dart';
 import 'package:bilisail/features/playback/domain/content_playback.dart';
 import 'package:bilisail/features/playback/presentation/playback_panel.dart';
@@ -5284,7 +5285,10 @@ void main() {
       final surface = _surfacePoint(tester);
       final initialPosition = (tester.getRect(title), tester.getRect(comments));
       final initialPlayback = engine.currentSnapshot.desiredPlaying;
-      expect(inset.value, tester.getSize(controls).height);
+      final plainControlsHeight = tester.getSize(controls).height;
+      final initialInset = inset.value;
+      final heatHeight = width < 600 ? 16.0 : 24.0;
+      expect(initialInset, plainControlsHeight + (width < 600 ? 20 : 24));
       expect(
         initialPosition.$1.bottom,
         lessThan(tester.getTopLeft(controls).dy),
@@ -5326,8 +5330,42 @@ void main() {
       await checkHover(visible: false);
       await tapSurface();
       await checkHover(visible: true);
+
+      final highEnergy = find.byKey(const ValueKey('playback-high-energy'));
+      final slider = find.byKey(const ValueKey('playback-timeline-slider'));
+      final sliderRect = tester.getRect(slider);
+      expect(highEnergy, findsNothing);
+      session.highEnergy.value = HighEnergyTrend(
+        step: const Duration(seconds: 1),
+        span: engine.currentSnapshot.duration,
+        points: const [HighEnergyPoint(0, 0), HighEnergyPoint(1, 1)],
+      );
+      await _pumpFrames(tester);
+      expect(highEnergy, findsOneWidget);
+      expect(tester.getSize(controls).height, plainControlsHeight + heatHeight);
+      expect(tester.getRect(slider), sliderRect);
+      expect(inset.value, initialInset);
+      expect(
+        tester.getTopLeft(controls).dy -
+            tester.getBottomLeft(find.byType(FeaturedVideoActions)).dy,
+        width < 600 ? 24 : 20,
+      );
+      expect((
+        tester.getRect(title),
+        tester.getRect(comments),
+      ), initialPosition);
+
       await tapSurface();
       await checkHover(visible: false);
+      session.highEnergy.value = null;
+      await _pumpFrames(tester);
+      expect(highEnergy, findsNothing);
+      expect(tester.getSize(controls).height, plainControlsHeight);
+      expect(inset.value, initialInset);
+      expect((
+        tester.getRect(title),
+        tester.getRect(comments),
+      ), initialPosition);
       expect(engine.currentSnapshot.desiredPlaying, initialPlayback);
 
       final hide = findMaterialTooltip('隐藏视频信息和互动按钮');

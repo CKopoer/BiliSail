@@ -34,7 +34,8 @@ class FeaturedVideoOverlay extends StatelessWidget {
     builder: (context, inset, _) => LayoutBuilder(
       builder: (context, bounds) {
         const margin = 12.0;
-        final bottom = (inset + 8).clamp(margin, double.infinity);
+        const controlsGap = 20.0;
+        final bottom = inset + controlsGap;
         final actionHeight = FeaturedVideoActions.actionHeight(context);
         final horizontal =
             bounds.maxHeight - bottom <

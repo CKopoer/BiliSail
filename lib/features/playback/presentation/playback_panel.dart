@@ -2031,6 +2031,21 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                         hasOverlayToggle: overlayToggle != null,
                       );
                       final smallWindow = layout.compact && !widget.fullScreen;
+                      void reportControlsInset(double height) {
+                        // Keep the surrounding overlays clear of optional timeline
+                        // decorations as they load, without moving the slider.
+                        final timelineAllowance = session.isLive
+                            ? 0.0
+                            : PlaybackTimelineBar.maximumHeightFor(width) -
+                                  PlaybackTimelineBar.heightFor(
+                                    width: width,
+                                    duration: snapshot.duration,
+                                    chapters: session.chapters,
+                                    trend: session.highEnergy.value,
+                                  );
+                        controlsInset?.call(height + timelineAllowance);
+                      }
+
                       return ColoredBox(
                         key: _playerBoundsKey,
                         color: Colors.black,
@@ -2515,7 +2530,9 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                             Positioned.fill(
                               child: _BottomPlayerLayers(
                                 controlsVisible: controls && widget.active,
-                                onControlsInsetChanged: controlsInset,
+                                onControlsInsetChanged: controlsInset == null
+                                    ? null
+                                    : reportControlsInset,
                                 subtitleBottomPadding:
                                     settings.subtitleBottomPadding,
                                 sponsorBlockBottomPadding:

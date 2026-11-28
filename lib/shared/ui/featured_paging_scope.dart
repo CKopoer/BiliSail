@@ -10,7 +10,7 @@ class FeaturedPagingScope extends InheritedWidget {
     this.onToggleVideoOverlays,
   });
 
-  /// Reports the inline controls' layout height, including while hidden.
+  /// Reports space to keep above the bottom edge for the inline controls.
   final ValueChanged<double>? onControlsInsetChanged;
   final bool showVideoOverlays;
   final VoidCallback? onToggleVideoOverlays;

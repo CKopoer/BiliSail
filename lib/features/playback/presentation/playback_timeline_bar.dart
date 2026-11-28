@@ -23,6 +23,15 @@ typedef _ChapterTitleInputs = ({
 
 /// Hover and drag state stay local. Preview never commands the media engine.
 class PlaybackTimelineBar extends StatefulWidget {
+  static const _trackHeight = 22.0;
+  static const _chapterHeight = 20.0;
+
+  static double _highEnergyHeight(double width) => width < 600 ? 16 : 24;
+
+  /// Maximum height at this width, independent of the available metadata.
+  static double maximumHeightFor(double width) =>
+      _trackHeight + math.max(_chapterHeight, _highEnergyHeight(width));
+
   /// Calculates the logical height reserved by the playback control bar.
   ///
   /// Tight width and height constraints contain position-driven layout work.
@@ -33,11 +42,11 @@ class PlaybackTimelineBar extends StatefulWidget {
     required List<VideoChapter> chapters,
     required HighEnergyTrend? trend,
   }) =>
-      22 +
+      _trackHeight +
       (normalizeChapters(chapters, duration).isNotEmpty
-          ? 20
+          ? _chapterHeight
           : trend != null && trend.matchesDuration(duration)
-          ? (width < 600 ? 16 : 24)
+          ? _highEnergyHeight(width)
           : 0);
 
   const PlaybackTimelineBar({
@@ -238,7 +247,9 @@ class _PlaybackTimelineBarState extends State<PlaybackTimelineBar> {
                                   key: const ValueKey('playback-high-energy'),
                                   trend: trend,
                                   fraction: enabled ? value / total : 0,
-                                  height: width < 600 ? 16 : 24,
+                                  height: PlaybackTimelineBar._highEnergyHeight(
+                                    width,
+                                  ),
                                 ),
                               ),
                             ),
@@ -246,7 +257,7 @@ class _PlaybackTimelineBarState extends State<PlaybackTimelineBar> {
                   if (chapters.isNotEmpty)
                     SizedBox(
                       width: double.infinity,
-                      height: 20,
+                      height: PlaybackTimelineBar._chapterHeight,
                       child: Stack(
                         children: [
                           for (final chapter in chapters)
@@ -307,7 +318,7 @@ class _PlaybackTimelineBarState extends State<PlaybackTimelineBar> {
                       ),
                     ),
                   SizedBox(
-                    height: 22,
+                    height: PlaybackTimelineBar._trackHeight,
                     child: SliderTheme(
                       data: SliderTheme.of(context).copyWith(
                         trackHeight: 3,
