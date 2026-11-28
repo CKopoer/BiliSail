@@ -4267,7 +4267,7 @@ void main() {
   });
 
   test(
-    'exclusive workspace waits for a closing player before resuming featured',
+    'exclusive workspace waits for stop while the closing player disposes',
     () async {
       final manager = _manager();
       addTearDown(manager.close);
@@ -4282,20 +4282,37 @@ void main() {
         allowConcurrent: false,
         activeTabId: 'window',
       );
-      await detached.open(_detail('2'), _part('2'));
-      final closing = Completer<void>();
-      (detached.engine as _FakeEngine).nextStop = closing;
+      final owner = Object();
+      detached.attach(owner);
+      await detached.activate(owner, _detail('2'), _part('2'));
+      final stopping = Completer<void>();
+      final disposing = Completer<void>();
+      final engine = detached.engine as _FakeEngine
+        ..nextStop = stopping
+        ..nextDispose = disposing;
+      addTearDown(() {
+        if (!stopping.isCompleted) stopping.complete();
+        if (!disposing.isCompleted) disposing.complete();
+      });
+      detached.detach(owner);
       manager.release('window', detached);
-
+      var released = false;
+      final release = manager.drainReleases().then((_) => released = true);
+      final stopCount = engine.stopCount;
       final restore = manager.updateWorkspace(
         allowConcurrent: false,
         activeTabId: 'featured',
       );
       await _flush();
+      expect(engine.stopCount, stopCount + 1);
       expect(featured.snapshots.value.phase, PlaybackPhase.paused);
-      closing.complete();
-      await restore;
+      stopping.complete();
+      await _flush();
       expect(featured.snapshots.value.phase, PlaybackPhase.playing);
+      expect(released, isFalse);
+      disposing.complete();
+      await restore;
+      expect(await release, isTrue);
     },
   );
 
@@ -8137,6 +8154,7 @@ final class _FakeEngine
   Completer<void>? nextPause;
   Completer<void>? nextOpen;
   Completer<void>? nextStop;
+  Completer<void>? nextDispose;
   PlayerFailureKind? nextOpenFailure;
   void Function()? onOpenFailure;
   Completer<void>? nextPlay;
@@ -8311,6 +8329,7 @@ final class _FakeEngine
   Future<void> dispose() async {
     subscriptionsActiveAtDispose =
         _snapshots.hasListener || _failures.hasListener;
+    if (nextDispose case final pending?) await pending.future;
     disposed = true;
     await _snapshots.close();
     await _failures.close();

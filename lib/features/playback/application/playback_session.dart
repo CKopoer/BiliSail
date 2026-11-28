@@ -927,7 +927,10 @@ class PlaybackSession extends ChangeNotifier {
     _checkpoints.remove(owner);
     if (_activeOwner == null) {
       scheduleMicrotask(() {
-        if (!_disposed && _activeOwner == null && _owners.isEmpty) {
+        if (!_disposed &&
+            !_closing &&
+            _activeOwner == null &&
+            _owners.isEmpty) {
           unawaited(stop(clearCheckpoints: false));
         }
       });
@@ -937,7 +940,7 @@ class PlaybackSession extends ChangeNotifier {
     _activeOwner = null;
     _ownerVisible = false;
     scheduleMicrotask(() {
-      if (!_disposed && _activeOwner == null) {
+      if (!_disposed && !_closing && _activeOwner == null) {
         unawaited(stop(clearCheckpoints: false));
       }
     });
@@ -3277,7 +3280,7 @@ class PlaybackSession extends ChangeNotifier {
     _notify();
   }
 
-  Future<void> close() async {
+  Future<void> close({VoidCallback? onPlaybackStopped}) async {
     if (_disposed || _closing) return;
     _closing = true;
     _listeningMode.removeListener(_applyListeningMode);
@@ -3292,7 +3295,10 @@ class PlaybackSession extends ChangeNotifier {
       }
     }
 
-    await attempt(stop);
+    await attempt(() async {
+      await stop();
+      onPlaybackStopped?.call();
+    });
     await attempt(_releaseAudioFocus);
     await attempt(() async => _historyReporter?.close());
     _disposed = true;

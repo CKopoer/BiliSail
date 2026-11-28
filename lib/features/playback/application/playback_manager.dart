@@ -44,7 +44,9 @@ final class PlaybackManager extends ChangeNotifier {
   final PlaybackSession Function(ListeningSleepTimer sleepTimer) _createSession;
   final _sessions = <String, PlaybackSession>{};
   final _foregroundOnly = <String, VoidCallback>{};
-  final _releases = <Future<void>>{};
+  // Playback arbitration waits for silence. Window destruction also waits for
+  // the session's stream subscriptions and native player to be released.
+  final _releases = <Future<void>, Future<void>>{};
   Future<void> _commands = Future.value();
   bool _allowConcurrent = true;
   bool _closed = false;
@@ -127,7 +129,7 @@ final class PlaybackManager extends ChangeNotifier {
     final blocked = <Future<void>>[
       for (final entry in _sessions.entries)
         if (!_canPlay(entry.key)) entry.value.setPlaybackAllowed(false),
-      if (!_allowConcurrent) ..._releases,
+      if (!_allowConcurrent) ..._releases.values,
     ];
     final operation = _commands.then((_) async {
       // Complete outgoing pauses before permitting another native engine.
@@ -150,8 +152,9 @@ final class PlaybackManager extends ChangeNotifier {
     }
     if (_sessions.isEmpty) sleepTimer.cancel();
     if (_selectedTabId == tabId) _selectedTabId = null;
-    final closing = session.close();
-    _releases.add(closing);
+    final stopped = Completer<void>();
+    final closing = session.close(onPlaybackStopped: stopped.complete);
+    _releases[closing] = Future.any([stopped.future, closing]);
     unawaited(closing.whenComplete(() => _releases.remove(closing)));
     final selectedChanged = _refreshSelection();
     notifyListeners();
@@ -161,7 +164,7 @@ final class PlaybackManager extends ChangeNotifier {
 
   /// Waits for unmounted pages' native engines, leaving retained sessions alone.
   Future<void> drainReleases() async {
-    await Future.wait(_releases.toList());
+    await Future.wait(_releases.keys.toList());
   }
 
   Future<void> pauseAll() async {
@@ -195,7 +198,7 @@ final class PlaybackManager extends ChangeNotifier {
       try {
         await _commands;
         await Future.wait([
-          ..._releases,
+          ..._releases.keys,
           for (final session in sessions) session.close(),
         ]);
       } finally {
