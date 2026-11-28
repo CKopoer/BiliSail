@@ -515,6 +515,7 @@ void main() {
         final dropdown = find.byType(DropdownButton<PlaybackMode>);
         await tester.ensureVisible(dropdown);
         await tester.pumpAndSettle();
+        expect(find.text('精选页始终单集循环。'), findsOneWidget);
         await tester.tap(dropdown);
         await tester.pumpAndSettle();
         await tester.tap(find.text('列表循环').last);
@@ -1522,6 +1523,7 @@ void main() {
     );
     await tester.ensureVisible(toggle);
     await tester.pumpAndSettle();
+    expect(find.textContaining('精选页始终单集循环'), findsOneWidget);
     for (final mode in PlaybackMode.values) {
       await tester.tap(toggle);
       await tester.pumpAndSettle();

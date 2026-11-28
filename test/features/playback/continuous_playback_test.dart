@@ -31,6 +31,7 @@ import 'package:bilisail/features/video/domain/watch_later_queue.dart';
 import 'package:bilisail/features/video/presentation/video_screen.dart';
 import 'package:bilisail/features/video/presentation/watch_later_queue_panel.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
+import 'package:bilisail/shared/ui/featured_paging_scope.dart';
 import 'package:bilisail/shared/ui/playback_page_commands.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/foundation.dart';
@@ -866,6 +867,72 @@ void main() {
       expect(session.snapshots.value.phase, PlaybackPhase.playing);
       expect(engine.opens, 3);
       expect(findMaterialTooltip('迷你小窗'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'featured always repeats the current source and ordinary playback restores its configured mode',
+    (tester) async {
+      final engine = _Engine();
+      final session = _session(engine);
+      addTearDown(session.close);
+      final video = _video(_a, _parts);
+      final window = _Window();
+      var advances = 0;
+
+      Future<void> show(PlaybackMode mode, {required bool featured}) async {
+        final player = PlaybackPageCommands(
+          previousPart: () {},
+          nextPart: () {},
+          toggleInfo: () {},
+          hasNext: true,
+          onCompleted: () {
+            advances++;
+          },
+          onLoopCompleted: () {
+            advances++;
+          },
+          child: PlaybackPanel(
+            detail: video,
+            part: _parts.first,
+            settings: AppSettings(playbackMode: mode, danmakuEnabled: false),
+            window: window,
+            onToggleComments: () {},
+          ),
+        );
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [playbackSessionProvider.overrideWithValue(session)],
+            child: MaterialApp(
+              home: Scaffold(
+                body: featured ? FeaturedPagingScope(child: player) : player,
+              ),
+            ),
+          ),
+        );
+        await _frames(tester);
+      }
+
+      for (final mode in PlaybackMode.values) {
+        await show(mode, featured: true);
+        final seeks = engine.seeks;
+        final opens = engine.opens;
+        engine.end();
+        engine.end();
+        await _frames(tester);
+        expect(engine.seeks, seeks + 1, reason: mode.name);
+        expect(engine.opens, opens);
+        expect(advances, 0);
+        expect(session.snapshots.value.phase, PlaybackPhase.playing);
+        expect(session.snapshots.value.position, Duration.zero);
+      }
+
+      await show(PlaybackMode.continuous, featured: false);
+      engine.end();
+      await _frames(tester);
+      expect(advances, 1);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await _frames(tester);
     },
   );
 

@@ -804,7 +804,7 @@ final class _SettingsCategoryPageState
                             contentPadding: EdgeInsets.zero,
                             title: const Text('播放模式'),
                             subtitle: const Text(
-                              '列表循环按分 P、播放队列、合集或当前影视分组的原始顺序播放',
+                              '列表循环按分 P、播放队列、合集或当前影视分组的原始顺序播放。精选页始终单集循环。',
                             ),
                             trailing: DropdownButton<PlaybackMode>(
                               value: s.playbackMode,

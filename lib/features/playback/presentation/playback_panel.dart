@@ -104,7 +104,9 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     (_controlsModeOverride ?? widget.settings.playerControlsMode) !=
         PlayerControlsMode.click,
   );
-  PlayerControlsMode? _controlsModeOverride;
+  bool _isFeatured = false;
+  PlayerControlsMode? get _controlsModeOverride =>
+      _isFeatured ? PlayerControlsMode.click : null;
   final _fullScreenExitCover = ValueNotifier(false);
   final _picture = PlayerPictureController();
   late int _pictureGeneration;
@@ -182,9 +184,9 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _controlsModeOverride = FeaturedPagingScope.maybeOf(context) == null
-        ? null
-        : PlayerControlsMode.click;
+    final isFeatured = FeaturedPagingScope.maybeOf(context) != null;
+    final featuredChanged = isFeatured != _isFeatured;
+    _isFeatured = isFeatured;
     final recommendation = RecommendationPlaybackScope.of(context);
     final recommendationChanged = recommendation != _recommendation;
     _recommendation = recommendation;
@@ -209,6 +211,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     }
     if (active) widget.window.onMiniPlayerRequested = _requestMiniPlayer;
     if (_active == active) {
+      if (active && featuredChanged) _configure();
       if (active &&
           ((linkChanged && _linkPosition != null) ||
               (recommendationChanged && recommendation != null))) {
@@ -271,7 +274,11 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
     });
   }
 
-  void _configure() => _session.configureSettings(widget.settings);
+  void _configure() => _session.configureSettings(
+    _isFeatured
+        ? widget.settings.copyWith(playbackMode: PlaybackMode.singleLoop)
+        : widget.settings,
+  );
 
   bool _mustPauseInBackground(AppLifecycleState? state) =>
       (!widget.settings.backgroundPlayback ||
@@ -288,7 +295,11 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   }
 
   void _onPlaybackCompleted() {
-    if (widget.target == null && widget.detail?.isInteractive == true) return;
+    if (!_isFeatured &&
+        widget.target == null &&
+        widget.detail?.isInteractive == true) {
+      return;
+    }
     final snapshot = _session.snapshots.value;
     if (snapshot.phase == PlaybackPhase.playing) {
       _handledCompletionGeneration = null;
@@ -315,7 +326,8 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
           _session.contentTarget != widget.target) {
         return;
       }
-      final action = switch (widget.settings.playbackMode) {
+      final mode = _session.playbackMode;
+      final action = switch (mode) {
         PlaybackMode.pause => null,
         PlaybackMode.continuous when commands?.hasNext == true =>
           widget.settings.continuousPlayback ? commands?.onCompleted : null,
@@ -331,8 +343,8 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
         if (mounted && _session.ownsPlayback(this)) {
           requestBackgroundPlaybackFrame();
         }
-      } else if (widget.settings.playbackMode == PlaybackMode.listLoop ||
-          widget.settings.playbackMode == PlaybackMode.singleLoop) {
+      } else if (mode == PlaybackMode.listLoop ||
+          mode == PlaybackMode.singleLoop) {
         unawaited(_session.repeatCompleted(generation));
       }
     });

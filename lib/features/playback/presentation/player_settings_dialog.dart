@@ -173,25 +173,31 @@ class _PlayerSettingsDialogState extends ConsumerState<_PlayerSettingsDialog> {
                         ),
                         ListTile(
                           title: const Text('播放模式'),
-                          subtitle: DropdownButton<PlaybackMode>(
-                            isExpanded: true,
-                            value: s.playbackMode,
-                            items: [
-                              for (final mode in PlaybackMode.values)
-                                DropdownMenuItem(
-                                  value: mode,
-                                  child: Text(mode.label),
-                                ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('精选页始终单集循环。'),
+                              DropdownButton<PlaybackMode>(
+                                isExpanded: true,
+                                value: s.playbackMode,
+                                items: [
+                                  for (final mode in PlaybackMode.values)
+                                    DropdownMenuItem(
+                                      value: mode,
+                                      child: Text(mode.label),
+                                    ),
+                                ],
+                                onChanged: (mode) {
+                                  if (mode != null) {
+                                    unawaited(
+                                      _update(
+                                        (c) => c.copyWith(playbackMode: mode),
+                                      ),
+                                    );
+                                  }
+                                },
+                              ),
                             ],
-                            onChanged: (mode) {
-                              if (mode != null) {
-                                unawaited(
-                                  _update(
-                                    (c) => c.copyWith(playbackMode: mode),
-                                  ),
-                                );
-                              }
-                            },
                           ),
                         ),
                         _switch(

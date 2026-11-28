@@ -177,12 +177,12 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
     super.dispose();
   }
 
-  Future<void> _step(int direction, {bool loop = false}) async {
+  Future<void> _step(int direction) async {
     if (!_canStep) return;
     _aim(direction, renew: true);
     final before = feed.selected;
     final revision = feed.refreshRevision;
-    var target = before + direction;
+    final target = before + direction;
     if (target >= feed.end && feed.hasMore) await feed.load();
     if (!mounted ||
         !_canStep ||
@@ -190,7 +190,6 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
         revision != feed.refreshRevision) {
       return;
     }
-    if (target >= feed.end && loop && !feed.hasMore) target = feed.first;
     if (feed.at(target) == null || !pages.hasClients) return;
     if (shouldReduceMotion(context)) {
       pages.jumpToPage(target);
@@ -525,8 +524,6 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
             toggleInfo: () => _toggle(_Info.description),
             toggleComments: () => _toggle(_Info.comments),
             hasNext: feed.hasMore || feed.selected + 1 < feed.end,
-            onCompleted: () => _step(1),
-            onLoopCompleted: () => _step(1, loop: true),
             child: Builder(
               builder: (context) => widget.playerBuilder(context, detail, part),
             ),
