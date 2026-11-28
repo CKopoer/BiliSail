@@ -508,6 +508,55 @@ void main() {
     }
   }
 
+  for (final mode in WorkspaceNavigationMode.values) {
+    testWidgets(
+      'narrow settings has one back button and returns to the My section in ${mode.name}',
+      (tester) async {
+        final router = await mount(
+          tester,
+          width: 390,
+          mode: mode,
+          initialLocation: '/me?section=watchLater',
+        );
+        final openSettings = find.byKey(
+          const ValueKey('account-open-settings'),
+        );
+        final back = find.byWidgetPredicate(
+          (widget) =>
+              widget is BackButton ||
+              widget.key == const ValueKey('workspace-back'),
+        );
+        for (final systemBack in [false, true]) {
+          await tester.tap(openSettings);
+          await tester.pumpAndSettle();
+          await tester.tap(
+            find.byKey(const ValueKey('settings-category-cache')),
+          );
+          await tester.pumpAndSettle();
+          expect(back, findsOneWidget);
+          if (systemBack) {
+            await tester.binding.handlePopRoute();
+          } else {
+            await tester.tap(back);
+          }
+          await tester.pumpAndSettle();
+          final location = router.routeInformationProvider.value.uri;
+          expect(location.path, '/me');
+          expect(location.queryParameters['section'], 'watchLater');
+        }
+        router.go('/settings');
+        await tester.pumpAndSettle();
+        expect(find.byType(SettingsScreen), findsOneWidget);
+        expect(back, findsNothing);
+        await tester.pumpWidget(const SizedBox());
+      },
+      variant: TargetPlatformVariant({
+        TargetPlatform.android,
+        TargetPlatform.iOS,
+      }),
+    );
+  }
+
   for (final tab in AccountContentTab.values) {
     testWidgets('My deep link lazily opens ${tab.name}', (tester) async {
       await mount(tester, initialLocation: '/me?section=${tab.name}');

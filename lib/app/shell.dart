@@ -236,7 +236,8 @@ final class _BiliAppShellState extends State<BiliAppShell>
 
   bool _frameShowsBack(BuildContext context) {
     final tab = _frameTab(context);
-    if (tab.hasOwnNavigation) return false;
+    // Settings renders its own return-to-origin button in every navigation mode.
+    if (tab.hasOwnNavigation || tab.isSettings) return false;
     return (_dualTabs || _singlePage) &&
         _canGoBack &&
         (!(tab.pinned && tab.isRoot) ||
