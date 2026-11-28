@@ -70,6 +70,7 @@ enum NativeErrorCause {
   connection,
   tls,
   hardwareDecoder,
+  audioOutput,
   videoOutput,
   decoder,
   missingFile,
@@ -95,6 +96,8 @@ enum PlaybackStallReason {
 }
 
 enum NativeErrorDetail {
+  audioDriverInit,
+  audioDeviceUnavailable,
   invalidBitstream,
   missingReference,
   timestamp,
@@ -132,7 +135,11 @@ final class NativeErrorSummary {
 
   factory NativeErrorSummary.classify(String text, {String prefix = 'other'}) {
     final value = text.toLowerCase();
-    final normalizedPrefix = prefix.startsWith('vo/') ? 'vo' : prefix;
+    final normalizedPrefix = switch (prefix) {
+      _ when prefix.startsWith('ao/') => 'ao',
+      _ when prefix.startsWith('vo/') => 'vo',
+      _ => prefix,
+    };
     final component =
         const {
           'ffmpeg',
@@ -157,6 +164,16 @@ final class NativeErrorSummary {
     ).firstMatch(value);
     final status = match == null ? null : int.tryParse(match.group(1) ?? '');
     final detail = switch (value) {
+      'could not open/initialize audio device -> no sound.'
+          when component == 'cplayer' || prefix == 'other' =>
+        NativeErrorDetail.audioDeviceUnavailable,
+      _
+          when component == 'ao' &&
+              (value.startsWith('failed to initialize audio driver') ||
+                  value.startsWith(
+                    'unable to set the input channel layout on the audio unit',
+                  )) =>
+        NativeErrorDetail.audioDriverInit,
       '...treating it as fatal error.' when component == 'lavf' =>
         NativeErrorDetail.fatalPacketRead,
       _ when value.contains('consider trying') && value.contains('hwdec') =>
@@ -201,6 +218,10 @@ final class NativeErrorSummary {
       _ => NativeErrorDetail.unknown,
     };
     final cause = switch (value) {
+      _
+          when detail == NativeErrorDetail.audioDeviceUnavailable ||
+              detail == NativeErrorDetail.audioDriverInit =>
+        NativeErrorCause.audioOutput,
       _ when status != null => NativeErrorCause.http,
       _ when value.contains('timed out') || value.contains('timeout') =>
         NativeErrorCause.timeout,

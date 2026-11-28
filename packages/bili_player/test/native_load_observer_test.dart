@@ -212,6 +212,35 @@ void main() {
     );
   });
 
+  test(
+    'audio output failure wakes readiness with or without error END_FILE',
+    () async {
+      for (final endsFile in [true, false]) {
+        final state = NativeLoadState()..started(7);
+        addTearDown(state.dispose);
+        final waiting = waitForNativeState(
+          ready: () => state.audioOutputFailed,
+          superseded: () => false,
+          changes: [state.changes],
+          timeout: const Duration(seconds: 1),
+        );
+        if (endsFile) {
+          expect(state.ended(entryId: 6, reason: 4, error: -14), false);
+          expect(state.audioOutputFailed, false);
+          state.ended(entryId: 7, reason: 4, error: -14);
+        } else {
+          state.audioDeviceUnavailable();
+          expect(state.errorCode, isNull);
+        }
+        await waiting;
+      }
+      final other = NativeLoadState()..started(8);
+      addTearDown(other.dispose);
+      other.ended(entryId: 8, reason: 4, error: -17);
+      expect(other.audioOutputFailed, false);
+    },
+  );
+
   test('superseding wins over a simultaneous terminal failure', () async {
     final state = NativeLoadState()..started(7);
     addTearDown(state.dispose);

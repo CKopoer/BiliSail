@@ -213,6 +213,40 @@ void main() {
     );
   });
 
+  test('audio driver failures are distinct from exhausted audio outputs', () {
+    for (final (prefix, text, detail) in [
+      (
+        'ao/coreaudio',
+        'unable to set the input channel layout on the audio unit (-50)',
+        NativeErrorDetail.audioDriverInit,
+      ),
+      (
+        'ao',
+        "Failed to initialize audio driver 'coreaudio'",
+        NativeErrorDetail.audioDriverInit,
+      ),
+      (
+        'cplayer',
+        'Could not open/initialize audio device -> no sound.',
+        NativeErrorDetail.audioDeviceUnavailable,
+      ),
+    ]) {
+      final summary = NativeErrorSummary.classify(text, prefix: prefix);
+      expect(summary.cause, NativeErrorCause.audioOutput);
+      expect(summary.detail, detail);
+      expect(summary.component, prefix == 'cplayer' ? 'cplayer' : 'ao');
+    }
+    // A demuxer can print arbitrary media text. Only the player announces
+    // that all output attempts have failed.
+    expect(
+      NativeErrorSummary.classify(
+        'Could not open/initialize audio device -> no sound.',
+        prefix: 'lavf',
+      ).detail,
+      NativeErrorDetail.unknown,
+    );
+  });
+
   test('audio decoding errors retain the sanitized decoder category', () {
     final summary = NativeErrorSummary.classify(
       'Error decoding audio.',

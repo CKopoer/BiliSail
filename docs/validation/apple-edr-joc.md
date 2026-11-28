@@ -32,6 +32,14 @@ macOS Release 上，1920×1080 的 P5 从 320×180 点放大至 1024×576 点，
 
 在 1×、0 dB 时自动选择 JOC 输出。音量和静音作用于系统渲染器。变速、额外增益使用 PCM，恢复设置后可以重新启用 JOC。普通 DD+、AAC 走已有解码输出。播放信息在当前音频输出为 `apple-joc` 且 Apple 渲染器进入 rendering 并收到样本后，显示「Apple 系统渲染 JOC」。耳机、扬声器及 HDMI 的最终输出取决于系统和当前路由。[Apple 音频渲染接口](https://developer.apple.com/documentation/avfoundation/avsamplebufferaudiorenderer)
 
+### macOS 的 48 kHz PCM 输出（2026-11-28）
+
+在报告者的 M5 MacBook Air 内置扬声器上，播放 48 kHz 立体声 AAC 时，CoreAudio 为平面浮点（`floatp`）设置输入声道布局返回 `-50`。应用已获得视频帧，但必需音轨一直没有就绪。同机、同一音轨改用交错浮点（`float`）后能正常初始化。重载时的 libmpv 错误码 `-14` 也表示音频输出初始化失败。[复现与单变量对照](https://github.com/CKopoer/BiliSail/issues/183)
+
+macOS 播放器在打开媒体前设置 `audio-format=float`，采样率和声道数继续协商。mpv 只对解码后的 PCM 应用此选项，JOC 压缩包仍交给 `apple-joc`。单个驱动初始化失败时允许 mpv 继续尝试后备输出。mpv 确认所有输出失败时，播放器结束等待并提示检查系统声音输出设备。[mpv 音频输出协商](https://github.com/mpv-player/mpv/blob/41f6a6450/player/audio.c)
+
+Windows 上用同一段 48 kHz 双声道 AAC 和 libmpv 空输出对照，默认输出为 `floatp`，设置后为 `float`，两次均为 48 kHz 双声道。原生故障回归另行验证输出初始化失败可到达设备错误提示。Apple 播放回归使用 48 kHz 立体声 AAC 并检查 macOS 实际输出为 `coreaudio / float`；本次尚未在 Mac 上运行该回归或复测内置扬声器。
+
 ## 构建与验证
 
 | 环境 | 实际观测 |

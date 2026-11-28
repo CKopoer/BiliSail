@@ -10,12 +10,13 @@ import 'native_readiness.dart';
 
 enum NativeOutputProperty { colorMatrix, driver }
 
-/// Only an error END_FILE for the matching START_FILE ends a load. Logs, EOF,
-/// stop, shutdown and playlist redirects are not terminal load failures.
+/// END_FILE errors belong to the matching START_FILE. Native audio output can
+/// fail independently while mpv continues playing a video track.
 final class NativeLoadState {
   final _changes = StreamController<void>.broadcast(sync: true);
   int? _entryId;
   int? _errorCode;
+  bool _audioDeviceUnavailable = false;
   bool _preparationFailed = false;
   Object? _preparationError;
   bool _disposed = false;
@@ -62,6 +63,18 @@ final class NativeLoadState {
 
   Stream<void> get changes => _changes.stream;
   int? get errorCode => _errorCode;
+  bool get audioOutputFailed =>
+      _audioDeviceUnavailable ||
+      _errorCode == mpv.mpv_error.MPV_ERROR_AO_INIT_FAILED;
+
+  // With video still playing, mpv can exhaust all audio outputs without
+  // sending an error END_FILE. Wake the same readiness waits in either case.
+  void audioDeviceUnavailable() {
+    if (_disposed || _audioDeviceUnavailable) return;
+    _audioDeviceUnavailable = true;
+    _changes.add(null);
+  }
+
   bool get preparationFailed => _preparationFailed;
   Object? get preparationError => _preparationError;
 

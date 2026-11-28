@@ -417,6 +417,13 @@ final class MediaKitBackend
   }
 
   PlayerFailure? _loadFailure(int generation) {
+    if (_nativeLoad?.state.audioOutputFailed == true) {
+      return PlayerFailure(
+        PlayerFailureKind.audioOutput,
+        'Audio output initialization failed.',
+        generation,
+      );
+    }
     if (_nativeLoad?.state.preparationFailed ?? false) {
       if (_nativeLoad?.state.preparationError
           case final PlayerFailure failure) {
@@ -972,7 +979,9 @@ final class MediaKitBackend
 
   BackendEvent _nativeFailureEvent() => BackendEvent(
     BackendEventKind.failure,
-    failureKind: _fatalLiveRead != null
+    failureKind: _nativeLoad?.state.audioOutputFailed == true
+        ? PlayerFailureKind.audioOutput
+        : _fatalLiveRead != null
         ? PlayerFailureKind.liveReadTerminated
         : PlayerFailureKind.nativePlayback,
   );
@@ -1093,6 +1102,14 @@ final class MediaKitBackend
             severity: severity,
             nativeError: summary,
           );
+          // Individual drivers can fail before mpv succeeds with a fallback.
+          // Only cplayer's final no-sound error ends playback.
+          if (severity != NativeLogSeverity.warning &&
+              summary.component == 'cplayer' &&
+              summary.detail == NativeErrorDetail.audioDeviceUnavailable) {
+            _nativeLoad?.state.audioDeviceUnavailable();
+            event(_nativeFailureEvent());
+          }
           if (summary.isVideoDecodeError ||
               severity != NativeLogSeverity.warning ||
               summary.detail == NativeErrorDetail.avDesync) {

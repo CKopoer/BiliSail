@@ -726,6 +726,7 @@ class SharedPlayerEngine
     final backend = _backend;
     final failure = PlayerFailure(kind, switch (kind) {
       PlayerFailureKind.unsupportedVideoColor => '当前播放后端无法正确显示此视频色彩',
+      PlayerFailureKind.audioOutput => '无法初始化音频输出，请检查系统声音输出设备后重试',
       PlayerFailureKind.videoInterrupted => '视频加载中断，已暂停播放',
       PlayerFailureKind.invalidSource => '无效的媒体源或播放参数',
       PlayerFailureKind.unsupportedHeaders => '不支持的媒体请求头',

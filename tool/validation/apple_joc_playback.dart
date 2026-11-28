@@ -29,7 +29,10 @@ Future<void> verifyAppleJoc(MediaKitEngine engine, Uri base) async {
               : info.audioOutput != null &&
                     info.audioOutput != 'apple-joc' &&
                     info.audioOutputFormat != null &&
-                    !info.encodedAudioOutput)) {
+                    !info.encodedAudioOutput &&
+                    (!Platform.isMacOS ||
+                        (info.audioOutput == 'coreaudio' &&
+                            info.audioOutputFormat == 'float')))) {
         return info;
       }
       await Future<void>.delayed(const Duration(milliseconds: 75));
@@ -47,7 +50,7 @@ Future<void> verifyAppleJoc(MediaKitEngine engine, Uri base) async {
       'joc.mkv',
       'joc.mp4',
       'ddp.m4a',
-      'audio.m4a',
+      'stereo48.m4a',
     ]) {
       final response = await (await http.getUrl(base.resolve(name))).close();
       if (response.statusCode != HttpStatus.ok) {
@@ -76,8 +79,8 @@ Future<void> verifyAppleJoc(MediaKitEngine engine, Uri base) async {
         false,
       ),
       (
-        'AAC',
-        DashPairSource(video: local('video.mp4'), audio: local('audio.m4a')),
+        '48 kHz stereo AAC',
+        DashPairSource(video: local('video.mp4'), audio: local('stereo48.m4a')),
         false,
       ),
     ]) {

@@ -2,10 +2,11 @@ import 'dart:async';
 
 import 'native_readiness.dart';
 
-/// PiliPlus's native playback defaults, independent of source and playback rate.
+/// Native playback defaults, independent of source and playback rate.
 /// Pitch correction, audio buffering and decoder queues remain owned by mpv.
 Future<void> configureNativePlaybackPolicy({
   required bool isAndroid,
+  required bool isMacOS,
   required Future<void> Function(String, String) write,
   required Future<String> Function(String) read,
   required bool Function() isCurrent,
@@ -38,6 +39,9 @@ Future<void> configureNativePlaybackPolicy({
     'video-sync': 'display-resample',
     'autosync': '${experimentalAutosync ?? (isAndroid ? 30 : 0)}',
     if (isAndroid) 'ao': 'opensles,aaudio,audiotrack',
+    // CoreAudio can reject 48 kHz planar float when setting the channel layout.
+    // mpv applies this option only to decoded PCM, including fallback from JOC.
+    if (isMacOS) 'audio-format': 'float',
     // The official SDK overrides these; PiliPlus leaves mpv's defaults intact.
     'hr-seek': 'default',
     'hr-seek-framedrop': 'yes',

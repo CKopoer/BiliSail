@@ -85,6 +85,7 @@ Future<mk.Player> createNativePlayer({int? experimentalAudioAutosync}) async {
     await player.handle;
     await configureNativePlaybackPolicy(
       isAndroid: Platform.isAndroid,
+      isMacOS: Platform.isMacOS,
       write: player.setPropertyAsync,
       read: player.getPropertyAsync,
       isCurrent: () => !player.native.disposed,

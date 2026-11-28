@@ -4,6 +4,7 @@ import 'package:bili_player/src/media_kit_backend.dart';
 import 'package:bili_player/src/native_player_properties.dart';
 import 'package:bili_player/src/playback_backend.dart';
 import 'package:bili_player/src/player_contract.dart';
+import 'package:bili_player/src/shared_player_engine.dart';
 import 'package:bili_player/src/validated_source.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:media_kit/media_kit.dart' as mk;
@@ -12,6 +13,62 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final library = Platform.environment['BILI_TEST_NATIVE_MPV'];
   final directory = Platform.environment['BILI_TEST_MEDIA_DIR'];
+  for (final allowFallback in [true, false]) {
+    test(
+      'native audio driver failure with fallback=$allowFallback',
+      () async {
+        mk.MediaKit.ensureInitialized(libmpv: library);
+        final temp = await Directory.systemTemp.createTemp('bilisail-ao-');
+        addTearDown(() => temp.delete(recursive: true));
+        late final SharedPlayerEngine engine;
+        engine = SharedPlayerEngine(
+          createBackend: () => MediaKitBackend(
+            snapshot: () => engine.currentSnapshot,
+            createPlayer: () async {
+              final player = await createNativePlayer();
+              await player.setPropertyAsync(
+                'ao',
+                allowFallback ? 'pcm,null' : 'pcm',
+              );
+              // The file output cannot open a file in a missing directory.
+              await player.setPropertyAsync(
+                'ao-pcm-file',
+                '${temp.path}/missing/out.wav',
+              );
+              return player;
+            },
+          ),
+        );
+        addTearDown(engine.dispose);
+        final opening = engine.open(
+          ProgressiveSource(
+            MediaTrack(
+              uri: File('$directory/audio.m4a').uri,
+              requestPolicy: MediaRequestPolicy(),
+            ),
+            isAudioOnly: true,
+          ),
+          const OpenOptions(play: true),
+        );
+        if (allowFallback) {
+          await opening;
+          expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+        } else {
+          await expectLater(
+            opening,
+            throwsA(
+              isA<PlayerFailure>()
+                  .having((f) => f.kind, 'kind', PlayerFailureKind.audioOutput)
+                  .having((f) => f.message, 'message', contains('声音输出设备')),
+            ),
+          );
+        }
+      },
+      skip: library == null || directory == null
+          ? 'Set BILI_TEST_NATIVE_MPV and BILI_TEST_MEDIA_DIR'
+          : false,
+    );
+  }
   test(
     'source reuse and rate round trips keep the same native policy',
     () async {

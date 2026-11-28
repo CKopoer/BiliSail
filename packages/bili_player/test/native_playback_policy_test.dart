@@ -5,10 +5,11 @@ import 'package:bili_player/src/native_readiness.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  for (final android in [false, true]) {
+  for (final platform in ['android', 'macos', 'other']) {
+    final android = platform == 'android';
     for (final curl in ['', 'yes', 'no']) {
       test(
-        'Android=$android curl=$curl uses PiliPlus playback policy',
+        '$platform curl=$curl applies transport, sync and audio output policy',
         () async {
           final values = {
             'curl-enabled': curl,
@@ -26,6 +27,7 @@ void main() {
           final writes = <String>[];
           await configureNativePlaybackPolicy(
             isAndroid: android,
+            isMacOS: platform == 'macos',
             write: (key, value) async {
               writes.add(key);
               values[key] = value;
@@ -39,6 +41,9 @@ void main() {
           expect(values['stream-lavf-o'], 'rw_timeout=5000000');
           expect(values['video-sync'], 'display-resample');
           expect(values['autosync'], android ? '30' : '0');
+          expect(values['audio-format'], platform == 'macos' ? 'float' : null);
+          expect(writes, isNot(contains('audio-samplerate')));
+          expect(writes, isNot(contains('audio-spdif')));
           expect(
             values['ao'],
             android ? 'opensles,aaudio,audiotrack' : 'opensles',
@@ -59,6 +64,7 @@ void main() {
     await expectLater(
       configureNativePlaybackPolicy(
         isAndroid: false,
+        isMacOS: false,
         write: (_, _) async {},
         read: (_) async => 'yes',
         isCurrent: () => true,
@@ -74,6 +80,7 @@ void main() {
     await expectLater(
       configureNativePlaybackPolicy(
         isAndroid: false,
+        isMacOS: false,
         write: (key, _) async => writes.add(key),
         read: (_) async {
           active = false;
@@ -91,6 +98,7 @@ void main() {
     await expectLater(
       configureNativePlaybackPolicy(
         isAndroid: false,
+        isMacOS: false,
         write: (_, _) async {},
         read: (_) => Completer<String>().future,
         isCurrent: () => true,
@@ -106,6 +114,7 @@ void main() {
     await expectLater(
       configureNativePlaybackPolicy(
         isAndroid: false,
+        isMacOS: false,
         write: (_, _) async => active = false,
         read: (key) async {
           reads.add(key);

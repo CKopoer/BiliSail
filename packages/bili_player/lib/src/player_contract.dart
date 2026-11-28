@@ -253,6 +253,7 @@ enum PlayerFailureKind {
   invalidSource,
   unsupportedHeaders,
   unsupportedVideoColor,
+  audioOutput,
   nativePlayback,
   networkOpen,
   networkRead,
