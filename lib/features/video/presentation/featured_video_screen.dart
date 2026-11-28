@@ -726,9 +726,11 @@ final class _FeaturedPlayerLayersState extends State<_FeaturedPlayerLayers> {
   }
 
   @override
-  Widget build(BuildContext context) => Stack(
-    fit: StackFit.expand,
-    children: [widget.player(_geometry), ?widget.overlay?.call(_geometry)],
+  Widget build(BuildContext context) => FeaturedPlayerMouseRegion(
+    child: Stack(
+      fit: StackFit.expand,
+      children: [widget.player(_geometry), ?widget.overlay?.call(_geometry)],
+    ),
   );
 }
 

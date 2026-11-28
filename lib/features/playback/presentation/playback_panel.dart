@@ -103,12 +103,9 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   int? _handledCompletionGeneration;
   // Inline and fullscreen views are recreated, but share the page's intent.
   late final _controlsVisible = ValueNotifier(
-    (_controlsModeOverride ?? widget.settings.playerControlsMode) !=
-        PlayerControlsMode.click,
+    widget.settings.playerControlsMode != PlayerControlsMode.click,
   );
   bool _isFeatured = false;
-  PlayerControlsMode? get _controlsModeOverride =>
-      _isFeatured ? PlayerControlsMode.click : null;
   final _fullScreenExitCover = ValueNotifier(false);
   final _panelPicture = PlayerPictureController();
   FeaturedInlinePicture? _featuredInline;
@@ -934,7 +931,6 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
                       session: _session,
                       settings: _settings,
                       controlsVisible: _controlsVisible,
-                      controlsModeOverride: _controlsModeOverride,
                       picture: _picture,
                       shortcuts: _shortcuts,
                       onToggleComments: () => widget.onToggleComments(),
@@ -1232,7 +1228,6 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
               session: _session,
               settings: _settings,
               controlsVisible: _controlsVisible,
-              controlsModeOverride: _controlsModeOverride,
               picture: _picture,
               shortcuts: _shortcuts,
               onToggleComments: widget.onToggleComments,
@@ -1289,7 +1284,6 @@ class _PlayerView extends StatefulWidget {
     required this.session,
     required this.settings,
     required this.controlsVisible,
-    required this.controlsModeOverride,
     required this.picture,
     required this.shortcuts,
     required this.onToggleComments,
@@ -1305,7 +1299,6 @@ class _PlayerView extends StatefulWidget {
   final PlaybackSession session;
   final ValueListenable<AppSettings> settings;
   final ValueNotifier<bool> controlsVisible;
-  final PlayerControlsMode? controlsModeOverride;
   final PlayerPictureController picture;
   final PlaybackShortcutController shortcuts;
   final VoidCallback onToggleComments;
@@ -1334,6 +1327,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   final Set<int> _pressedPointers = {};
   final Set<String> _hoveredControlRegions = {};
   bool _mouseInside = false;
+  ValueListenable<PointerEvent?>? _featuredMouseEvents;
   PointerDeviceKind? _doubleTapKind;
   bool _multiplePictureTouches = false;
   late AppLifecycleState? _appLifecycleState;
@@ -1347,8 +1341,6 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   late bool _hasError;
   late PlayerControlsMode _controlsMode;
 
-  PlayerControlsMode get _configuredControlsMode =>
-      widget.controlsModeOverride ?? widget.settings.value.playerControlsMode;
   bool get _dynamicControls => _controlsMode == PlayerControlsMode.dynamic;
   bool get _appActive =>
       _appLifecycleState == null ||
@@ -1362,7 +1354,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     _appLifecycleState = WidgetsBinding.instance.lifecycleState;
-    _controlsMode = _configuredControlsMode;
+    _controlsMode = widget.settings.value.playerControlsMode;
     _sourceGeneration = widget.session.sourceGeneration;
     _hasError = widget.session.error != null;
     widget.settings.addListener(_onSettingsChanged);
@@ -1374,6 +1366,30 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _syncHighEnergyVisibility();
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final events = widget.fullScreen
+        ? null
+        : FeaturedPlayerMouseRegion.eventsOf(context);
+    if (identical(events, _featuredMouseEvents)) return;
+    _featuredMouseEvents?.removeListener(_onFeaturedMouseEvent);
+    _featuredMouseEvents = events;
+    events?.addListener(_onFeaturedMouseEvent);
+  }
+
+  void _onFeaturedMouseEvent() {
+    if (!widget.active) return;
+    switch (_featuredMouseEvents?.value) {
+      case final PointerEnterEvent event:
+        _onMouseEnter(event);
+      case final PointerExitEvent event:
+        _onMouseExit(event);
+      case PointerHoverEvent():
+        _onMouseActivity();
+    }
   }
 
   void _syncHighEnergyVisibility() =>
@@ -1425,7 +1441,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   }
 
   void _syncControlsMode() {
-    final mode = _configuredControlsMode;
+    final mode = widget.settings.value.playerControlsMode;
     if (_controlsMode == mode) return;
     _controlsMode = mode;
     _pressedPointers.clear();
@@ -1439,9 +1455,6 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   @override
   void didUpdateWidget(covariant _PlayerView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.controlsModeOverride != widget.controlsModeOverride) {
-      _syncControlsMode();
-    }
     if (oldWidget.active != widget.active) {
       if (!widget.active) {
         _dismissComposerDialog();
@@ -1469,6 +1482,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   void dispose() {
     _dismissComposerDialog();
     _dismissMoreDialog();
+    _featuredMouseEvents?.removeListener(_onFeaturedMouseEvent);
     _controlsHideTimer?.cancel();
     _cursorHideTimer?.cancel();
     _cursorHidden.dispose();
@@ -1820,9 +1834,11 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                 _cursorHidden.value
             ? SystemMouseCursors.none
             : MouseCursor.defer,
-        onEnter: _onMouseEnter,
-        onHover: (_) => _onMouseActivity(),
-        onExit: _onMouseExit,
+        onEnter: _featuredMouseEvents == null ? _onMouseEnter : null,
+        onHover: _featuredMouseEvents == null
+            ? (_) => _onMouseActivity()
+            : null,
+        onExit: _featuredMouseEvents == null ? _onMouseExit : null,
         child: child,
       ),
       child: Listener(

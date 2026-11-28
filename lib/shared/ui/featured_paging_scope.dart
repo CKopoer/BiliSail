@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/widgets.dart';
 
 import 'player_picture.dart';
@@ -49,6 +50,41 @@ final class FeaturedControlsGeometry {
     _pendingHeight = null;
     height.dispose();
     opacity.dispose();
+  }
+}
+
+/// Both the picture and its interactive overlays are inside this mouse region.
+class FeaturedPlayerMouseRegion extends StatefulWidget {
+  const FeaturedPlayerMouseRegion({super.key, required this.child});
+  final Widget child;
+
+  static ValueListenable<PointerEvent?>? eventsOf(BuildContext context) =>
+      context
+          .findAncestorStateOfType<_FeaturedPlayerMouseRegionState>()
+          ?.events;
+
+  @override
+  State<FeaturedPlayerMouseRegion> createState() =>
+      _FeaturedPlayerMouseRegionState();
+}
+
+class _FeaturedPlayerMouseRegionState extends State<FeaturedPlayerMouseRegion> {
+  final events = ValueNotifier<PointerEvent?>(null);
+
+  void _onMouseEvent(PointerEvent event) => events.value = event;
+
+  @override
+  Widget build(BuildContext context) => MouseRegion(
+    onEnter: _onMouseEvent,
+    onHover: _onMouseEvent,
+    onExit: _onMouseEvent,
+    child: widget.child,
+  );
+
+  @override
+  void dispose() {
+    events.dispose();
+    super.dispose();
   }
 }
 

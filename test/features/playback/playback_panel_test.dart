@@ -5339,7 +5339,7 @@ void main() {
         _app(
           session,
           window,
-          AppSettings(playerControlsMode: PlayerControlsMode.dynamic),
+          AppSettings(playerControlsMode: PlayerControlsMode.click),
           width: width,
           playerHeight: 440,
           featuredGeometry: geometry,
@@ -5564,6 +5564,84 @@ void main() {
       await _pumpFrames(tester);
     });
   }
+
+  testWidgets(
+    'featured controls follow live settings and hover across the whole card',
+    (tester) async {
+      final engine = _FakeEngine();
+      final session = _session(engine);
+      final geometry = FeaturedControlsGeometry();
+      final window = _FakeWindowService();
+      addTearDown(session.close);
+      addTearDown(geometry.dispose);
+
+      Future<void> setMode(PlayerControlsMode mode) async {
+        await tester.pumpWidget(
+          _app(
+            session,
+            window,
+            AppSettings(playerControlsMode: mode),
+            featuredGeometry: geometry,
+            playerHeight: 440,
+          ),
+        );
+        await _pumpFrames(tester);
+      }
+
+      await setMode(PlayerControlsMode.dynamic);
+      final bar = find.byKey(const ValueKey('player-controls')).hitTestable();
+      expect(bar, findsOneWidget);
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: const Offset(-10, -10));
+      await mouse.moveTo(_surfacePoint(tester));
+      await tester.pump(const Duration(seconds: 3));
+      expect(bar, findsNothing);
+      await mouse.moveTo(_surfacePoint(tester) + const Offset(3, 0));
+      await _pumpSurfaceTap(tester);
+      expect(bar, findsOneWidget);
+      final comment = findMaterialTooltip('评论');
+      final before = tester.getCenter(comment);
+      await mouse.moveTo(before);
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(bar, findsOneWidget);
+      expect(tester.getCenter(comment), before);
+      await mouse.moveTo(const Offset(-10, -10));
+      await _pumpSurfaceTap(tester);
+      expect(bar, findsNothing);
+
+      final playing = engine.currentSnapshot.desiredPlaying;
+      await tester.tapAt(_surfacePoint(tester));
+      await _pumpSurfaceTap(tester);
+      expect(engine.currentSnapshot.desiredPlaying, !playing);
+      await tester.tap(findMaterialTooltip('全屏（F）'));
+      await _pumpFrames(tester);
+      expect(window.fullScreen, isTrue);
+
+      await setMode(PlayerControlsMode.click);
+      await tester.tapAt(_surfacePoint(tester));
+      await _pumpSurfaceTap(tester);
+      expect(bar, findsNothing);
+      await mouse.moveTo(_surfacePoint(tester));
+      await _pumpFrames(tester);
+      expect(bar, findsNothing);
+      expect(engine.currentSnapshot.desiredPlaying, !playing);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await _pumpFrames(tester);
+      expect(window.fullScreen, isFalse);
+      await mouse.moveTo(_surfacePoint(tester));
+      await _pumpFrames(tester);
+      expect(bar, findsNothing);
+      await tester.tapAt(_surfacePoint(tester));
+      await _pumpSurfaceTap(tester);
+      expect(bar, findsOneWidget);
+      expect(engine.currentSnapshot.desiredPlaying, !playing);
+      expect(engine.opens, 1);
+      await mouse.removePointer();
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+    },
+  );
 
   testWidgets('featured overlays settle immediately with reduced motion', (
     tester,
@@ -12045,26 +12123,28 @@ Widget _wrapFeaturedPlayer(
   var showNavigation = true;
   return StatefulBuilder(
     builder: (context, setState) {
-      final content = Stack(
-        fit: StackFit.expand,
-        children: [
-          FeaturedPagingScope(
-            showVideoOverlays: showOverlays,
-            onToggleVideoOverlays: () =>
-                setState(() => showOverlays = !showOverlays),
-            controlsGeometry: geometry,
-            child: player,
-          ),
-          if (showOverlays)
-            FeaturedVideoOverlay(
-              detail: _detail,
+      final content = FeaturedPlayerMouseRegion(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            FeaturedPagingScope(
+              showVideoOverlays: showOverlays,
+              onToggleVideoOverlays: () =>
+                  setState(() => showOverlays = !showOverlays),
               controlsGeometry: geometry,
-              onLogin: () {},
-              onOpenUser: (_) {},
-              onShowDescription: () {},
-              onShowComments: () {},
+              child: player,
             ),
-        ],
+            if (showOverlays)
+              FeaturedVideoOverlay(
+                detail: _detail,
+                controlsGeometry: geometry,
+                onLogin: () {},
+                onOpenUser: (_) {},
+                onShowDescription: () {},
+                onShowComments: () {},
+              ),
+          ],
+        ),
       );
       return FeaturedNavigationScope(
         navigation: navigationPlacement == null
