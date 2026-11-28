@@ -95,6 +95,8 @@ Story 样本有 `card_goto=vertical_av`、`bvid/param`、`player_args.aid/cid`�
 
 ## 滑动、播放权与预加载
 
+触屏拖动时卡片跟随手指。慢拖松手后，位移达到视口高度的 16% 即翻页，门槛限制在 48 至 96 个逻辑像素之间。快速轻扫按松手速度和方向翻页，拖回起点附近会回到原卡。开启「减少动态效果」时，松手后直接落位。鼠标滚轮累计 24 个逻辑像素触发一页，常规动画为 220 毫秒。
+
 官方 Windows 客户端 `1.13.0.3194` 的精选页轮换三个卡片槽位。卡片取得 CID 后便请求视频详情，并创建、连接或重载该槽位的 Nano 播放器。初始化使用 `autoplay: false`，当前槽位收到播放指令，离开当前槽位时暂停。同一份渲染代码另有推荐队列少于三条时补充推荐列表的逻辑。检查对象与上文桌面协议取证相同。渲染代码可以确认播放器准备时机，无法据此确定相邻卡片实际缓冲的音视频字节数、首帧耗时或手机端的原生实现。[官方下载中心](https://app.bilibili.com/)
 
 AndroidX Media3 1.4.0 的短视频示例按当前页与邻页的距离预取媒体，卡片绑定已准备的媒体源，使用有数量上限的播放器池。BiliSail 参考了相邻卡片提前准备、落位复用的做法，继续使用现有播放会话和 media_kit。 [ViewPagerMediaAdapter](https://github.com/androidx/media/blob/1.4.0/demos/shortform/src/main/java/androidx/media3/demo/shortform/viewpager/ViewPagerMediaAdapter.kt) · [ViewPagerMediaHolder](https://github.com/androidx/media/blob/1.4.0/demos/shortform/src/main/java/androidx/media3/demo/shortform/viewpager/ViewPagerMediaHolder.kt)

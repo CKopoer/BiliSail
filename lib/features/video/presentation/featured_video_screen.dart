@@ -149,6 +149,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
   }
 
   void _cancelPaging() {
+    _touchDrag = null;
     _clearSwipePreview();
     if (!pages.hasClients ||
         (pages.page == feed.selected &&
@@ -171,6 +172,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
   );
   final _visitedParts = <(VideoId, String?)>{};
   bool _showVideoOverlays = true;
+  _FeaturedTouchDrag? _touchDrag;
   _Info? panel;
   Timer? wheelIdle;
   double wheelDelta = 0;
@@ -207,6 +209,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
   void _changed() {
     if (!mounted) return;
     if (refreshRevision != feed.refreshRevision) {
+      _touchDrag = null;
       _clearSwipePreview();
       _preparingSession?.clearFeaturedVisits(this);
       _visitedParts.clear();
@@ -319,8 +322,17 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
 
   bool _onPaging(ScrollNotification notification) {
     if (notification.depth != 0 || !_canPage) return false;
+    if (notification is ScrollStartNotification) {
+      final page = pages.page;
+      _touchDrag =
+          notification.dragDetails?.kind == PointerDeviceKind.touch &&
+              page != null
+          ? _FeaturedTouchDrag(page)
+          : null;
+    }
     if (notification is ScrollUpdateNotification) _syncSwipePreview();
     if (notification is ScrollEndNotification && pages.hasClients) {
+      _touchDrag = null;
       final page = pages.page;
       if (page == null || page != page.roundToDouble()) return false;
       final index = page.round();
@@ -438,11 +450,18 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
                             child: PageView.builder(
                               controller: pages,
                               scrollDirection: Axis.vertical,
+                              // Our physics selects the page for finger drags
+                              // and delegates other input to PageScrollPhysics.
+                              pageSnapping: false,
                               // Keep one viewport on either side so a prepared
                               // texture is attached before the first drag frame.
                               allowImplicitScrolling: _canPage,
                               physics: _canPage
-                                  ? _FeaturedScrollPhysics(feed.first)
+                                  ? _FeaturedScrollPhysics(
+                                      feed.first,
+                                      () => _touchDrag,
+                                      reduceMotion: shouldReduceMotion(context),
+                                    )
                                   : const NeverScrollableScrollPhysics(),
                               itemCount: feed.end,
                               itemBuilder: (context, index) =>
@@ -543,6 +562,11 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
     final pictureCid = item.previewCid ?? part?.cid;
     return Listener(
       onPointerSignal: _wheel,
+      onPointerCancel: (event) {
+        if (event.kind == PointerDeviceKind.touch) {
+          _touchDrag?.targetPage = feed.selected;
+        }
+      },
       child: _FeaturedSlot(
         key: ValueKey((index, item.id, item.previewCid)),
         picture: (inline) => _slotPicture(item.id, pictureCid, inline),
@@ -763,15 +787,88 @@ final class _FeaturedSlotState extends State<_FeaturedSlot> {
   );
 }
 
-/// Earlier pages may have been evicted while absolute pager positions stay stable.
-class _FeaturedScrollPhysics extends ScrollPhysics {
-  const _FeaturedScrollPhysics(this.first, {super.parent});
+/// Retain the release target if Flutter restarts the simulation on resize.
+final class _FeaturedTouchDrag {
+  _FeaturedTouchDrag(this.startPage);
+  final double startPage;
+  int? targetPage;
+
+  int releasePage(double pixels, double extent, double velocity) {
+    final page = pixels / extent;
+    if (velocity > 0) return page.ceil();
+    if (velocity < 0) return page.floor();
+
+    final threshold = (extent * .16).clamp(48.0, 96.0);
+    final delta = pixels - startPage * extent;
+    if (delta.abs() < threshold || threshold >= extent / 2) return page.round();
+    // After a long drag, only the distance past the last whole page counts
+    // toward advancing one more. Compare in logical pixels in both directions.
+    final wholePage = delta > 0 ? page.floor() : page.ceil();
+    final remainder = (pixels - wholePage * extent).abs();
+    return remainder >= threshold ? wholePage + delta.sign.toInt() : wholePage;
+  }
+}
+
+class _FeaturedScrollPhysics extends PageScrollPhysics {
+  const _FeaturedScrollPhysics(
+    this.first,
+    this.touchDrag, {
+    required this.reduceMotion,
+    super.parent,
+  });
   final int first;
+  final _FeaturedTouchDrag? Function() touchDrag;
+  final bool reduceMotion;
+  static final _touchSpring = SpringDescription.withDurationAndBounce(
+    duration: const Duration(milliseconds: 110),
+  );
+
   @override
   _FeaturedScrollPhysics applyTo(ScrollPhysics? ancestor) =>
-      _FeaturedScrollPhysics(first, parent: buildParent(ancestor));
+      _FeaturedScrollPhysics(
+        first,
+        touchDrag,
+        reduceMotion: reduceMotion,
+        parent: buildParent(ancestor),
+      );
+
+  @override
+  bool shouldUpdate(covariant _FeaturedScrollPhysics old) =>
+      first != old.first ||
+      reduceMotion != old.reduceMotion ||
+      super.shouldUpdate(old);
+
+  @override
+  Simulation? createBallisticSimulation(
+    ScrollMetrics position,
+    double velocity,
+  ) {
+    final drag = touchDrag();
+    final extent = position.viewportDimension;
+    if (drag == null || extent <= 0 || position.outOfRange) {
+      return super.createBallisticSimulation(position, velocity);
+    }
+    final from = position.pixels;
+    final page = drag.targetPage ??= drag.releasePage(from, extent, velocity);
+    final to = (page * extent).clamp(first * extent, position.maxScrollExtent);
+    if (from == to) return null;
+    // A fast fling released just before the target must not overshoot and
+    // briefly preview the card beyond it. Limit the critically damped spring's
+    // initial speed to the remaining distance times its natural frequency.
+    final maxSpeed =
+        (to - from).abs() * _touchSpring.damping / (2 * _touchSpring.mass);
+    return ScrollSpringSimulation(
+      _touchSpring,
+      reduceMotion ? to : from,
+      to,
+      reduceMotion ? 0 : velocity.clamp(-maxSpeed, maxSpeed),
+      tolerance: toleranceFor(position),
+    );
+  }
+
   @override
   double applyBoundaryConditions(ScrollMetrics position, double value) {
+    // Evicted cards keep their absolute page numbers.
     final floor = first * position.viewportDimension;
     if (first > 0 && value < floor && value < position.pixels) {
       return value - (position.pixels < floor ? position.pixels : floor);
