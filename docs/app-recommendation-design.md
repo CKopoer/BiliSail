@@ -26,7 +26,9 @@
 
 2026-10-31 响应接纳范围对齐：只读核对 GitHub PiliPlus `c741279080fa90571d59ff9558640beb88861492` 的 `lib/http/video.dart`、`lib/models/home/rcmd/result.dart` 与 `lib/common/widgets/video_card/video_card_v.dart`，仅参考协议与行为，独立实现，不复制 GPLv3 应用代码。首页 query 与最终请求头已一致，本次保留现有取值，并增加完整 query、首请求与翻页的回归测试。响应取消仅接纳 `card_goto=av` 的限制；与参考一致排除 `ad_av`、`ad_web_s`、有 `ad_info` 及 `can_play!=1` 的卡片，继续校验字段类型、数字身份、标题及响应容量，应用层仍使用用户已有过滤偏好。
 
-API 卡片保留原始 `card_goto`、`param` 和可解析 URI。普通 av 继续用 player_args.aid／param 转换 BV；非 av 不将 param 冒充 aid 或转换 BV。主应用为非 av 使用 `app:<type>:<param>` 列表标识，不作为有效 VideoId 传入视频操作：番剧按 param 打开既有剧集页面；已识别的原生视频／影视／直播 URI 使用既有路由，动态映射到公开网页，允许的 Bilibili HTTPS 内容链接交由既有外链端口；未知或非法跳转仍保留卡片并提示暂不支持。非 av 不显示普通视频稍后再看菜单、不启动 AV 悬停预览。App 反馈及撤销携带原始 param 与 goto，不再固定为 av；服务端原因、同账号 token、epoch、单次写入与未知结果不重放规则不变。没有接入 Story 推荐或改变封面比例。
+API 卡片保留原始 `card_goto`、`param` 和可解析 URI。稿件卡（`av`、`inline_av_v2`）优先使用列表的有效 BV 号，缺失时按 `player_args.aid`、`param` 的顺序取 AV 号并转换为 BV 号。两种卡共用普通视频的播放、稍后再看和悬停预览入口。UP 主名称直接读取 `args.up_name`，缺失或空白时取 `up_args.up_name`。
+
+其他卡型使用 `app:<type>:<param>` 列表标识。番剧按 `param` 打开剧集，已识别的视频、影视和直播 URI 使用对应路由，动态和允许的 Bilibili HTTPS 链接交给外链端口。未知或非法跳转保留卡片并提示暂不支持。所有卡型的 App 反馈及撤销均携带原始 `param` 和 `card_goto`，沿用服务端原因、同账号 token、epoch 和单次写入规则。
 
 本轮验证结果见文末“响应接纳范围对齐验证”；前面的请求身份对齐验证记录为同日较早一轮。
 

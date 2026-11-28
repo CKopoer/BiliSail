@@ -149,7 +149,7 @@ final class AppRecommendationClient {
         param == null) {
       return null;
     }
-    final isVideo = cardGoto == 'av';
+    final isVideo = cardGoto == 'av' || cardGoto == 'inline_av_v2';
     // Non-video params identify episodes/dynamics, not AV archives.
     final aid = _id(player['aid']) ?? (isVideo ? param : null);
     final suppliedBvid = entry['bvid'];
@@ -164,10 +164,7 @@ final class AppRecommendationClient {
     }
     final title = entry['title'];
     if (bvid == null || title is! String || title.trim().isEmpty) return null;
-    final rawReason = entry['rcmd_reason'];
-    final reason = rawReason is String && rawReason.trim().isNotEmpty
-        ? rawReason.trim()
-        : null;
+    final reason = _text(entry['rcmd_reason']);
     final followReason = const {'已关注', '新关注'}.contains(reason);
     final followed =
         entry['is_followed'] == 1 ||
@@ -236,7 +233,9 @@ final class AppRecommendationClient {
         coverUrl: cover,
         cover43Url: _image(entry['cover43']) ?? (smallCover ? cover : null),
         ownerName: isVideo
-            ? (args['up_name'] is String ? args['up_name'] as String : '')
+            ? _text(args['up_name']) ??
+                  _text(_map(entry['up_args'])['up_name']) ??
+                  ''
             : (_map(entry['desc_button'])['text'] is String
                   ? _map(entry['desc_button'])['text'] as String
                   : ''),
@@ -259,6 +258,8 @@ final class AppRecommendationClient {
 
   static Map<String, Object?> _map(Object? value) =>
       value is Map<String, Object?> ? value : const {};
+  static String? _text(Object? value) =>
+      value is String && value.trim().isNotEmpty ? value.trim() : null;
   static int? _integer(Object? value) => value is int
       ? value
       : value is String

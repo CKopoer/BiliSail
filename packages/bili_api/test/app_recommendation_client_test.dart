@@ -495,6 +495,44 @@ void main() {
   });
 
   test(
+    'inline AV cards read their uploader from the feed in priority order',
+    () async {
+      final transport = _Transport()
+        ..entries = [
+          for (final (primary, fallback) in [
+            ('主字段', '备用字段'),
+            ('', '备用字段'),
+            ('  ', '备用字段'),
+            (null, '备用字段'),
+            (null, null),
+          ])
+            _entry(
+              extra: {
+                'card_goto': 'inline_av_v2',
+                'card_type': 'large_cover_v9',
+                'args': {'up_name': ?primary},
+                if (fallback != null) 'up_args': {'up_name': fallback},
+                'desc_button': {'text': '按钮文案'},
+                'player_args': {'cid': 99},
+              },
+            ),
+        ];
+      final api = BiliApiClient(transport: transport);
+      addTearDown(api.close);
+      final page = await AppRecommendationClient(api).load(buvid: _device);
+      expect(page.items.map((item) => item.video.ownerName), [
+        '主字段',
+        '备用字段',
+        '备用字段',
+        '备用字段',
+        '',
+      ]);
+      expect(page.items.first.video.bvid, 'BV17x411w7KC');
+      expect(page.items.first.video.previewCid, '99');
+    },
+  );
+
+  test(
     'playable non-ad cards retain their type and original identity',
     () async {
       final transport = _Transport()

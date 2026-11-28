@@ -237,8 +237,9 @@ class ApiFeedRepository
         result.items.map((item) {
           final video = item.video;
           final trackId = item.trackId;
-          final target = _appRecommendationTarget(item);
-          final targetVideo = item.cardGoto == 'av'
+          final isVideo = video.bvid.isNotEmpty;
+          final target = isVideo ? null : _appRecommendationTarget(item);
+          final targetVideo = isVideo
               ? video.bvid
               : target?.kind == RecommendationTargetKind.video
               ? target?.id
@@ -248,9 +249,7 @@ class ApiFeedRepository
               : null;
           return VideoSummary(
             id: VideoId(
-              item.cardGoto == 'av'
-                  ? video.bvid
-                  : 'app:${item.cardGoto}:${item.param}',
+              isVideo ? video.bvid : 'app:${item.cardGoto}:${item.param}',
             ),
             recommendationCard: RecommendationCard(
               source: RecommendationSource.app,
@@ -322,10 +321,9 @@ class ApiFeedRepository
     cancellation: cancellation,
   );
 
-  static RecommendationTarget? _appRecommendationTarget(
+  static RecommendationTarget _appRecommendationTarget(
     ApiAppRecommendation item,
   ) {
-    if (item.cardGoto == 'av') return null;
     if (item.cardGoto == 'bangumi') {
       return RecommendationTarget(
         kind: RecommendationTargetKind.episode,

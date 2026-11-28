@@ -123,6 +123,34 @@ void main() {
     },
   );
 
+  test(
+    'inline AV cards open as videos and retain their feed identity',
+    () async {
+      transport.entries = [
+        {
+          ..._entry('inline_av_v2'),
+          'args': {'up_id': 7},
+          'up_args': {'up_name': '列表作者'},
+          'track_id': 'inline-track',
+        },
+      ];
+      final page = await repository.loadAppRecommendations(
+        request: const AppRecommendationRequest(),
+        cancellation: RequestCancellation(),
+      );
+      final video = page.items.single;
+      expect(video.author, '列表作者');
+      expect(video.authorId?.value, '7');
+      expect(video.id, const VideoId('BV17x411w7KC'));
+      expect(video.recommendationTarget, isNull);
+      expect(video.recommendationPlayback?.matches(video.id.value, 0), isTrue);
+      expect(video.recommendationPlayback?.trackId, 'inline-track');
+      expect(video.recommendationCard?.cardGoto, 'inline_av_v2');
+      expect(video.recommendationFeedback?.goto, 'inline_av_v2');
+      expect(video.recommendationFeedback?.aid, '42');
+    },
+  );
+
   test('Web and desktop cards retain their own response profile', () async {
     transport.webEntries = [
       {
