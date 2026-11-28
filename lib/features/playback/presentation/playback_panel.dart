@@ -1659,6 +1659,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
     if (_moreDialogOpen || !widget.active) return;
     _moreDialogOpen = true;
     final container = ProviderScope.containerOf(context);
+    final showInfo = PlaybackInfoScope.read(context)?.showInfo ?? true;
     widget.shortcuts.cancel();
     _onControlsMenuChanged(true);
     try {
@@ -1674,6 +1675,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
               data: _playerControlsTheme(context),
               child: PlayerMoreDialog(
                 session: widget.session,
+                showInfo: showInfo,
                 playerBounds: () {
                   final box = _playerBoundsKey.currentContext
                       ?.findRenderObject();

@@ -15,11 +15,13 @@ class PlayerMoreDialog extends StatelessWidget {
   const PlayerMoreDialog({
     super.key,
     required this.session,
+    required this.showInfo,
     required this.playerBounds,
     required this.onSettings,
   });
 
   final PlaybackSession session;
+  final bool showInfo;
   final ValueGetter<Rect?> playerBounds;
   final Future<void> Function(int) onSettings;
 
@@ -106,6 +108,7 @@ class PlayerMoreDialog extends StatelessWidget {
         ],
       );
     }
+    if (!showInfo) return SafeArea(child: dialog);
     return _BelowVideoArea(playerBounds: playerBounds, child: dialog);
   }
 

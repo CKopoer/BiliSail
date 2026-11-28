@@ -2405,6 +2405,16 @@ void main() {
         ),
         findsOneWidget,
       );
+      if (width < 600) {
+        await tester.tap(findMaterialTooltip('更多播放选项'));
+        await tester.pumpAndSettle();
+        final close = findMaterialTooltip('关闭更多播放选项');
+        expect(close.hitTestable(), findsOneWidget);
+        expect(find.text('重新加载').hitTestable(), findsOneWidget);
+        await tester.tap(close);
+        await tester.pumpAndSettle();
+        expect(find.byType(PlaybackInfoTabs), findsNothing);
+      }
       await tester.tap(fullscreen);
       await _pumpFrames(tester);
       expect(window.fullScreen, isTrue);
