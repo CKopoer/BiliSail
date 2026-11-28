@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../../domain/user.dart';
 import '../../../domain/video.dart';
+import '../../../shared/ui/featured_paging_scope.dart';
 import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/user_follow_button.dart';
 import '../../../shared/ui/video_card.dart';
@@ -16,7 +17,7 @@ class FeaturedVideoOverlay extends StatelessWidget {
   const FeaturedVideoOverlay({
     super.key,
     required this.detail,
-    required this.controlsInset,
+    required this.controlsGeometry,
     required this.onLogin,
     required this.onOpenUser,
     required this.onShowDescription,
@@ -24,21 +25,25 @@ class FeaturedVideoOverlay extends StatelessWidget {
   });
 
   final VideoDetail detail;
-  final ValueListenable<double> controlsInset;
+  final FeaturedControlsGeometry controlsGeometry;
   final VoidCallback onLogin, onShowDescription, onShowComments;
   final ValueChanged<UserId> onOpenUser;
 
   @override
   Widget build(BuildContext context) => ValueListenableBuilder(
-    valueListenable: controlsInset,
-    builder: (context, inset, _) => LayoutBuilder(
+    valueListenable: controlsGeometry.height,
+    child: _FeaturedVideoIdentity(
+      detail: detail,
+      onLogin: onLogin,
+      onOpenUser: onOpenUser,
+      onShowDescription: onShowDescription,
+    ),
+    builder: (context, height, identity) => LayoutBuilder(
       builder: (context, bounds) {
-        const margin = 12.0;
-        // Leave the collapsed two-pixel progress track visible at the edge.
-        final bottom = inset + 4;
-        final actionHeight = FeaturedVideoActions.actionHeight(context);
+        const margin = _FeaturedOverlayPlacement.margin;
+        final raisedBottom = (height + 4).clamp(margin, double.infinity);
         final horizontal =
-            bounds.maxHeight - bottom <
+            bounds.maxHeight - raisedBottom <
                 FeaturedVideoActions.verticalHeight(context) &&
             bounds.maxWidth >=
                 FeaturedVideoActions.horizontalWidth + 2 * margin;
@@ -47,35 +52,25 @@ class FeaturedVideoOverlay extends StatelessWidget {
             : FeaturedVideoActions.width;
         final stackAboveActions =
             horizontal && bounds.maxWidth - actionsWidth - 3 * margin < 190;
-        return Stack(
+        return Flow(
+          delegate: _FeaturedOverlayPlacement(
+            opacity: controlsGeometry.opacity,
+            lift: raisedBottom - margin,
+            cardWidth:
+                (bounds.maxWidth -
+                        2 * margin -
+                        (stackAboveActions ? 0 : actionsWidth + margin))
+                    .clamp(0, 480),
+            stackAboveActions: stackAboveActions,
+          ),
           children: [
-            Positioned(
-              left: margin,
-              right: stackAboveActions ? margin : actionsWidth + 2 * margin,
-              bottom: stackAboveActions ? bottom + actionHeight + 4 : bottom,
-              child: Align(
-                alignment: Alignment.bottomLeft,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 480),
-                  child: _FeaturedVideoIdentity(
-                    detail: detail,
-                    onLogin: onLogin,
-                    onOpenUser: onOpenUser,
-                    onShowDescription: onShowDescription,
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              right: margin,
-              bottom: bottom,
-              child: VideoActionsScope(
-                detail: detail,
-                onLogin: onLogin,
-                child: FeaturedVideoActions(
-                  onShowComments: onShowComments,
-                  horizontal: horizontal,
-                ),
+            identity!,
+            VideoActionsScope(
+              detail: detail,
+              onLogin: onLogin,
+              child: FeaturedVideoActions(
+                onShowComments: onShowComments,
+                horizontal: horizontal,
               ),
             ),
           ],
@@ -83,6 +78,58 @@ class FeaturedVideoOverlay extends StatelessWidget {
       },
     ),
   );
+}
+
+/// Both children keep their layout and repaint boundaries throughout the fade.
+class _FeaturedOverlayPlacement extends FlowDelegate {
+  _FeaturedOverlayPlacement({
+    required this.opacity,
+    required this.lift,
+    required this.cardWidth,
+    required this.stackAboveActions,
+  }) : super(repaint: opacity);
+
+  static const margin = 12.0;
+  final ValueListenable<double> opacity;
+  final double lift, cardWidth;
+  final bool stackAboveActions;
+
+  @override
+  BoxConstraints getConstraintsForChild(int i, BoxConstraints constraints) =>
+      BoxConstraints(maxWidth: i == 0 ? cardWidth : constraints.maxWidth);
+
+  @override
+  void paintChildren(FlowPaintingContext context) {
+    final card = context.getChildSize(0)!;
+    final rail = context.getChildSize(1)!;
+    final bottom = context.size.height - margin - lift * opacity.value;
+    context.paintChild(
+      0,
+      transform: Matrix4.translationValues(
+        margin,
+        bottom - card.height - (stackAboveActions ? rail.height + 4 : 0),
+        0,
+      ),
+    );
+    context.paintChild(
+      1,
+      transform: Matrix4.translationValues(
+        context.size.width - margin - rail.width,
+        bottom - rail.height,
+        0,
+      ),
+    );
+  }
+
+  @override
+  bool shouldRelayout(_FeaturedOverlayPlacement oldDelegate) =>
+      cardWidth != oldDelegate.cardWidth;
+
+  @override
+  bool shouldRepaint(_FeaturedOverlayPlacement oldDelegate) =>
+      opacity != oldDelegate.opacity ||
+      lift != oldDelegate.lift ||
+      stackAboveActions != oldDelegate.stackAboveActions;
 }
 
 class _FeaturedVideoIdentity extends ConsumerWidget {

@@ -93,7 +93,7 @@ void main() {
                   playerBuilder: (context, detail, part) {
                     final featured = FeaturedPagingScope.maybeOf(context)!;
                     if (part.cid == '0') {
-                      featured.onControlsInsetChanged?.call(80);
+                      featured.controlsGeometry?.reportHeight(80);
                     }
                     return ColoredBox(
                       key: ValueKey('playing-${part.cid}'),
@@ -125,7 +125,11 @@ void main() {
       expect(videos.details, [videos.items[0].id]);
       final overlay = find.byType(FeaturedVideoOverlay);
       expect(
-        tester.widget<FeaturedVideoOverlay>(overlay).controlsInset.value,
+        tester
+            .widget<FeaturedVideoOverlay>(overlay)
+            .controlsGeometry
+            .height
+            .value,
         80,
       );
       final pager = find.byType(PageView);
@@ -139,7 +143,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('playing-1')), findsOneWidget);
       expect(
-        tester.widget<FeaturedVideoOverlay>(overlay).controlsInset.value,
+        tester
+            .widget<FeaturedVideoOverlay>(overlay)
+            .controlsGeometry
+            .height
+            .value,
         0,
       );
       final reverse = await tester.startGesture(tester.getCenter(pager));

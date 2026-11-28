@@ -14,6 +14,7 @@ import '../../../core/platform/window_service.dart';
 import '../../../core/platform/picture_in_picture_service.dart';
 import '../../../core/platform/window_size_policy.dart';
 import '../../../core/presentation/workspace_activity.dart';
+import '../../../core/presentation/motion_preferences.dart';
 import '../../../core/presentation/history_back_region.dart';
 import '../../../core/presentation/android_system_ui.dart';
 import '../../../core/presentation/mobile_playback_status_bar.dart';
@@ -1765,8 +1766,10 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
     required String hoverRegion,
     required Widget child,
     bool retainDynamicPress = false,
+    ValueNotifier<double>? featuredOpacity,
   }) => _FadingPlayerControls(
     visible: visible,
+    featuredOpacity: featuredOpacity,
     onHoverChanged: (hovered) {
       if (hovered) {
         _hoveredControlRegions.add(hoverRegion);
@@ -1932,7 +1935,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
     final featured = widget.fullScreen
         ? null
         : FeaturedPagingScope.maybeOf(context);
-    final controlsInset = featured?.onControlsInsetChanged;
+    final geometry = featured?.controlsGeometry;
     final usesSlotPicture = featured?.inlinePicture != null;
     final overlayToggle = switch (featured) {
       FeaturedPagingScope(
@@ -2013,7 +2016,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                       commands: widget.pageCommands.value,
                       completedOverlay: completedOverlay,
                       overlayToggle: overlayToggle,
-                      onControlsInsetChanged: controlsInset,
+                      onControlsInsetChanged: geometry?.showAudioToolbar,
                       navigation: ValueListenableBuilder<PlaybackNavigation?>(
                         valueListenable: widget.navigation,
                         builder: (context, actions, _) => Row(
@@ -2545,7 +2548,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                             Positioned.fill(
                               child: _BottomPlayerLayers(
                                 controlsVisible: controls && widget.active,
-                                onControlsInsetChanged: controlsInset,
+                                onControlsInsetChanged: geometry?.reportHeight,
                                 subtitleBottomPadding:
                                     settings.subtitleBottomPadding,
                                 sponsorBlockBottomPadding:
@@ -2670,6 +2673,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                       child: _controlsVisibility(
                                         visible: controls,
                                         hoverRegion: 'bar',
+                                        featuredOpacity: geometry?.opacity,
                                         retainDynamicPress: true,
                                         child: Theme(
                                           data: _playerControlsTheme(context),
@@ -2729,6 +2733,9 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                                             trend: trend,
                                                           ),
                                                       child: PlaybackSnapshotBuilder(
+                                                        enabled:
+                                                            controls ||
+                                                            geometry == null,
                                                         snapshots:
                                                             session.snapshots,
                                                         select: (snapshot) => (
@@ -2806,6 +2813,9 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                                         horizontal: 10,
                                                       ),
                                                   child: _ControlBar(
+                                                    trackTime:
+                                                        controls ||
+                                                        geometry == null,
                                                     layout: layout,
                                                     overlayToggle:
                                                         overlayToggle,
@@ -2976,16 +2986,18 @@ class _BottomPlayerLayout extends MultiChildLayoutDelegate {
       sponsorBlockBottomPadding != oldDelegate.sponsorBlockBottomPadding;
 }
 
-// Keep the subtree alive until fade-out finishes, while immediately releasing
-// input and semantics. Reversing a fade reuses the same controls and composer.
+// Release input immediately. The selected featured card also retains its
+// measured toolbar between fades, with tickers and time updates suspended.
 class _FadingPlayerControls extends StatefulWidget {
   const _FadingPlayerControls({
     required this.visible,
+    this.featuredOpacity,
     required this.onHoverChanged,
     required this.child,
   });
 
   final bool visible;
+  final ValueNotifier<double>? featuredOpacity;
   final ValueChanged<bool> onHoverChanged;
   final Widget child;
 
@@ -3006,6 +3018,27 @@ class _FadingPlayerControlsState extends State<_FadingPlayerControls>
     parent: _opacity,
     curve: Curves.easeInOut,
   );
+  bool _reduceMotion = false;
+
+  void _reportOpacity() => widget.featuredOpacity?.value = _curve.value;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.featuredOpacity != null) {
+      _curve.addListener(_reportOpacity);
+      _reportOpacity();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reduceMotion =
+        FeaturedPagingScope.maybeOf(context) != null &&
+        shouldReduceMotion(context);
+    if (_reduceMotion) _opacity.value = widget.visible ? 1 : 0;
+  }
 
   void _setHovered(bool hovered) {
     if (_hovered == hovered) return;
@@ -3025,13 +3058,30 @@ class _FadingPlayerControlsState extends State<_FadingPlayerControls>
   @override
   void didUpdateWidget(covariant _FadingPlayerControls oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.featuredOpacity != oldWidget.featuredOpacity) {
+      if (oldWidget.featuredOpacity != null) {
+        _curve.removeListener(_reportOpacity);
+      }
+      if (widget.featuredOpacity != null) {
+        _curve.addListener(_reportOpacity);
+        _reportOpacity();
+      }
+    }
     if (widget.visible == oldWidget.visible) return;
     if (widget.visible) {
       _renderChild = true;
-      _opacity.forward();
+      if (_reduceMotion) {
+        _opacity.value = 1;
+      } else {
+        _opacity.forward();
+      }
     } else {
       _setHovered(false);
-      _opacity.reverse();
+      if (_reduceMotion) {
+        _opacity.value = 0;
+      } else {
+        _opacity.reverse();
+      }
       // A reveal can be cancelled before its first animation frame.
       if (_opacity.isDismissed) _renderChild = false;
     }
@@ -3041,6 +3091,7 @@ class _FadingPlayerControlsState extends State<_FadingPlayerControls>
   void dispose() {
     // MouseRegion does not send an exit when a hovered control is removed.
     _setHovered(false);
+    if (widget.featuredOpacity != null) _curve.removeListener(_reportOpacity);
     _curve.dispose();
     _opacity.dispose();
     super.dispose();
@@ -3055,11 +3106,14 @@ class _FadingPlayerControlsState extends State<_FadingPlayerControls>
         excluding: !widget.visible,
         child: FadeTransition(
           opacity: _curve,
-          child: _renderChild
-              ? MouseRegion(
-                  onEnter: (_) => _setHovered(true),
-                  onExit: (_) => _setHovered(false),
-                  child: widget.child,
+          child: _renderChild || widget.featuredOpacity != null
+              ? TickerMode(
+                  enabled: _renderChild,
+                  child: MouseRegion(
+                    onEnter: (_) => _setHovered(true),
+                    onExit: (_) => _setHovered(false),
+                    child: widget.child,
+                  ),
                 )
               : const SizedBox.shrink(),
         ),
@@ -3070,6 +3124,7 @@ class _FadingPlayerControlsState extends State<_FadingPlayerControls>
 
 class _ControlBar extends StatelessWidget {
   const _ControlBar({
+    required this.trackTime,
     required this.layout,
     required this.composerKey,
     required this.composeExpanded,
@@ -3090,6 +3145,7 @@ class _ControlBar extends StatelessWidget {
   });
 
   final PlaybackSession session;
+  final bool trackTime;
   final AppSettings settings;
   final PlaybackSnapshot snapshot;
   final PlaybackPageCommands? pageCommands;
@@ -3119,6 +3175,7 @@ class _ControlBar extends StatelessWidget {
       width: layout.timeWidth,
       height: layout.timeHeight,
       child: PlaybackSnapshotBuilder(
+        enabled: trackTime,
         snapshots: session.snapshots,
         select: (snapshot) => (
           snapshot._displayedProgressPosition.inSeconds,

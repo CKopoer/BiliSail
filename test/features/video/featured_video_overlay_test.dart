@@ -11,6 +11,7 @@ import 'package:bilisail/features/video/presentation/featured_video_overlay.dart
 import 'package:bilisail/features/video/presentation/video_actions_bar.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:bilisail/shared/ui/network_avatar.dart';
+import 'package:bilisail/shared/ui/featured_paging_scope.dart';
 import 'package:bilisail/shared/ui/user_follow_button.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -62,9 +63,9 @@ void main() {
     final authors = _Authors();
     final actions = FakeActions();
     final detail = ValueNotifier(_detail);
-    final controlsInset = ValueNotifier(80.0);
+    final controlsGeometry = FeaturedControlsGeometry()..showAudioToolbar(80);
     addTearDown(detail.dispose);
-    addTearDown(controlsInset.dispose);
+    addTearDown(controlsGeometry.dispose);
     UserId? opened;
     var detailsShown = 0;
     var commentsShown = 0;
@@ -72,7 +73,7 @@ void main() {
     await _pump(
       tester,
       detail: detail,
-      controlsInset: controlsInset,
+      controlsGeometry: controlsGeometry,
       authors: authors,
       actions: actions,
       signedIn: true,
@@ -127,9 +128,9 @@ void main() {
   ) async {
     final authors = _Authors();
     final detail = ValueNotifier(_detail);
-    final controlsInset = ValueNotifier(80.0);
+    final controlsGeometry = FeaturedControlsGeometry()..showAudioToolbar(80);
     addTearDown(detail.dispose);
-    addTearDown(controlsInset.dispose);
+    addTearDown(controlsGeometry.dispose);
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(320, 400);
     addTearDown(tester.view.resetPhysicalSize);
@@ -137,7 +138,7 @@ void main() {
     await _pump(
       tester,
       detail: detail,
-      controlsInset: controlsInset,
+      controlsGeometry: controlsGeometry,
       authors: authors,
       actions: FakeActions(),
       textScale: 2,
@@ -146,7 +147,7 @@ void main() {
     final coins = find.text('215');
     expect(tester.getCenter(likes).dx, tester.getCenter(coins).dx);
 
-    controlsInset.value = 190;
+    controlsGeometry.height.value = 190;
     await tester.pump();
     expect(
       tester.getCenter(likes).dy,
@@ -186,13 +187,13 @@ void main() {
     final pending = Completer<VideoAuthor>();
     final authors = _Authors()..firstResult = pending.future;
     final detail = ValueNotifier(_detail);
-    final controlsInset = ValueNotifier(80.0);
+    final controlsGeometry = FeaturedControlsGeometry()..showAudioToolbar(80);
     addTearDown(detail.dispose);
-    addTearDown(controlsInset.dispose);
+    addTearDown(controlsGeometry.dispose);
     await _pump(
       tester,
       detail: detail,
-      controlsInset: controlsInset,
+      controlsGeometry: controlsGeometry,
       authors: authors,
       actions: FakeActions(),
       settle: false,
@@ -216,7 +217,7 @@ void main() {
 Future<void> _pump(
   WidgetTester tester, {
   required ValueNotifier<VideoDetail> detail,
-  required ValueNotifier<double> controlsInset,
+  required FeaturedControlsGeometry controlsGeometry,
   required _Authors authors,
   required FakeActions actions,
   bool signedIn = false,
@@ -242,7 +243,7 @@ Future<void> _pump(
               valueListenable: detail,
               builder: (context, value, _) => FeaturedVideoOverlay(
                 detail: value,
-                controlsInset: controlsInset,
+                controlsGeometry: controlsGeometry,
                 onLogin: () {},
                 onOpenUser: onOpenUser ?? (_) {},
                 onShowDescription: onShowDescription ?? () {},

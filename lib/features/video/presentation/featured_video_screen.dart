@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:bili_player/bili_player.dart'
     show VideoCompositionScope, VideoSurface;
-import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -500,19 +499,19 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
             ? null
             : (inline) => _FeaturedPlayerLayers(
                 key: ValueKey(part?.cid),
-                player: (reportInset) => _player(
+                player: (geometry) => _player(
                   item,
                   detail,
                   part,
                   inline,
-                  onControlsInsetChanged: reportInset,
+                  controlsGeometry: geometry,
                   seed: seed,
                   failed: result?.hasError == true,
                 ),
                 overlay: active && _showVideoOverlays && detail != null
-                    ? (controlsInset) => FeaturedVideoOverlay(
+                    ? (geometry) => FeaturedVideoOverlay(
                         detail: detail,
-                        controlsInset: controlsInset,
+                        controlsGeometry: geometry,
                         onLogin: widget.onLogin,
                         onOpenUser: widget.onOpenUser,
                         onShowDescription: () => _toggle(_Info.description),
@@ -565,7 +564,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
     VideoDetail? detail,
     VideoPart? part,
     FeaturedInlinePicture inline, {
-    required ValueChanged<double> onControlsInsetChanged,
+    required FeaturedControlsGeometry controlsGeometry,
     required bool seed,
     required bool failed,
   }) {
@@ -586,7 +585,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
             : const ContentLink(),
         child: FeaturedPagingScope(
           inlinePicture: _preparingSession == null ? null : inline,
-          onControlsInsetChanged: onControlsInsetChanged,
+          controlsGeometry: controlsGeometry,
           showVideoOverlays: _showVideoOverlays,
           onToggleVideoOverlays: _toggleVideoOverlays,
           child: PlaybackPageCommands(
@@ -659,42 +658,26 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
 final class _FeaturedPlayerLayers extends StatefulWidget {
   const _FeaturedPlayerLayers({super.key, required this.player, this.overlay});
 
-  final Widget Function(ValueChanged<double>) player;
-  final Widget Function(ValueListenable<double>)? overlay;
+  final Widget Function(FeaturedControlsGeometry) player;
+  final Widget Function(FeaturedControlsGeometry)? overlay;
 
   @override
   State<_FeaturedPlayerLayers> createState() => _FeaturedPlayerLayersState();
 }
 
 final class _FeaturedPlayerLayersState extends State<_FeaturedPlayerLayers> {
-  final _inset = ValueNotifier(0.0);
-  double? _pending;
-
-  void _updateInset(double height) {
-    if (_pending != null) {
-      _pending = height;
-      return;
-    }
-    if (_inset.value == height) return;
-    // The player measures during layout. Reposition the sibling next frame.
-    _pending = height;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final height = _pending;
-      _pending = null;
-      if (mounted && height != null) _inset.value = height;
-    });
-  }
+  final _geometry = FeaturedControlsGeometry();
 
   @override
   void dispose() {
-    _inset.dispose();
+    _geometry.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) => Stack(
     fit: StackFit.expand,
-    children: [widget.player(_updateInset), ?widget.overlay?.call(_inset)],
+    children: [widget.player(_geometry), ?widget.overlay?.call(_geometry)],
   );
 }
 

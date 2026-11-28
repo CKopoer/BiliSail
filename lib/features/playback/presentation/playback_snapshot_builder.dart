@@ -8,11 +8,13 @@ final class PlaybackSnapshotBuilder<T> extends StatefulWidget {
   const PlaybackSnapshotBuilder({
     super.key,
     required this.snapshots,
+    this.enabled = true,
     required this.select,
     required this.builder,
   });
 
   final ValueListenable<PlaybackSnapshot> snapshots;
+  final bool enabled;
   final T Function(PlaybackSnapshot snapshot) select;
   final Widget Function(BuildContext context, PlaybackSnapshot snapshot)
   builder;
@@ -30,7 +32,7 @@ final class _PlaybackSnapshotBuilderState<T>
   void initState() {
     super.initState();
     _selected = widget.select(widget.snapshots.value);
-    widget.snapshots.addListener(_onSnapshot);
+    if (widget.enabled) widget.snapshots.addListener(_onSnapshot);
   }
 
   void _onSnapshot() {
@@ -42,16 +44,17 @@ final class _PlaybackSnapshotBuilderState<T>
   @override
   void didUpdateWidget(covariant PlaybackSnapshotBuilder<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!identical(widget.snapshots, oldWidget.snapshots)) {
-      oldWidget.snapshots.removeListener(_onSnapshot);
-      widget.snapshots.addListener(_onSnapshot);
+    if (widget.enabled != oldWidget.enabled ||
+        !identical(widget.snapshots, oldWidget.snapshots)) {
+      if (oldWidget.enabled) oldWidget.snapshots.removeListener(_onSnapshot);
+      if (widget.enabled) widget.snapshots.addListener(_onSnapshot);
     }
     _selected = widget.select(widget.snapshots.value);
   }
 
   @override
   void dispose() {
-    widget.snapshots.removeListener(_onSnapshot);
+    if (widget.enabled) widget.snapshots.removeListener(_onSnapshot);
     super.dispose();
   }
 

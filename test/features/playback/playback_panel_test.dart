@@ -5264,9 +5264,9 @@ void main() {
       final engine = _FakeEngine();
       final session = _session(engine);
       final window = _FakeWindowService();
-      final inset = ValueNotifier(0.0);
+      final geometry = FeaturedControlsGeometry();
       addTearDown(session.close);
-      addTearDown(inset.dispose);
+      addTearDown(geometry.dispose);
       await tester.pumpWidget(
         _app(
           session,
@@ -5274,7 +5274,7 @@ void main() {
           AppSettings(playerControlsMode: PlayerControlsMode.dynamic),
           width: width,
           playerHeight: 440,
-          featuredInset: inset,
+          featuredGeometry: geometry,
         ),
       );
       await _pumpFrames(tester);
@@ -5300,13 +5300,13 @@ void main() {
       final playerEdge = tester
           .getBottomLeft(find.byType(FeaturedVideoOverlay))
           .dy;
-      void expectDockedAt(double edge) {
-        expect(tester.getRect(identity).bottom, edge - 4);
-        expect(tester.getRect(actions).bottom, edge - 4);
+      void expectDockedAt(double bottom) {
+        expect(tester.getRect(identity).bottom, moreOrLessEquals(bottom));
+        expect(tester.getRect(actions).bottom, moreOrLessEquals(bottom));
       }
 
-      expect(inset.value, 0);
-      expectDockedAt(playerEdge);
+      expect(geometry.opacity.value, 0);
+      expectDockedAt(playerEdge - 12);
 
       Future<void> tapSurface() async {
         await tester.tapAt(_surfacePoint(tester), kind: kind);
@@ -5336,11 +5336,67 @@ void main() {
       }
 
       await checkHover(visible: false);
+      final timelineFinder = find.byType(PlaybackTimelineBar);
+      final timeline = tester.state(timelineFinder);
+      final hiddenTimeline = tester.widget<PlaybackTimelineBar>(timelineFinder);
+      final updatedPosition =
+          hiddenTimeline.position + const Duration(seconds: 3);
+      engine._emit(engine.currentSnapshot.copyWith(position: updatedPosition));
+      await tester.pump();
+      expect(
+        tester.widget<PlaybackTimelineBar>(timelineFinder),
+        same(hiddenTimeline),
+      );
+      final titleWidget = tester.widget(title);
+      final actionsWidget = tester.widget(actions);
+      void toggleControls() => tester
+          .widget<GestureDetector>(
+            find.byKey(const ValueKey('player-surface-tap-target')),
+          )
+          .onTap!();
+      double checkFadePosition() {
+        final opacity = tester
+            .widget<FadeTransition>(
+              find
+                  .ancestor(of: controls, matching: find.byType(FadeTransition))
+                  .first,
+            )
+            .opacity
+            .value;
+        expect(opacity, inExclusiveRange(0, 1));
+        expectDockedAt(
+          playerEdge - 12 - (tester.getSize(controls).height - 8) * opacity,
+        );
+        expect(tester.widget(title), same(titleWidget));
+        expect(tester.widget(actions), same(actionsWidget));
+        expect(comments.hitTestable(), findsOneWidget);
+        return opacity;
+      }
+
+      // Use the accepted single tap to reverse before the double-tap deadline.
+      toggleControls();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      final rising = checkFadePosition();
+      toggleControls();
+      await tester.pump();
+      expect(checkFadePosition(), closeTo(rising, .001));
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(checkFadePosition(), lessThan(rising));
+      await tester.pump(const Duration(milliseconds: 180));
+      expectDockedAt(playerEdge - 12);
+      expect(controls.hitTestable(), findsNothing);
+
       await tapSurface();
+      expect(tester.state(timelineFinder), same(timeline));
+      expect(
+        tester.widget<PlaybackTimelineBar>(timelineFinder).position,
+        updatedPosition,
+      );
       final plainControlsHeight = tester.getSize(controls).height;
       final visiblePosition = positions();
-      expect(inset.value, plainControlsHeight);
-      expectDockedAt(tester.getRect(controls).top);
+      expect(geometry.height.value, plainControlsHeight);
+      expectDockedAt(tester.getRect(controls).top - 4);
       await checkHover(visible: true);
 
       final highEnergy = find.byKey(const ValueKey('playback-high-energy'));
@@ -5356,16 +5412,16 @@ void main() {
       expect(highEnergy, findsOneWidget);
       expect(tester.getSize(controls).height, plainControlsHeight + heatHeight);
       expect(tester.getRect(slider), sliderRect);
-      expect(inset.value, plainControlsHeight + heatHeight);
-      expectDockedAt(tester.getRect(controls).top);
+      expect(geometry.height.value, plainControlsHeight + heatHeight);
+      expectDockedAt(tester.getRect(controls).top - 4);
 
       await tapSurface();
       await checkHover(visible: false);
-      expectDockedAt(playerEdge);
+      expectDockedAt(playerEdge - 12);
       session.highEnergy.value = null;
       await _pumpFrames(tester);
       expect(highEnergy, findsNothing);
-      expect(inset.value, 0);
+      expect(geometry.opacity.value, 0);
       expect(positions(), hiddenPosition);
       expect(engine.currentSnapshot.desiredPlaying, initialPlayback);
 
@@ -5440,6 +5496,43 @@ void main() {
       await _pumpFrames(tester);
     });
   }
+
+  testWidgets('featured overlays settle immediately with reduced motion', (
+    tester,
+  ) async {
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(reduceMotion: true);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    final session = _session(_FakeEngine());
+    final geometry = FeaturedControlsGeometry();
+    addTearDown(session.close);
+    addTearDown(geometry.dispose);
+    await tester.pumpWidget(
+      _app(
+        session,
+        _FakeWindowService(),
+        const AppSettings.defaults(),
+        width: 360,
+        playerHeight: 440,
+        featuredGeometry: geometry,
+      ),
+    );
+    await _pumpFrames(tester);
+    final edge = tester.getRect(find.byType(FeaturedVideoOverlay)).bottom;
+    final actions = find.byType(FeaturedVideoActions);
+    final surface = find.byKey(const ValueKey('player-surface-tap-target'));
+    for (final opacity in [1.0, 0.0]) {
+      tester.widget<GestureDetector>(surface).onTap!();
+      await tester.pump();
+      expect(geometry.opacity.value, opacity);
+      expect(
+        tester.getRect(actions).bottom,
+        edge - (opacity == 1 ? geometry.height.value + 4 : 12),
+      );
+    }
+    await tester.pumpWidget(const SizedBox());
+    await _pumpFrames(tester);
+  });
 
   for (final live in [false, true]) {
     for (final dimensions in [
@@ -11795,7 +11888,7 @@ Widget _app(
   bool showNavigationInPlayer = false,
   SettingsRepository? settingsRepository,
   VoidCallback? onToggleComments,
-  ValueNotifier<double>? featuredInset,
+  FeaturedControlsGeometry? featuredGeometry,
   ContentLink link = const ContentLink(),
 }) => ProviderScope(
   overrides: [
@@ -11844,7 +11937,7 @@ Widget _app(
                   child: AspectRatio(
                     aspectRatio: 16 / 9,
                     child: _wrapFeaturedPlayer(
-                      featuredInset,
+                      featuredGeometry,
                       PlaybackPanel(
                         detail: target == null ? _detail : null,
                         part: target == null ? _part : null,
@@ -11872,8 +11965,8 @@ Widget _app(
   ),
 );
 
-Widget _wrapFeaturedPlayer(ValueNotifier<double>? inset, Widget player) {
-  if (inset == null) return player;
+Widget _wrapFeaturedPlayer(FeaturedControlsGeometry? geometry, Widget player) {
+  if (geometry == null) return player;
   var showOverlays = true;
   return StatefulBuilder(
     builder: (context, setState) => Stack(
@@ -11883,18 +11976,13 @@ Widget _wrapFeaturedPlayer(ValueNotifier<double>? inset, Widget player) {
           showVideoOverlays: showOverlays,
           onToggleVideoOverlays: () =>
               setState(() => showOverlays = !showOverlays),
-          onControlsInsetChanged: (value) {
-            if (inset.value == value) return;
-            WidgetsBinding.instance.addPostFrameCallback(
-              (_) => inset.value = value,
-            );
-          },
+          controlsGeometry: geometry,
           child: player,
         ),
         if (showOverlays)
           FeaturedVideoOverlay(
             detail: _detail,
-            controlsInset: inset,
+            controlsGeometry: geometry,
             onLogin: () {},
             onOpenUser: (_) {},
             onShowDescription: () {},
