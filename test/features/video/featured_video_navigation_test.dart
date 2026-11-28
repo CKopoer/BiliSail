@@ -16,6 +16,7 @@ import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
 import 'package:bilisail/features/video/application/video_controller.dart';
 import 'package:bilisail/features/video/domain/video_repository.dart';
 import 'package:bilisail/features/video/presentation/featured_video_screen.dart';
+import 'package:bilisail/features/video/presentation/video_actions_bar.dart';
 import 'package:bilisail/shared/ui/featured_navigation_scope.dart';
 import 'package:bilisail/shared/ui/measured_list_view.dart';
 import 'package:bilisail/shared/ui/playback_page_commands.dart';
@@ -27,6 +28,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../support/input_test_app.dart';
+import '../../support/material_tooltip_finder.dart';
 
 void main() {
   for (final (width, prefix) in [
@@ -245,7 +247,10 @@ void main() {
         Future<void> openPanel(int clip) async {
           await tester.tap(
             comments
-                ? find.byIcon(Icons.chat_bubble_outline)
+                ? find.descendant(
+                    of: find.byType(FeaturedVideoActions),
+                    matching: findMaterialTooltip('评论'),
+                  )
                 : find.text('片段 $clip'),
           );
           await tester.pumpAndSettle();

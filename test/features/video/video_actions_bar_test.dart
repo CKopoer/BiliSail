@@ -11,6 +11,7 @@ import 'package:bilisail/features/video/application/video_actions_controller.dar
 import 'package:bilisail/features/video/domain/video_actions_repository.dart';
 import 'package:bilisail/features/video/presentation/video_actions_bar.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
+import 'package:bilisail/shared/ui/interaction_icon.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -94,7 +95,10 @@ void main() {
             of: button,
             matching: find.text(caption),
           );
-          final icon = find.descendant(of: button, matching: find.byType(Icon));
+          final icon = find.descendant(
+            of: button,
+            matching: find.byType(InteractionIcon),
+          );
           expect(label.hitTestable(), findsOneWidget);
           expect(
             tester.getTopLeft(label).dy,

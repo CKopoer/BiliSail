@@ -1,5 +1,7 @@
 # 参考项目、证据与采用边界
 
+2026-11-28 只读核对 Bili-Space 的独立 SVG、内联路径、官网资源快照、SVGA 与本地交互动效。视频详情、精选和动态的首批互动图标使用独立绘制的 Flutter 图形。具体来源和实现见 [Bili-Space 图标来源与 BiliSail 互动图标](ui-redesign/bili-space-icons-2026-11-28.md)。
+
 2026-11-17 播放底层对齐只读核对 PiliPlus `217fb54f51f6764176319bbdedab2a7522d75401` 的 `lib/plugin/pl_player/controller.dart`、`lib/utils/storage_pref.dart`、`models/hwdec_type.dart` 及其锁定的 media-kit 核心 `73771ec38176be2d984a3049c28177bce23b54a0`；核对本机两应用实际 libmpv／FFmpeg 版本与固定 mpv 的 curl／lavf 源码。独立实现 HTTP 路径、同步、音频、seek 和解码队列行为对齐；无 GPLv3 应用源码／资源复制、相邻仓库／Pub 缓存修改或依赖替换。逐项采用边界及受控失声复现见[底层对齐记录](validation/piliplus-playback-parity-2026-11-17.md)。
 
 2026-11-17 评论链接只读参考 PiliPlus `217fb54f51f6764176319bbdedab2a7522d75401` 的评论富文本、`ReplyContent.jumpUrl` 和视频 scheme 分发，核对其实际 overrides／锁文件。仅借鉴服务端链接标题、行内图标和 BV／AV 视频身份的职责，独立实现本项目纯 Dart 解析、协议字段映射与共享评论组件；未复制 GPLv3 应用源码／资源、修改相邻仓库或依赖。来源、行为及验证见[专项记录](validation/comment-video-links-2026-11-17.md)。

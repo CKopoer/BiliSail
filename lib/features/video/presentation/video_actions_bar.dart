@@ -1,6 +1,3 @@
-import '../../../shared/ui/bili_icons.dart';
-import '../../../shared/ui/bili_coin_icon.dart';
-
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +13,7 @@ import '../../../core/platform/external_links.dart';
 import '../../../domain/app_failure.dart';
 import '../../../domain/video.dart';
 import '../../../shared/ui/app_notice.dart';
+import '../../../shared/ui/interaction_icon.dart';
 import '../../../shared/ui/video_card.dart';
 import '../application/video_actions_controller.dart';
 import '../domain/video_actions_repository.dart';
@@ -407,6 +405,7 @@ class VideoActionsBar extends StatelessWidget {
     }
 
     final detail = view.detail;
+    final selectionKey = ValueKey((detail.summary.id, state.loaded));
     final likes = compactCount(detail.likeCount ?? detail.summary.likeCount);
     final coins = compactCount(detail.coinCount);
     final favorites = compactCount(detail.favoriteCount);
@@ -417,10 +416,10 @@ class VideoActionsBar extends StatelessWidget {
         child: Row(
           children: [
             action(
-              Icon(
-                state.interaction.liked
-                    ? Icons.thumb_up_alt
-                    : Icons.thumb_up_alt_outlined,
+              InteractionIcon(
+                InteractionGlyph.like,
+                key: selectionKey,
+                selected: state.interaction.liked,
               ),
               state.interaction.liked ? '已点赞' : '点赞 $likes',
               likes,
@@ -430,7 +429,11 @@ class VideoActionsBar extends StatelessWidget {
               selected: state.interaction.liked,
             ),
             action(
-              BiliCoinIcon(filled: state.interaction.coins > 0),
+              InteractionIcon(
+                InteractionGlyph.coin,
+                key: selectionKey,
+                selected: state.interaction.coins > 0,
+              ),
               state.interaction.coins > 0
                   ? '已投 ${state.interaction.coins} 枚'
                   : '投币 $coins',
@@ -441,10 +444,10 @@ class VideoActionsBar extends StatelessWidget {
               selected: state.interaction.coins > 0,
             ),
             action(
-              Icon(
-                state.interaction.favorited
-                    ? BiliIcons.favoriteFilled
-                    : BiliIcons.favorite,
+              InteractionIcon(
+                InteractionGlyph.favorite,
+                key: selectionKey,
+                selected: state.interaction.favorited,
               ),
               state.interaction.favorited ? '已收藏' : '收藏 $favorites',
               favorites,
@@ -454,20 +457,20 @@ class VideoActionsBar extends StatelessWidget {
               selected: state.interaction.favorited,
             ),
             action(
-              const Icon(BiliIcons.share),
+              const InteractionIcon(InteractionGlyph.share),
               '分享',
               compactCount(detail.shareCount),
               () => owner._invoke(ShortcutAction.shareVideo),
             ),
             action(
-              const Icon(Icons.open_in_new),
+              const InteractionIcon(InteractionGlyph.external),
               '官方页面',
               '官网',
               owner._openOfficial,
             ),
             if (onDownload != null)
               action(
-                const Icon(Icons.download_outlined),
+                const InteractionIcon(InteractionGlyph.download),
                 '下载视频',
                 '下载',
                 onDownload,
@@ -521,6 +524,7 @@ class FeaturedVideoActions extends StatelessWidget {
     if (view == null) return const SizedBox.shrink();
     final interaction = view.state.interaction;
     final detail = view.detail;
+    final selectionKey = ValueKey((detail.summary.id, view.state.loaded));
     final owner = view.owner;
     final height = actionHeight(context);
     final buttonWidth = horizontal ? _horizontalButtonWidth : width;
@@ -587,10 +591,10 @@ class FeaturedVideoActions extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         action(
-          icon: Icon(
-            interaction.liked
-                ? Icons.thumb_up_alt
-                : Icons.thumb_up_alt_outlined,
+          icon: InteractionIcon(
+            InteractionGlyph.like,
+            key: selectionKey,
+            selected: interaction.liked,
           ),
           label: interaction.liked ? '已点赞' : '点赞',
           count: detail.likeCount ?? detail.summary.likeCount,
@@ -602,7 +606,11 @@ class FeaturedVideoActions extends StatelessWidget {
           selected: interaction.liked,
         ),
         action(
-          icon: BiliCoinIcon(filled: interaction.coins > 0),
+          icon: InteractionIcon(
+            InteractionGlyph.coin,
+            key: selectionKey,
+            selected: interaction.coins > 0,
+          ),
           label: interaction.coins > 0 ? '已投 ${interaction.coins} 枚' : '投币',
           count: detail.coinCount,
           onPressed: onAction(
@@ -613,10 +621,10 @@ class FeaturedVideoActions extends StatelessWidget {
           selected: interaction.coins > 0,
         ),
         action(
-          icon: Icon(
-            interaction.favorited
-                ? BiliIcons.favoriteFilled
-                : BiliIcons.favorite,
+          icon: InteractionIcon(
+            InteractionGlyph.favorite,
+            key: selectionKey,
+            selected: interaction.favorited,
           ),
           label: interaction.favorited ? '已收藏' : '收藏',
           count: detail.favoriteCount,
@@ -624,13 +632,13 @@ class FeaturedVideoActions extends StatelessWidget {
           selected: interaction.favorited,
         ),
         action(
-          icon: const Icon(Icons.chat_bubble_outline),
+          icon: const InteractionIcon(InteractionGlyph.comment),
           label: '评论',
           count: detail.replyCount,
           onPressed: onShowComments,
         ),
         action(
-          icon: const Icon(BiliIcons.share),
+          icon: const InteractionIcon(InteractionGlyph.share),
           label: '分享',
           count: detail.shareCount,
           onPressed: () => owner._invoke(ShortcutAction.shareVideo),

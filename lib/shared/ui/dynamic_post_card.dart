@@ -9,7 +9,7 @@ import 'image_viewer.dart';
 import 'dynamic_content_card.dart';
 import 'dynamic_post_text.dart';
 export 'dynamic_post_text.dart' show DynamicPostExpansionState;
-import 'bili_icons.dart';
+import 'interaction_icon.dart';
 import 'post_author_header.dart';
 import 'post_card_surface.dart';
 import 'video_card.dart';
@@ -558,7 +558,7 @@ class _DynamicActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget action(
-      IconData icon,
+      InteractionGlyph glyph,
       String label,
       int? count,
       VoidCallback? callback, {
@@ -577,9 +577,11 @@ class _DynamicActions extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  icon,
+                InteractionIcon(
+                  glyph,
+                  key: ValueKey(post.id),
                   size: 18,
+                  selected: selected,
                   color: selected
                       ? Theme.of(context).colorScheme.primary
                       : null,
@@ -601,15 +603,15 @@ class _DynamicActions extends StatelessWidget {
       spacing: 12,
       runSpacing: 4,
       children: [
-        action(BiliIcons.share, '分享动态', repostCount, onShare),
+        action(InteractionGlyph.share, '分享动态', repostCount, onShare),
         action(
-          BiliIcons.comment,
+          InteractionGlyph.comment,
           post.commentForbidden ? '评论已关闭' : '查看评论',
           post.commentCount,
           onComment,
         ),
         action(
-          BiliIcons.like,
+          InteractionGlyph.like,
           liked ? '取消点赞动态' : '点赞动态',
           likeCount,
           onLike,
