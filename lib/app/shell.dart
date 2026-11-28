@@ -34,6 +34,7 @@ import '../features/settings/domain/settings_category.dart';
 import '../features/settings/domain/app_settings.dart';
 import '../shared/ui/smooth_scroll_behavior.dart';
 import '../shared/ui/bili_icons.dart';
+import '../shared/ui/bottom_navigation_scroll_region.dart';
 import '../shared/ui/shortcut_hint.dart';
 import '../shared/ui/app_notice.dart';
 import '../shared/ui/featured_selection_scope.dart';
@@ -947,6 +948,11 @@ final class _BiliAppShellState extends State<BiliAppShell>
           child: LayoutBuilder(
             builder: (context, constraints) {
               final compact = _usesBottomNavigation(constraints.maxWidth);
+              final bottomNavigation =
+                  compact &&
+                  !tab.isPlayback &&
+                  !tab.isProfile &&
+                  !tab.hasOwnNavigation;
               final extended = switch (widget.sidebarStyle) {
                 SidebarStyle.automatic =>
                   constraints.maxWidth >= widget.sidebarExpandedWidth,
@@ -991,97 +997,114 @@ final class _BiliAppShellState extends State<BiliAppShell>
                   ] else
                     _tabStrip(context, navigationTools: navigationTools),
                   Expanded(
-                    key: const ValueKey('workspace-body'),
-                    child: Row(
-                      children: [
-                        _sidebarRegion(
-                          context,
-                          compact: compact,
-                          extended: extended,
-                        ),
-                        Expanded(
-                          child: AnimatedPadding(
-                            duration: compact || shouldReduceMotion(context)
-                                ? Duration.zero
-                                : const Duration(milliseconds: 240),
-                            curve: Curves.easeInOutCubic,
-                            padding: compact
-                                ? EdgeInsets.zero
-                                : EdgeInsets.fromLTRB(
-                                    _sidebarCollapsed ? 16 : 0,
-                                    12,
-                                    16,
-                                    16,
-                                  ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(
-                                compact ? 0 : 18,
-                              ),
-                              child: ColoredBox(
-                                color: colors.surface,
-                                // Switching a retained root restores dense image
-                                // lists. Keep that content stationary while the
-                                // bottom bar animates its selected destination.
-                                child: RepaintBoundary(
-                                  key: const ValueKey(
-                                    'workspace-primary-content',
-                                  ),
-                                  child: ScrollHeaderRegion(
-                                    enabled: compact,
-                                    child: ScrollHeaderLayout(
+                    child: BottomNavigationScrollRegion(
+                      destination: (tab.id, tab.location),
+                      enabled:
+                          bottomNavigation &&
+                          View.of(context).viewInsets.bottom == 0,
+                      navigationBuilder: bottomNavigation
+                          ? (context, visible) => _animatedBottomNavigation(
+                              context,
+                              scrollVisible: visible,
+                              // Resize the settled page once before it can
+                              // accept another wheel or touch gesture.
+                              animate: !tab.isFeatured,
+                            )
+                          : null,
+                      child: Row(
+                        key: const ValueKey('workspace-body'),
+                        children: [
+                          _sidebarRegion(
+                            context,
+                            compact: compact,
+                            extended: extended,
+                          ),
+                          Expanded(
+                            child: AnimatedPadding(
+                              duration: compact || shouldReduceMotion(context)
+                                  ? Duration.zero
+                                  : const Duration(milliseconds: 240),
+                              curve: Curves.easeInOutCubic,
+                              padding: compact
+                                  ? EdgeInsets.zero
+                                  : EdgeInsets.fromLTRB(
+                                      _sidebarCollapsed ? 16 : 0,
+                                      12,
+                                      16,
+                                      16,
+                                    ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(
+                                  compact ? 0 : 18,
+                                ),
+                                child: ColoredBox(
+                                  color: colors.surface,
+                                  // Switching a retained root restores dense image
+                                  // lists. Keep that content stationary while the
+                                  // bottom bar animates its selected destination.
+                                  child: RepaintBoundary(
+                                    key: const ValueKey(
+                                      'workspace-primary-content',
+                                    ),
+                                    child: ScrollHeaderRegion(
                                       enabled: compact,
-                                      header:
-                                          compact &&
-                                              tab.location.path != '/search' &&
-                                              !tab.isPlayback &&
-                                              !tab.isProfile &&
-                                              !tab.hasOwnNavigation &&
-                                              !tab.isMessages &&
-                                              sectionForLocation(
-                                                    tab.location,
-                                                    compact: _compactChannels,
-                                                  ) ==
-                                                  WorkspaceSection.home
-                                          ? _tools(context)
-                                          : const SizedBox.shrink(),
-                                      child: Column(
-                                        children: [
-                                          if (tab.location.path != '/search' &&
-                                              !tab.isPlayback &&
-                                              !tab.isProfile &&
-                                              !tab.hasOwnNavigation &&
-                                              !tab.isMessages &&
-                                              !tab.isFeatured)
-                                            LayoutBuilder(
-                                              builder: (context, bounds) =>
-                                                  _navigationHeader(
-                                                    context,
-                                                    bounds,
-                                                    _channelBar(
+                                      child: ScrollHeaderLayout(
+                                        enabled: compact,
+                                        header:
+                                            compact &&
+                                                tab.location.path !=
+                                                    '/search' &&
+                                                !tab.isPlayback &&
+                                                !tab.isProfile &&
+                                                !tab.hasOwnNavigation &&
+                                                !tab.isMessages &&
+                                                sectionForLocation(
+                                                      tab.location,
+                                                      compact: _compactChannels,
+                                                    ) ==
+                                                    WorkspaceSection.home
+                                            ? _tools(context)
+                                            : const SizedBox.shrink(),
+                                        child: Column(
+                                          children: [
+                                            if (tab.location.path !=
+                                                    '/search' &&
+                                                !tab.isPlayback &&
+                                                !tab.isProfile &&
+                                                !tab.hasOwnNavigation &&
+                                                !tab.isMessages &&
+                                                !tab.isFeatured)
+                                              LayoutBuilder(
+                                                builder: (context, bounds) =>
+                                                    _navigationHeader(
                                                       context,
+                                                      bounds,
+                                                      _channelBar(
+                                                        context,
+                                                        compact: compact,
+                                                      ),
+                                                      showTools: compact
+                                                          ? false
+                                                          : null,
                                                       compact: compact,
                                                     ),
-                                                    showTools: compact
-                                                        ? false
-                                                        : null,
-                                                    compact: compact,
-                                                  ),
+                                              ),
+                                            Expanded(
+                                              child: PageToolbarLeading(
+                                                leading:
+                                                    tab.isMessages &&
+                                                        _frameShowsBack(
+                                                          context,
+                                                        ) &&
+                                                        widget.windowControlsBuilder ==
+                                                            null
+                                                    ? _backButton()
+                                                    : null,
+                                                child: pages,
+                                              ),
                                             ),
-                                          Expanded(
-                                            child: PageToolbarLeading(
-                                              leading:
-                                                  tab.isMessages &&
-                                                      _frameShowsBack(
-                                                        context,
-                                                      ) &&
-                                                      widget.windowControlsBuilder ==
-                                                          null
-                                                  ? _backButton()
-                                                  : null,
-                                              child: pages,
-                                            ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -1089,15 +1112,10 @@ final class _BiliAppShellState extends State<BiliAppShell>
                               ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                  if (compact &&
-                      !tab.isPlayback &&
-                      !tab.isProfile &&
-                      !tab.hasOwnNavigation)
-                    _animatedBottomNavigation(context),
                 ],
               );
             },
@@ -1854,31 +1872,42 @@ final class _BiliAppShellState extends State<BiliAppShell>
     );
   }
 
-  Widget _animatedBottomNavigation(BuildContext context) {
-    // Scaffold clears MediaQuery's body insets. Read this view's inset to
-    // hide immediately on keyboard opening and animate only the return.
-    final visible = View.of(context).viewInsets.bottom == 0;
-    final disableAnimations = shouldReduceMotion(context);
-    final target = visible ? 1.0 : 0.0;
+  Widget _animatedBottomNavigation(
+    BuildContext context, {
+    required bool scrollVisible,
+    required bool animate,
+  }) {
+    // Scaffold clears the body's insets. Read the view to hide immediately
+    // when the keyboard opens, including during a scroll-driven transition.
+    final keyboardOpen = View.of(context).viewInsets.bottom > 0;
+    final animateVisibility =
+        animate && !keyboardOpen && !shouldReduceMotion(context);
+    final target = scrollVisible && !keyboardOpen ? 1.0 : 0.0;
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: target, end: target),
-      duration: visible && !disableAnimations
+      duration: animateVisibility
           ? const Duration(milliseconds: 180)
           : Duration.zero,
       curve: Curves.easeOutCubic,
       child: _bottomNavigation(context),
       builder: (context, value, child) {
-        final progress = disableAnimations ? 1.0 : value;
-        if (!visible || progress == 0) {
+        final progress = animateVisibility ? value : target;
+        if (progress == 0) {
           return const SizedBox.shrink();
         }
-        return IgnorePointer(
-          ignoring: progress < 1,
-          child: ClipRect(
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              heightFactor: progress,
-              child: Opacity(opacity: progress, child: child),
+        return ExcludeFocus(
+          excluding: progress < 1,
+          child: ExcludeSemantics(
+            excluding: progress < 1,
+            child: IgnorePointer(
+              ignoring: progress < 1,
+              child: ClipRect(
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  heightFactor: progress,
+                  child: Opacity(opacity: progress, child: child),
+                ),
+              ),
             ),
           ),
         );

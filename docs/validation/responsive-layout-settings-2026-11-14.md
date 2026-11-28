@@ -63,3 +63,11 @@
 直播间使用下方样式时，房间资料按内容高度贴在左栏底部，播放器占满其上方的剩余空间，直播画面沿用播放器的画幅设置。窗口增高时，增加的高度全部分给播放器。窗口较矮且固定使用下方样式时，资料区可在限高内滚动。
 
 主窗口和独立播放窗使用同一份设置。三项偏好存入 `preferences.v1` 的 `responsiveLayout.playbackSplitStyles`，快照版本 56，数据库版本 3。旧快照的有效共用样式 `playbackSplitStyle` 升级后作为三项的初始值。新配置、恢复默认及缺失或无效的样式采用「信息在右侧」。分栏宽度阈值继续共用。组件测试覆盖独立选择、进入／退出边界、字体缩放、竖屏素材、强制样式、隐藏信息、选集、评论、直播滚动及输入草稿。原生应用构建与实机视觉验收由用户另行确认。
+
+## 滚动时收起底栏（2026-11-28）
+
+有底栏的页面向上滑动时收起导航，反向滑动恢复。桌面窄窗的纵向滚轮也可以恢复和收起底栏。切换目的地、从侧栏切回底栏或关闭软键盘后恢复可见。收起让出完整的导航高度，系统安全区继续保留。
+
+参考 PiliPlus `217fb54f51f6764176319bbdedab2a7522d75401` 中按用户纵向滚动方向显隐导航的行为，在 BiliSail 的 [工作区内容层](../../lib/shared/ui/bottom_navigation_scroll_region.dart) 独立实现。拖动和滚轮信号触发显隐，惯性、横向滑动或程序跳转保持当前显隐状态。精选在纵向分页落位后一次性更新可用高度，避免改变已开始的动画目标。 [PiliPlus 滚动处理](https://github.com/bggRGjQaUbCoE/PiliPlus/blob/217fb54f51f6764176319bbdedab2a7522d75401/lib/pages/common/common_page.dart) · [PiliPlus 导航布局](https://github.com/bggRGjQaUbCoE/PiliPlus/blob/217fb54f51f6764176319bbdedab2a7522d75401/lib/pages/main/view.dart)
+
+[组件测试](../../test/app/bottom_navigation_scroll_test.dart) 覆盖首页、动态、我的、精选分页、鼠标滚轮、键盘、路由及侧栏切换。触摸与滚轮手感仍需实机验收。
