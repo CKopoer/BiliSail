@@ -214,6 +214,7 @@ class InputRouteObserver extends NavigatorObserver {
   Set<Route<Object?>> get presentationRoutes => _ledger.presentationRoutes;
   set onChanged(VoidCallback? callback) => _ledger.onChanged = callback;
   Route<Object?>? get top => routes.lastOrNull;
+  bool get presenting => presentationRoutes.contains(top);
   bool get modal => top is PopupRoute && !presentationRoutes.contains(top);
   void presentation(Route<Object?> route) => presentationRoutes.add(route);
   void _changed() => _ledger.onChanged?.call();
@@ -478,6 +479,7 @@ class _AppInputHostState<C> extends State<AppInputHost<C>>
                       null ||
                   focus.findAncestorWidgetOfExactType<InkWell>() != null)),
       modal: widget.routes.modal || widget.dispatcher.barriers != 0,
+      presentation: widget.routes.presenting,
       topRoute: widget.routes.top,
     );
   }

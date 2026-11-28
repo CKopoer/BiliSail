@@ -74,9 +74,10 @@ final class ShortcutContext {
     this.editing = false,
     this.reserveActivation = false,
     this.modal = false,
+    this.presentation = false,
     this.topRoute,
   });
-  final bool activeWindow, editing, reserveActivation, modal;
+  final bool activeWindow, editing, reserveActivation, modal, presentation;
   final Object? topRoute;
 }
 
@@ -145,6 +146,7 @@ class ShortcutDispatcher<C> {
   int barriers = 0;
   void Function(DispatchResult<C>)? onResult;
   final Map<ShortcutChord, C> localBindings = {};
+  final Map<ShortcutChord, C> pageBindings = {};
   void replaceBindings(
     Map<ShortcutChord, C> bindings, {
     Set<ShortcutChord> disabled = const {},
@@ -378,6 +380,13 @@ class ShortcutDispatcher<C> {
     }
     final chord = stroke.chord;
     final configured = _bindings[chord];
+    final pageCommand = context.modal || context.editing || context.presentation
+        ? null
+        : pageBindings[chord];
+    final pageTargets = pageCommand == null
+        ? const <Never>[]
+        : _activeTargets(pageCommand, CommandScope.page, context);
+    final pageBound = pageTargets.isNotEmpty;
     final applicationCommand =
         configured != null && scopeFor(configured) == CommandScope.application;
     final local = context.modal ? localBindings[chord] : null;
@@ -386,6 +395,8 @@ class ShortcutDispatcher<C> {
               (applicationCommand && editorException(configured, chord!)
                   ? configured
                   : null)
+        : pageBound
+        ? pageCommand
         : configured;
     if (command == null) {
       return _result(
@@ -421,19 +432,14 @@ class ShortcutDispatcher<C> {
         ),
       );
     }
-    final scope = local != null ? CommandScope.local : scopeFor(command);
-    final targets = _targets
-        .where(
-          (target) =>
-              !target.disposed &&
-              target.active() &&
-              target.scope == scope &&
-              target.commands.containsKey(command) &&
-              (!context.modal ||
-                  scope == CommandScope.application ||
-                  identical(target.route, context.topRoute)),
-        )
-        .toList();
+    final scope = local != null
+        ? CommandScope.local
+        : pageBound
+        ? CommandScope.page
+        : scopeFor(command);
+    final targets = pageBound
+        ? pageTargets
+        : _activeTargets(command, scope, context);
     if (targets.length != 1) {
       return _result(
         DispatchResult(
@@ -461,4 +467,21 @@ class ShortcutDispatcher<C> {
       ),
     );
   }
+
+  List<CommandRegistration<C>> _activeTargets(
+    C command,
+    CommandScope scope,
+    ShortcutContext context,
+  ) => _targets
+      .where(
+        (target) =>
+            !target.disposed &&
+            target.active() &&
+            target.scope == scope &&
+            target.commands.containsKey(command) &&
+            (!context.modal ||
+                scope == CommandScope.application ||
+                identical(target.route, context.topRoute)),
+      )
+      .toList();
 }

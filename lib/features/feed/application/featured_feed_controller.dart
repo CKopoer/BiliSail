@@ -47,10 +47,14 @@ class FeaturedFeedController extends ChangeNotifier {
   VideoSummary? at(int position) =>
       position >= first && position < end ? _items[position - first] : null;
 
-  void setActive(bool value) {
-    if (active == value) return;
+  void setActive(bool value, {bool reload = false}) {
+    final changed = active != value;
     active = value;
-    if (!value) {
+    if (active && reload) {
+      unawaited(refresh());
+    } else if (!changed) {
+      return;
+    } else if (!active) {
       _request?.cancel();
       _request = null;
       _loading = null;

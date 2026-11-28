@@ -1,20 +1,24 @@
 import 'dart:async';
 
 import 'package:flutter/gestures.dart';
-import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/input/input_stroke.dart';
+import '../../../core/input/shortcut_dispatcher.dart';
+import '../../../core/presentation/input_scope.dart';
 import '../../../core/presentation/workspace_activity.dart';
 import '../../../core/presentation/page_back_scope.dart';
 import '../../../core/presentation/motion_preferences.dart';
 import '../../../domain/content_link.dart';
 import '../../../domain/recommendation_playback_context.dart';
+import '../../../domain/shortcut_command.dart';
 import '../../../shared/ui/recommendation_playback_scope.dart';
 import '../../../domain/user.dart';
 import '../../../domain/video.dart';
 import '../../../shared/ui/content_link_scope.dart';
 import '../../../shared/ui/featured_paging_scope.dart';
+import '../../../shared/ui/featured_selection_scope.dart';
 import '../../../shared/ui/playback_navigation.dart';
 import '../../../shared/ui/playback_page_commands.dart';
 import '../../../shared/ui/playback_split_layout.dart';
@@ -56,12 +60,13 @@ class FeaturedVideoScreen extends ConsumerStatefulWidget {
 class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen> {
   late final feed = widget.createController()..addListener(_changed);
   final pages = PageController(keepPage: false);
-  final focus = FocusNode(debugLabel: '精选画面');
   _Info? panel;
   Timer? wheelIdle;
   double wheelDelta = 0;
   bool wheelConsumed = false, moving = false, active = false;
   bool presented = false;
+  bool resettingPage = false;
+  int? selectionRevision;
   int refreshRevision = 0;
   late bool seedPositionPending = widget.seedLink.position != null;
 
@@ -71,8 +76,18 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen> {
     active =
         WorkspaceActivity.isActive(context) &&
         WorkspaceMediaPermission.isAllowed(context);
+    final revision = feed.seed == null
+        ? FeaturedSelectionScope.revisionOf(context)
+        : null;
+    final reload =
+        active &&
+        presented &&
+        selectionRevision != null &&
+        revision != null &&
+        selectionRevision != revision;
+    if (active || selectionRevision == null) selectionRevision = revision;
     if (active) presented = true;
-    feed.setActive(active);
+    feed.setActive(active, reload: reload);
   }
 
   void _changed() {
@@ -81,8 +96,11 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen> {
       refreshRevision = feed.refreshRevision;
       seedPositionPending = false;
       panel = null;
+      resettingPage = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && pages.hasClients) pages.jumpToPage(feed.selected);
+        if (!mounted) return;
+        if (pages.hasClients) pages.jumpToPage(feed.selected);
+        resettingPage = false;
       });
     }
     setState(() {});
@@ -92,26 +110,20 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen> {
   void dispose() {
     wheelIdle?.cancel();
     pages.dispose();
-    focus.dispose();
     feed.dispose();
     super.dispose();
   }
 
   Future<void> _step(int direction, {bool loop = false}) async {
-    if (!active ||
-        moving ||
-        panel != null ||
-        ModalRoute.of(context)?.isCurrent == false) {
-      return;
-    }
+    if (!_canStep) return;
     final before = feed.selected;
+    final revision = feed.refreshRevision;
     var target = before + direction;
     if (target >= feed.end && feed.hasMore) await feed.load();
     if (!mounted ||
-        !active ||
-        moving ||
+        !_canStep ||
         before != feed.selected ||
-        panel != null) {
+        revision != feed.refreshRevision) {
       return;
     }
     if (target >= feed.end && loop && !feed.hasMore) target = feed.first;
@@ -133,8 +145,20 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen> {
     }
   }
 
+  bool get _canStep =>
+      active &&
+      !moving &&
+      !resettingPage &&
+      panel == null &&
+      ModalRoute.of(context)?.isCurrent != false;
+
   void _settle(int index) {
-    if (!active || index == feed.selected || feed.at(index) == null) return;
+    if (!active ||
+        resettingPage ||
+        index == feed.selected ||
+        feed.at(index) == null) {
+      return;
+    }
     seedPositionPending = false;
     feed.select(index);
   }
@@ -161,23 +185,15 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen> {
     });
   }
 
-  Future<void> _refresh() async {
-    if (moving || feed.busy) return;
-    await feed.refresh();
-  }
-
   void _toggle(_Info kind) =>
       setState(() => panel = panel == kind ? null : kind);
 
-  KeyEventResult _key(FocusNode node, KeyEvent event) {
-    if (panel != null || event is! KeyDownEvent) return KeyEventResult.ignored;
-    final key = event.logicalKey;
-    if (key != LogicalKeyboardKey.arrowDown &&
-        key != LogicalKeyboardKey.arrowUp) {
-      return KeyEventResult.ignored;
+  CommandOutcome _pageWithKey(InputStroke stroke, int direction) {
+    if (stroke.phase != InputPhase.down || !_canStep) {
+      return CommandOutcome.noOp;
     }
-    unawaited(_step(key == LogicalKeyboardKey.arrowDown ? 1 : -1));
-    return KeyEventResult.handled;
+    unawaited(_step(direction));
+    return CommandOutcome.completed;
   }
 
   bool _scrollEnded(ScrollEndNotification notification) {
@@ -203,6 +219,18 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen> {
     final detail = current == null
         ? null
         : ref.watch(videoDetailProvider(current.id));
+    return CommandTargetScope<Object>(
+      scope: CommandScope.page,
+      active: active && panel == null,
+      commands: {
+        FeaturedPagingShortcut.previous: (stroke) => _pageWithKey(stroke, -1),
+        FeaturedPagingShortcut.next: (stroke) => _pageWithKey(stroke, 1),
+      },
+      child: _viewer(current, detail),
+    );
+  }
+
+  Widget _viewer(VideoSummary? current, AsyncValue<VideoDetail>? detail) {
     return PageBackHandler(
       enabled: active && (panel != null || widget.onReturnToVideo != null),
       onBack: () {
@@ -213,102 +241,103 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen> {
         }
         return true;
       },
-      child: Column(
+      child: Stack(
+        fit: StackFit.expand,
         children: [
-          SizedBox(
-            height: 44,
-            child: Row(
-              children: [
-                if (feed.seed != null)
-                  BackButton(
-                    onPressed:
-                        widget.onReturnToVideo ??
-                        PlaybackNavigation.maybeOf(context)?.onBack,
-                  ),
-                const SizedBox(width: 12),
-                Text('精选', style: Theme.of(context).textTheme.titleMedium),
-                const Spacer(),
-                if (feed.error case final message? when current != null)
-                  Flexible(
-                    child: TextButton(
-                      onPressed: feed.load,
-                      child: Text(
-                        '$message · 重试',
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ),
-                IconButton(
-                  tooltip: '换一批',
-                  onPressed: feed.busy ? null : _refresh,
-                  icon: const Icon(Icons.refresh),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: current == null
-                ? feed.busy
-                      ? const StateView.loading(message: '正在加载精选…')
-                      : StateView.empty(
-                          message: feed.error ?? '暂无精选视频',
-                          actionLabel: '重新加载',
-                          onAction: feed.hasMore ? feed.load : _refresh,
-                        )
-                : LayoutBuilder(
-                    builder: (context, bounds) {
-                      final wide = bounds.maxWidth >= widget.splitWidth;
-                      final info = detail?.value;
-                      final show = panel != null && info != null;
-                      return Stack(
-                        children: [
-                          Positioned.fill(
-                            right: wide && show
-                                ? PlaybackSplitLayout.sidebarWidth
-                                : 0,
-                            child: Focus(
-                              focusNode: focus,
-                              onKeyEvent: _key,
-                              child:
-                                  NotificationListener<ScrollEndNotification>(
-                                    onNotification: _scrollEnded,
-                                    child: PageView.builder(
-                                      controller: pages,
-                                      scrollDirection: Axis.vertical,
-                                      physics: show
-                                          ? const NeverScrollableScrollPhysics()
-                                          : _FeaturedScrollPhysics(feed.first),
-                                      itemCount: feed.end,
-                                      itemBuilder: (context, index) =>
-                                          _page(index, detail),
-                                    ),
-                                  ),
+          current == null
+              ? feed.busy
+                    ? const StateView.loading(message: '正在加载精选…')
+                    : StateView.empty(
+                        message: feed.error ?? '暂无精选视频',
+                        actionLabel: '重新加载',
+                        onAction: feed.hasMore ? feed.load : feed.refresh,
+                      )
+              : LayoutBuilder(
+                  builder: (context, bounds) {
+                    final wide = bounds.maxWidth >= widget.splitWidth;
+                    final info = detail?.value;
+                    final show = panel != null && info != null;
+                    return Stack(
+                      children: [
+                        Positioned.fill(
+                          right: wide && show
+                              ? PlaybackSplitLayout.sidebarWidth
+                              : 0,
+                          child: NotificationListener<ScrollEndNotification>(
+                            onNotification: _scrollEnded,
+                            child: PageView.builder(
+                              controller: pages,
+                              scrollDirection: Axis.vertical,
+                              physics: show
+                                  ? const NeverScrollableScrollPhysics()
+                                  : _FeaturedScrollPhysics(feed.first),
+                              itemCount: feed.end,
+                              itemBuilder: (context, index) =>
+                                  _page(index, detail),
                             ),
                           ),
-                          if (show && !wide)
-                            Positioned.fill(
-                              child: GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onTap: () => setState(() => panel = null),
-                              ),
+                        ),
+                        if (show && !wide)
+                          Positioned.fill(
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => setState(() => panel = null),
                             ),
-                          if (show)
-                            Positioned(
-                              right: 0,
-                              left: wide ? null : 0,
-                              top: wide ? 0 : null,
-                              bottom: 0,
-                              width: wide
-                                  ? PlaybackSplitLayout.sidebarWidth
-                                  : null,
-                              height: wide ? null : bounds.maxHeight * .62,
-                              child: _infoPanel(info),
-                            ),
-                        ],
-                      );
-                    },
+                          ),
+                        if (show)
+                          Positioned(
+                            right: 0,
+                            left: wide ? null : 0,
+                            top: wide ? 0 : null,
+                            bottom: 0,
+                            width: wide
+                                ? PlaybackSplitLayout.sidebarWidth
+                                : null,
+                            height: wide ? null : bounds.maxHeight * .62,
+                            child: _infoPanel(info),
+                          ),
+                      ],
+                    );
+                  },
+                ),
+          if (feed.error case final message?
+              when current != null && panel == null)
+            PositionedDirectional(
+              start: feed.seed == null ? 8 : 64,
+              end: 8,
+              top: 8,
+              child: Align(
+                alignment: AlignmentDirectional.topStart,
+                child: TextButton(
+                  onPressed: feed.load,
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    backgroundColor: Colors.black54,
                   ),
-          ),
+                  child: Text('$message · 重试', overflow: TextOverflow.ellipsis),
+                ),
+              ),
+            ),
+          if (feed.seed != null)
+            PositionedDirectional(
+              start: 8,
+              top: 8,
+              child: BackButton(
+                style: IconButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  backgroundColor: Colors.black54,
+                ),
+                onPressed: () {
+                  if (panel != null) {
+                    setState(() => panel = null);
+                  } else {
+                    (widget.onReturnToVideo ??
+                            PlaybackNavigation.maybeOf(context)?.onBack)
+                        ?.call();
+                  }
+                },
+              ),
+            ),
         ],
       ),
     );
@@ -319,7 +348,6 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen> {
     final detail = result?.value;
     return Listener(
       onPointerSignal: _wheel,
-      onPointerDown: (_) => focus.requestFocus(),
       child: ColoredBox(
         color: Colors.black,
         child: index != feed.selected || item == null
@@ -353,14 +381,6 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen> {
                     ),
                   if (detail != null)
                     Positioned(right: 4, bottom: 62, child: _actions(detail)),
-                  Positioned(
-                    right: 6,
-                    top: 4,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [_arrow(-1), _arrow(1)],
-                    ),
-                  ),
                 ],
               ),
       ),
@@ -397,8 +417,6 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen> {
             ? widget.seedLink
             : const ContentLink(),
         child: FeaturedPagingScope(
-          step: (dir) => unawaited(_step(dir)),
-          hasFocus: () => focus.hasFocus && panel == null,
           child: PlaybackPageCommands(
             previousPart: () => _step(-1),
             nextPart: () => _step(1),
@@ -471,19 +489,6 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen> {
       ],
     ),
   );
-
-  Widget _arrow(int direction) {
-    final enabled = direction < 0
-        ? feed.selected > feed.first
-        : feed.selected + 1 < feed.end || feed.hasMore;
-    return IconButton.filledTonal(
-      tooltip: direction < 0 ? '上一条' : '下一条',
-      onPressed: enabled ? () => _step(direction) : null,
-      icon: Icon(
-        direction < 0 ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-      ),
-    );
-  }
 }
 
 /// Earlier pages may have been evicted while absolute pager positions stay stable.

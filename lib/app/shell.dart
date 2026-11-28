@@ -36,6 +36,7 @@ import '../shared/ui/smooth_scroll_behavior.dart';
 import '../shared/ui/bili_icons.dart';
 import '../shared/ui/shortcut_hint.dart';
 import '../shared/ui/app_notice.dart';
+import '../shared/ui/featured_selection_scope.dart';
 import '../shared/ui/playback_navigation.dart';
 import '../shared/ui/workspace_link.dart';
 import '../shared/ui/app_dialog.dart';
@@ -214,6 +215,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
   final _searchDrafts = <String, String>{};
   final _pageBack = <String, PageBackController>{};
   final _pagingProgress = <(String, bool), TabPagingProgress>{};
+  final _featuredSelection = ValueNotifier(0);
   final _lastChannels = <WorkspaceSection, HomeChannel>{};
   final _lastSections = <HomeChannel, String>{};
   SettingsCategory _lastSettingsCategory = SettingsCategory.appearance;
@@ -459,6 +461,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _featuredSelection.dispose();
     for (final controller in _searchControllers.values) {
       controller.dispose();
     }
@@ -775,7 +778,10 @@ final class _BiliAppShellState extends State<BiliAppShell>
     // Keyboard resizing changes geometry, not the cached pages' configuration.
     final pages = WorkspaceLinkScope(
       openBackground: _dualTabs || _singlePage ? null : _openBackgroundTab,
-      child: Builder(builder: _pages),
+      child: FeaturedSelectionScope(
+        notifier: _featuredSelection,
+        child: Builder(builder: _pages),
+      ),
     );
     final main = CommandTargetScope<Object>(
       scope: CommandScope.workspace,
@@ -1390,7 +1396,8 @@ final class _BiliAppShellState extends State<BiliAppShell>
     }
     switch (section) {
       case WorkspaceSection.featured:
-        context.go('/featured');
+        _featuredSelection.value++;
+        if (!_workspace.active.isFeatured) context.go('/featured');
       case WorkspaceSection.home:
         final channels = channelsForSection(section, compact: _compactChannels);
         final previous = _lastChannels[section];
@@ -1864,9 +1871,9 @@ final class _BiliAppShellState extends State<BiliAppShell>
       return _unselectedBottomNavigation(context, sections);
     }
     // A highlighted group can include other pages, such as history under
-    // Mine. Suppress re-selection only on the destination's own page.
+    // Mine. Featured explicitly refreshes when re-selected.
     final atSelectedDestination = switch (selected) {
-      WorkspaceSection.featured => tab.isFeatured,
+      WorkspaceSection.featured => false,
       WorkspaceSection.mine => tab.isAccount,
       WorkspaceSection.settings => tab.isSettings,
       _ => tab.isBrowse,

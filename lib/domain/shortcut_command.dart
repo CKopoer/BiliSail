@@ -83,3 +83,5 @@ enum ReservedShortcut {
   imageZoomIn,
   imageZoomOut,
 }
+
+enum FeaturedPagingShortcut { previous, next }

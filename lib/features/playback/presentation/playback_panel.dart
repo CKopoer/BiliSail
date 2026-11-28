@@ -1156,25 +1156,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
       },
       commands: {
         for (final action in _shortcuts.capabilities)
-          action: (stroke) {
-            final paging = context
-                .getInheritedWidgetOfExactType<FeaturedPagingScope>();
-            final key = stroke.chord;
-            if (!_fullScreen &&
-                !_miniPlayer &&
-                paging != null &&
-                paging.hasFocus() &&
-                (action == ShortcutAction.volumeUp ||
-                    action == ShortcutAction.volumeDown) &&
-                key?.modifiers == 0 &&
-                (key?.key == 'ArrowUp' || key?.key == 'ArrowDown')) {
-              if (stroke.phase == InputPhase.down) {
-                paging.step(key?.key == 'ArrowUp' ? -1 : 1);
-              }
-              return CommandOutcome.completed;
-            }
-            return _shortcuts.execute(action, stroke);
-          },
+          action: (stroke) => _shortcuts.execute(action, stroke),
         ShortcutAction.toggleMiniPlayer: _toggleMiniPlayer,
         ShortcutAction.returnToBrowser: (stroke) {
           final navigation = _navigation.value;

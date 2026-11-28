@@ -73,6 +73,10 @@ final class ShortcutCoordinator extends ShortcutDispatcher<Object> {
       for (final key in ['ArrowDown', 'Minus', 'NumpadSubtract'])
         ShortcutChord(key): ReservedShortcut.imageZoomOut,
     });
+    pageBindings.addAll({
+      const ShortcutChord('ArrowUp'): FeaturedPagingShortcut.previous,
+      const ShortcutChord('ArrowDown'): FeaturedPagingShortcut.next,
+    });
     if (onBossKey != null) {
       register(
         owner: this,
