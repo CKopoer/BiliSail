@@ -5,6 +5,10 @@ import 'package:bilisail/domain/page_result.dart';
 import 'package:bilisail/domain/recommendation_settings.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
+import 'package:bilisail/features/auth/application/auth_controller.dart';
+import 'package:bilisail/features/auth/domain/auth_repository.dart';
+import 'package:bilisail/features/comments/application/comments_controller.dart';
+import 'package:bilisail/features/comments/domain/comments_repository.dart';
 import 'package:bilisail/features/feed/application/featured_feed_controller.dart';
 import 'package:bilisail/features/feed/domain/feed_repository.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
@@ -12,6 +16,7 @@ import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
 import 'package:bilisail/features/video/application/video_controller.dart';
 import 'package:bilisail/features/video/domain/video_repository.dart';
 import 'package:bilisail/features/video/presentation/featured_video_screen.dart';
+import 'package:bilisail/shared/ui/measured_list_view.dart';
 import 'package:bilisail/shared/ui/playback_page_commands.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
@@ -114,6 +119,113 @@ void main() {
       expect(videos.refreshes, [false, true, true, true]);
       expect(find.byKey(const ValueKey('playing-1')), findsOneWidget);
     });
+  }
+
+  for (final comments in [true, false]) {
+    testWidgets(
+      'featured ${comments ? 'comments' : 'description'} scroll leaves the bottom navigation alone',
+      (tester) async {
+        _size(tester, 390);
+        final videos = _Videos(withPanelContent: true);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              authControllerProvider.overrideWith(_GuestAuth.new),
+              videoRepositoryProvider.overrideWithValue(videos),
+              videoCommentsRepositoryProvider.overrideWithValue(_Comments()),
+            ],
+            child: InputTestApp(
+              home: BiliAppShell(
+                location: '/featured',
+                navigationMode: WorkspaceNavigationMode.singlePage,
+                pageBuilder: (_, _) => _screen(videos),
+                child: const SizedBox.shrink(),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final bar = find.byKey(const ValueKey('workspace-bottom-navigation'));
+        final pager = find.byType(PageView);
+        final list = find.byType(comments ? MeasuredListView : ListView);
+        ScrollPosition position() => tester
+            .state<ScrollableState>(
+              find
+                  .descendant(of: list, matching: find.byType(Scrollable))
+                  .first,
+            )
+            .position;
+
+        Future<void> openPanel(int clip) async {
+          await tester.tap(
+            comments
+                ? find.byIcon(Icons.chat_bubble_outline)
+                : find.text('片段 $clip'),
+          );
+          await tester.pumpAndSettle();
+        }
+
+        Future<void> wheel(Finder area, double dy) async {
+          tester.binding.handlePointerEvent(
+            PointerScrollEvent(
+              kind: PointerDeviceKind.mouse,
+              position: tester.getCenter(area),
+              scrollDelta: Offset(0, dy),
+            ),
+          );
+          await tester.pumpAndSettle();
+          await tester.pump(const Duration(milliseconds: 190));
+        }
+
+        Future<void> drag(double dy) async {
+          await tester.timedDrag(
+            list,
+            Offset(0, dy),
+            const Duration(milliseconds: 300),
+          );
+          await tester.pumpAndSettle();
+        }
+
+        expect(bar.hitTestable(), findsOneWidget);
+        await openPanel(1);
+        await drag(-160);
+        final afterDrag = position().pixels;
+        expect(afterDrag, greaterThan(0));
+        expect(bar.hitTestable(), findsOneWidget);
+        await wheel(list, 130);
+        expect(position().pixels, greaterThan(afterDrag));
+        expect(bar.hitTestable(), findsOneWidget);
+
+        await tester.tap(find.byType(CloseButton));
+        await tester.pumpAndSettle();
+        await wheel(pager, 130);
+        expect(find.byKey(const ValueKey('playing-2')), findsOneWidget);
+        expect(bar, findsNothing);
+
+        await openPanel(2);
+        position().jumpTo(300);
+        await tester.pumpAndSettle();
+        await drag(120);
+        final afterReverseDrag = position().pixels;
+        expect(afterReverseDrag, lessThan(300));
+        expect(bar, findsNothing);
+        await wheel(list, -130);
+        expect(position().pixels, lessThan(afterReverseDrag));
+        expect(bar, findsNothing);
+        position().jumpTo(0);
+        await tester.pumpAndSettle();
+        await wheel(list, -130);
+        await drag(120);
+        expect(bar, findsNothing);
+
+        await tester.tap(find.byType(CloseButton));
+        await tester.pumpAndSettle();
+        await wheel(pager, -130);
+        expect(find.byKey(const ValueKey('playing-1')), findsOneWidget);
+        expect(bar.hitTestable(), findsOneWidget);
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.windows),
+    );
   }
 
   testWidgets(
@@ -278,6 +390,9 @@ Widget _screen(
 );
 
 class _Videos implements FeaturedFeedRepository, VideoRepository {
+  _Videos({this.withPanelContent = false});
+
+  final bool withPanelContent;
   final items = List.generate(5, (index) {
     final i = index + 1;
     return VideoSummary(
@@ -316,7 +431,8 @@ class _Videos implements FeaturedFeedRepository, VideoRepository {
     final item = items.singleWhere((video) => video.id == id);
     return VideoDetail(
       summary: item,
-      description: '简介',
+      aid: withPanelContent ? item.previewCid : null,
+      description: withPanelContent ? '分段简介\n' * 60 : '简介',
       parts: [
         VideoPart(
           cid: item.previewCid!,
@@ -327,4 +443,36 @@ class _Videos implements FeaturedFeedRepository, VideoRepository {
       ],
     );
   }
+}
+
+class _Comments extends Fake implements CommentsRepository {
+  @override
+  String get accountScope => 'guest';
+
+  @override
+  int get sessionEpoch => 0;
+
+  @override
+  Future<CommentPage> load(
+    String oid,
+    int page,
+    CommentSort sort,
+    RequestCancellation cancellation, {
+    String? cursor,
+  }) async => CommentPage(
+    items: List.generate(
+      40,
+      (index) => CommentEntry(
+        id: '$index',
+        author: '用户 $index',
+        message: '评论内容 $index',
+      ),
+    ),
+    hasMore: false,
+  );
+}
+
+class _GuestAuth extends AuthController {
+  @override
+  AuthState build() => const AuthState();
 }

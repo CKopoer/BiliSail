@@ -5,6 +5,32 @@ import 'package:flutter/widgets.dart';
 import '../../core/presentation/input_scope.dart';
 import '../../core/presentation/workspace_activity.dart';
 
+final _excludedScrollInput = Expando<bool>();
+
+/// Keeps a panel's own scrolling independent of the workspace navigation bar.
+class BottomNavigationScrollExclusion extends StatelessWidget {
+  const BottomNavigationScrollExclusion({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) =>
+      NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          _excludedScrollInput[notification] = true;
+          return false;
+        },
+        child: Listener(
+          behavior: HitTestBehavior.opaque,
+          onPointerSignal: (event) {
+            // Each hit-test target can receive a differently transformed copy.
+            _excludedScrollInput[event.original ?? event] = true;
+          },
+          child: child,
+        ),
+      );
+}
+
 class BottomNavigationScrollRegion extends StatefulWidget {
   const BottomNavigationScrollRegion({
     super.key,
@@ -65,6 +91,7 @@ class _BottomNavigationScrollRegionState
   bool _onScroll(ScrollNotification notification) {
     if (!_active ||
         !widget.enabled ||
+        _excludedScrollInput[notification] == true ||
         notification.metrics.axis != Axis.vertical) {
       return false;
     }
@@ -93,6 +120,7 @@ class _BottomNavigationScrollRegionState
     if (!_active ||
         !widget.enabled ||
         event is! PointerScrollEvent ||
+        _excludedScrollInput[event.original ?? event] == true ||
         (event.kind != PointerDeviceKind.mouse &&
             event.kind != PointerDeviceKind.trackpad) ||
         InputModifierScope.anyPressedOf(context, const [
