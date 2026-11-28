@@ -4,7 +4,6 @@ import androidx.media3.common.C
 import androidx.media3.common.DataReader
 import androidx.media3.common.Format
 import androidx.media3.common.MimeTypes
-import androidx.media3.common.util.ParsableBitArray
 import androidx.media3.common.util.ParsableByteArray
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.extractor.*
@@ -29,18 +28,11 @@ internal fun dolbyExtractors() = ExtractorsFactory {
 @UnstableApi
 private class DolbyTrackOutput(track: TrackOutput) : ForwardingTrackOutput(track) {
     private var pending: Format? = null
-    private val prefix = ByteArray(4096)
-    private var count = 0
+    private val probe by lazy(LazyThreadSafetyMode.NONE) { Eac3SampleProbe() }
+
     override fun format(format: Format) {
-        count = 0
         pending = format.takeIf { it.sampleMimeType == MimeTypes.AUDIO_E_AC3 }
-        if (pending == null) super.format(format)
-    }
-    private fun collect(data: ByteArray, offset: Int, length: Int) {
-        val size = minOf(length, prefix.size - count)
-        if (size <= 0) return
-        data.copyInto(prefix, count, offset, offset + size)
-        count += size
+        if (pending == null) super.format(format) else probe.reset()
     }
     override fun sampleData(input: DataReader, length: Int, allowEndOfInput: Boolean): Int =
         sampleData(input, length, allowEndOfInput, TrackOutput.SAMPLE_DATA_PART_MAIN)
@@ -50,20 +42,17 @@ private class DolbyTrackOutput(track: TrackOutput) : ForwardingTrackOutput(track
         if (pending == null || sampleDataPart != TrackOutput.SAMPLE_DATA_PART_MAIN)
             return super.sampleData(input, length, allowEndOfInput, sampleDataPart)
         return super.sampleData(DataReader { data, offset, len ->
-            input.read(data, offset, len).also { if (it > 0) collect(data, offset, it) }
+            input.read(data, offset, len).also { if (it > 0) probe.append(data, offset, it) }
         }, length, allowEndOfInput, sampleDataPart)
     }
     override fun sampleData(data: ParsableByteArray, length: Int, sampleDataPart: Int) {
         if (pending != null && sampleDataPart == TrackOutput.SAMPLE_DATA_PART_MAIN)
-            collect(data.data, data.position, length)
+            probe.append(data.data, data.position, length)
         super.sampleData(data, length, sampleDataPart)
     }
     override fun sampleMetadata(timeUs: Long, flags: Int, size: Int, offset: Int, cryptoData: TrackOutput.CryptoData?) {
         pending?.let { format ->
-            val joc = count >= 7 && prefix[0] == 0x0b.toByte() && prefix[1] == 0x77.toByte() &&
-                try {
-                    Ac3Util.parseAc3SyncframeInfo(ParsableBitArray(prefix, count)).mimeType == MimeTypes.AUDIO_E_AC3_JOC
-                } catch (_: IndexOutOfBoundsException) { false } catch (_: IllegalStateException) { false }
+            val joc = flags and C.BUFFER_FLAG_ENCRYPTED == 0 && probe.containsJoc(size, offset)
             super.format(if (joc) format.buildUpon().setSampleMimeType(MimeTypes.AUDIO_E_AC3_JOC).build() else format)
             pending = null
         }

@@ -38,6 +38,8 @@ Windows x64 实际打包的 DLL 将 8 秒 JOC 样片输出为 250 个 IEC 61937 
 
 Windows 换库后的首帧回归还发现，D3D11 纹理可能在首次绘制完成前就向 Flutter 报告视频尺寸。现在等 GPU 完成新尺寸的首帧再通知 Flutter。使用普通 AAC 分轨对照，验证了从冷启动到拖动进度条时的画面和音画同步。
 
-Android 10（API 29）及以上向 Media3 提交原始媒体。分轨共用一个 ExoPlayer 和一套时钟。Matroska 标记为普通 E-AC-3 时，读取首个音频包的同步帧头确认 JOC。播放器在暂停状态下等待轨道选中、JOC 解码器或编码输出、所需的视频首帧，最多使用打开预算的三分之一且不超过 8 秒。软件视频解码偏好、非零启动音量增益及更早的 Android 版本沿用 media_kit。
+Android 10（API 29）及以上向 Media3 提交原始媒体。分轨共用一个 ExoPlayer 和一套时钟。当 MP4 或 Matroska 将音轨标为普通 E-AC-3，且首个音频样本为明文时，提取器按帧长检查该样本内的各同步帧。如果 JOC 标记位于 AC-3 核心之后的依赖帧，就将音轨标为 `audio/eac3-joc`，原始压缩包继续交给 Media3。播放器在暂停状态下等待轨道选中、JOC 解码器或编码输出、所需的视频首帧，最多使用打开预算的三分之一且不超过 8 秒。软件视频解码偏好、非零启动音量增益及更早的 Android 版本沿用 media_kit。
 
 小米 13（Android 16）用同一份 Dolby 样片分别验证了独立音视频、离线 MKV、Profile 5＋Atmos MP4 和纯音频。另以本机 HTTP 服务验证了独立视频和 JOC 音轨的 Referer、重定向和非零偏移 Range 读取。五项均报告 `audio/eac3-joc`、`c2.dolby.eac3.decoder.eac3-joc` 和 12 声道 PCM 16-bit AudioTrack。Profile 5 同时选中了 `video/dolby-vision` 并输出首帧。普通 DD+ 和 AAC 对照组均使用 media_kit，七项均测试了暂停、定位和恢复。12 声道是交给系统音轨的格式，机身扬声器的最终声场、耳机空间化及 HDMI 接收端显示仍待分别验收。复现入口为 [设备回归脚本](../tool/test-dolby-atmos.ps1)。
+
+2026-11-28 在 Android 16 模拟器上对照验证了带 AC-3 核心的 7.1 JOC 样片。旧提取器将原始 MP4 和同码流 MKV 都识别为普通 DD+。修复后两者均识别为 JOC，原有 5.1 JOC、普通 DD+ 和 AAC 对照均正确。8 秒片段经 M4A 和 MKV 提取后各得到 250 包、1,664,000 字节，SHA-256 均与原始音频一致。模拟器没有系统 JOC 解码器，本次验证覆盖轨道识别和码流传递，实体杜比设备对这条 7.1 音轨的渲染仍待试听。[Android 识别实现](../android/app/src/main/kotlin/dev/bilisail/bilisail/Eac3SampleProbe.kt) · [同步帧与样本边界测试](../android/app/src/test/kotlin/dev/bilisail/bilisail/Eac3SampleProbeTest.kt)

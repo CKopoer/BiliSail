@@ -136,5 +136,6 @@ apply(from = rootProject.file("patches/media_kit/android-audio.gradle"))
 
 dependencies {
     implementation("androidx.media3:media3-exoplayer:1.9.2")
+    testImplementation("junit:junit:4.13.2")
 }
 
