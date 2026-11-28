@@ -1,3 +1,4 @@
+import AVFAudio
 import Flutter
 import Network
 import UIKit
@@ -13,6 +14,12 @@ import UIKit
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    // Our sample-buffer player supplies multichannel tracks outside AVPlayer.
+    do {
+      try AVAudioSession.sharedInstance().setSupportsMultichannelContent(true)
+    } catch {
+      NSLog("Unable to advertise multichannel playback to the audio session.")
+    }
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 

@@ -2,7 +2,7 @@
 
 ## 视频
 
-macOS 和 iOS 共用 BiliSail 的 media_kit 播放会话、分轨请求、缓冲、seek 和音频时钟。选中的视频轨为 Dolby Vision Profile 5、Profile 8、HDR10 或 HLG 时，Flutter 平台视图承载独立的 CAMetalLayer。mpv 的 gpu-next 和 libplacebo 通过 MoltenVK 向该层提交画面。普通 SDR 源沿用原有纹理。Apple 原生依赖包含可重建配方、源码版本、补丁和许可。[应用显示面](../../apple/AppleVideoSurface.swift) · [固定依赖及校验值](https://github.com/CKopoer/libmpv-darwin-build/releases/tag/apple-joc-continuity-2026-11-27-r3)
+macOS 和 iOS 共用 BiliSail 的 media_kit 播放会话、分轨请求、缓冲、seek 和音频时钟。选中的视频轨为 Dolby Vision Profile 5、Profile 8、HDR10 或 HLG 时，Flutter 平台视图承载独立的 CAMetalLayer。mpv 的 gpu-next 和 libplacebo 通过 MoltenVK 向该层提交画面。普通 SDR 源沿用原有纹理。Apple 原生依赖包含可重建配方、源码版本、补丁和许可。[应用显示面](../../apple/AppleVideoSurface.swift) · [固定依赖及校验值](https://github.com/CKopoer/libmpv-darwin-build/releases/tag/apple-joc-spatial-audio-2026-11-28)
 
 | 源与设备 | 接入行为 | 如何判读 |
 | --- | --- | --- |
@@ -28,9 +28,21 @@ macOS Release 上，1920×1080 的 P5 从 320×180 点放大至 1024×576 点，
 
 ## 正式播放器的 JOC 输出
 
-在线 DASH、离线分轨和本地 MP4／MKV 都使用现有 media_kit 会话。mpv 检查选中音轨的实际 E-AC-3 profile，将确认的 JOC 原始压缩包交给 `apple-joc` 音频输出。输出驱动从码流重建带 `dec3` 的格式描述，并确认 Apple 返回 `ec+3`。随后由 `AVSampleBufferAudioRenderer` 消费压缩样本，队列延迟反馈给 mpv 音频时钟。请求头、Range、缓存和视频仍由同一次打开操作管理。[原生输出源码](https://github.com/CKopoer/libmpv-darwin-build/blob/1146169ce340ddec08d2f139de830dc301d76e28/bilisail/ao_apple_joc.m) · [播放器回归入口](../../tool/validation/apple_joc_playback.dart)
+在线 DASH、离线分轨和本地 MP4／MKV 都使用现有 media_kit 会话。mpv 检查选中音轨的实际 E-AC-3 profile，将确认的 JOC 原始压缩包交给 `apple-joc` 音频输出。输出驱动从码流重建带 `dec3` 的格式描述，并确认 Apple 返回 `ec+3`。随后由 `AVSampleBufferAudioRenderer` 消费压缩样本，队列延迟反馈给 mpv 音频时钟。请求头、Range、缓存和视频仍由同一次打开操作管理。[原生输出源码](https://github.com/CKopoer/libmpv-darwin-build/blob/38c376b0885ae3a209b6a22607b6a1629980c3cf/bilisail/ao_apple_joc.m) · [播放器回归入口](../../tool/validation/apple_joc_playback.dart)
 
 在 1×、0 dB 时自动选择 JOC 输出。音量和静音作用于系统渲染器。变速、额外增益使用 PCM，恢复设置后可以重新启用 JOC。普通 DD+、AAC 走已有解码输出。播放信息在当前音频输出为 `apple-joc` 且 Apple 渲染器进入 rendering 并收到样本后，显示「Apple 系统渲染 JOC」。耳机、扬声器及 HDMI 的最终输出取决于系统和当前路由。[Apple 音频渲染接口](https://developer.apple.com/documentation/avfoundation/avsamplebufferaudiorenderer)
+
+### AirPods 切换固定与头部追踪（2026-11-28）
+
+用户报告在控制中心切到「固定」或「关闭」后，JOC 播放听起来仍在追踪头部。旧版 `apple-joc` 只检查渲染状态和播放时钟。Apple 自动清空渲染队列时，时钟可以继续走，驱动仍把已经清掉的压缩包计入剩余音频。Apple 在输出配置与已排队格式不匹配时也会通知客户端重新提交样本。[Apple 自动清队列说明](https://developer.apple.com/documentation/avfoundation/avsamplebufferaudiorendererwasflushedautomaticallynotification) · [输出配置通知](https://developer.apple.com/documentation/avfoundation/avsamplebufferaudiorendereroutputconfigurationdidchangenotification) · [macOS 切换三种模式时的实机通知日志](https://github.com/iina/iina/issues/4920)
+
+两端的 JOC 驱动按渲染器实例接收这两种通知。音频输出在与送包串行的位置清空队列，按原时间戳重新提交半秒缓冲中尚未开始播放的完整压缩包，继续使用同一播放时钟和暂停状态。iOS 也监听系统空间播放能力变化，并在应用启动时声明可提供多声道内容。固定、头部追踪和关闭都由系统控制中心选择。[原生实现](https://github.com/CKopoer/libmpv-darwin-build/blob/38c376b0885ae3a209b6a22607b6a1629980c3cf/bilisail/ao_apple_joc.m) · [Apple 空间音频接口](https://developer.apple.com/videos/play/wwdc2021/10265/)
+
+macOS arm64 上用同一段 Dolby 样片向正式渲染器注入通知。旧版 r3 在播放中收到配置变化、暂停中收到自动清队列通知后，均未重新提交待播样本。新版两次均重新提交了原样本，暂停时渲染时钟速率保持为零，恢复后仍使用 `apple-joc`。[新旧二进制对照日志](https://github.com/CKopoer/BiliSail/actions/runs/46125231286/job/140918256864)
+
+macOS Release 和 iPhone 模拟器使用本次发布的归档，通过在线／离线 DASH、MKV、MP4、普通 DD+ 和 48 kHz AAC 播放回归。macOS 的正常播放和延迟就绪提示两种条件下，左右声道回录均有 60/60 个时间窗匹配 PCM 参考。[macOS 播放与波形](https://github.com/CKopoer/BiliSail/actions/runs/46125266765/job/140919180908) · [iPhone 模拟器播放](https://github.com/CKopoer/BiliSail/actions/runs/46125266765/job/140919181176)
+
+实体 AirPods 验收使用同一段带居中对白的 JOC 视频，保持设备静止，在连续播放中依次选「头部追踪 → 固定 → 关闭 → 头部追踪」并转头。固定模式下对白应随头保持居中，重新启用追踪后对白应随转头偏向屏幕方向。另在暂停时切换一次，确认恢复播放后采用新模式。两端的实际耳机听感仍待确认。[Apple 的 AirPods 模式说明](https://support.apple.com/guide/airpods/dev00eb7e0a3/web)
 
 ### macOS 的 48 kHz PCM 输出（2026-11-28）
 
@@ -38,7 +50,7 @@ macOS Release 上，1920×1080 的 P5 从 320×180 点放大至 1024×576 点，
 
 macOS 播放器在打开媒体前设置 `audio-format=float`，采样率和声道数继续协商。mpv 只对解码后的 PCM 应用此选项，JOC 压缩包仍交给 `apple-joc`。单个驱动初始化失败时允许 mpv 继续尝试后备输出。mpv 确认所有输出失败时，播放器结束等待并提示检查系统声音输出设备。[mpv 音频输出协商](https://github.com/mpv-player/mpv/blob/41f6a6450/player/audio.c)
 
-Windows 上用同一段 48 kHz 双声道 AAC 和 libmpv 空输出对照，默认输出为 `floatp`，设置后为 `float`，两次均为 48 kHz 双声道。原生故障回归另行验证输出初始化失败可到达设备错误提示。Apple 播放回归使用 48 kHz 立体声 AAC 并检查 macOS 实际输出为 `coreaudio / float`；本次尚未在 Mac 上运行该回归或复测内置扬声器。
+Windows 上用同一段 48 kHz 双声道 AAC 和 libmpv 空输出对照，默认输出为 `floatp`，设置后为 `float`，两次均为 48 kHz 双声道。原生故障回归另行验证输出初始化失败可到达设备错误提示。本次 macOS Release 回归已确认 48 kHz 立体声 AAC 实际输出为 `coreaudio / float`。报告者的内置扬声器仍待复测。[macOS 播放日志](https://github.com/CKopoer/BiliSail/actions/runs/46125266765/job/140919180908)
 
 ## 构建与验证
 
