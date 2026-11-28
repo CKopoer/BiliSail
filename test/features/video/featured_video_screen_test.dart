@@ -9,6 +9,7 @@ import 'package:bilisail/features/video/application/video_controller.dart';
 import 'package:bilisail/features/video/domain/video_repository.dart';
 import 'package:bilisail/features/video/presentation/featured_video_overlay.dart';
 import 'package:bilisail/features/video/presentation/featured_video_screen.dart';
+import 'package:bilisail/shared/ui/app_network_image.dart';
 import 'package:bilisail/shared/ui/featured_paging_scope.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,17 +18,19 @@ import 'package:material_ui/material_ui.dart';
 import '../../support/input_test_app.dart';
 
 class _Videos implements FeaturedFeedRepository, VideoRepository {
-  final items = List.generate(
-    5,
-    (i) => VideoSummary(
-      id: VideoId('BV123456789$i'),
-      title: '片段 $i',
-      coverUrl: '',
-      author: '作者',
-      duration: const Duration(minutes: 1),
-      previewCid: '$i',
-    ),
-  );
+  _Videos({bool includeCovers = false})
+    : items = List.generate(
+        5,
+        (i) => VideoSummary(
+          id: VideoId('BV123456789$i'),
+          title: '片段 $i',
+          coverUrl: includeCovers ? 'https://i0.hdslb.com/fixture-$i.jpg' : '',
+          author: '作者',
+          duration: const Duration(minutes: 1),
+          previewCid: '$i',
+        ),
+      );
+  final List<VideoSummary> items;
   final details = <VideoId>[];
   @override
   Future<PageResult<VideoSummary>> loadFeatured({
@@ -67,7 +70,7 @@ void main() {
       tester.view.physicalSize = const Size(1200, 800);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
-      final videos = _Videos();
+      final videos = _Videos(includeCovers: true);
       final visible = ValueNotifier(true);
       addTearDown(visible.dispose);
       await tester.pumpWidget(
@@ -122,10 +125,17 @@ void main() {
       await drag.moveBy(const Offset(0, -120));
       await tester.pump();
       expect(videos.details, [videos.items[0].id]);
+      expect(find.byType(AppNetworkImage), findsNothing);
       await drag.moveBy(const Offset(0, -420));
       await drag.up();
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('playing-1')), findsOneWidget);
+      final reverse = await tester.startGesture(tester.getCenter(pager));
+      await reverse.moveBy(const Offset(0, 120));
+      await tester.pump();
+      expect(find.byType(AppNetworkImage), findsNothing);
+      await reverse.cancel();
+      await tester.pumpAndSettle();
       expect(videos.details, [videos.items[0].id, videos.items[1].id]);
       await tester.tap(find.text('片段 1'));
       await tester.pumpAndSettle();

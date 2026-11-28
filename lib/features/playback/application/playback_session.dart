@@ -230,8 +230,13 @@ class PlaybackSession extends ChangeNotifier {
   final FeaturedPreparedEngine? featuredStandby;
   final FeaturedMediaResolver? resolveFeatured;
   Object? _featuredOwner;
+  Object? _featuredHistoryOwner;
   (VideoId, String?)? _featuredCurrent;
   (VideoId, String)? _featuredNeighbor;
+  final _featuredVisits = <(VideoId, String), _FeaturedVisit>{};
+  ((VideoId, String), Object)? _featuredPlaying;
+  _FeaturedPausedEngine? _featuredPaused;
+  bool _featuredWaitingForPanel = false;
   Future<void>? _retiringEngine;
   final CardPreviewPlayback? cardPreviews;
   Timer? _recoveryTimer;
@@ -786,6 +791,7 @@ class PlaybackSession extends ChangeNotifier {
       recommendation: _recommendation,
     );
     _checkpoints[owner] = checkpoint;
+    _rememberFeaturedVisit(checkpoint);
     if (_settings.navigationMode != WorkspaceNavigationMode.multipleTabs) {
       final key = (video?.summary.id, selected?.playbackKey, contentTarget);
       _navigationCheckpoints.remove(key);
@@ -808,6 +814,7 @@ class PlaybackSession extends ChangeNotifier {
     RecommendationPlaybackContext? recommendation,
   }) async {
     if (_disposed || !_owners.contains(owner)) return;
+    _featuredWaitingForPanel = false;
     if (identical(_activeOwner, owner) &&
         detail?.summary.id == video?.summary.id &&
         part?.playbackKey == selected?.playbackKey &&
@@ -859,15 +866,19 @@ class PlaybackSession extends ChangeNotifier {
             selected?.playbackKey,
             target,
           )];
+    final featuredVisit = target == null && _isFeaturedClip(video, selected)
+        ? _featuredVisits[(video!.summary.id, selected!.cid)]
+        : null;
+    final remembered = featuredVisit?.checkpoint ?? saved;
     final restored =
         !switchingInteractiveNode &&
-            saved != null &&
-            saved.scope == accountScope() &&
-            saved.epoch == sessionEpoch() &&
-            saved.videoId == video?.summary.id &&
-            saved.partKey == selected?.playbackKey &&
-            saved.target == target
-        ? saved
+            remembered != null &&
+            remembered.scope == accountScope() &&
+            remembered.epoch == sessionEpoch() &&
+            remembered.videoId == video?.summary.id &&
+            remembered.partKey == selected?.playbackKey &&
+            remembered.target == target
+        ? remembered
         : null;
     _activeOwner = owner;
     // Retained pages can advance to another part/episode while hidden. Updating
@@ -889,7 +900,7 @@ class PlaybackSession extends ChangeNotifier {
         ? nextIntent.playing
         : null;
     if (nextPlaying != null) _nextSourceIntent = null;
-    await open(
+    await _open(
       video,
       selected,
       recommendation: recommendation ?? restored?.recommendation,
@@ -922,6 +933,9 @@ class PlaybackSession extends ChangeNotifier {
       title: title,
       voice: restored?.voice ?? const PlaybackVoice.original(),
       audioQuality: restored?.audioQuality,
+      featuredVisit: identical(restored, featuredVisit?.checkpoint)
+          ? featuredVisit
+          : null,
     );
   }
 
@@ -953,7 +967,7 @@ class PlaybackSession extends ChangeNotifier {
             !_closing &&
             _activeOwner == null &&
             _owners.isEmpty) {
-          unawaited(stop(clearCheckpoints: false));
+          _stopDetachedOwner();
         }
       });
       return;
@@ -963,7 +977,7 @@ class PlaybackSession extends ChangeNotifier {
     _ownerVisible = false;
     scheduleMicrotask(() {
       if (!_disposed && !_closing && _activeOwner == null) {
-        unawaited(stop(clearCheckpoints: false));
+        _stopDetachedOwner();
       }
     });
   }
@@ -1067,9 +1081,11 @@ class PlaybackSession extends ChangeNotifier {
     PlaybackMedia? retryMedia,
     PlaybackMedia? selectedLiveMedia,
     RecommendationPlaybackContext? recommendation,
+    _FeaturedVisit? featuredVisit,
   }) async {
     if (_disposed || _closing) return;
     if (target == null && (video == null || selected == null)) return;
+    _featuredWaitingForPanel = false;
     if (!force &&
         _audioOnly ==
             (_listeningMode.enabled && target is! LivePlaybackTarget) &&
@@ -1079,6 +1095,24 @@ class PlaybackSession extends ChangeNotifier {
         (_resolving || (error == null && media != null))) {
       return;
     }
+    final openingFeatured = target == null && _isFeaturedClip(video, selected);
+    final nextFeaturedClip = openingFeatured
+        ? (video!.summary.id, selected!.cid)
+        : null;
+    final outgoingClip = _featuredPlaying?.$1;
+    final canPark =
+        nextFeaturedClip != null &&
+        outgoingClip != null &&
+        nextFeaturedClip != outgoingClip &&
+        !_audioOnly &&
+        _playbackAllowed &&
+        _canParkFeaturedEngine(engine, media);
+    final featuredProfile = _featuredProfile;
+    final resumeFeaturedMedia = _usableFeaturedVisit(
+      featuredVisit,
+      featuredProfile,
+    );
+    _featuredPlaying = null;
     final generation = ++_generation;
     _cancelRecovery();
     if (_interruptedGeneration != null) unawaited(_releaseAudioFocus());
@@ -1227,10 +1261,20 @@ class PlaybackSession extends ChangeNotifier {
           _settings.resumePlayback &&
           video != null &&
           selected != null;
+      final previousEngine = engine;
+      var parked = false;
       final stopped = startupDiagnostics.measure(
         generation,
         PlaybackStartupStage.stopPrevious,
-        retryMedia != null ? engine.pause : engine.stop,
+        () async {
+          if (retryMedia != null) {
+            await previousEngine.pause();
+          } else if (canPark) {
+            parked = await _parkFeaturedEngine(previousEngine, isCurrent);
+          } else {
+            await previousEngine.stop();
+          }
+        },
       );
       final contentResolver = contentRepository;
       final resolution = startupDiagnostics.measure(
@@ -1239,6 +1283,9 @@ class PlaybackSession extends ChangeNotifier {
         () async {
           if (retryMedia != null) return retryMedia;
           if (selectedLiveMedia != null) return selectedLiveMedia;
+          if (resumeFeaturedMedia) {
+            return featuredVisit!.media;
+          }
           if (target is LivePlaybackTarget &&
               quality == AppSettings.networkLiveQuality) {
             quality = await defaultLiveQuality?.call() ?? 10000;
@@ -1372,7 +1419,7 @@ class PlaybackSession extends ChangeNotifier {
         if (isLive) _openingLiveGeneration = generation;
         openedAudioOutput = _settings.androidAudioOutput;
         openedCacheLimits = _settings.playbackCacheLimits(live: isLive);
-        final options = OpenOptions(
+        OpenOptions optionsFor(Duration budget) => OpenOptions(
           startPosition: resume,
           play:
               playLive &&
@@ -1389,17 +1436,25 @@ class PlaybackSession extends ChangeNotifier {
             AndroidVideoOutputPreference.directTexture =>
               AndroidVideoOutputMode.directTexture,
           },
-          openTimeout: openBudget,
+          openTimeout: budget,
           androidAudioOutput: openedAudioOutput,
           cacheLimits: openedCacheLimits,
           retainPresentation: retryMedia != null,
         );
+        final options = optionsFor(openBudget);
+        if (openingFeatured && _featuredDolby(resolved)) {
+          _discardFeaturedPaused();
+          await featuredStandby?.clear(owner: this);
+          if (parked && isCurrent()) await previousEngine.stop();
+          parked = false;
+          if (!isCurrent()) return;
+        }
         if (_featuredOwner != null &&
             video != null &&
             selected != null &&
             target == null &&
             !requestedAudioOnly &&
-            requestedVoice.isOriginal &&
+            (requestedVoice.isOriginal || resumeFeaturedMedia) &&
             retryMedia == null &&
             await _useFeaturedEngine(
               video.summary.id,
@@ -1408,10 +1463,38 @@ class PlaybackSession extends ChangeNotifier {
               options,
               cancellation,
               isCurrent,
+              park: parked ? outgoingClip : null,
+              useVisited: resumeFeaturedMedia,
             )) {
           return;
         }
-        if (isCurrent()) await engine.open(source, options);
+        if (parked && isCurrent() && identical(engine, previousEngine)) {
+          await _openWithFeaturedEngine(
+            previousEngine,
+            outgoingClip!,
+            isCurrent,
+          );
+        }
+        if (!isCurrent()) return;
+        try {
+          await engine.open(source, options);
+        } on PlayerFailure catch (failure) {
+          if (!isCurrent() ||
+              _featuredPaused == null ||
+              (failure.kind != PlayerFailureKind.nativePlayback &&
+                  failure.kind != PlayerFailureKind.audioOutput)) {
+            rethrow;
+          }
+          // A device can have fewer decoder/audio-output slots than expected.
+          _discardFeaturedPaused();
+          await _retiringEngine;
+          await featuredStandby?.clear(owner: this);
+          final remaining =
+              openBudget -
+              ((startupNow?.call() ?? _clock.elapsed) - nativeOpenStarted!);
+          if (remaining <= Duration.zero || !isCurrent()) rethrow;
+          await engine.open(source, optionsFor(remaining));
+        }
       }
 
       nativeOpenStarted = startupNow?.call() ?? _clock.elapsed;
@@ -1474,6 +1557,10 @@ class PlaybackSession extends ChangeNotifier {
       );
       if (!isCurrent()) return;
       _reportProgress();
+      if (nextFeaturedClip != null && _featuredOwner != null) {
+        _featuredPlaying = (nextFeaturedClip, featuredProfile);
+        _captureOwner();
+      }
       _notify();
       mediaReady.complete(true);
       _prepareFeaturedNeighbor();
@@ -1492,6 +1579,36 @@ class PlaybackSession extends ChangeNotifier {
       }
     } on PlayerFailure catch (failure) {
       if (isCurrent()) {
+        if (resumeFeaturedMedia && nextFeaturedClip != null) {
+          _featuredVisits.remove(nextFeaturedClip);
+          if (_featuredPaused?.clip == nextFeaturedClip) {
+            _discardFeaturedPaused();
+          }
+          final remaining =
+              openBudget -
+              ((startupNow?.call() ?? _clock.elapsed) -
+                  (nativeOpenStarted ?? Duration.zero));
+          if (remaining > Duration.zero) {
+            await _open(
+              video,
+              selected,
+              quality: quality,
+              force: true,
+              position: _openingPosition,
+              desiredPlaying: _desiredPlaying,
+              rate: _openingRate,
+              volume: _openingVolume,
+              target: target,
+              title: title,
+              voice: _voice,
+              audioQuality: requestedAudioQuality,
+              startupBudget: remaining,
+              allowColorFallback: allowColorFallback,
+              recommendation: recommendation,
+            );
+            return;
+          }
+        }
         if (failure.kind == PlayerFailureKind.unsupportedVideoColor &&
             allowColorFallback &&
             !isLive &&
@@ -1889,7 +2006,12 @@ class PlaybackSession extends ChangeNotifier {
       }
     }
     final previous = _settings;
+    final previousFeaturedProfile = _featuredProfile;
     _settings = settings.normalized();
+    if (_featuredPaused != null &&
+        previousFeaturedProfile != _featuredProfile) {
+      _discardFeaturedPaused();
+    }
     _rateMemory.configure(enabled: _settings.rememberPlaybackRate);
     if (previous.danmakuSendStyle != _settings.danmakuSendStyle) {
       setDanmakuSendStyle(_settings.danmakuSendStyle);
@@ -2599,6 +2721,7 @@ class PlaybackSession extends ChangeNotifier {
   }
 
   Future<void> togglePlaying() async {
+    if (_featuredWaitingForPanel) return;
     ++_audioIntentRevision;
     final reclaimFocus = audioFocus != null && !_desiredPlaying;
     _interruptedGeneration = null;
@@ -2647,6 +2770,7 @@ class PlaybackSession extends ChangeNotifier {
 
   /// Idempotent system play commands must never toggle a playing source off.
   Future<void> play() async {
+    if (_featuredWaitingForPanel) return;
     final intentChanged = !_desiredPlaying;
     final reclaimFocus = audioFocus != null && intentChanged;
     if (intentChanged) ++_audioIntentRevision;
@@ -2700,6 +2824,7 @@ class PlaybackSession extends ChangeNotifier {
       _prepareFeaturedNeighbor();
     } else {
       unawaited(featuredStandby?.clear(owner: this));
+      _discardFeaturedPaused();
     }
     if (!allowed) {
       _interruptedGeneration = null;
@@ -2727,7 +2852,7 @@ class PlaybackSession extends ChangeNotifier {
       if (_disposed || generation != _generation) return;
       sleepTimer.checkDeadline();
       if (sleepTimer.elapsed) _desiredPlaying = false;
-      if (!_playbackAllowed) {
+      if (!_playbackAllowed || _featuredWaitingForPanel) {
         if (engine.currentSnapshot.desiredPlaying ||
             engine.currentSnapshot.phase == PlaybackPhase.playing) {
           await engine.pause();
@@ -3269,7 +3394,10 @@ class PlaybackSession extends ChangeNotifier {
     // delayed details arrive. Retain its prepared engine through that gap.
     if (clearCheckpoints || _featuredOwner == null) {
       unawaited(featuredStandby?.clear(owner: this));
+      _discardFeaturedPaused();
     }
+    _featuredPlaying = null;
+    _featuredWaitingForPanel = false;
     if (_ownsSleepTimer) sleepTimer.cancel();
     _cancelRecovery();
     _audioOnly = false;
@@ -3278,6 +3406,8 @@ class PlaybackSession extends ChangeNotifier {
     if (clearCheckpoints) {
       _checkpoints.clear();
       _navigationCheckpoints.clear();
+      _featuredVisits.clear();
+      _featuredHistoryOwner = null;
     }
     _activeOwner = null;
     _openingPosition = null;

@@ -25,17 +25,19 @@ import '../../support/video_card_fake_engine.dart';
 import '../../support/window_service_fake.dart';
 
 class _Videos implements VideoRepository, FeaturedFeedRepository {
-  final items = List.generate(
-    5,
-    (i) => VideoSummary(
-      id: VideoId('BV17x411w7K$i'),
-      title: '视频 $i',
-      author: '作者',
-      coverUrl: '',
-      duration: const Duration(minutes: 1),
-      previewCid: i == 1 ? null : '${i + 1}',
-    ),
-  );
+  _Videos({int count = 5})
+    : items = List.generate(
+        count,
+        (i) => VideoSummary(
+          id: VideoId('BV17x411w7K${i.toRadixString(36)}'),
+          title: '视频 $i',
+          author: '作者',
+          coverUrl: '',
+          duration: const Duration(minutes: 1),
+          previewCid: i == 1 ? null : '${i + 1}',
+        ),
+      );
+  final List<VideoSummary> items;
   final reads = <VideoId>[];
   @override
   Future<PageResult<VideoSummary>> loadFeatured({
@@ -82,6 +84,73 @@ class _PagingEngine extends CardFakeEngine {
 }
 
 void main() {
+  testWidgets(
+    'the feed retains details for the last 16 visited parts across navigation',
+    (tester) async {
+      final videos = _Videos(count: 18);
+      final visible = ValueNotifier(true);
+      addTearDown(visible.dispose);
+      final feed = FeaturedFeedController(
+        videos,
+        FeaturedSource.desktop,
+        RecommendationFilter(const RecommendationSettings.defaults()),
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [videoRepositoryProvider.overrideWithValue(videos)],
+          child: InputTestApp(
+            home: Scaffold(
+              body: ValueListenableBuilder(
+                valueListenable: visible,
+                builder: (_, on, child) =>
+                    WorkspaceMediaPermission(allowed: on, child: child!),
+                child: FeaturedVideoScreen(
+                  createController: () => feed,
+                  splitWidth: 1000,
+                  onLogin: () {},
+                  onOpenUser: (_) {},
+                  playerBuilder: (_, detail, _) =>
+                      Text(detail.summary.id.value),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      Future<void> visit(int index) async {
+        tester
+            .widget<PageView>(find.byType(PageView))
+            .controller!
+            .jumpToPage(index);
+        await tester.pumpAndSettle();
+        expect(feed.selected, index);
+        expect(find.text(videos.items[index].id.value), findsOneWidget);
+      }
+
+      for (var i = 1; i < videos.items.length; i++) {
+        await visit(i);
+      }
+      expect(videos.reads, videos.items.map((item) => item.id));
+      visible.value = false;
+      await tester.pumpAndSettle();
+      visible.value = true;
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<PageView>(find.byType(PageView)).controller!.page,
+        17,
+      );
+      expect(find.text(videos.items[17].id.value), findsOneWidget);
+      for (var i = 16; i >= 2; i--) {
+        await visit(i);
+      }
+      expect(videos.reads, hasLength(18));
+      await visit(1);
+      expect(videos.reads, hasLength(19));
+      expect(videos.reads.last, videos.items[1].id);
+    },
+  );
+
   testWidgets(
     'swiping the actual player adopts the silent neighbor without a second DASH open',
     (tester) async {
@@ -164,13 +233,17 @@ void main() {
       expect(session.detail?.summary.id, videos.items[1].id);
       expect(session.engine, same(prepared));
       expect(prepared.opens, 1);
-      expect(primary.disposals, 1);
+      expect(primary.disposals, 0);
+      expect(primary.currentSnapshot.phase, PlaybackPhase.paused);
+      expect(primary.currentSnapshot.volume, 0);
       await tester.fling(find.byType(PageView), const Offset(0, 350), 900);
       await tester.pumpAndSettle();
       await frames();
       expect(session.detail?.summary.id, videos.items.first.id);
-      expect(session.engine, isNot(same(prepared)));
-      expect((session.engine as _PagingEngine).opens, 1);
+      expect(session.engine, same(primary));
+      expect(primary.opens, 1);
+      expect(prepared.currentSnapshot.phase, PlaybackPhase.paused);
+      expect(prepared.currentSnapshot.volume, 0);
       await tester.pumpWidget(const SizedBox.shrink());
       await frames();
       final closing = session.close();

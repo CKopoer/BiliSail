@@ -76,6 +76,8 @@ void main() {
       expect(engine.options?.audioGainDb, foreground.audioGainDb);
       expect(engine.options?.cacheLimits, foreground.cacheLimits);
       expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
+      expect(standby.preview('next'), same(engine));
+      expect(standby.preview('next', owner: Object()), isNull);
 
       final foregroundToken = RequestCancellation();
       final transferred = await standby.take(
@@ -86,6 +88,7 @@ void main() {
       );
       addTearDown(engine.dispose);
       expect(transferred, same(engine));
+      expect(standby.preview('next'), isNull);
       expect(engine.opens, 1);
       foregroundToken.cancel();
       await standby.clear();

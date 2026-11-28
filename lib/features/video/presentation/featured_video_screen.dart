@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:bili_player/bili_player.dart' show VideoSurface;
 import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,7 +23,6 @@ import '../../../shared/ui/featured_selection_scope.dart';
 import '../../../shared/ui/playback_navigation.dart';
 import '../../../shared/ui/playback_page_commands.dart';
 import '../../../shared/ui/playback_split_layout.dart';
-import '../../../shared/ui/app_network_image.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../feed/application/featured_feed_controller.dart';
 import '../../playback/application/playback_manager.dart';
@@ -115,7 +115,14 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
   }
 
   late final feed = widget.createController()..addListener(_changed);
-  final pages = PageController(keepPage: false);
+  late final PageController pages = PageController(
+    keepPage: false,
+    // Media permission can detach the viewport while the feed stays mounted.
+    onAttach: (position) {
+      if (!position.hasViewportDimension) pages.jumpToPage(feed.selected);
+    },
+  );
+  final _visitedParts = <(VideoId, String?)>{};
   final controlsInset = ValueNotifier(0.0);
   bool _showVideoOverlays = true;
   double? pendingControlsInset;
@@ -153,6 +160,8 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
   void _changed() {
     if (!mounted) return;
     if (refreshRevision != feed.refreshRevision) {
+      _preparingSession?.clearFeaturedVisits(this);
+      _visitedParts.clear();
       refreshRevision = feed.refreshRevision;
       seedPositionPending = false;
       _direction = 1;
@@ -170,6 +179,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _preparingSession?.clearFeaturedVisits(this);
     _preparingSession?.leaveFeatured(this);
     wheelIdle?.cancel();
     pages.dispose();
@@ -280,31 +290,46 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
 
   @override
   Widget build(BuildContext context) {
-    if (!presented || !WorkspaceMediaPermission.isAllowed(context)) {
-      return const SizedBox.expand();
-    }
-    final current = feed.at(feed.selected);
+    final permitted = presented && WorkspaceMediaPermission.isAllowed(context);
+    final current = permitted ? feed.at(feed.selected) : null;
     final detail = current == null
         ? null
         : ref.watch(videoDetailProvider(current.id));
+    if (active && current != null && detail?.value != null) {
+      final key = (current.id, current.previewCid);
+      _visitedParts
+        ..remove(key)
+        ..add(key);
+      if (_visitedParts.length > featuredPlaybackHistoryLimit) {
+        _visitedParts.remove(_visitedParts.first);
+      }
+    }
+    // Keep completed detail providers alive with the feed, including a visit
+    // to another workspace page. Adjacent, unvisited reads remain speculative.
+    for (final (id, _) in _visitedParts) {
+      if (id != current?.id) ref.watch(videoDetailProvider(id));
+    }
+    if (!permitted) return const SizedBox.expand();
     if (active && _appVisible) {
-      watchFeaturedVideoPreparation(
-        ref,
-        current: current,
-        previous: feed.at(feed.selected - 1),
-        next: feed.at(feed.selected + 1),
-      );
       if (current != null &&
           detail?.value != null &&
           ref.watch(featuredPlayInfoPreparationProvider) != null &&
           ref.watch(playbackManagerProvider) != null) {
         final session = ref.read(playbackSessionProvider);
         if (!identical(_preparingSession, session)) {
+          _preparingSession?.clearFeaturedVisits(this);
           _preparingSession?.leaveFeatured(this);
           _preparingSession = session;
         }
-        _nominate(current);
       }
+      watchFeaturedVideoPreparation(
+        ref,
+        current: current,
+        previous: feed.at(feed.selected - 1),
+        next: feed.at(feed.selected + 1),
+        hasReusableMedia: _preparingSession?.hasFeaturedVisit,
+      );
+      if (current != null && detail?.value != null) _nominate(current);
     }
     return CommandTargetScope<Object>(
       scope: CommandScope.page,
@@ -458,9 +483,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
       child: ColoredBox(
         color: Colors.black,
         child: index != feed.selected || item == null
-            ? item != null && item.coverUrl.isNotEmpty
-                  ? AppNetworkImage(url: item.coverUrl, fit: BoxFit.contain)
-                  : const SizedBox.expand()
+            ? _neighborPicture(item)
             : Stack(
                 fit: StackFit.expand,
                 children: [
@@ -481,6 +504,25 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
     );
   }
 
+  Widget _neighborPicture(VideoSummary? item) {
+    final session = _preparingSession;
+    if (item == null || session == null || !active || !_appVisible) {
+      return const SizedBox.expand();
+    }
+    return AnimatedBuilder(
+      animation: Listenable.merge([
+        session,
+        session.featuredStandby?.previewChanges,
+      ]),
+      builder: (_, _) {
+        final engine = session.featuredPreview(item.id, item.previewCid);
+        return engine == null
+            ? const SizedBox.expand()
+            : IgnorePointer(child: VideoSurface(engine: engine));
+      },
+    );
+  }
+
   Widget _player(
     VideoSummary item,
     VideoDetail? detail, {
@@ -496,14 +538,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
         ? defaultPart
         : detail?.parts.where((part) => part.cid == cid).firstOrNull;
     if (detail == null && !failed) {
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          if (item.coverUrl.isNotEmpty)
-            AppNetworkImage(url: item.coverUrl, fit: BoxFit.contain),
-          const Center(child: CircularProgressIndicator()),
-        ],
-      );
+      return const Center(child: CircularProgressIndicator());
     }
     if (detail == null || part == null) {
       return StateView.error(

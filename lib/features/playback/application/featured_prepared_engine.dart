@@ -24,11 +24,33 @@ final class FeaturedPreparedEngine {
   final PlayerEngine Function() createEngine;
   final Duration maximumAge;
   final Duration handoffTimeout;
+  final previewChanges = ValueNotifier(0);
 
   _Preparation? _candidate;
   _Preparation? _claim;
   Future<void> _releasing = Future.value();
   bool _releaseFailed = false;
+  bool _previewChangeQueued = false;
+
+  PlayerEngine? preview(Object key, {Object? owner}) {
+    final entry = _candidate;
+    if (entry == null ||
+        entry.key != key ||
+        !identical(entry.owner, owner) ||
+        !entry.ready.isCompleted) {
+      return null;
+    }
+    return entry.engine;
+  }
+
+  void _notifyPreviewChange() {
+    if (_previewChangeQueued) return;
+    _previewChangeQueued = true;
+    scheduleMicrotask(() {
+      _previewChangeQueued = false;
+      previewChanges.value++;
+    });
+  }
 
   void prepare(
     Object key,
@@ -93,7 +115,10 @@ final class FeaturedPreparedEngine {
         ),
         entry.relinquished.future,
       ]).timeout(timeout);
-      if (!entry.finished) entry.ready.complete();
+      if (!entry.finished) {
+        entry.ready.complete();
+        _notifyPreviewChange();
+      }
     } on Object {
       // Speculation can fail independently of foreground resolve and open.
       _discard(entry);
@@ -174,6 +199,7 @@ final class FeaturedPreparedEngine {
     entry.cancellation.cancel();
     if (!entry.ready.isCompleted) entry.ready.complete();
     entry.relinquished.complete();
+    _notifyPreviewChange();
   }
 
   Future<void> _release(PlayerEngine engine) async {

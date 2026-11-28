@@ -87,6 +87,134 @@ void main() {
     session.leaveFeatured(owner);
   });
 
+  test(
+    'featured reverse navigation reuses the paused engine and card intent',
+    () async {
+      final primary = _FakeEngine();
+      final repository = _FakeRepository(autoResolve: true);
+      final screen = Object();
+      final session = PlaybackSession(
+        engine: primary,
+        repository: repository,
+        progress: _FakeProgress(),
+        accountScope: () => 'guest',
+        featuredStandby: FeaturedPreparedEngine(createEngine: _FakeEngine.new),
+      );
+      addTearDown(session.close);
+      session.configureSettings(
+        const AppSettings.defaults(
+          navigationMode: WorkspaceNavigationMode.multipleTabs,
+        ),
+      );
+
+      Object? previousPanel;
+      Future<void> select(String cid, {bool waitForDetails = false}) async {
+        final video = _detail(cid);
+        final panel = Object();
+        session.setFeaturedNeighbor(screen, (video.summary.id, cid), null);
+        if (previousPanel case final previous?) session.detach(previous);
+        if (waitForDetails) {
+          await _flush();
+          await session.setPlaybackAllowed(false);
+          await session.setPlaybackAllowed(true);
+          await session.play();
+          expect(session.snapshots.value.phase, PlaybackPhase.paused);
+        }
+        session.attach(panel);
+        await session.activate(panel, video, video.parts.single);
+        previousPanel = panel;
+      }
+
+      await select('11');
+      await session.seek(const Duration(seconds: 4));
+      await session.setRate(1.25);
+      await session.setVolume(37);
+      await session.pause();
+      await select('22', waitForDetails: true);
+      final second = session.engine as _FakeEngine;
+      expect(second, isNot(same(primary)));
+      expect(primary.currentSnapshot.phase, PlaybackPhase.paused);
+      expect(primary.currentSnapshot.volume, 0);
+      expect(
+        session.featuredPreview(_detail('11').summary.id, '11'),
+        same(primary),
+      );
+      final resolutions = repository.qualities.length;
+      await select('11');
+      expect(session.engine, same(primary));
+      expect(repository.qualities, hasLength(resolutions));
+      expect(primary.sources, hasLength(1));
+      expect(primary.currentSnapshot.position, const Duration(seconds: 4));
+      expect(primary.currentSnapshot.rate, 1.25);
+      expect(primary.currentSnapshot.volume, 37);
+      expect(primary.currentSnapshot.phase, PlaybackPhase.paused);
+      expect(second.currentSnapshot.phase, PlaybackPhase.paused);
+      expect(second.currentSnapshot.volume, 0);
+      await session.setPlaybackAllowed(false);
+      await _flush();
+      expect(second.disposed, isTrue);
+    },
+  );
+
+  for (final audioOnly in [false, true]) {
+    test(
+      'featured retains sixteen visits and reopens cold clips with cached tracks (audioOnly=$audioOnly)',
+      () async {
+        final repository = _FakeRepository(autoResolve: true);
+        var epoch = 0;
+        final screen = Object();
+        final listening = PlaybackListeningMode();
+        await listening.select(audioOnly);
+        final session = PlaybackSession(
+          engine: _FakeEngine(),
+          repository: repository,
+          progress: _FakeProgress(),
+          accountScope: () => 'guest',
+          sessionEpoch: () => epoch,
+          listeningMode: listening,
+          featuredStandby: FeaturedPreparedEngine(
+            createEngine: _FakeEngine.new,
+          ),
+        );
+        addTearDown(session.close);
+        final panel = Object();
+        session.configureSettings(
+          const AppSettings.defaults(
+            navigationMode: WorkspaceNavigationMode.multipleTabs,
+          ),
+        );
+        session.attach(panel);
+        Future<void> select(int i) async {
+          final cid = '$i';
+          final video = _detail(cid);
+          session.setFeaturedNeighbor(screen, (video.summary.id, cid), null);
+          await session.activate(panel, video, video.parts.single);
+        }
+
+        for (var i = 1; i <= 17; i++) {
+          await select(i);
+          await session.seek(Duration(seconds: i));
+        }
+        expect(session.hasFeaturedVisit(_detail('1').summary.id, '1'), isFalse);
+        for (var i = 2; i <= 17; i++) {
+          expect(
+            session.hasFeaturedVisit(_detail('$i').summary.id, '$i'),
+            isTrue,
+          );
+        }
+        final resolutions = repository.qualities.length;
+        await select(2);
+        expect(repository.qualities, hasLength(resolutions));
+        expect(session.audioOnly, audioOnly);
+        expect(session.snapshots.value.position, const Duration(seconds: 2));
+        epoch++;
+        expect(session.hasFeaturedVisit(_detail('2').summary.id, '2'), isFalse);
+        session.clearFeaturedVisits(screen);
+        await select(3);
+        expect(repository.qualities, hasLength(resolutions + 1));
+      },
+    );
+  }
   TestWidgetsFlutterBinding.ensureInitialized();
   test(
     'Android audio changes during opening and playback preserve the source',

@@ -28,12 +28,13 @@ void watchFeaturedVideoPreparation(
   required VideoSummary? current,
   required VideoSummary? next,
   required VideoSummary? previous,
+  bool Function(VideoId video, String cid)? hasReusableMedia,
 }) {
   if (ref.watch(featuredPlayInfoPreparationProvider) == null) return;
   for (final video in [?current, ?next, ?previous]) {
     final parts = ref.watch(videoDetailProvider(video.id)).value?.parts;
     final cid = video.previewCid ?? parts?.singleOrNull?.cid;
-    if (cid != null) {
+    if (cid != null && hasReusableMedia?.call(video.id, cid) != true) {
       ref.watch(
         _preparedPlayInfo((id: video.id, cid: cid, neighbor: video != current)),
       );
