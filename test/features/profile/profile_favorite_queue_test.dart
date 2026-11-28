@@ -4,6 +4,9 @@ import 'package:bilisail/core/network/api_requests.dart';
 import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/favorite_content_filter.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/domain/responsive_layout_settings.dart';
+import 'package:bilisail/shared/ui/responsive_layout_scope.dart';
+import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
@@ -87,7 +90,14 @@ void main() {
                 builder: (context, child) => MediaQuery(
                   data: MediaQuery.of(context)
                       .copyWith(textScaler: TextScaler.linear(isSelf ? 1 : 2)),
-                  child: child!,
+                  child: ResponsiveLayoutScope(
+                    settings: ResponsiveLayoutSettings(
+                      cardCoverRatios: const {
+                        CardCoverGroup.mine: CardCoverRatio.standard,
+                      },
+                    ),
+                    child: child!,
+                  ),
                 ),
                 home: Scaffold(
                   body: ProfileScreen(
@@ -106,6 +116,13 @@ void main() {
           await tester.pumpAndSettle();
           await tester.tap(find.text(_folder.title));
           await tester.pumpAndSettle();
+          final cover = find
+              .descendant(
+                of: find.byType(VideoCard).first,
+                matching: find.byType(AspectRatio),
+              )
+              .first;
+          expect(tester.getSize(cover).aspectRatio, closeTo(4 / 3, .001));
           final button = find.byKey(
             const ValueKey('profile-favorite-play-all'),
           );

@@ -293,7 +293,6 @@ class AppDependencies {
     final settings = SqliteSettingsRepository(
       database,
       defaultNavigationMode: defaultWorkspaceNavigationMode,
-      defaultCardCoverRatio: defaultCardCoverRatio,
       defaultRecommendationSource: defaultRecommendationSource,
       defaultShortcuts: defaultShortcuts,
       defaultHighEnergyProgressEnabled: defaultHighEnergyProgressEnabled,

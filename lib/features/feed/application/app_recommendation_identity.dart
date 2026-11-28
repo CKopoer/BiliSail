@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/recommendation_settings.dart';
+import '../../../domain/responsive_layout_settings.dart';
 import '../../../domain/app_failure.dart';
 import '../../../shared/application/recommendation_filter_provider.dart';
 import '../../settings/application/settings_controller.dart';
@@ -58,10 +59,15 @@ final recommendationQueryKeyProvider = Provider((ref) {
   final appCoverRatio = source == RecommendationSource.app
       ? ref.watch(
               settingsControllerProvider.select(
-                (state) => state.value?.responsiveLayout.cardCoverRatio,
+                (state) => state.value?.responsiveLayout.cardCoverRatioFor(
+                  CardCoverGroup.home,
+                ),
               ),
             ) ??
-            ref.watch(settingsDefaultsProvider).responsiveLayout.cardCoverRatio
+            ref
+                .watch(settingsDefaultsProvider)
+                .responsiveLayout
+                .cardCoverRatioFor(CardCoverGroup.home)
       : null;
   return (source: source, identity: identity, appCoverRatio: appCoverRatio);
 });

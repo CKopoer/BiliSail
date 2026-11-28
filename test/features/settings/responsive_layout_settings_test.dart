@@ -80,49 +80,57 @@ void main() {
     tearDown(() => database.close());
 
     test(
-      'card cover ratios use the platform fallback and persist overrides',
+      'cover ratios migrate the saved global choice and round-trip per group',
       () async {
-        final mobile = SqliteSettingsRepository(
-          database,
-          defaultCardCoverRatio: CardCoverRatio.standard,
+        Future<void> writeLayout(Object? layout) => database.writeSetting(
+          'preferences.v1',
+          jsonEncode({'schemaVersion': 58, 'responsiveLayout': layout}),
         );
-        expect(
-          mobile.defaults.responsiveLayout.cardCoverRatio,
-          CardCoverRatio.standard,
-        );
-        expect(
-          (await mobile.load()).responsiveLayout.cardCoverRatio,
-          CardCoverRatio.standard,
-        );
+        Future<List<CardCoverRatio>> readRatios() async {
+          final settings = (await repository.load()).responsiveLayout;
+          return CardCoverGroup.values.map(settings.cardCoverRatioFor).toList();
+        }
+
+        expect(await readRatios(), everyElement(CardCoverRatio.widescreen));
         for (final layout in [
           null,
-          <String, Object?>{},
-          {'cardCoverRatio': 'unsupported'},
+          {},
           {'cardCoverRatio': 4 / 3},
+          {'cardCoverRatios': 'invalid'},
         ]) {
-          await database.writeSetting(
-            'preferences.v1',
-            jsonEncode({'schemaVersion': 57, 'responsiveLayout': layout}),
-          );
-          expect(
-            (await mobile.load()).responsiveLayout.cardCoverRatio,
-            CardCoverRatio.standard,
-          );
-          expect(
-            (await repository.load()).responsiveLayout.cardCoverRatio,
-            CardCoverRatio.widescreen,
-          );
+          await writeLayout(layout);
+          expect(await readRatios(), everyElement(CardCoverRatio.widescreen));
         }
-        await mobile.save(repository.defaults);
-        expect(
-          (await mobile.load()).responsiveLayout.cardCoverRatio,
-          CardCoverRatio.widescreen,
+        for (final ratio in CardCoverRatio.values) {
+          await writeLayout({'cardCoverRatio': ratio.name});
+          expect(await readRatios(), everyElement(ratio));
+        }
+
+        final migrated = await repository.load();
+        await repository.save(
+          migrated.copyWith(
+            responsiveLayout: migrated.responsiveLayout.copyWith(
+              cardCoverRatios: {
+                ...migrated.responsiveLayout.cardCoverRatios,
+                CardCoverGroup.mine: CardCoverRatio.widescreen,
+              },
+            ),
+          ),
         );
-        await repository.save(mobile.defaults);
-        expect(
-          (await repository.load()).responsiveLayout.cardCoverRatio,
+        expect(await readRatios(), [
           CardCoverRatio.standard,
-        );
+          CardCoverRatio.standard,
+          CardCoverRatio.widescreen,
+        ]);
+
+        await writeLayout({
+          'cardCoverRatios': {'home': 'unknown', 'videoDynamic': 'standard'},
+        });
+        expect(await readRatios(), [
+          CardCoverRatio.widescreen,
+          CardCoverRatio.standard,
+          CardCoverRatio.widescreen,
+        ]);
       },
     );
 
@@ -344,7 +352,7 @@ void main() {
           isA<Map<String, Object?>>().having(
             (map) => map['schemaVersion'],
             'schema version',
-            58,
+            59,
           ),
         );
         expect(database.schemaVersion, 4);
@@ -368,7 +376,14 @@ void main() {
       await container.read(settingsControllerProvider.future);
       final controller = container.read(settingsControllerProvider.notifier);
       await Future.wait([
-        controller.setCardCoverRatio(CardCoverRatio.standard),
+        controller.setCardCoverRatio(
+          CardCoverGroup.home,
+          CardCoverRatio.standard,
+        ),
+        controller.setCardCoverRatio(
+          CardCoverGroup.mine,
+          CardCoverRatio.standard,
+        ),
         controller.setNavigationBreakpoints(800, 1280),
         controller.setPlaybackSideBySideWidth(900),
         controller.setPlaybackSplitStyle(
@@ -393,8 +408,14 @@ void main() {
       expect(repository.value.responsiveLayout.playbackSideBySideWidth, 900);
       expect(repository.value.responsiveLayout.videoGridMinWidths?[2], 1000);
       expect(
-        repository.value.responsiveLayout.cardCoverRatio,
-        CardCoverRatio.standard,
+        CardCoverGroup.values.map(
+          repository.value.responsiveLayout.cardCoverRatioFor,
+        ),
+        [
+          CardCoverRatio.standard,
+          CardCoverRatio.widescreen,
+          CardCoverRatio.standard,
+        ],
       );
       expect(repository.value.responsiveLayout.articleWidthFraction, .64);
       const savedStyles = {
@@ -446,8 +467,14 @@ void main() {
       await controller.setVideoGridMinWidths(null);
       expect(repository.value.responsiveLayout.videoGridMinWidths, isNull);
       expect(
-        repository.value.responsiveLayout.cardCoverRatio,
-        CardCoverRatio.standard,
+        CardCoverGroup.values.map(
+          repository.value.responsiveLayout.cardCoverRatioFor,
+        ),
+        [
+          CardCoverRatio.standard,
+          CardCoverRatio.widescreen,
+          CardCoverRatio.standard,
+        ],
       );
       expect(repository.value.responsiveLayout.playbackSideBySideWidth, 900);
       expect(
@@ -456,8 +483,10 @@ void main() {
       );
       await controller.resetToDefaults();
       expect(
-        repository.value.responsiveLayout.cardCoverRatio,
-        CardCoverRatio.widescreen,
+        CardCoverGroup.values.map(
+          repository.value.responsiveLayout.cardCoverRatioFor,
+        ),
+        everyElement(CardCoverRatio.widescreen),
       );
       expect(
         splitStyles(repository.value.responsiveLayout),

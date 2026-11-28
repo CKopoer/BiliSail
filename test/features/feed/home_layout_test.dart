@@ -1,5 +1,7 @@
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/dynamic_post.dart';
+import 'package:bilisail/domain/responsive_layout_settings.dart';
+import 'package:bilisail/shared/ui/responsive_layout_scope.dart';
 import 'package:bilisail/shared/ui/dynamic_post_card.dart';
 import 'package:bilisail/features/feed/application/home_controller.dart';
 import 'package:bilisail/features/feed/domain/home_channel.dart';
@@ -13,6 +15,55 @@ import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:bilisail/shared/ui/bili_badges.dart';
 
 void main() {
+  for (final (channel, group) in [
+    (HomeChannel.videoDynamic, CardCoverGroup.videoDynamic),
+    (HomeChannel.live, CardCoverGroup.home),
+    (HomeChannel.favorites, CardCoverGroup.mine),
+    (HomeChannel.watchLater, CardCoverGroup.mine),
+  ]) {
+    testWidgets('${channel.name} grid tracks its own cover ratio', (
+      tester,
+    ) async {
+      final settings = ValueNotifier(const ResponsiveLayoutSettings.defaults());
+      addTearDown(settings.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [homeRepositoryProvider.overrideWithValue(_Repository())],
+          child: MaterialApp(
+            home: ValueListenableBuilder(
+              valueListenable: settings,
+              builder: (context, value, child) =>
+                  ResponsiveLayoutScope(settings: value, child: child!),
+              child: Scaffold(
+                body: HomeContent(
+                  channel: channel,
+                  section: channel.sections.first,
+                  isSignedIn: true,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      for (final changed in CardCoverGroup.values) {
+        settings.value = ResponsiveLayoutSettings(
+          cardCoverRatios: {changed: CardCoverRatio.standard},
+        );
+        await tester.pumpAndSettle();
+        final card = find
+            .byType(channel == HomeChannel.live ? LiveRoomCard : VideoCard)
+            .first;
+        final cover = find
+            .descendant(of: card, matching: find.byType(AspectRatio))
+            .first;
+        expect(
+          tester.getSize(cover).aspectRatio,
+          closeTo(changed == group ? 4 / 3 : 16 / 9, .001),
+        );
+      }
+    });
+  }
+
   for (final width in [375.0, 1920.0]) {
     testWidgets('dynamic is a centered single column at $width', (
       tester,

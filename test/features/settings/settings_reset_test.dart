@@ -26,7 +26,6 @@ void main() {
       final repository = SqliteSettingsRepository(
         database,
         defaultNavigationMode: workspaceNavigationModeForPlatform(platform),
-        defaultCardCoverRatio: cardCoverRatioForPlatform(platform),
         defaultRecommendationSource: recommendationSourceForPlatform(platform),
         defaultShortcuts: shortcutSettingsForPlatform(platform),
         defaultHighEnergyProgressEnabled: highEnergyProgressEnabledForPlatform(
@@ -55,11 +54,10 @@ void main() {
             source: RecommendationSource.desktop,
           ),
           responsiveLayout: defaults.responsiveLayout.copyWith(
-            cardCoverRatio:
-                defaults.responsiveLayout.cardCoverRatio ==
-                    CardCoverRatio.standard
-                ? CardCoverRatio.widescreen
-                : CardCoverRatio.standard,
+            cardCoverRatios: {
+              for (final group in CardCoverGroup.values)
+                group: CardCoverRatio.standard,
+            },
           ),
           closeTabOnMiddleClick: true,
           closeTabOnRightClick: true,
@@ -141,8 +139,10 @@ void main() {
           defaults.recommendations.source,
         );
         expect(
-          settings.responsiveLayout.cardCoverRatio,
-          defaults.responsiveLayout.cardCoverRatio,
+          CardCoverGroup.values.map(
+            settings.responsiveLayout.cardCoverRatioFor,
+          ),
+          everyElement(CardCoverRatio.widescreen),
         );
         expect(settings.closeTabOnMiddleClick, isFalse);
         expect(settings.closeTabOnRightClick, isFalse);

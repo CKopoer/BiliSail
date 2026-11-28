@@ -69,9 +69,7 @@ final class _LiveRoomTileState extends State<LiveRoomTile> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               AspectRatio(
-                aspectRatio: ResponsiveLayoutScope.of(context)
-                    .cardCoverRatio
-                    .aspectRatio,
+                aspectRatio: CardCoverScope.ratioOf(context).aspectRatio,
                 child: LiveCardCover(
                   roomId: widget.roomId,
                   hovered: _hovered,

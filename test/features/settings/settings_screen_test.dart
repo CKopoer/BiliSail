@@ -1456,7 +1456,7 @@ void main() {
     }
     expect(tester.takeException(), isNull);
   });
-  testWidgets('appearance saves both card cover ratios', (tester) async {
+  testWidgets('appearance saves independent card cover ratios', (tester) async {
     final repository = _SettingsRepository();
     await tester.pumpWidget(
       ProviderScope(
@@ -1465,19 +1465,39 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    final widescreen = find.widgetWithText(ChoiceChip, '16:9');
-    final standard = find.widgetWithText(ChoiceChip, '4:3');
-    expect(tester.widget<ChoiceChip>(widescreen).selected, isTrue);
-    for (final (chip, ratio) in [
-      (standard, CardCoverRatio.standard),
-      (widescreen, CardCoverRatio.widescreen),
-    ]) {
-      await tester.ensureVisible(chip);
-      await tester.pumpAndSettle();
-      await tester.tap(chip);
-      await tester.pumpAndSettle();
-      expect(repository.settings.responsiveLayout.cardCoverRatio, ratio);
-      expect(tester.widget<ChoiceChip>(chip).selected, isTrue);
+    const labels = {
+      CardCoverGroup.home: '首页卡片封面比例',
+      CardCoverGroup.videoDynamic: '动态卡片封面比例',
+      CardCoverGroup.mine: '我的卡片封面比例',
+    };
+    Finder choice(CardCoverGroup group, String label) => find.descendant(
+      of: find
+          .ancestor(
+            of: find.text(labels[group]!),
+            matching: find.byType(Column),
+          )
+          .first,
+      matching: find.widgetWithText(ChoiceChip, label),
+    );
+    for (final group in labels.keys) {
+      expect(tester.widget<ChoiceChip>(choice(group, '16:9')).selected, isTrue);
+      for (final (label, ratio) in [
+        ('4:3', CardCoverRatio.standard),
+        ('16:9', CardCoverRatio.widescreen),
+      ]) {
+        final chip = choice(group, label);
+        await tester.ensureVisible(chip);
+        await tester.pumpAndSettle();
+        await tester.tap(chip);
+        await tester.pumpAndSettle();
+        for (final page in labels.keys) {
+          expect(
+            repository.settings.responsiveLayout.cardCoverRatioFor(page),
+            page == group ? ratio : CardCoverRatio.widescreen,
+          );
+        }
+        expect(tester.widget<ChoiceChip>(chip).selected, isTrue);
+      }
     }
   });
 

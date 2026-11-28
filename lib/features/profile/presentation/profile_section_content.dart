@@ -7,6 +7,8 @@ import '../../../shared/ui/dynamic_post_interactions.dart';
 import '../../../shared/ui/network_avatar.dart';
 import '../../../shared/ui/app_cover_image.dart';
 import '../../../shared/ui/responsive_card_grid.dart';
+import '../../../shared/ui/responsive_layout_scope.dart';
+import '../../../domain/responsive_layout_settings.dart';
 import '../../../shared/ui/season_card.dart';
 import '../../../shared/ui/sliver_dynamic_post_list.dart';
 import '../domain/profile_repository.dart';
@@ -108,10 +110,13 @@ class _ProfileSectionContentState extends State<ProfileSectionContent> {
     }
     final kind = _kind ??= _classify();
     if (kind == _ContentKind.folderVideos) {
-      return ProfileFolderVideoGrid(
-        entries: widget.entries,
-        onOpenVideo: widget.onOpenVideo,
-        onOpenUser: widget.onOpenUser,
+      return CardCoverScope(
+        group: CardCoverGroup.mine,
+        child: ProfileFolderVideoGrid(
+          entries: widget.entries,
+          onOpenVideo: widget.onOpenVideo,
+          onOpenUser: widget.onOpenUser,
+        ),
       );
     }
     if (kind == _ContentKind.dynamics) {

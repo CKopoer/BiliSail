@@ -14,7 +14,7 @@ final class AppRecommendationRequest {
   const AppRecommendationRequest({
     this.cursor = '0',
     this.reason = AppRecommendationLoadReason.initial,
-    this.coverRatio = CardCoverRatio.standard,
+    this.coverRatio = CardCoverRatio.widescreen,
   });
 
   /// Server card index anchoring this recommendation batch, never a page number.

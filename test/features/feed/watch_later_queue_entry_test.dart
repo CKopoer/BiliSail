@@ -50,8 +50,10 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: ResponsiveLayoutScope(
-            settings: const ResponsiveLayoutSettings.defaults(
-              cardCoverRatio: CardCoverRatio.standard,
+            settings: ResponsiveLayoutSettings(
+              cardCoverRatios: const {
+                CardCoverGroup.mine: CardCoverRatio.standard,
+              },
             ),
             child: MaterialApp.router(routerConfig: router),
           ),

@@ -10,6 +10,8 @@ import '../../../shared/ui/app_notice.dart';
 import '../../../shared/ui/content_section_tabs.dart';
 import '../../../shared/ui/paged_scroll_viewport.dart';
 import '../../../shared/ui/responsive_card_grid.dart';
+import '../../../shared/ui/responsive_layout_scope.dart';
+import '../../../domain/responsive_layout_settings.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../../shared/ui/video_card.dart';
 import '../../../shared/ui/workspace_link.dart';
@@ -324,7 +326,10 @@ final class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                       ),
                     ),
                   ),
-                  const _HistoryEntriesSliver(),
+                  const CardCoverScope(
+                    group: CardCoverGroup.mine,
+                    child: _HistoryEntriesSliver(),
+                  ),
                   SliverToBoxAdapter(
                     child: Column(
                       children: [

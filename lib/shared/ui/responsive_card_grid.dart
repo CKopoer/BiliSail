@@ -171,7 +171,7 @@ final class _SliverResponsiveCardGridState
           MediaQuery.boldTextOf(context),
           Localizations.maybeLocaleOf(context),
           Directionality.of(context),
-          ResponsiveLayoutScope.of(context).cardCoverRatio,
+          CardCoverScope.ratioOf(context),
         );
         // Sliver constraints also change on every scroll frame. Reusing the rows
         // keeps a scroll offset change from replacing the delegate and rebuilding

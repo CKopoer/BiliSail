@@ -88,7 +88,7 @@ void main() {
       final snapshot = jsonDecode(
         (await database.readSetting('preferences.v1'))!,
       ) as Map<String, Object?>;
-      expect(snapshot['schemaVersion'], 58);
+      expect(snapshot['schemaVersion'], 59);
       expect(snapshot['orientation'], 'landscape');
       await container
           .read(settingsControllerProvider.notifier)

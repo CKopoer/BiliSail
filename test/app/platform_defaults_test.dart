@@ -1,32 +1,23 @@
 import 'package:bilisail/app/platform_defaults.dart';
 import 'package:bilisail/domain/recommendation_source.dart';
-import 'package:bilisail/domain/responsive_layout_settings.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test(
-    'only Android and iOS default to 4:3 covers and App recommendations',
-    () {
-      addTearDown(() => debugDefaultTargetPlatformOverride = null);
-      for (final platform in TargetPlatform.values) {
-        debugDefaultTargetPlatformOverride = platform;
-        final mobile =
-            platform == TargetPlatform.android ||
-            platform == TargetPlatform.iOS;
-        expect(
-          defaultCardCoverRatio,
-          mobile ? CardCoverRatio.standard : CardCoverRatio.widescreen,
-        );
-        expect(
-          defaultRecommendationSource,
-          mobile ? RecommendationSource.app : RecommendationSource.web,
-        );
-      }
-    },
-  );
+  test('only Android and iOS default to App recommendations', () {
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    for (final platform in TargetPlatform.values) {
+      debugDefaultTargetPlatformOverride = platform;
+      final mobile =
+          platform == TargetPlatform.android || platform == TargetPlatform.iOS;
+      expect(
+        defaultRecommendationSource,
+        mobile ? RecommendationSource.app : RecommendationSource.web,
+      );
+    }
+  });
 
   test(
     'macOS and iOS use Command defaults while other platforms retain Ctrl',

@@ -120,9 +120,7 @@ class _HistoryContentCardState extends State<HistoryContentCard> {
                 children: [
                   AspectRatio(
                     aspectRatio: liveRoom
-                        ? ResponsiveLayoutScope.of(context)
-                              .cardCoverRatio
-                              .aspectRatio
+                        ? CardCoverScope.ratioOf(context).aspectRatio
                         : 16 / 9,
                     child: liveRoom
                         ? LiveCardCover(

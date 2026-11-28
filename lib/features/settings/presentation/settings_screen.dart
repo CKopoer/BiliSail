@@ -430,15 +430,38 @@ final class _SettingsCategoryPageState
                             '使用侧边栏时生效；随窗口宽度模式按下方导航栏阈值展开。可用左上角按钮完全收起或展开，保留当前页面和侧栏样式。',
                             style: TextStyle(fontSize: 12),
                           ),
-                          _choices(
-                            '视频与直播卡片封面比例',
-                            s.responsiveLayout.cardCoverRatio,
-                            const {
-                              CardCoverRatio.widescreen: '16:9',
-                              CardCoverRatio.standard: '4:3',
-                            },
-                            controller.setCardCoverRatio,
-                          ),
+                          for (final (group, label, description) in const [
+                            (
+                              CardCoverGroup.home,
+                              '首页卡片封面比例',
+                              '用于首页各子标签、直播和搜索结果中的视频卡与直播卡。',
+                            ),
+                            (
+                              CardCoverGroup.videoDynamic,
+                              '动态卡片封面比例',
+                              '用于「视频动态」的视频卡网格。',
+                            ),
+                            (
+                              CardCoverGroup.mine,
+                              '我的卡片封面比例',
+                              '用于稍后再看、我的收藏、历史记录，以及个人空间和 UP 主空间收藏夹里的视频。',
+                            ),
+                          ]) ...[
+                            _choices(
+                              label,
+                              s.responsiveLayout.cardCoverRatioFor(group),
+                              const {
+                                CardCoverRatio.widescreen: '16:9',
+                                CardCoverRatio.standard: '4:3',
+                              },
+                              (ratio) =>
+                                  controller.setCardCoverRatio(group, ratio),
+                            ),
+                            Text(
+                              description,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ],
                           ResponsiveLayoutSettingsControls(
                             settings: s.responsiveLayout,
                             onVideoGridChanged:

@@ -1,6 +1,8 @@
 import '../../../domain/user.dart';
 import '../../../domain/dynamic_post.dart';
 import '../../../shared/ui/responsive_card_grid.dart';
+import '../../../shared/ui/responsive_layout_scope.dart';
+import '../../../domain/responsive_layout_settings.dart';
 import '../../../shared/ui/season_card.dart';
 import '../../../shared/ui/sliver_dynamic_post_list.dart';
 import '../../../shared/ui/network_avatar.dart';
@@ -446,7 +448,7 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
         onLogin: widget.onLogin == null ? null : _login,
       );
     }
-    return _bodySliver = SliverResponsiveCardGrid(
+    final grid = SliverResponsiveCardGrid(
       itemCount: items.length,
       itemBuilder: (context, index) {
         final item = items[index];
@@ -551,6 +553,17 @@ final class _HomeContentState extends ConsumerState<HomeContent> {
         return _EntryCard(key: key, entry: item, onTap: () => _open(item));
       },
     );
+    return _bodySliver = switch (widget.channel) {
+      HomeChannel.videoDynamic => CardCoverScope(
+        group: CardCoverGroup.videoDynamic,
+        child: grid,
+      ),
+      HomeChannel.watchLater || HomeChannel.favorites => CardCoverScope(
+        group: CardCoverGroup.mine,
+        child: grid,
+      ),
+      _ => grid,
+    };
   }
 
   Widget _areaRow(List<HomeEntry> items, {required bool parent}) {

@@ -225,8 +225,7 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
     final videoRecommendation = widget.recommended && widget.video.id.isValid;
     final standardCover =
         videoRecommendation &&
-        ResponsiveLayoutScope.of(context).cardCoverRatio ==
-            CardCoverRatio.standard;
+        CardCoverScope.ratioOf(context) == CardCoverRatio.standard;
     final visibleRecommendation =
         videoRecommendation && WorkspaceActivity.isActive(context);
     if (visibleRecommendation &&

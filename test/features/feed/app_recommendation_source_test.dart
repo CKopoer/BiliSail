@@ -207,7 +207,10 @@ void main() {
       final first = controller.refresh();
       complete('web');
       await first;
-      await settings.setCardCoverRatio(CardCoverRatio.standard);
+      await settings.setCardCoverRatio(
+        CardCoverGroup.home,
+        CardCoverRatio.standard,
+      );
       await container.pump();
       expect(feed.calls, hasLength(1));
 
@@ -220,7 +223,23 @@ void main() {
       expect(feed.appRequests.last.cursor, '123');
       expect(feed.appRequests.last.coverRatio, CardCoverRatio.standard);
 
-      await settings.setCardCoverRatio(CardCoverRatio.widescreen);
+      final requests = feed.calls.length;
+      await settings.setCardCoverRatio(
+        CardCoverGroup.videoDynamic,
+        CardCoverRatio.standard,
+      );
+      await settings.setCardCoverRatio(
+        CardCoverGroup.mine,
+        CardCoverRatio.standard,
+      );
+      await container.pump();
+      expect(stale.cancellation.isCancelled, isFalse);
+      expect(feed.calls, hasLength(requests));
+
+      await settings.setCardCoverRatio(
+        CardCoverGroup.home,
+        CardCoverRatio.widescreen,
+      );
       await container.pump();
       expect(stale.cancellation.isCancelled, isTrue);
       expect(feed.appRequests.last.coverRatio, CardCoverRatio.widescreen);

@@ -62,8 +62,8 @@ void main() {
             valueListenable: ratio,
             child: child,
             builder: (context, value, child) => ResponsiveLayoutScope(
-              settings: ResponsiveLayoutSettings.defaults(
-                cardCoverRatio: value,
+              settings: ResponsiveLayoutSettings(
+                cardCoverRatios: {CardCoverGroup.home: value},
               ),
               child: child ?? const SizedBox.shrink(),
             ),

@@ -661,7 +661,9 @@ Widget _app({
         child: SizedBox(
           width: width,
           child: ResponsiveLayoutScope(
-            settings: ResponsiveLayoutSettings.defaults(cardCoverRatio: ratio),
+            settings: ResponsiveLayoutSettings(
+              cardCoverRatios: {CardCoverGroup.home: ratio},
+            ),
             child: VideoCard(
               video:
                   video ??

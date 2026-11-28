@@ -79,7 +79,10 @@ void main() {
       row: 1,
       column: 1,
     );
-    await settings.setCardCoverRatio(CardCoverRatio.standard);
+    await settings.setCardCoverRatio(
+      CardCoverGroup.home,
+      CardCoverRatio.standard,
+    );
     expect(container.read(recommendationReporterProvider), same(reporter));
     await tester.pump(const Duration(seconds: 1));
     expect(repository.batches.single.single.card, same(card));

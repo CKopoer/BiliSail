@@ -166,8 +166,13 @@ Widget _app({
   builder: (context, child) => MediaQuery(
     data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(scale)),
     child: ResponsiveLayoutScope(
-      settings: ResponsiveLayoutSettings.defaults(cardCoverRatio: ratio),
-      child: child ?? const SizedBox.shrink(),
+      settings: ResponsiveLayoutSettings(
+        cardCoverRatios: {CardCoverGroup.mine: ratio},
+      ),
+      child: CardCoverScope(
+        group: CardCoverGroup.mine,
+        child: child ?? const SizedBox.shrink(),
+      ),
     ),
   ),
   home: Scaffold(

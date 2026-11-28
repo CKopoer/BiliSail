@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 
 import '../domain/recommendation_source.dart';
-import '../domain/responsive_layout_settings.dart';
 import '../features/settings/domain/app_settings.dart';
 import '../features/settings/domain/shortcut_settings.dart';
 
@@ -50,15 +49,6 @@ bool videoCardHoverPlaybackForPlatform(TargetPlatform platform) =>
 
 bool get defaultVideoCardHoverPlayback =>
     videoCardHoverPlaybackForPlatform(defaultTargetPlatform);
-
-CardCoverRatio cardCoverRatioForPlatform(TargetPlatform platform) =>
-    switch (platform) {
-      TargetPlatform.android || TargetPlatform.iOS => CardCoverRatio.standard,
-      _ => CardCoverRatio.widescreen,
-    };
-
-CardCoverRatio get defaultCardCoverRatio =>
-    cardCoverRatioForPlatform(defaultTargetPlatform);
 
 RecommendationSource recommendationSourceForPlatform(TargetPlatform platform) =>
     switch (platform) {

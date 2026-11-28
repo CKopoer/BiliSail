@@ -279,7 +279,7 @@ final class _VideoCardState extends State<VideoCard> {
     final scheme = theme.colorScheme;
     final video = widget.video;
     final menu = _menu;
-    final coverRatio = ResponsiveLayoutScope.of(context).cardCoverRatio;
+    final coverRatio = CardCoverScope.ratioOf(context);
     final standardCover = coverRatio == CardCoverRatio.standard;
     final coverImage = _buildCoverImage(context, standardCover: standardCover);
     final menuButton =

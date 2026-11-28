@@ -567,7 +567,7 @@ final class FeedController extends Notifier<FeedState> {
         : AppRecommendationRequest(
             cursor: _appRecommendationCursor,
             coverRatio:
-                _recommendationKey.appCoverRatio ?? CardCoverRatio.standard,
+                _recommendationKey.appCoverRatio ?? CardCoverRatio.widescreen,
             reason:
                 appReason ??
                 (_page == 0
@@ -768,7 +768,7 @@ final class FeedController extends Notifier<FeedState> {
                   reason: AppRecommendationLoadReason.loadMore,
                   coverRatio:
                       _recommendationKey.appCoverRatio ??
-                      CardCoverRatio.standard,
+                      CardCoverRatio.widescreen,
                 ),
             cancellation: cancellation,
           );
