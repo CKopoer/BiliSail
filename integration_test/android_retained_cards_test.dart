@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/features/feed/domain/home_repository.dart';
+import 'package:bilisail/shared/ui/scroll_collapsing_header.dart';
 import 'package:bilisail/shared/ui/video_card.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -41,6 +42,7 @@ void main() {
         .firstWhere(
           (state) =>
               state.position.axis == Axis.vertical &&
+              state.widget.controller is HeaderScrollController &&
               (state.context
                       .getInheritedWidgetOfExactType<WorkspaceActivity>()
                       ?.active ??
@@ -48,7 +50,21 @@ void main() {
         );
     Finder listFinder() => find.byWidget(visibleList().widget);
     Future<void> select(String page) async {
-      await tester.tap(find.byKey(ValueKey('workspace-bottom-$page')));
+      final destination = find
+          .byKey(ValueKey('workspace-bottom-$page'))
+          .hitTestable();
+      if (destination.evaluate().isEmpty) {
+        await tester.fling(listFinder(), const Offset(0, 140), 5000);
+        for (
+          var frame = 0;
+          frame < 20 && destination.evaluate().isEmpty;
+          frame++
+        ) {
+          await tester.pump(const Duration(milliseconds: 16));
+        }
+      }
+      expect(destination, findsOneWidget);
+      await tester.tap(destination);
       await tester.pump();
     }
 

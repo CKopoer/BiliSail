@@ -93,7 +93,28 @@ void main() {
             );
             await tester.pump(const Duration(milliseconds: 32));
             final next = page == 'home' ? 'dynamic' : 'home';
-            await tester.tap(find.byKey(ValueKey('workspace-bottom-$next')));
+            final destination = find
+                .byKey(ValueKey('workspace-bottom-$next'))
+                .hitTestable();
+            expect(destination, findsNothing);
+
+            // Reveal the bar with a reverse fling and switch while the list
+            // still has momentum, so leaving must stop the retained position.
+            await tester.fling(
+              find.byWidget(activeList().widget),
+              const Offset(0, 140),
+              4000,
+            );
+            for (
+              var frame = 0;
+              frame < 20 && destination.evaluate().isEmpty;
+              frame++
+            ) {
+              await tester.pump(const Duration(milliseconds: 16));
+            }
+            expect(destination, findsOneWidget);
+            expect(positions[page]!.isScrollingNotifier.value, isTrue);
+            await tester.tap(destination);
             await tester.pump();
             final saved = positions[page]!.pixels;
             await tester.pumpAndSettle(
