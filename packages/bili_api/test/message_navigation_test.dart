@@ -137,12 +137,6 @@ void main() {
       },
     ),
     (
-      ApiInboxSection.mentions,
-      {'native_uri': 'bilibili://opus/9007199254740993123#reply200'},
-      '/9007199254740993123',
-      <String, String>{},
-    ),
-    (
       ApiInboxSection.replies,
       {
         'native_uri':
@@ -197,9 +191,57 @@ void main() {
       expect(entry.targetUrl?.host, 't.bilibili.com');
       expect(entry.targetUrl?.path, path);
       expect(entry.targetUrl?.queryParameters, query);
-      if (section == ApiInboxSection.mentions) {
-        expect(entry.targetUrl?.fragment, 'reply200');
-      }
+    });
+  }
+
+  for (final (source, path) in [
+    ('bilibili://opus/9007199254740993123', '/opus/9007199254740993123'),
+    ('bilibili://article/123', '/read/cv123'),
+  ]) {
+    test('keeps the reader and comment location for $source', () async {
+      final api = BiliApiClient(
+        transport: _Transport(
+          _page(ApiInboxSection.mentions, {
+            'native_uri': '$source?comment_root_id=200#reply202',
+          }),
+        ),
+      );
+      addTearDown(api.close);
+      final entry = (await MessageClient(
+        api,
+      ).notifications(ApiInboxSection.mentions)).items.single;
+      expect(
+        entry.targetUrl,
+        Uri.parse('https://www.bilibili.com$path?comment_root_id=200#reply202'),
+      );
+    });
+  }
+
+  for (final (source, path) in [
+    (
+      'bilibili://comment/msg_fold/11/345/200?anchor=202&enterUri=bilibili%3A%2F%2Fopus%2F9007199254740993123',
+      '/opus/9007199254740993123',
+    ),
+    ('bilibili://comment/detail/12/345/200?anchor=202', '/read/cv345'),
+    (
+      'https://www.bilibili.com/h5/comment/sub?oid=345&pageType=12&root=200&comment_secondary_id=202',
+      '/read/cv345',
+    ),
+  ]) {
+    test('opens the original work from reply notification $source', () async {
+      final api = BiliApiClient(
+        transport: _Transport(
+          _page(ApiInboxSection.replies, {'native_uri': source}),
+        ),
+      );
+      addTearDown(api.close);
+      final entry = (await MessageClient(
+        api,
+      ).notifications(ApiInboxSection.replies)).items.single;
+      expect(entry.targetUrl?.host, 'www.bilibili.com');
+      expect(entry.targetUrl?.path, path);
+      expect(entry.targetUrl?.queryParameters['comment_root_id'], '200');
+      expect(entry.targetUrl?.queryParameters['comment_secondary_id'], '202');
     });
   }
 

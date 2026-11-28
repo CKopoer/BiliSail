@@ -1,10 +1,14 @@
 import '../support/material_tooltip_finder.dart';
 
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:bilisail/app/router.dart';
 import 'package:bilisail/core/network/api_requests.dart';
 import 'package:bilisail/core/platform/external_links.dart';
+import 'package:bilisail/core/presentation/app_image_provider.dart';
+import 'package:bilisail/core/storage/image_byte_cache.dart';
 import 'package:bilisail/domain/article_address.dart';
 import 'package:bilisail/domain/comment_target.dart';
 import 'package:bilisail/domain/content_link.dart';
@@ -34,6 +38,8 @@ import 'package:bilisail/features/feed/domain/feed_repository.dart';
 import 'package:bilisail/features/feed/domain/home_channel.dart';
 import 'package:bilisail/features/feed/domain/home_repository.dart';
 import 'package:bilisail/features/feed/presentation/feed_screen.dart';
+import 'package:bilisail/features/image_viewer/application/image_viewer_controller.dart';
+import 'package:bilisail/features/image_viewer/domain/original_image.dart';
 import 'package:bilisail/features/library/application/library_controller.dart';
 import 'package:bilisail/features/library/domain/library_repository.dart';
 import 'package:bilisail/features/library/presentation/history_screen.dart';
@@ -45,6 +51,8 @@ import 'package:bilisail/features/settings/application/settings_controller.dart'
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/domain/settings_repository.dart';
 import 'package:bilisail/shared/ui/comments_panel.dart';
+import 'package:bilisail/shared/ui/app_network_image.dart';
+import 'package:bilisail/shared/ui/image_viewer.dart';
 import 'package:bilisail/shared/ui/paging_tab_strip.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
@@ -83,6 +91,7 @@ void main() {
     DynamicRepositoryFake? dynamics,
     CommentsRepository? dynamicComments,
     ArticleRepository? articles,
+    AppImageCache? imageCache,
     (CommentTargetType, CommentsRepository)? articleComments,
     Future<bool> Function(Uri)? externalOpener,
   }) async {
@@ -124,12 +133,22 @@ void main() {
                 .overrideWithValue(dynamicComments),
           if (articles != null)
             articleRepositoryProvider.overrideWithValue(articles),
+          if (imageCache != null)
+            originalImageRepositoryProvider.overrideWithValue(
+              _OriginalImages(),
+            ),
           if (articleComments case (final type, final repository))
             commentsRepositoryProvider(type).overrideWithValue(repository),
           if (externalOpener != null)
             externalLinkOpenerProvider.overrideWithValue(externalOpener),
         ],
-        child: InputTestApp.router(routerConfig: router),
+        child: InputTestApp.router(
+          routerConfig: router,
+          builder: imageCache == null
+              ? null
+              : (_, child) =>
+                    AppImageCacheScope(cache: imageCache, child: child!),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -151,9 +170,16 @@ void main() {
       const ArticleAddress(ArticleKind.opus, '9007199254740993'),
       const CommentTarget('456', CommentTargetType.dynamic),
     ),
+    (
+      InboxSection.replies,
+      WorkspaceNavigationMode.singlePage,
+      390.0,
+      const ArticleAddress(ArticleKind.opus, '9007199254740993'),
+      _dynamicTarget,
+    ),
   ]) {
     testWidgets(
-      '${address.kind.name} notification locates its article comment and returns to the retained inbox',
+      '$section ${address.kind.name} notification shows the images and locates its article comment',
       (tester) async {
         messages.entries = [
           InboxEntry(
@@ -169,6 +195,16 @@ void main() {
           ),
         ];
         final articles = _NotificationArticles(target);
+        final cache = AppImageCache(
+          ImageByteCache(
+            directory: () async =>
+                throw const FileSystemException('memory only'),
+            loader: (_, _) async => base64Decode(
+              'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGMwCasA'
+              'IgYIBQAbNgQJ4mDIDgAAAABJRU5ErkJggg==',
+            ),
+          ),
+        );
         final comments = _NotificationComments(showComments: true);
         final external = <Uri>[];
         final router = await mount(
@@ -177,6 +213,7 @@ void main() {
           mode: mode,
           initialLocation: '/messages',
           articles: articles,
+          imageCache: cache,
           articleComments: (target.type, comments),
           externalOpener: (uri) async {
             external.add(uri);
@@ -226,6 +263,31 @@ void main() {
           );
           expect(find.text('专栏评论').hitTestable(), findsNothing);
         }
+        final photo = find.bySemanticsLabel('查看图片 2');
+        await tester.ensureVisible(photo);
+        final pixels = find.descendant(
+          of: photo,
+          matching: find.byType(RawImage),
+        );
+        for (var i = 0; i < 50; i++) {
+          if (tester
+              .widgetList<RawImage>(pixels)
+              .any((raw) => raw.image != null)) {
+            break;
+          }
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 10)),
+          );
+          await tester.pump();
+        }
+        expect(tester.widget<RawImage>(pixels).image, isNotNull);
+        await tester.tap(photo);
+        await tester.pumpAndSettle();
+        final viewer = tester.widget<ImageViewer>(find.byType(ImageViewer));
+        expect(viewer.request.images, _NotificationArticles.photos);
+        expect(viewer.request.initialIndex, 1);
+        await tester.tap(findMaterialTooltip('关闭图片'));
+        await tester.pumpAndSettle();
         await tester.tap(
           find.descendant(of: article, matching: findMaterialTooltip('返回')),
         );
@@ -236,6 +298,7 @@ void main() {
         expect(messages.reads, reads);
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox());
+        await cache.close();
       },
     );
   }
@@ -874,7 +937,13 @@ final class _NotificationDynamics extends DynamicRepositoryFake {
   }
 }
 
+final class _OriginalImages extends Fake implements OriginalImageRepository {}
+
 final class _NotificationArticles extends Fake implements ArticleRepository {
+  static final photos = [
+    Uri.https('i0.hdslb.com', '/bfs/new_dyn/first.jpg'),
+    Uri.https('i0.hdslb.com', '/bfs/new_dyn/second.png'),
+  ];
   @override
   Future<ArticleStats> viewInfo(
     String cvId,
@@ -893,7 +962,10 @@ final class _NotificationArticles extends Fake implements ArticleRepository {
     return ArticleDocument(
       url: address.webUri,
       title: '通知原专栏',
-      blocks: const [],
+      blocks: [
+        for (final photo in photos)
+          ArticleBlock(ArticleBlockKind.image, image: photo, aspectRatio: 2),
+      ],
       commentTarget: target,
       commentCount: 2,
     );

@@ -35,6 +35,7 @@ final class ArticleParser {
     for (final value in _list(item['modules'])) {
       final module = articleMap(value);
       for (final key in const [
+        'module_top',
         'module_title',
         'module_author',
         'module_content',
@@ -53,12 +54,17 @@ final class ArticleParser {
     final like = articleMap(stats?['like']);
     final favorite = articleMap(stats?['favorite']);
     final forward = articleMap(stats?['forward']);
+    final display = articleMap(modules['module_top']?['display']);
+    final album = articleMap(display['album']);
     return _document(
       title: _text(modules['module_title']?['text']),
       author: modules['module_author'] ?? const {},
       published: modules['module_author']?['pub_ts'],
       blocks: blocked == null
-          ? _paragraphs(modules['module_content']?['paragraphs']).toList()
+          ? [
+              ..._list(album['pics']).take(18).map(_picture).nonNulls,
+              ..._paragraphs(modules['module_content']?['paragraphs']),
+            ]
           : const [],
       accessMessage: blocked == null
           ? null
@@ -218,6 +224,11 @@ final class ArticleParser {
     );
   }
 
+  ApiArticleBlock? _picture(Object? value) {
+    final photo = articleMap(value);
+    return _image(photo['url'], photo['width'], photo['height']);
+  }
+
   Iterable<ApiArticleBlock> _paragraphs(
     Object? value, {
     int depth = 0,
@@ -229,14 +240,11 @@ final class ArticleParser {
       final kind = int.tryParse('${paragraph['para_type']}');
       switch (kind) {
         case 2:
-          for (final row in _list(articleMap(paragraph['pic'])['pics'])) {
-            final photo = articleMap(row);
-            final image = _image(photo['url'], photo['width'], photo['height']);
-            if (image != null) yield image;
-          }
+          yield* _list(
+            articleMap(paragraph['pic'])['pics'],
+          ).map(_picture).nonNulls;
         case 3:
-          final photo = articleMap(articleMap(paragraph['line'])['pic']);
-          yield _image(photo['url'], photo['width'], photo['height']) ??
+          yield _picture(articleMap(paragraph['line'])['pic']) ??
               const ApiArticleBlock(ApiArticleBlockKind.divider);
         case 5:
           final list = articleMap(paragraph['list']);

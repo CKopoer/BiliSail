@@ -71,3 +71,13 @@ Windows Release 的脱敏日志记录了鉴权失败。原有发送表单带 Web
 已迁移专栏优先读取新版正文。新版接口返回普通限流时，对已知的 CV 号使用现有专栏接口补读。仅在作品 ID 一致且返回结构化正文时采用该响应。验证码与权限错误继续按原流程处理。
 
 只读对照 PiliPlus 提交 [`217fb54f`](https://github.com/bggRGjQaUbCoE/PiliPlus/tree/217fb54f51f6764176319bbdedab2a7522d75401) 的 `lib/pages/dynamics/widgets/rich_node_panel.dart`、`lib/pages/article/controller.dart` 和 `lib/pages/article/widgets/opus_content.dart`，参考「全文」标记、正文接口与段落顺序。BiliSail 复用现有阅读组件，独立实现动态入口与专栏回退。
+
+## 2026-11-28 消息跳转与顶部相簿
+
+从「回复我的 → 查看原内容」打开的[样本动态](https://t.bilibili.com/1198877805005242402)在图文作品接口中有一个文字段落，两张图片单独放在 `module_top.display.album.pics`。原阅读器只解析 `module_content.paragraphs`，因此能显示文字，却遗漏整组图片。阅读器现在按相簿顺序把图片放在正文段落前，与段落内的配图共用尺寸、预览和原图查看逻辑。受限文章继续只展示访问提示。
+
+私信相簿分享（`source=2`）使用资源 ID 查询动态，普通动态分享（`source=11`）使用动态 ID。通知里的原生 opus 链接进入图文阅读页，专栏和图文的评论链接保留楼层定位。样本的作品 ID 为 `1198877805005242402`，相簿和评论使用 `393655877`、评论类型 11。
+
+匿名读取[图文作品接口](https://api.bilibili.com/x/polymer/web-dynamic/v1/opus/detail?id=1198877805005242402)并用项目的 `ArticleClient` 重放，依次得到两张图和一个文字段落。两张图的宽高分别为 2048 × 1536 和 1080 × 1080，原图及阅读器使用的缩略图共四个地址均返回 HTTP 200。在 Flutter 无头运行时使用同一响应和实际缩略图打开阅读页，两张预览均已绘制，解码尺寸分别为 1280 × 960 和 1080 × 1080。
+
+[消息工作区回归](../../test/app/account_workspace_test.dart)使用本地图片验证回复及 @ 通知。窄屏从定位楼层返回正文，宽屏在评论旁阅读。两种布局都能显示预览，从第二张图打开整组原图，并回到原消息列表。

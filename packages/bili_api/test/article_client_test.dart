@@ -170,6 +170,23 @@ void main() {
             'id_str': _id,
             'modules': [
               {
+                'module_top': {
+                  'display': {
+                    'album': {
+                      'pics': [
+                        {
+                          'url': 'http://i0.hdslb.com/bfs/new_dyn/top.jpg',
+                          'width': 2048,
+                          'height': 1536,
+                        },
+                        {'url': 'https://untrusted.invalid/top.jpg'},
+                        {'url': '//i0.hdslb.com/bfs/new_dyn/second.png'},
+                      ],
+                    },
+                  },
+                },
+              },
+              {
                 'module_content': {
                   'paragraphs': [
                     {
@@ -215,17 +232,19 @@ void main() {
       expect(article.blocks.map((block) => block.kind), [
         ApiArticleBlockKind.image,
         ApiArticleBlockKind.image,
+        ApiArticleBlockKind.image,
+        ApiArticleBlockKind.image,
         ApiArticleBlockKind.divider,
       ]);
-      expect(
-        article.blocks[0].image.toString(),
+      expect(article.blocks.map((block) => block.image?.toString()), [
+        'https://i0.hdslb.com/bfs/new_dyn/top.jpg',
+        'https://i0.hdslb.com/bfs/new_dyn/second.png',
         'https://i0.hdslb.com/bfs/new_dyn/article.png',
-      );
-      expect(article.blocks[0].aspectRatio, 1080 / 1920);
-      expect(
-        article.blocks[1].image.toString(),
         'https://i0.hdslb.com/bfs/article/line.png',
-      );
+        null,
+      ]);
+      expect(article.blocks[0].aspectRatio, 2048 / 1536);
+      expect(article.blocks[2].aspectRatio, 1080 / 1920);
     },
   );
 
@@ -587,6 +606,17 @@ void main() {
           'modules': [
             {
               'module_blocked': {'title': '内容受限', 'hint_message': '请先登录'},
+            },
+            {
+              'module_top': {
+                'display': {
+                  'album': {
+                    'pics': [
+                      {'url': '//i0.hdslb.com/bfs/new_dyn/blocked.png'},
+                    ],
+                  },
+                },
+              },
             },
             {
               'module_content': {'paragraphs': _paragraphs},

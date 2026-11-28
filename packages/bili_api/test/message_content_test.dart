@@ -50,7 +50,7 @@ void main() {
     'share source gives precise typed targets and keeps thumbnail separate',
     () async {
       for (final (source, expected) in [
-        (2, 'https://t.bilibili.com/9007199254740993123'),
+        (2, 'https://t.bilibili.com/9007199254740993123?type=2'),
         (5, 'https://www.bilibili.com/video/av9007199254740993123'),
         (6, 'https://www.bilibili.com/read/cv9007199254740993123'),
         (11, 'https://t.bilibili.com/9007199254740993123'),

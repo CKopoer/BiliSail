@@ -908,7 +908,9 @@ final class MessageClient {
       }
       final source = content['source'];
       switch (source is String ? int.tryParse(source) : source) {
-        case 2 || 11:
+        case 2:
+          return Uri.https('t.bilibili.com', '/$id', {'type': '2'});
+        case 11:
           return Uri.https('t.bilibili.com', '/$id');
         case 5:
           return _videoTarget(id);
@@ -943,6 +945,7 @@ final class MessageClient {
         }
         final target = switch (business) {
           '1' => _videoTarget(subject),
+          '12' => Uri.https('www.bilibili.com', '/read/cv$subject'),
           '17' => Uri.https('t.bilibili.com', '/$subject'),
           '11' || '16' => _foldedDynamicTarget(parsed, subject),
           _ => null,
@@ -985,10 +988,12 @@ final class MessageClient {
           'pgc' when parts.length == 2 && parts[0] == 'season' => withContext(
             Uri.https('www.bilibili.com', '/bangumi/play/ss$decimal'),
           ),
-          'article' => Uri.https('www.bilibili.com', '/read/cv$decimal'),
+          'article' => withContext(
+            Uri.https('www.bilibili.com', '/read/cv$decimal'),
+          ),
           'dynamic' => withContext(Uri.https('t.bilibili.com', '/$decimal')),
           'opus' when parts.length == 1 && decimal == id => withContext(
-            Uri.https('t.bilibili.com', '/$decimal'),
+            Uri.https('www.bilibili.com', '/opus/$decimal'),
           ),
           'following'
               when parts.length == 2 &&
@@ -1025,6 +1030,7 @@ final class MessageClient {
         if (oid != null && root != null) {
           final target = switch (uri.queryParameters['pageType']) {
             '1' => _videoTarget(oid),
+            '12' => Uri.https('www.bilibili.com', '/read/cv$oid'),
             '17' => Uri.https('t.bilibili.com', '/$oid'),
             '11' || '16' => Uri.https('t.bilibili.com', '/$oid', {'type': '2'}),
             _ => null,
@@ -1050,14 +1056,14 @@ final class MessageClient {
   Uri _foldedDynamicTarget(Uri notification, String subject) {
     final link = notification.queryParameters['enterUri'];
     final uri = link == null ? null : Uri.tryParse(link);
-    if (uri case Uri(
-      scheme: 'bilibili',
-      host: 'following',
-      userInfo: '',
-      hasPort: false,
-      pathSegments: ['detail', final id],
-    ) when _positiveDecimal(id) != null) {
-      return Uri.https('t.bilibili.com', '/$id');
+    if (uri case Uri(scheme: 'bilibili', userInfo: '', hasPort: false)) {
+      switch ((uri.host, uri.pathSegments)) {
+        case ('opus', [final id]) when _positiveDecimal(id) != null:
+          return Uri.https('www.bilibili.com', '/opus/$id');
+        case ('following', ['detail', final id])
+            when _positiveDecimal(id) != null:
+          return Uri.https('t.bilibili.com', '/$id');
+      }
     }
     return Uri.https('t.bilibili.com', '/$subject', {'type': '2'});
   }
