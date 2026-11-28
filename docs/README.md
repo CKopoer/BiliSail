@@ -95,7 +95,7 @@
 | [个人媒体 fork 统一维护](validation/media-kit-personal-fork-2026-11-07.md) | 官方基线、八个固定 Git 包、libmpv 源码／资产、平台修复和验证边界 |
 | [整体架构](architecture.md) | 产品范围、技术栈、模块依赖、目录、状态管理、存储和平台适配 |
 | [设置页日志压缩导出](validation/log-export-2026-11-06.md) | 核心与播放日志、脱敏和容量限制、各平台默认保存位置及验证边界 |
-| [项目宣传视频脚本](marketing/promotional-video-script.md) | 2026-11-22《从掌心到宽屏》，60 秒逐镜脚本、播放页动态重排实录及各平台画面来源 |
+| [项目宣传视频脚本](marketing/promotional-video-script.md) | 2026-11-28《今天看什么？》，60 秒功能快剪、横竖屏实录与平台布局预览、原创配乐及剪辑工程 |
 | [推荐流设置](recommendation-settings-design.md) | PiliPlus 11 项对应、查询级过滤与刷新保留、性能约束及验证 |
 | [App 推荐接入](app-recommendation-design.md) | Web/App 来源、独立设备标识、扫码授权、安全凭据及服务端反馈 |
 | [App 推荐有效性调查](validation/app-recommendation-investigation-2026-11-10.md) | #107 的实际接口与身份、PiliPlus 空参数签名差异、其他客户端对照及游客验证边界 |
