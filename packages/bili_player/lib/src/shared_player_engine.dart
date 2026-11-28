@@ -21,6 +21,7 @@ class SharedPlayerEngine
         AudioGainControl,
         PlaybackCacheControl,
         AndroidAudioOutputControl,
+        PlaybackPresentationControl,
         PlayerInformationSource {
   SharedPlayerEngine({
     required this.createBackend,
@@ -58,6 +59,7 @@ class SharedPlayerEngine
   Future<void>? _releaseBarrier;
   Future<PlayerFailure>? _failing;
   PlaybackOperation? _openOperation, _playOperation, _seekOperation;
+  PlaybackOperation? _presentationOperation;
   PlaybackOperation? _nativeSeekOperation;
   int _generation = 0,
       _seekRevision = 0,
@@ -66,6 +68,7 @@ class SharedPlayerEngine
   bool _disposed = false, _opening = false;
   bool _waitingForPair = false, _backendBuffering = false;
   bool _requiresAudio = false, _requiresVideo = false, _audioConfirmed = false;
+  bool _presentationConfirmed = false;
   bool _live = false, _preview = false;
   bool _liveLoadAccepted = false;
   double _gainDb = 0;
@@ -239,6 +242,7 @@ class SharedPlayerEngine
     _openOperation?.cancel();
     _playOperation?.cancel();
     _seekOperation?.cancel();
+    _presentationOperation?.cancel();
     _seekRetirement = Future.value();
     _pendingSeek?.complete();
     _pendingSeek = null;
@@ -378,6 +382,7 @@ class SharedPlayerEngine
         _live = plan.live;
         _preview = source is DashVideoSource;
         _audioConfirmed = false;
+        _presentationConfirmed = false;
         await _subscription?.cancel();
         _subscription = null;
         final existing = _backend;
@@ -449,7 +454,8 @@ class SharedPlayerEngine
           await _control(generation, (b) => b.setRate(_snapshot.rate));
         }
         Future<void> confirmReady() async {
-          if (_snapshot.desiredPlaying &&
+          final preload = !plan.live && options.preload && !options.play;
+          if ((_snapshot.desiredPlaying || preload) &&
               _pendingSeek == null &&
               _requiresAudio &&
               !_audioConfirmed) {
@@ -465,8 +471,8 @@ class SharedPlayerEngine
               operation.check();
             }
           }
-          if (_requiresVideo) {
-            await operation.wait(backend.confirmPresentation(operation));
+          if (_requiresVideo && (!preload || _snapshot.desiredPlaying)) {
+            await _confirmPresentation(backend, operation);
           }
         }
 
@@ -751,6 +757,7 @@ class SharedPlayerEngine
     }
     _playOperation?.cancel();
     _seekOperation?.cancel();
+    _presentationOperation?.cancel();
     _cancelNetworkRetry();
     unawaited(() async {
       var released = false;
@@ -806,6 +813,32 @@ class SharedPlayerEngine
     allowed: () => _liveLoadAccepted && _snapshot.desiredPlaying,
   );
 
+  Future<void> _confirmPresentation(
+    PlaybackBackend backend,
+    PlaybackOperation operation,
+  ) async {
+    await operation.wait(backend.confirmPresentation(operation));
+    if (_current(operation.generation, backend)) _presentationConfirmed = true;
+  }
+
+  @override
+  Future<void> confirmPreparedPresentation(Duration timeout) async {
+    final backend = _backend;
+    if (_presentationConfirmed || !_requiresVideo || backend == null) return;
+    _presentationOperation?.cancel();
+    final operation = _presentationOperation = PlaybackOperation(
+      _generation,
+      timeout,
+    );
+    try {
+      await _confirmPresentation(backend, operation);
+    } finally {
+      if (identical(_presentationOperation, operation)) {
+        _presentationOperation = null;
+      }
+    }
+  }
+
   @override
   Future<void> play() {
     if (_disposed ||
@@ -842,16 +875,17 @@ class SharedPlayerEngine
           _control(generation, (b) => b.play(), allowed: allowed),
         );
       }
-      if (!_audioConfirmed) {
+      final confirmAudio = !_audioConfirmed;
+      if (confirmAudio || (_requiresVideo && !_presentationConfirmed)) {
         _waitingForPair = true;
         _publish(_snapshot.copyWith(phase: _phase()));
         // A paused open already applied the user settings.
         // A first play only needs the evidence deferred by a paused open.
-        if (_requiresAudio) {
+        if (_requiresAudio && confirmAudio) {
           await operation.wait(backend.confirmAudio(operation));
         }
         if (_requiresVideo) {
-          await operation.wait(backend.confirmPresentation(operation));
+          await _confirmPresentation(backend, operation);
         }
       }
       if (!_live) {

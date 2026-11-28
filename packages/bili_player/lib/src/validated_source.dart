@@ -143,6 +143,7 @@ final class ValidatedSource {
             androidAudioOutput: options.androidAudioOutput,
             cacheLimits: options.cacheLimits,
             retainPresentation: options.retainPresentation,
+            preload: options.preload,
             maxBufferAhead: source is DashVideoSource
                 ? previewWindow
                 : options.requestedBufferAhead,

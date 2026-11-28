@@ -956,6 +956,59 @@ void main() {
     expect(backend.volume, 24);
   });
 
+  test('a preloaded source confirms both tracks before waiting for its visible frame', () async {
+    final backend = _Backend()
+      ..audio = Completer<void>()
+      ..presentation = Completer<void>();
+    final engine = SharedPlayerEngine(createBackend: () => backend);
+    addTearDown(engine.dispose);
+    final opening = engine.open(
+      pair,
+      const OpenOptions(volume: 0, preload: true),
+    );
+    await tick();
+    expect(backend.audioConfirmations, 1);
+    expect(backend.playing, isFalse);
+    expect(engine.currentSnapshot.phase, PlaybackPhase.opening);
+
+    backend.audio!.complete();
+    await opening;
+    expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
+    expect(backend.presentationConfirmations, 0);
+    final playing = engine.play();
+    await tick();
+    expect(backend.playing, isFalse);
+    expect(backend.presentationConfirmations, 1);
+    backend.presentation!.complete();
+    await playing;
+    expect(backend.audioConfirmations, 1);
+    expect(backend.presentationConfirmations, 1);
+    expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+    expect(backend.volume, 0);
+  });
+
+  test(
+    'a preloaded paused source waits for presentation without starting',
+    () async {
+      final backend = _Backend()..presentation = Completer<void>();
+      final engine = SharedPlayerEngine(createBackend: () => backend);
+      addTearDown(engine.dispose);
+      await engine.open(pair, const OpenOptions(volume: 0, preload: true));
+      final presenting = engine.confirmPreparedPresentation(
+        const Duration(seconds: 1),
+      );
+      expect(backend.presentationConfirmations, 1);
+      expect(backend.playing, isFalse);
+      backend.presentation!.complete();
+      await presenting;
+      expect(engine.currentSnapshot.phase, PlaybackPhase.paused);
+      expect(backend.volume, 0);
+      await engine.play();
+      expect(backend.presentationConfirmations, 1);
+      expect(backend.audioConfirmations, 1);
+    },
+  );
+
   test('play arriving during paused presentation stays paused until audio is ready', () async {
     final backend = _Backend()
       ..presentation = Completer<void>()

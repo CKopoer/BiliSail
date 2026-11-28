@@ -106,6 +106,7 @@ final class OpenOptions {
     this.androidAudioOutput = defaultAndroidAudioOutput,
     this.cacheLimits,
     this.retainPresentation = false,
+    this.preload = false,
   }) : requestedBufferAhead = maxBufferAhead;
   final Duration startPosition;
   final bool play;
@@ -132,6 +133,10 @@ final class OpenOptions {
   /// Reopening the same content after interruption keeps its last frame and
   /// timeline until both replacement tracks are ready. Never use for new media.
   final bool retainPresentation;
+
+  /// For paused on-demand sources, confirm both decoded tracks and defer
+  /// confirming the first presented video frame until the surface is visible.
+  final bool preload;
 }
 
 enum PlaybackPhase {
@@ -308,6 +313,11 @@ abstract interface class PlayerEngine {
 /// Optional native gain control; changing gain must not reopen media.
 abstract interface class AudioGainControl {
   Future<void> setAudioGain(double gainDb);
+}
+
+/// Allows a paused preloaded source to become a foreground presentation.
+abstract interface class PlaybackPresentationControl {
+  Future<void> confirmPreparedPresentation(Duration timeout);
 }
 
 abstract interface class AndroidAudioOutputControl {

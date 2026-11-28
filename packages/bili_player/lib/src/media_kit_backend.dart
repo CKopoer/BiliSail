@@ -771,7 +771,7 @@ final class MediaKitBackend
         // At/beyond EOF mpv confirms the clamped time only after its paused
         // final frame is rendered. Preserve that native ordering on resume.
         await confirmVideo(operation);
-        if (!options.play && !_requiresVideoColorMapping) {
+        if (!options.play && !options.preload && !_requiresVideoColorMapping) {
           await operation.wait(_videoOutput.videoFramePresented);
         }
       }
