@@ -34,11 +34,10 @@ final class MediaKitEngine extends SharedPlayerEngine {
       enabledOverride: experimentalVideoFrameQueue,
     );
     late final MediaKitEngine engine;
-    final diagnosticId = ++_nextDiagnosticId;
     void report(PlayerDiagnosticEvent event) {
       onDiagnostic?.call(
         event.withContext(
-          playerId: diagnosticId,
+          playerId: engine.diagnosticId,
           diagnostics: event.kind == PlayerDiagnosticKind.openStarted
               ? null
               : engine.inspectDiagnostics(),
@@ -56,6 +55,7 @@ final class MediaKitEngine extends SharedPlayerEngine {
     }
 
     engine = MediaKitEngine._(
+      diagnosticId: ++_nextDiagnosticId,
       createSourceBackend: Platform.isAndroid
           ? AndroidDolbyBackend.tryOpen
           : null,
@@ -76,6 +76,7 @@ final class MediaKitEngine extends SharedPlayerEngine {
     return engine;
   }
   MediaKitEngine._({
+    required this.diagnosticId,
     required super.createBackend,
     required super.createSourceBackend,
     super.onDiagnostic,
@@ -88,6 +89,7 @@ final class MediaKitEngine extends SharedPlayerEngine {
          schemes: {'http', 'https', 'file', if (Platform.isAndroid) 'content'},
        );
 
+  final int diagnosticId;
   final bool experimentalVideoFrameQueue;
   final int? experimentalAudioAutosync;
   final MediaKitVideoOutput _idleOutput;

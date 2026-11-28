@@ -187,6 +187,11 @@ void main() {
             expect(engine.currentSnapshot.generation, generation);
             expect(requests, 1);
             expect(failures, isEmpty);
+            final eof = diagnostics.singleWhere(
+              (event) => event.kind == PlayerDiagnosticKind.endOfFile,
+            );
+            expect(eof.sourceKind, DiagnosticSourceKind.liveProgressive);
+            expect(eof.snapshot.generation, generation);
             return;
           }
           // Allow the already queued decoder/audio-device data to drain before

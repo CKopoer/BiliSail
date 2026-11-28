@@ -176,6 +176,91 @@ void main() {
     }
   });
 
+  testWidgets(
+    'a disconnected live FLV reopens at the live edge after the room check',
+    (tester) async {
+      initializePlayerBackend();
+      final directory = Platform.environment['BILI_CONTENT_MEDIA_DIR']!;
+      final flv = await File('$directory/live.flv').readAsBytes();
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      final requests = <Uri>[];
+      final finish = Completer<void>();
+      server.listen((request) async {
+        requests.add(request.uri);
+        final first = requests.length == 1;
+        request.response.headers.contentType = ContentType('video', 'x-flv');
+        try {
+          request.response.add(flv);
+          await request.response.flush();
+          // Withhold the next bytes from this unbounded response. A fresh
+          // reader of the same URL gets a new stream starting at timestamp zero.
+          if (first) await finish.future;
+          await request.response.close();
+        } on IOException {
+          // The native player can close a timed-out response before cleanup.
+        }
+      });
+      final repository = _LiveRepository(server.port);
+      final events = <PlayerDiagnosticEvent>[];
+      final engine = MediaKitEngine(onDiagnostic: events.add);
+      final outcomes = <(int, LiveRecoveryOutcome)>[];
+      var roomChecks = 0;
+      final session = PlaybackSession(
+        engine: engine,
+        repository: _UnusedRepository(),
+        contentRepository: repository,
+        progress: _UnusedProgress(),
+        accountScope: () => 'guest',
+        isRoomLive: (target, _) async {
+          roomChecks++;
+          return target.roomId == '1';
+        },
+        onLiveRecovery: (generation, decision) =>
+            outcomes.add((generation, decision)),
+      );
+      try {
+        await tester.pumpWidget(
+          MaterialApp(home: VideoSurface(engine: engine)),
+        );
+        await _withFrames(
+          tester,
+          session.open(
+            null,
+            null,
+            target: const LivePlaybackTarget('1'),
+            volume: 0,
+          ),
+        );
+        final generation = engine.currentSnapshot.generation;
+        final watch = Stopwatch()..start();
+        bool resumed() =>
+            engine.currentSnapshot.generation > generation &&
+            engine.currentSnapshot.phase == PlaybackPhase.playing &&
+            engine.currentSnapshot.position > const Duration(seconds: 1);
+        while (!resumed() && watch.elapsed < const Duration(seconds: 30)) {
+          await tester.pump(const Duration(milliseconds: 100));
+        }
+        expect(resumed(), isTrue);
+        expect(requests, hasLength(2));
+        expect(requests.first, requests.last);
+        expect(repository.resolutions, 1);
+        expect(roomChecks, 1);
+        expect(outcomes, [(generation, LiveRecoveryOutcome.roomLive)]);
+        final eof = events.singleWhere(
+          (event) => event.kind == PlayerDiagnosticKind.endOfFile,
+        );
+        expect(eof.snapshot.generation, generation);
+        expect(eof.sourceKind, DiagnosticSourceKind.liveProgressive);
+        expect(session.error, isNull);
+      } finally {
+        finish.complete();
+        await _withFrames(tester, session.close());
+        await tester.pumpWidget(const SizedBox.shrink());
+        await server.close(force: true);
+      }
+    },
+  );
+
   testWidgets('a failed live playlist reload reopens the same stream once', (
     tester,
   ) async {
@@ -276,7 +361,8 @@ void main() {
         failures.every((f) => f.kind == PlayerFailureKind.liveReadTerminated),
         isTrue,
       );
-      expect(failures.length + roomChecks, 1);
+      expect(failures.length, lessThanOrEqualTo(1));
+      expect(roomChecks, 1);
       expect(mediaHeaders, {
         ('BiliSail-Live-Test', 'https://www.bilibili.com'),
       });

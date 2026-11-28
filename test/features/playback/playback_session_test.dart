@@ -7,6 +7,7 @@ import 'package:bili_danmaku/bili_danmaku.dart';
 import 'package:bilisail/domain/playback_rates.dart';
 import 'package:bilisail/domain/audio_normalization.dart';
 import 'package:bilisail/core/input/input_stroke.dart';
+import 'package:bilisail/core/logging/playback_diagnostic_log.dart';
 import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
 import 'package:bilisail/features/playback/application/playback_shortcut_controller.dart';
 
@@ -1688,66 +1689,122 @@ void main() {
     },
   );
 
-  for (final outcome in ['on air', 'offline', 'pause', 'unavailable']) {
-    testWidgets('live HLS EOF checks room status once: $outcome', (
-      tester,
-    ) async {
-      final engine = _FakeEngine();
-      final response = Completer<bool>();
-      final requests = <RequestCancellation>[];
-      final roomIds = <String>[];
+  for (final kind in [
+    PlaybackMediaKind.liveHls,
+    PlaybackMediaKind.liveFlv,
+    PlaybackMediaKind.progressive,
+  ]) {
+    for (final outcome in ['on air', 'offline', 'pause', 'unavailable']) {
+      testWidgets('live $kind EOF checks room status once: $outcome', (
+        tester,
+      ) async {
+        final engine = _FakeEngine();
+        final response = Completer<bool>();
+        final requests = <RequestCancellation>[];
+        final roomIds = <String>[];
+        final decisions = <(int, LiveRecoveryOutcome)>[];
+        final session = PlaybackSession(
+          engine: engine,
+          repository: _FakeRepository(),
+          contentRepository: _FakeContentRepository()..liveKind = kind,
+          progress: _FakeProgress(),
+          accountScope: () => 'guest',
+          isRoomLive: (room, token) {
+            roomIds.add(room.roomId);
+            requests.add(token);
+            return response.future;
+          },
+          onLiveRecovery: (generation, decision) =>
+              decisions.add((generation, decision)),
+        );
+        addTearDown(session.close);
+        await session.open(null, null, target: const LivePlaybackTarget('42'));
+        final opens = engine.sources.length;
+        final generation = engine.currentSnapshot.generation;
+        expect(
+          engine.currentSnapshot.phase,
+          PlaybackPhase.playing,
+          reason: session.error,
+        );
+        engine.emit(
+          engine.currentSnapshot.copyWith(
+            phase: PlaybackPhase.ended,
+            desiredPlaying: false,
+          ),
+        );
+        expect(
+          session.isRecovering,
+          isTrue,
+          reason:
+              'kind=${session.media?.kind} phase=${session.snapshots.value.phase}',
+        );
+        await tester.pump(const Duration(seconds: 3));
+        expect(roomIds, [
+          '42',
+        ], reason: 'recovering=${session.isRecovering} error=${session.error}');
+        expect(requests, hasLength(1));
+        if (outcome == 'pause') {
+          await session.pause();
+          expect(requests.single.isCancelled, isTrue);
+        }
+        if (outcome == 'unavailable') {
+          response.completeError(TimeoutException('room status'));
+        } else {
+          response.complete(outcome != 'offline');
+        }
+        await tester.pump();
+        expect(engine.sources.length, opens + (outcome == 'on air' ? 1 : 0));
+        expect(session.isRecovering, isFalse);
+        expect(session.error != null, outcome == 'unavailable');
+        expect(decisions, switch (outcome) {
+          'on air' => [(generation, LiveRecoveryOutcome.roomLive)],
+          'offline' => [(generation, LiveRecoveryOutcome.roomOffline)],
+          'unavailable' => [
+            (generation, LiveRecoveryOutcome.statusUnavailable),
+          ],
+          _ => isEmpty,
+        });
+      });
+    }
+  }
+
+  testWidgets(
+    'FLV EOF before first frame also uses the remaining reconnect budget',
+    (tester) async {
+      final engine = _FakeEngine()
+        ..nextOpenFailure = PlayerFailureKind.liveReadTerminated;
+      engine.onOpenFailure = () =>
+          engine.nextOpenFailure = PlayerFailureKind.liveReadTerminated;
+      final content = _FakeContentRepository()
+        ..liveKind = PlaybackMediaKind.liveFlv;
+      final outcomes = <LiveRecoveryOutcome>[];
       final session = PlaybackSession(
         engine: engine,
         repository: _FakeRepository(),
-        contentRepository: _FakeContentRepository(),
+        contentRepository: content,
         progress: _FakeProgress(),
         accountScope: () => 'guest',
-        isRoomLive: (room, token) {
-          roomIds.add(room.roomId);
-          requests.add(token);
-          return response.future;
-        },
+        isRoomLive: (_, _) async => true,
+        onLiveRecovery: (_, outcome) => outcomes.add(outcome),
       );
       addTearDown(session.close);
       await session.open(null, null, target: const LivePlaybackTarget('42'));
-      final opens = engine.sources.length;
-      expect(
-        engine.currentSnapshot.phase,
-        PlaybackPhase.playing,
-        reason: session.error,
-      );
-      engine.emit(
-        engine.currentSnapshot.copyWith(
-          phase: PlaybackPhase.ended,
-          desiredPlaying: false,
-        ),
-      );
-      expect(
-        session.isRecovering,
-        isTrue,
-        reason:
-            'kind=${session.media?.kind} phase=${session.snapshots.value.phase}',
-      );
-      await tester.pump(const Duration(seconds: 3));
-      expect(roomIds, [
-        '42',
-      ], reason: 'recovering=${session.isRecovering} error=${session.error}');
-      expect(requests, hasLength(1));
-      if (outcome == 'pause') {
-        await session.pause();
-        expect(requests.single.isCancelled, isTrue);
+      for (var retry = 0; retry < 3; retry++) {
+        expect(session.isRecovering, isTrue);
+        await tester.pump(const Duration(seconds: 3));
       }
-      if (outcome == 'unavailable') {
-        response.completeError(TimeoutException('room status'));
-      } else {
-        response.complete(outcome != 'offline');
-      }
-      await tester.pump();
-      expect(engine.sources.length, opens + (outcome == 'on air' ? 1 : 0));
+      await tester.pump(const Duration(seconds: 6));
+      expect(outcomes, [
+        ...List.filled(3, LiveRecoveryOutcome.roomLive),
+        LiveRecoveryOutcome.retryLimit,
+      ]);
+      expect(engine.sources, hasLength(4));
+      expect(engine.openedUris.toSet(), hasLength(1));
+      expect(content.targets, hasLength(1));
       expect(session.isRecovering, isFalse);
-      expect(session.error != null, outcome == 'unavailable');
-    });
-  }
+      expect(session.error, isNotNull);
+    },
+  );
 
   for (final kind in [PlaybackMediaKind.liveHls, PlaybackMediaKind.liveFlv]) {
     test('live buffering identity reaches the backend: $kind', () async {
@@ -8122,6 +8179,7 @@ final class _FakeContentRepository implements ContentPlaybackRepository {
   PlaybackMedia? resolvedMedia;
   PlaybackMedia Function(int quality)? mediaForQuality;
   int liveLineCount = 1;
+  PlaybackMediaKind liveKind = PlaybackMediaKind.liveHls;
   final targets = <ContentPlaybackTarget>[];
   final qualities = <int>[];
   final codecs = <VideoCodecPreference>[];
@@ -8158,7 +8216,9 @@ final class _FakeContentRepository implements ContentPlaybackRepository {
         video: PlaybackTrack(
           urls: List.generate(
             liveLineCount,
-            (line) => Uri.parse('https://example.test/live-$line.m3u8'),
+            (line) => Uri.parse(
+              'https://example.test/live-$line.${liveKind == PlaybackMediaKind.liveFlv ? 'flv' : 'm3u8'}',
+            ),
           ),
           codec: 'avc',
           bandwidth: 0,
@@ -8168,7 +8228,7 @@ final class _FakeContentRepository implements ContentPlaybackRepository {
         qualities: const [400, 10000],
         duration: Duration.zero,
         headers: const {},
-        kind: PlaybackMediaKind.liveHls,
+        kind: liveKind,
       ),
     );
   }

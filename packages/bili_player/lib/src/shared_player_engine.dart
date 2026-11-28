@@ -698,18 +698,17 @@ class SharedPlayerEngine
         });
       case BackendEventKind.failure:
         // A matching network error can be followed immediately by END_FILE.
-        // The open has terminated, so there is no reader left to wait on.
-        final networkEnded =
-            _networkRetry != null &&
-            (_live || (_backendBuffering && backend.buffered?.inSeconds == 0));
-        unawaited(
-          _fail(
-            networkEnded &&
-                    event.failureKind == PlayerFailureKind.nativePlayback
-                ? PlayerFailureKind.networkOpen
-                : event.failureKind,
-          ),
-        );
+        // An active live reader can terminate with either EOF or a native
+        // error. Both must reach the same bounded live recovery decision.
+        var kind = event.failureKind;
+        if (kind == PlayerFailureKind.nativePlayback && _networkRetry != null) {
+          if (_live) {
+            kind = PlayerFailureKind.liveReadTerminated;
+          } else if (_backendBuffering && backend.buffered?.inSeconds == 0) {
+            kind = PlayerFailureKind.networkOpen;
+          }
+        }
+        unawaited(_fail(kind));
     }
   }
 

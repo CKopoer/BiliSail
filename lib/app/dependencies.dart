@@ -345,7 +345,7 @@ class AppDependencies {
             const FileAccessService().trustedDownloadDocumentsDirectory,
       ),
     );
-    PlayerEngine createPlayerEngine() =>
+    MediaKitEngine createPlayerEngine() =>
         MediaKitEngine(onDiagnostic: playbackLog?.record);
     final cardPreviews = VideoCardPreviewPlayback(
       createEngine: createPlayerEngine,
@@ -402,6 +402,7 @@ class AppDependencies {
           networkMetadata: playbackRepository,
           networkContent: networkContent,
         );
+        final engine = createPlayerEngine();
         return PlaybackSession(
           audioFocus: audioFocus,
           cardPreviews: Platform.isWindows ? cardPreviews : null,
@@ -412,7 +413,7 @@ class AppDependencies {
           sponsorRepository: ApiSponsorRepository(
             SponsorBlockClient(sponsorTransport),
           ),
-          engine: createPlayerEngine(),
+          engine: engine,
           repository: repository,
           historyRepository: ApiPlaybackHistoryRepository(
             PlaybackHistoryClient(api),
@@ -423,6 +424,8 @@ class AppDependencies {
           metadataRepository: repository,
           contentRepository: repository.content,
           isRoomLive: networkContent.isRoomLive,
+          onLiveRecovery: (generation, outcome) => playbackLog
+              ?.recordLiveRecovery(engine.diagnosticId, generation, outcome),
           defaultLiveQuality: defaultNetworkLiveQuality,
           accountScope: () => session.accountScope,
           progress: LocalProgressStore(

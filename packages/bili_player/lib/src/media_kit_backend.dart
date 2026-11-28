@@ -83,7 +83,7 @@ final class MediaKitBackend
   Timer? _colorDeadline;
   Future<void> Function()? _sourceOptionsHook;
   bool _networkOpenError = false;
-  bool _fatalLiveHlsRead = false;
+  NativeErrorSummary? _fatalLiveRead;
   NativeBufferingDiagnostics? _bufferDiagnostics;
   DiagnosticSourceKind? diagnosticSourceKind;
   NativeReadinessStage? get readinessStage => _readinessStage;
@@ -489,7 +489,7 @@ final class MediaKitBackend
     }
     final player = _player!;
     _networkOpenError = false;
-    _fatalLiveHlsRead = false;
+    _fatalLiveRead = null;
     if (_nativeLoad == null) {
       final attaching = _attachingLoad =
           NativeLoadObserver.attach(
@@ -498,6 +498,7 @@ final class MediaKitBackend
               _diagnose(
                 PlayerDiagnosticKind.openTerminated,
                 nativeErrorCode: code,
+                nativeError: _fatalLiveRead,
               );
               if (_snapshot.phase != PlaybackPhase.opening &&
                   !_snapshot.isSeeking) {
@@ -971,7 +972,7 @@ final class MediaKitBackend
 
   BackendEvent _nativeFailureEvent() => BackendEvent(
     BackendEventKind.failure,
-    failureKind: _fatalLiveHlsRead
+    failureKind: _fatalLiveRead != null
         ? PlayerFailureKind.liveReadTerminated
         : PlayerFailureKind.nativePlayback,
   );
@@ -1045,9 +1046,13 @@ final class MediaKitBackend
                 _seek != null) {
               return;
             }
-            // Let buffered packets play out. A fatal HLS reader can report
-            // ordinary playback EOF once they are consumed.
-            if (_fatalLiveHlsRead && _snapshot.desiredPlaying) {
+            // EOF confirms the reader ended. A live demuxer can first report a
+            // fatal read, then deliver the last packets it already buffered.
+            _diagnose(
+              PlayerDiagnosticKind.endOfFile,
+              nativeError: _fatalLiveRead,
+            );
+            if (_fatalLiveRead != null && _snapshot.desiredPlaying) {
               event(_nativeFailureEvent());
               return;
             }
@@ -1076,10 +1081,12 @@ final class MediaKitBackend
             prefix: log.prefix,
           );
           if (networkSource &&
-              diagnosticSourceKind == DiagnosticSourceKind.liveManifest &&
+              (diagnosticSourceKind == DiagnosticSourceKind.liveManifest ||
+                  diagnosticSourceKind ==
+                      DiagnosticSourceKind.liveProgressive) &&
               severity != NativeLogSeverity.warning &&
               summary.detail == NativeErrorDetail.fatalPacketRead) {
-            _fatalLiveHlsRead = true;
+            _fatalLiveRead = summary;
           }
           _diagnose(
             PlayerDiagnosticKind.nativeLog,

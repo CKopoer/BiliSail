@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:bilisail/core/logging/playback_diagnostic_log.dart';
@@ -61,6 +62,57 @@ void main() {
     expect(lines, hasLength(65));
     expect(lines.last, contains('"droppedEvents":136'));
   });
+
+  test(
+    'native log bursts preserve correlated EOF and room decisions',
+    () async {
+      final log = PlaybackDiagnosticLog(directory);
+      for (var i = 0; i < 100; i++) {
+        log.record(
+          PlayerDiagnosticEvent(
+            kind: PlayerDiagnosticKind.nativeLog,
+            snapshot: const PlaybackSnapshot(
+              phase: PlaybackPhase.playing,
+              generation: 3,
+            ),
+          ),
+        );
+      }
+      log.record(
+        PlayerDiagnosticEvent(
+          kind: PlayerDiagnosticKind.endOfFile,
+          snapshot: const PlaybackSnapshot(
+            phase: PlaybackPhase.playing,
+            generation: 3,
+          ),
+          playerId: 7,
+          sourceKind: DiagnosticSourceKind.liveProgressive,
+        ),
+      );
+      log.recordLiveRecovery(7, 3, LiveRecoveryOutcome.roomOffline);
+      await log.close();
+      final file = await directory
+          .list()
+          .where((entry) => entry is File)
+          .cast<File>()
+          .single;
+      final records = (await file.readAsLines())
+          .map((line) => jsonDecode(line) as Map<String, Object?>)
+          .toList();
+      final terminal = records
+          .where((row) => row['event'] != 'nativeLog')
+          .toList();
+      expect(terminal.map((row) => (row['playerId'], row['generation'])), [
+        (7, 3),
+        (7, 3),
+      ]);
+      expect(terminal.first['event'], 'endOfFile');
+      expect(terminal.first['sourceKind'], 'liveProgressive');
+      expect(terminal.first['droppedEvents'], greaterThan(0));
+      expect(terminal.last['event'], 'liveRecovery');
+      expect(terminal.last['outcome'], 'roomOffline');
+    },
+  );
 
   test(
     'unwritable diagnostic destination does not propagate to playback',

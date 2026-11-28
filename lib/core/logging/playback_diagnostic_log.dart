@@ -7,6 +7,13 @@ import 'package:path_provider/path_provider.dart';
 
 import 'diagnostic_log_writer.dart';
 
+enum LiveRecoveryOutcome {
+  roomLive,
+  roomOffline,
+  statusUnavailable,
+  retryLimit,
+}
+
 /// Local structured diagnostics only: no URLs, headers, account IDs or raw logs.
 final class PlaybackDiagnosticLog {
   PlaybackDiagnosticLog(Directory directory, {int maxBytes = 256 * 1024})
@@ -36,7 +43,25 @@ final class PlaybackDiagnosticLog {
   }
 
   void record(PlayerDiagnosticEvent event, {String backend = 'media_kit'}) =>
-      _writer.record({...event.toJson(), 'backend': backend});
+      _writer.record({
+        ...event.toJson(),
+        'backend': backend,
+      }, lowPriority: event.kind == PlayerDiagnosticKind.nativeLog);
+
+  void recordLiveRecovery(
+    int playerId,
+    int generation,
+    LiveRecoveryOutcome outcome,
+  ) {
+    _writer.record({
+      'time': DateTime.now().toUtc().toIso8601String(),
+      'event': 'liveRecovery',
+      'playerId': playerId,
+      'generation': generation,
+      'outcome': outcome.name,
+    });
+  }
+
   Future<void> flush() => _writer.flush();
   Future<void> close() => _writer.close();
 }

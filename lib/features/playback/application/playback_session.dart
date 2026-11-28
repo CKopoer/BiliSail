@@ -10,6 +10,8 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/app_failure.dart';
+import '../../../core/logging/playback_diagnostic_log.dart'
+    show LiveRecoveryOutcome;
 import '../../../core/platform/playback_audio_focus.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
@@ -48,6 +50,7 @@ class PlaybackSession extends ChangeNotifier {
     this.sponsorRepository,
     this.contentRepository,
     this.isRoomLive,
+    this.onLiveRecovery,
     this.defaultLiveQuality,
     this.metadataRepository,
     this.historyRepository,
@@ -216,6 +219,8 @@ class PlaybackSession extends ChangeNotifier {
   final ContentPlaybackRepository? contentRepository;
   final Future<bool> Function(LivePlaybackTarget, RequestCancellation)?
   isRoomLive;
+  final void Function(int generation, LiveRecoveryOutcome outcome)?
+  onLiveRecovery;
   final Future<int> Function()? defaultLiveQuality;
   final PlaybackProgressStore progress;
   final PlaybackStartupDiagnostics startupDiagnostics;
@@ -233,16 +238,17 @@ class PlaybackSession extends ChangeNotifier {
   bool _scheduleNetworkRetry(
     PlayerFailureKind kind,
     int engineGeneration,
-    PlaybackMedia? source, {
-    LivePlaybackTarget? verifyRoom,
-  }) {
+    PlaybackMedia? source,
+  ) {
+    final target = contentTarget;
     final terminalLiveRead =
-        isLive && kind == PlayerFailureKind.liveReadTerminated;
+        target is LivePlaybackTarget &&
+        kind == PlayerFailureKind.liveReadTerminated;
     if (source == null ||
         (!terminalLiveRead &&
             kind != PlayerFailureKind.networkRead &&
             kind != PlayerFailureKind.networkOpen) ||
-        _reopening ||
+        (_reopening && !terminalLiveRead) ||
         _disposed ||
         _closing ||
         !_desiredPlaying ||
@@ -257,7 +263,11 @@ class PlaybackSession extends ChangeNotifier {
       _liveReadRetries.removeWhere(
         (attempt) => now - attempt >= const Duration(seconds: 30),
       );
-      if (_liveReadRetries.length >= 3) return false;
+      if (_liveReadRetries.length >= 3) {
+        onLiveRecovery?.call(engineGeneration, LiveRecoveryOutcome.retryLimit);
+        error = '直播连接反复中断，请重新加载或切换线路。';
+        return false;
+      }
       _liveReadRetries.add(now);
     }
     final generation = _generation;
@@ -279,22 +289,35 @@ class PlaybackSession extends ChangeNotifier {
             _playbackAllowed &&
             sourceMatchesAccount;
         if (!current()) return;
-        if ((verifyRoom, isRoomLive) case (final room?, final readStatus?)) {
+        final readStatus = isRoomLive;
+        if (terminalLiveRead && readStatus != null) {
           final token = _roomStatusRequest = RequestCancellation();
           try {
             final onAir = await readStatus(
-              room,
+              target,
               token,
             ).timeout(const Duration(seconds: 8));
             if (token.isCancelled || !current()) return;
+            onLiveRecovery?.call(
+              engineGeneration,
+              onAir
+                  ? LiveRecoveryOutcome.roomLive
+                  : LiveRecoveryOutcome.roomOffline,
+            );
             if (!onAir) {
               _desiredPlaying = false;
+              unawaited(_releaseAudioFocus());
               return;
             }
           } on Exception {
             if (!token.isCancelled && current()) {
+              onLiveRecovery?.call(
+                engineGeneration,
+                LiveRecoveryOutcome.statusUnavailable,
+              );
               _desiredPlaying = false;
               error = '无法确认直播状态，请重新加载。';
+              unawaited(_releaseAudioFocus());
             }
             return;
           } finally {
@@ -1465,17 +1488,14 @@ class PlaybackSession extends ChangeNotifier {
             ? '无法播放本地视频，文件可能无法解码或已不可访问'
             : failure.message;
         _resolving = false;
-        if (retryMedia == null) {
+        // A reconnect can itself reach EOF before the first frame. Each such
+        // open goes through the same rolling live-read budget.
+        if (retryMedia == null ||
+            failure.kind == PlayerFailureKind.liveReadTerminated) {
           _scheduleNetworkRetry(
             failure.kind,
             failure.generation,
             compatibilityMedia,
-            verifyRoom:
-                failure.kind == PlayerFailureKind.liveReadTerminated &&
-                    compatibilityMedia?.kind == PlaybackMediaKind.liveHls &&
-                    target is LivePlaybackTarget
-                ? target
-                : null,
           );
         }
         _notify();
@@ -1518,18 +1538,15 @@ class PlaybackSession extends ChangeNotifier {
       unawaited(ensureHighEnergy());
     }
     if (enteredEnded && !_resolving) {
-      // A libmpv instance may receive only EOF if FFmpeg is logging through
-      // another player in the process. Check the room once before reopening.
-      final target = contentTarget;
+      // Both a disconnected live reader and a finished broadcast can deliver
+      // a plain EOF. The room status distinguishes them for every live format.
       final recovering =
-          target is LivePlaybackTarget &&
-          media?.kind == PlaybackMediaKind.liveHls &&
+          isLive &&
           isRoomLive != null &&
           _scheduleNetworkRetry(
             PlayerFailureKind.liveReadTerminated,
             value.generation,
             media,
-            verifyRoom: target,
           );
       if (!recovering) {
         _desiredPlaying = false;

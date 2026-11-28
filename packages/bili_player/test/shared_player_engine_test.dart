@@ -307,6 +307,26 @@ void main() {
       },
     );
   }
+  test('a live network error followed by native failure terminates the reader once', () async {
+    final backend = _Backend();
+    final engine = SharedPlayerEngine(createBackend: () => backend);
+    addTearDown(engine.dispose);
+    final failures = <PlayerFailure>[];
+    engine.failures.listen(failures.add);
+    await engine.open(
+      ProgressiveSource(track('live'), isLive: true),
+      const OpenOptions(play: true),
+    );
+    backend.signals.add(const BackendEvent(BackendEventKind.networkError));
+    backend.signals.add(const BackendEvent(BackendEventKind.failure));
+    backend.signals.add(const BackendEvent(BackendEventKind.ended));
+    await tick();
+    expect(failures.map((failure) => failure.kind), [
+      PlayerFailureKind.liveReadTerminated,
+    ]);
+    expect(engine.currentSnapshot.phase, PlaybackPhase.failed);
+  });
+
   for (final live in [false, true]) {
     test(
       'network retry checks the current source after 3s (live=$live)',

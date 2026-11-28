@@ -27,9 +27,10 @@ final class DiagnosticLogWriter {
     await _prune(keep: 4);
   }
 
-  void record(Map<String, Object?> event) {
+  void record(Map<String, Object?> event, {bool lowPriority = false}) {
     if (_closed || _unavailable) return;
-    if (_pending >= 64) {
+    // Leave room for EOF and recovery decisions during bursts of native logs.
+    if (_pending >= (lowPriority ? 60 : 64)) {
       _dropped++;
       return;
     }
