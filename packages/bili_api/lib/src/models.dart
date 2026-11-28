@@ -112,6 +112,7 @@ final class ApiVideoSummary {
     this.ownerMid,
     this.recommendationReason,
     this.recommendationFeedback,
+    this.featuredTrackId,
     this.previewCid,
     this.access = const ApiVideoAccess(),
   });
@@ -131,6 +132,7 @@ final class ApiVideoSummary {
   final String? ownerMid;
   final String? recommendationReason;
   final ApiRecommendationFeedback? recommendationFeedback;
+  final String? featuredTrackId;
   final String? previewCid;
   final ApiVideoAccess access;
 }

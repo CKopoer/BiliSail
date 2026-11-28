@@ -162,7 +162,12 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
           .read(recommendationPlaybackRegistryProvider)
           .capture(attribution);
       return Uri.parse(route)
-          .replace(queryParameters: {'recommendation': routeId})
+          .replace(
+            queryParameters: {
+              ...Uri.parse(route).queryParameters,
+              'recommendation': routeId,
+            },
+          )
           .toString();
     }
 
@@ -173,6 +178,17 @@ final class _FeedVideoCardState extends ConsumerState<_FeedVideoCard> {
       return;
     }
     final route = switch (target.kind) {
+      RecommendationTargetKind.video
+          when target.story &&
+              (Theme.of(context).platform == TargetPlatform.android ||
+                  Theme.of(context).platform == TargetPlatform.iOS) =>
+        Uri(
+          path: '/story/${target.id}',
+          queryParameters: {
+            'aid': ?target.storyAid,
+            'cid': ?widget.video.previewCid,
+          },
+        ).toString(),
       RecommendationTargetKind.video => '/video/${target.id}',
       RecommendationTargetKind.episode => '/pgc/episode/${target.id}',
       RecommendationTargetKind.season => '/pgc/season/${target.id}',

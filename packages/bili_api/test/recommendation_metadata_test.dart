@@ -6,6 +6,71 @@ import 'package:test/test.dart';
 
 void main() {
   test(
+    'featured desktop batches use the Electron profile and WBI signature',
+    () async {
+      final transport = _Transport()..includeAds = true;
+      final api = BiliApiClient(transport: transport);
+      addTearDown(api.close);
+      for (final (batch, refresh, type) in [
+        (1, false, '0'),
+        (2, false, '4'),
+        (1, true, '3'),
+      ]) {
+        final page = await api.getDesktopFeatured(
+          batch: batch,
+          refresh: refresh,
+        );
+        final uri = transport.requests.last;
+        expect(uri.host, 'api.bilibili.com');
+        expect(uri.path, '/x/web-interface/index/top/feed/rcmd');
+        expect(uri.queryParameters, containsPair('fresh_type', type));
+        expect(uri.queryParameters, containsPair('fresh_idx', '$batch'));
+        expect(uri.queryParameters, containsPair('ps', '10'));
+        expect(
+          uri.queryParameters,
+          containsPair('feed_version', 'CLIENT_SELECTED'),
+        );
+        expect(
+          uri.queryParameters,
+          containsPair('web_location', 'bilibili-electron'),
+        );
+        expect(uri.queryParameters['w_rid'], hasLength(32));
+        expect(page.items.single.previewCid, '77');
+        expect(page.items.single.featuredTrackId, 'sample-track');
+      }
+    },
+  );
+
+  test(
+    'signed Story batches keep their seed and map nested playback identifiers',
+    () async {
+      final transport = _Transport();
+      final api = BiliApiClient(transport: transport);
+      addTearDown(api.close);
+      for (final batch in [1, 2]) {
+        final page = await api.getStoryFeatured(
+          batch: batch,
+          buvid: 'local-test-device-123',
+          aid: '4',
+          cid: '77',
+          bvid: 'BV1234567890',
+          trackId: 'sample',
+        );
+        final uri = transport.requests.last;
+        expect(uri.host, 'app.bilibili.com');
+        expect(uri.path, '/x/v2/feed/index/story');
+        expect(uri.queryParameters, containsPair('display_id', '$batch'));
+        expect(uri.queryParameters, containsPair('aid', '4'));
+        expect(uri.queryParameters, containsPair('trackid', 'sample'));
+        expect(uri.queryParameters['sign'], hasLength(32));
+        expect(uri.queryParameters.containsKey('access_key'), isFalse);
+        expect(page.items.single.previewCid, '77');
+        expect(page.items.single.coverUrl?.path, '/story.jpg');
+      }
+    },
+  );
+
+  test(
     'desktop uses signed PC parameters for initial, refresh and pagination',
     () async {
       final transport = _Transport();
@@ -173,6 +238,20 @@ final class _Transport implements ApiTransport {
                       'sub_url': 'https://i0.hdslb.com/bfs/wbi/${'b' * 32}.png',
                     },
                   }
+                : uri.path.endsWith('/story')
+                ? {
+                    'items': [
+                      {
+                        'card_goto': 'vertical_av',
+                        'bvid': 'BV1234567890',
+                        'player_args': {'aid': 4, 'cid': 77},
+                        'cover': 'https://i0.hdslb.com/story.jpg',
+                        'title': 'Story',
+                      },
+                      {'card_goto': 'live', 'title': '直播'},
+                      {'card_goto': 'vertical_av', 'is_ad': 1, 'title': '广告'},
+                    ],
+                  }
                 : uri.path.endsWith('/rcmd')
                 ? {'item': _items}
                 : _items,
@@ -189,6 +268,9 @@ final class _Transport implements ApiTransport {
     if (!onlyAds)
       {
         'bvid': 'BV1234567890',
+        'goto': 'av',
+        'cid': 77,
+        'track_id': 'sample-track',
         'title': '视频',
         'duration': 60,
         'pic': 'http://i0.hdslb.com/wide.jpg',

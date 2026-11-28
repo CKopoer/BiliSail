@@ -183,10 +183,10 @@ void expectDpiBottomNavigation(WidgetTester tester) {
     navigation.destinations.whereType<NavigationDestination>().map(
       (d) => d.label,
     ),
-    ['首页', '动态', '我的', '设置'],
+    ['首页', '精选', '动态', '我的'],
   );
   final bounds = tester.getRect(finder);
-  for (final label in ['首页', '动态', '我的', '设置']) {
+  for (final label in ['首页', '精选', '动态', '我的']) {
     final text = find.descendant(of: finder, matching: find.text(label));
     final rect = tester.getRect(text);
     expect(rect.left, greaterThanOrEqualTo(bounds.left));

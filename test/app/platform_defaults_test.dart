@@ -1,5 +1,5 @@
 import 'package:bilisail/app/platform_defaults.dart';
-import 'package:bilisail/domain/recommendation_source.dart';
+import 'package:bilisail/domain/recommendation_settings.dart';
 import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/features/settings/domain/shortcut_settings.dart';
 import 'package:flutter/foundation.dart';
@@ -12,6 +12,13 @@ void main() {
       debugDefaultTargetPlatformOverride = platform;
       final mobile =
           platform == TargetPlatform.android || platform == TargetPlatform.iOS;
+      expect(
+        featuredSourceForPlatform(FeaturedSource.automatic, platform),
+        mobile ? FeaturedSource.mobile : FeaturedSource.desktop,
+      );
+      for (final explicit in [FeaturedSource.desktop, FeaturedSource.mobile]) {
+        expect(featuredSourceForPlatform(explicit, platform), explicit);
+      }
       expect(
         defaultRecommendationSource,
         mobile ? RecommendationSource.app : RecommendationSource.web,

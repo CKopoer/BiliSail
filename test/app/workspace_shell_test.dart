@@ -2059,7 +2059,7 @@ void main() {
             const ValueKey('workspace-bottom-navigation'),
           );
           expect(tester.getSize(bottom).height, 52);
-          if (selected == 'messages' || selected == 'downloads') {
+          if (const {'messages', 'downloads', 'settings'}.contains(selected)) {
             expect(find.byType(NavigationBar), findsNothing);
             final flags = tester
                 .widgetList<Semantics>(
@@ -2075,7 +2075,7 @@ void main() {
             find.byKey(const ValueKey('workspace-bottom-live')),
             findsNothing,
           );
-          for (final entry in ['home', 'dynamic', 'mine', 'settings']) {
+          for (final entry in ['home', 'featured', 'dynamic', 'mine']) {
             expect(
               find.byKey(ValueKey('workspace-bottom-$entry')).hitTestable(),
               findsOneWidget,

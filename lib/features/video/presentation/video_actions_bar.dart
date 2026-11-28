@@ -319,10 +319,13 @@ class VideoActionsBar extends StatelessWidget {
     super.key,
     this.menuOnly = false,
     this.onReload,
+    this.onOpenStory,
+    this.featured = false,
     this.onDownload,
   });
   static const height = 36.0;
-  final bool menuOnly;
+  final bool menuOnly, featured;
+  final VoidCallback? onOpenStory;
   final VoidCallback? onReload;
   final VoidCallback? onDownload;
 
@@ -338,7 +341,9 @@ class VideoActionsBar extends StatelessWidget {
     if (menuOnly) {
       return PopupMenuButton<String>(
         tooltip: '更多',
+        iconColor: featured ? Colors.white : null,
         onSelected: (value) {
+          if (value == 'story') onOpenStory?.call();
           if (value == 'download') onDownload?.call();
           if (value == 'watchLater') {
             owner._run((c) => c.watchLater());
@@ -349,6 +354,8 @@ class VideoActionsBar extends StatelessWidget {
           }
         },
         itemBuilder: (_) => [
+          if (onOpenStory != null)
+            const PopupMenuItem(value: 'story', child: Text('上下滑观看')),
           if (onDownload != null)
             const PopupMenuItem(value: 'download', child: Text('下载视频')),
           PopupMenuItem(
@@ -357,6 +364,39 @@ class VideoActionsBar extends StatelessWidget {
             child: Text(state.watchLaterAdded ? '已加入稍后再看' : '稍后再看'),
           ),
           const PopupMenuItem(value: 'reload', child: Text('重新加载')),
+        ],
+      );
+    }
+    if (featured) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            tooltip: '点赞',
+            color: state.interaction.liked
+                ? Theme.of(context).colorScheme.primary
+                : Colors.white,
+            icon: Icon(
+              state.interaction.liked
+                  ? Icons.thumb_up
+                  : Icons.thumb_up_outlined,
+            ),
+            onPressed: enabled('like', needsState: true)
+                ? () => owner._invoke(ShortcutAction.likeVideo)
+                : null,
+          ),
+          IconButton(
+            tooltip: '收藏',
+            color: state.interaction.favorited
+                ? Theme.of(context).colorScheme.primary
+                : Colors.white,
+            icon: Icon(
+              state.interaction.favorited ? Icons.star : Icons.star_outline,
+            ),
+            onPressed: enabled('favorite')
+                ? () => owner._invoke(ShortcutAction.favoriteVideo)
+                : null,
+          ),
         ],
       );
     }

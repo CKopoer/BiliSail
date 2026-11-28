@@ -69,7 +69,12 @@ class AccountButton extends ConsumerWidget {
         }
         showAppDialog<void>(
           context: context,
-          builder: (_) => AccountDialog(onOpenUser: onOpenUser),
+          builder: (_) => AccountDialog(
+            onOpenUser: onOpenUser,
+            onSettings: onNavigate == null
+                ? null
+                : () => onNavigate!('/settings'),
+          ),
         );
       },
     );

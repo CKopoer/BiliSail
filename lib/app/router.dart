@@ -19,6 +19,8 @@ import '../features/downloads/presentation/downloads_screen.dart';
 import '../features/downloads/presentation/offline_screen.dart';
 import '../domain/user.dart';
 import '../core/platform/external_links.dart';
+import '../core/platform/window_size_policy.dart';
+import '../core/presentation/page_back_scope.dart';
 import '../features/profile/domain/profile_repository.dart';
 import '../features/messages/application/messages_controller.dart';
 import '../features/messages/domain/message_target.dart';
@@ -60,6 +62,12 @@ import '../features/search/application/search_controller.dart';
 import '../features/search/presentation/search_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/video/presentation/video_screen.dart';
+import '../features/video/presentation/featured_video_screen.dart';
+import '../features/feed/application/featured_feed_controller.dart';
+import '../features/feed/application/app_recommendation_identity.dart';
+import '../features/feed/domain/feed_repository.dart';
+import '../shared/application/recommendation_filter_provider.dart';
+import '../domain/recommendation_settings.dart';
 import '../features/video/application/watch_later_queue_registry.dart';
 import '../core/network/api_requests.dart';
 import '../features/pgc/application/pgc_controller.dart';
@@ -203,6 +211,8 @@ GoRouter createBiliRouter({
       routes: [
         for (final path in [
           '/',
+          '/featured',
+          '/story/:bvid',
           '/search',
           '/video/:bvid',
           '/pgc/season/:id',
@@ -257,7 +267,7 @@ final class _WorkspacePageScope extends ConsumerWidget {
         unawaited(
           playback.updateWorkspace(
             allowConcurrent: allowConcurrentPlayback,
-            activeTabId: tab.id,
+            activeTabId: tab.isFeatured ? 'featured-${tab.id}' : tab.id,
           ),
         );
       });
@@ -425,6 +435,38 @@ final class _WorkspacePage extends ConsumerWidget {
         );
       },
     ),
+    featuredBuilder: (context, location) => _rootBranch(
+      section: WorkspaceRootSection.featured,
+      location: location,
+      builder: (context) => Consumer(
+        builder: (context, ref, _) {
+          final manager = ref.watch(playbackManagerProvider);
+          final selected = WorkspacePlaybackSelection.of(context);
+          return WorkspaceActivity(
+            active:
+                WorkspaceActivity.isActive(context) &&
+                (selected == null || selected == tab.id),
+            child: ProviderScope(
+              overrides: [
+                if (manager != null)
+                  playbackSessionProvider.overrideWith((ref) {
+                    final owner = 'featured-${tab.id}';
+                    final session = manager.acquire(
+                      owner,
+                      foregroundOnly: true,
+                    );
+                    ref.onDispose(() => manager.release(owner, session));
+                    return session;
+                  }),
+              ],
+              child: Builder(
+                builder: (context) => _featuredPage(context, location),
+              ),
+            ),
+          );
+        },
+      ),
+    ),
     accountBuilder: (context, location) => _rootBranch(
       section: WorkspaceRootSection.account,
       location: location,
@@ -444,7 +486,16 @@ final class _WorkspacePage extends ConsumerWidget {
               queryParameters: {'section': section.name, 'tab': tab.id},
             ).toString(),
           ),
-          onNavigate: context.go,
+          showSettings: WindowSizePolicy.compactLayout(
+            mobile: WindowSizePolicy.isMobile(Theme.of(context).platform),
+            displaySize: WindowSizePolicy.displaySize(View.of(context)),
+            availableWidth:
+                MediaQuery.sizeOf(context).width -
+                MediaQuery.paddingOf(context).horizontal,
+          ),
+          onNavigate: (path) => context.go(
+            path == '/settings' ? settingsFromLocation(location) : path,
+          ),
           onLogin: login,
           contentBuilder: (context, section) =>
               _accountContent(context, section, signedIn, login),
@@ -466,6 +517,92 @@ final class _WorkspacePage extends ConsumerWidget {
       location: location,
       builder: (context) => _settingsPage(context, location),
     ),
+  );
+
+  Widget _featuredPage(BuildContext context, Uri location) => Consumer(
+    builder: (context, ref, _) {
+      final repo = ref.watch(feedRepositoryProvider);
+      if (repo is! FeaturedFeedRepository) {
+        return const StateView.empty(message: '精选服务暂不可用');
+      }
+      final settings = ref.watch(recommendationSettingsProvider);
+      final source = featuredSourceForPlatform(
+        settings.featuredSource,
+        Theme.of(context).platform,
+      );
+      final identityRevision = source == FeaturedSource.mobile
+          ? ref.watch(appRecommendationIdentityChangesProvider).value
+          : null;
+      final query = location.queryParameters;
+      String? numeric(String key) {
+        final value = query[key];
+        return value != null && RegExp(r'^[1-9][0-9]{0,19}$').hasMatch(value)
+            ? value
+            : null;
+      }
+
+      RecommendationPlaybackContext? recommendation;
+      FeaturedSeed? seed;
+      if (location.pathSegments.first == 'story') {
+        final id = VideoId(location.pathSegments.last);
+        if (!id.isValid) return const StateView.empty(message: '视频地址无效');
+        recommendation = ref
+            .read(recommendationPlaybackRegistryProvider)
+            .resolve(
+              query['recommendation'],
+              id,
+              ref.read(sessionEpochProvider)(),
+            );
+        seed = (
+          video: id,
+          cid: numeric('cid'),
+          aid: numeric('aid'),
+          trackId: recommendation?.trackId,
+        );
+      }
+      final origin = Uri.tryParse(query['returnTo'] ?? '');
+      final returnsToVideo =
+          seed != null &&
+          origin != null &&
+          !origin.hasScheme &&
+          !origin.hasAuthority &&
+          origin.path == '/video/${seed.video.value}';
+      void restoreVideo() {
+        if (!returnsToVideo) return;
+        final page = WorkspacePageNavigation.maybeOf(context);
+        if (page != null) {
+          page.navigate(origin);
+        } else {
+          context.go(origin.toString());
+        }
+      }
+
+      return FeaturedVideoScreen(
+        onReturnToVideo: returnsToVideo ? restoreVideo : null,
+        key: ValueKey((source, identityRevision, settings.filterKey, seed)),
+        createController: () => FeaturedFeedController(
+          repo as FeaturedFeedRepository,
+          source,
+          RecommendationFilter(settings),
+          seed: seed,
+        ),
+        splitWidth:
+            ref
+                .watch(settingsControllerProvider)
+                .value
+                ?.responsiveLayout
+                .playbackSideBySideWidth ??
+            1000,
+        playerBuilder: playerBuilder,
+        seedLink: ContentLink.fromUri(location),
+        seedAttribution: recommendation,
+        onOpenUser: (user) => context.openWorkspaceLink('/user/${user.value}'),
+        onLogin: () => showAppDialog<void>(
+          context: context,
+          builder: (_) => const AccountDialog(),
+        ),
+      );
+    },
   );
 
   Widget _messagesPage(BuildContext context, Uri uri) => MessagesScreen(
@@ -517,16 +654,49 @@ final class _WorkspacePage extends ConsumerWidget {
     },
   );
 
-  Widget _settingsPage(BuildContext context, Uri uri) => SettingsScreen(
-    key: PageStorageKey('settings-${tab.id}'),
-    category: SettingsCategory.fromName(uri.queryParameters['section']),
-    onCategoryChanged: (category) => context.go(
-      Uri(
-        path: '/settings',
-        queryParameters: {'tab': tab.id, 'section': category.name},
-      ).toString(),
-    ),
-  );
+  Widget _settingsPage(BuildContext context, Uri uri) {
+    final origin = Uri.tryParse(uri.queryParameters['returnTo'] ?? '');
+    final canReturn =
+        origin != null &&
+        !origin.hasScheme &&
+        !origin.hasAuthority &&
+        const {'/', '/me'}.contains(origin.path);
+    void back() {
+      if (canReturn) context.go(origin.toString());
+    }
+
+    return PageBackHandler(
+      enabled: canReturn,
+      onBack: () {
+        back();
+        return true;
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (canReturn) BackButton(onPressed: back),
+          Expanded(
+            child: SettingsScreen(
+              key: PageStorageKey('settings-${tab.id}'),
+              category: SettingsCategory.fromName(
+                uri.queryParameters['section'],
+              ),
+              onCategoryChanged: (category) => context.go(
+                Uri(
+                  path: '/settings',
+                  queryParameters: {
+                    ...uri.queryParameters,
+                    'tab': tab.id,
+                    'section': category.name,
+                  },
+                ).toString(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _downloadsPage(BuildContext context) => DownloadsScreen(
     key: PageStorageKey('downloads-${tab.id}'),
@@ -736,6 +906,7 @@ final class _WorkspacePage extends ConsumerWidget {
           builder: (context) {
             final uri = tab.location;
             if (tab.isRoot) return _rootPage(context, account.$1);
+            if (tab.isStory) return _featuredPage(context, uri);
             switch (uri.path) {
               case '/search':
                 return WorkspacePageHeader.wrap(

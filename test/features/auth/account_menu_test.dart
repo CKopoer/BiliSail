@@ -164,6 +164,7 @@ void main() {
         '我的收藏',
         '历史记录',
         '直播中心',
+        '设置',
         '退出登录',
       ]) {
         expect(find.text(label), findsOneWidget);
@@ -174,6 +175,19 @@ void main() {
       expect(find.byType(AccountMenu), findsNothing);
     },
   );
+  testWidgets(
+    'signed-in avatar closes the account panel before opening settings',
+    (tester) async {
+      final routes = <String>[];
+      await mount(tester, routes.add);
+      await tester.ensureVisible(find.text('设置'));
+      await tester.tap(find.text('设置'));
+      await tester.pumpAndSettle();
+      expect(routes, ['/settings']);
+      expect(find.byType(AccountMenu), findsNothing);
+    },
+  );
+
   testWidgets('statistics navigate to corresponding profile sections', (
     tester,
   ) async {

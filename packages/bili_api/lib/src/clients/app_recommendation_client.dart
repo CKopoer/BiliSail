@@ -149,7 +149,10 @@ final class AppRecommendationClient {
         param == null) {
       return null;
     }
-    final isVideo = cardGoto == 'av' || cardGoto == 'inline_av_v2';
+    final isVideo =
+        cardGoto == 'av' ||
+        cardGoto == 'inline_av_v2' ||
+        cardGoto == 'vertical_av';
     // Non-video params identify episodes/dynamics, not AV archives.
     final aid = _id(player['aid']) ?? (isVideo ? param : null);
     final suppliedBvid = entry['bvid'];

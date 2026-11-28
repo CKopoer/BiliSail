@@ -41,7 +41,7 @@ void main() {
     await bottom('mine');
     await tester.tap(find.byKey(const ValueKey('account-tab-watchLater')));
     await tester.pumpAndSettle(const Duration(milliseconds: 16));
-    await bottom('settings');
+    await bottom('featured');
     await bottom('home');
     final reads = Map.of(fixture.home.reads);
     final feedReads = fixture.feed.reads;
@@ -50,7 +50,7 @@ void main() {
     void collect(List<ui.FrameTiming> frames) => timings.addAll(frames);
     binding.addTimingsCallback(collect);
     for (var round = 0; round < 8; round++) {
-      for (final name in ['dynamic', 'mine', 'settings', 'home']) {
+      for (final name in ['dynamic', 'mine', 'featured', 'home']) {
         timings.clear();
         await bottom(name);
         // FrameTiming arrives in batches; flush outside the animated interval.

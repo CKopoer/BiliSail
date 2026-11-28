@@ -1,4 +1,5 @@
 import '../../../domain/recommendation_card.dart';
+import '../../../domain/recommendation_settings.dart';
 import '../../../domain/page_result.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/video.dart';
@@ -96,6 +97,23 @@ abstract interface class RecommendationPublicationTimeRepository {
 abstract interface class RecommendationReportingRepository {
   Future<void> reportRecommendations(
     List<RecommendationEvent> events, {
+    required RequestCancellation cancellation,
+  });
+}
+
+typedef FeaturedSeed = ({
+  VideoId video,
+  String? cid,
+  String? aid,
+  String? trackId,
+});
+
+abstract interface class FeaturedFeedRepository {
+  Future<PageResult<VideoSummary>> loadFeatured({
+    required FeaturedSource source,
+    required int batch,
+    required bool refresh,
+    FeaturedSeed? seed,
     required RequestCancellation cancellation,
   });
 }

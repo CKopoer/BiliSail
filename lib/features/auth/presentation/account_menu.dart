@@ -237,6 +237,7 @@ class AccountMenu extends ConsumerWidget {
                       Icons.flag_outlined,
                       '/?channel=live&section=我的关注',
                     ),
+                    item('设置', Icons.settings_outlined, '/settings'),
                     const Divider(height: 12),
                     if (auth.isSignedIn)
                       ListTile(

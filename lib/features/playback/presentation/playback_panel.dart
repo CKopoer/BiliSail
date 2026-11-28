@@ -18,6 +18,7 @@ import '../../../core/presentation/history_back_region.dart';
 import '../../../core/presentation/android_system_ui.dart';
 import '../../../core/presentation/mobile_playback_status_bar.dart';
 import '../../../shared/ui/playback_page_commands.dart';
+import '../../../shared/ui/featured_paging_scope.dart';
 import '../../../shared/ui/playback_sidebar_toggle.dart';
 import '../../../shared/ui/playback_navigation.dart';
 import '../../../shared/ui/collapsed_playback_header.dart';
@@ -1155,7 +1156,25 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
       },
       commands: {
         for (final action in _shortcuts.capabilities)
-          action: (stroke) => _shortcuts.execute(action, stroke),
+          action: (stroke) {
+            final paging = context
+                .getInheritedWidgetOfExactType<FeaturedPagingScope>();
+            final key = stroke.chord;
+            if (!_fullScreen &&
+                !_miniPlayer &&
+                paging != null &&
+                paging.hasFocus() &&
+                (action == ShortcutAction.volumeUp ||
+                    action == ShortcutAction.volumeDown) &&
+                key?.modifiers == 0 &&
+                (key?.key == 'ArrowUp' || key?.key == 'ArrowDown')) {
+              if (stroke.phase == InputPhase.down) {
+                paging.step(key?.key == 'ArrowUp' ? -1 : 1);
+              }
+              return CommandOutcome.completed;
+            }
+            return _shortcuts.execute(action, stroke);
+          },
         ShortcutAction.toggleMiniPlayer: _toggleMiniPlayer,
         ShortcutAction.returnToBrowser: (stroke) {
           final navigation = _navigation.value;
@@ -1577,6 +1596,10 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
     }
     final input = InputScope.of<Object>(context);
     if (input?.routes.modal == true || (input?.dispatcher.barriers ?? 0) != 0) {
+      return;
+    }
+    if (!widget.fullScreen &&
+        context.getInheritedWidgetOfExactType<FeaturedPagingScope>() != null) {
       return;
     }
     // Claim only the picture's wheel event so enclosing pages do not scroll.
@@ -2045,6 +2068,12 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                       enabled:
                                           settings.fullscreenSwipeControls &&
                                           widget.active,
+                                      yieldCenterDrag:
+                                          !widget.fullScreen &&
+                                          FeaturedPagingScope.maybeOf(
+                                                context,
+                                              ) !=
+                                              null,
                                       sourceGeneration: sourceGeneration,
                                       volume: snapshot.volume,
                                       setVolume: session.setVolume,

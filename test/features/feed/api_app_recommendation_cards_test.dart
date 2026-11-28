@@ -298,6 +298,8 @@ void main() {
       RecommendationTargetKind.video,
     );
     expect(page.items[3].recommendationTarget?.id, 'BV17x411w7KC');
+    expect(page.items[3].recommendationTarget?.story, isTrue);
+    expect(page.items[3].recommendationTarget?.storyAid, '170001');
     expect(
       page.items.last.recommendationTarget?.kind,
       RecommendationTargetKind.unsupported,

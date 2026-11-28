@@ -4231,6 +4231,41 @@ void main() {
     expect(session.snapshots.value.phase, PlaybackPhase.paused);
   });
 
+  test('featured playback pauses offscreen even with concurrent tabs and resumes user intent', () async {
+    final manager = _manager();
+    addTearDown(manager.close);
+    final feed = manager.acquire('featured', foregroundOnly: true);
+    await manager.updateWorkspace(
+      allowConcurrent: true,
+      activeTabId: 'featured',
+    );
+    await feed.open(_detail('1'), _part('1'));
+    await feed.seek(const Duration(seconds: 7));
+    final generation = feed.sourceGeneration;
+    await manager.updateWorkspace(
+      allowConcurrent: true,
+      activeTabId: 'browser',
+    );
+    expect(feed.snapshots.value.phase, PlaybackPhase.paused);
+    await manager.updateWorkspace(
+      allowConcurrent: true,
+      activeTabId: 'featured',
+    );
+    expect(feed.snapshots.value.phase, PlaybackPhase.playing);
+    expect(feed.snapshots.value.position, const Duration(seconds: 7));
+    expect(feed.sourceGeneration, generation);
+    await feed.pause();
+    await manager.updateWorkspace(
+      allowConcurrent: false,
+      activeTabId: 'browser',
+    );
+    await manager.updateWorkspace(
+      allowConcurrent: false,
+      activeTabId: 'featured',
+    );
+    expect(feed.snapshots.value.phase, PlaybackPhase.paused);
+  });
+
   test('exclusive workspace policy suspends other sources and preserves manual pause and preferences', () async {
     final manager = _manager();
     addTearDown(manager.close);

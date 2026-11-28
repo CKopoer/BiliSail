@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-import '../domain/recommendation_source.dart';
+import '../domain/recommendation_settings.dart';
 import '../features/settings/domain/app_settings.dart';
 import '../features/settings/domain/shortcut_settings.dart';
 
@@ -86,3 +86,14 @@ PlayerControlsMode playerControlsModeForPlatform(TargetPlatform platform) =>
 
 PlayerControlsMode get defaultPlayerControlsMode =>
     playerControlsModeForPlatform(defaultTargetPlatform);
+
+FeaturedSource featuredSourceForPlatform(
+  FeaturedSource preference,
+  TargetPlatform platform,
+) {
+  if (preference != FeaturedSource.automatic) return preference;
+  return switch (platform) {
+    TargetPlatform.android || TargetPlatform.iOS => FeaturedSource.mobile,
+    _ => FeaturedSource.desktop,
+  };
+}

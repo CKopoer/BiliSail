@@ -410,6 +410,8 @@ void main() {
           tester.view.physicalSize = Size(width, 900);
           addTearDown(tester.view.resetDevicePixelRatio);
           addTearDown(tester.view.resetPhysicalSize);
+          final auth = _AuthRepository();
+          addTearDown(auth.dispose);
           final settings = _SettingsRepository(navigationMode: mode)
             ..settings = AppSettings(
               navigationMode: mode,
@@ -423,6 +425,7 @@ void main() {
           await tester.pumpWidget(
             ProviderScope(
               overrides: [
+                authRepositoryProvider.overrideWithValue(auth),
                 settingsRepositoryProvider.overrideWithValue(settings),
                 feedRepositoryProvider.overrideWithValue(_FeedRepository()),
                 homeRepositoryProvider.overrideWithValue(_HomeRepository()),
@@ -450,7 +453,15 @@ void main() {
           await enter('home');
           await enter('dynamic');
           expect(channel(), 'dynamic');
-          await enter('settings');
+          if (width < 600) {
+            await enter('mine');
+            await tester.tap(
+              find.byKey(const ValueKey('account-open-settings')),
+            );
+            await tester.pumpAndSettle();
+          } else {
+            await enter('settings');
+          }
           // Changing the preference replaces the previous in-session choice.
           for (final label in ['动态', '视频动态']) {
             final choice = find.widgetWithText(ChoiceChip, label);
@@ -2367,7 +2378,7 @@ void main() {
             ('dynamic', HomeChannel.dynamic),
             ('mine', null),
             ('home', HomeChannel.recommended),
-            ('settings', null),
+            ('featured', null),
             ('dynamic', HomeChannel.dynamic),
             ('home', HomeChannel.recommended),
           ]) {
@@ -2421,6 +2432,8 @@ void main() {
           tester.view.devicePixelRatio = 1;
           addTearDown(tester.view.resetPhysicalSize);
           addTearDown(tester.view.resetDevicePixelRatio);
+          final auth = _AuthRepository();
+          addTearDown(auth.dispose);
           final settings = _SettingsRepository()
             ..settings = const AppSettings.defaults().copyWith(
               navigationMode: mode,
@@ -2432,6 +2445,7 @@ void main() {
           await tester.pumpWidget(
             ProviderScope(
               overrides: [
+                authRepositoryProvider.overrideWithValue(auth),
                 settingsRepositoryProvider.overrideWithValue(settings),
                 feedRepositoryProvider.overrideWithValue(_FeedRepository()),
                 homeRepositoryProvider.overrideWithValue(_HomeRepository()),
@@ -2479,8 +2493,20 @@ void main() {
 
           expectHighlight(HomeChannel.recommended);
           final prefix = width < 600 ? 'workspace-bottom' : 'workspace-nav';
-          await tester.tap(find.byKey(ValueKey('$prefix-settings')));
-          await tester.pumpAndSettle();
+          Future<void> openSettings() async {
+            if (width < 600) {
+              await tester.tap(find.byKey(ValueKey('$prefix-mine')));
+              await tester.pumpAndSettle();
+              await tester.tap(
+                find.byKey(const ValueKey('account-open-settings')),
+              );
+            } else {
+              await tester.tap(find.byKey(ValueKey('$prefix-settings')));
+            }
+            await tester.pumpAndSettle();
+          }
+
+          await openSettings();
           final settingsPager = tester.element(
             find.byKey(const ValueKey('settings-category-swipe')),
           );
@@ -2502,8 +2528,7 @@ void main() {
             expectHighlight(channel);
             expect(tester.state(find.byType(FeedScreen)), same(feed));
           }
-          await tester.tap(find.byKey(ValueKey('$prefix-settings')));
-          await tester.pumpAndSettle();
+          await openSettings();
           expect(
             tester.element(
               find.byKey(const ValueKey('settings-category-swipe')),

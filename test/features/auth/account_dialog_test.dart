@@ -47,6 +47,22 @@ void main() {
     expect(find.byType(AccountDialog), findsNothing);
     expect(find.byType(AccountMenu), findsNothing);
   });
+  testWidgets(
+    'guest can open settings from the avatar without starting QR login',
+    (tester) async {
+      final repository = _FakeAuthRepository();
+      addTearDown(repository.dispose);
+      final routes = <String>[];
+      await tester.pumpWidget(_app(repository, onNavigate: routes.add));
+      await tester.tap(findMaterialTooltip('登录'));
+      await tester.pumpAndSettle();
+      await tester.tap(findMaterialTooltip('设置'));
+      await tester.pumpAndSettle();
+      expect(routes, ['/settings']);
+      expect(find.text('获取登录二维码'), findsNothing);
+    },
+  );
+
   testWidgets('closing an active QR dialog cancels sign in', (tester) async {
     final repository = _FakeAuthRepository();
     addTearDown(repository.dispose);
@@ -100,18 +116,23 @@ void main() {
   });
 }
 
-Widget _app(_FakeAuthRepository repository, {double textScale = 1}) =>
-    ProviderScope(
-      overrides: [authRepositoryProvider.overrideWithValue(repository)],
-      child: MaterialApp(
-        builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(context)
-              .copyWith(textScaler: TextScaler.linear(textScale)),
-          child: child ?? const SizedBox(),
-        ),
-        home: const Scaffold(body: Center(child: AccountButton())),
-      ),
-    );
+Widget _app(
+  _FakeAuthRepository repository, {
+  double textScale = 1,
+  ValueChanged<String>? onNavigate,
+}) => ProviderScope(
+  overrides: [authRepositoryProvider.overrideWithValue(repository)],
+  child: MaterialApp(
+    builder: (context, child) => MediaQuery(
+      data: MediaQuery.of(context)
+          .copyWith(textScaler: TextScaler.linear(textScale)),
+      child: child ?? const SizedBox(),
+    ),
+    home: Scaffold(
+      body: Center(child: AccountButton(onNavigate: onNavigate)),
+    ),
+  ),
+);
 
 final class _FakeAuthRepository implements AuthRepository {
   final _changes = StreamController<AuthState>.broadcast(sync: true);

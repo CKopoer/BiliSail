@@ -571,8 +571,10 @@ void main() {
       expect(page.items.map((item) => item.param).toSet(), {'42'});
       expect(page.items.first.aid, '170001');
       expect(page.items.first.video.bvid, 'BV17x411w7KC');
+      expect(page.items[1].aid, '170001');
+      expect(page.items[1].video.bvid, 'BV17x411w7KC');
       expect(
-        page.items.skip(1).every((item) => item.video.bvid.isEmpty),
+        page.items.skip(2).every((item) => item.video.bvid.isEmpty),
         isTrue,
       );
       expect(page.items.last.video.ownerName, '系列作者');

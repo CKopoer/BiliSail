@@ -40,7 +40,7 @@ void main() {
       await bottom('mine');
       await tester.tap(find.byKey(const ValueKey('account-tab-watchLater')));
       await tester.pumpAndSettle();
-      await bottom('settings');
+      await bottom('featured');
       await bottom('home');
       final sizes = {
         for (final element
@@ -64,11 +64,11 @@ void main() {
       for (final name in [
         'dynamic',
         'mine',
-        'settings',
+        'featured',
         'home',
         'mine',
         'dynamic',
-        'settings',
+        'featured',
         'home',
       ]) {
         await bottom(name);
@@ -97,7 +97,7 @@ void main() {
       expect(fixture.home.reads, reads);
       expect(fixture.feed.reads, 1);
       // Taps can retarget before the bottom indicator finishes animating.
-      for (final name in ['dynamic', 'mine', 'settings', 'home']) {
+      for (final name in ['dynamic', 'mine', 'featured', 'home']) {
         await tester.tap(find.byKey(ValueKey('workspace-bottom-$name')));
         await tester.pump(const Duration(milliseconds: 16));
       }
@@ -114,7 +114,7 @@ void main() {
         tester.view.physicalSize = Size(width, 900);
         await tester.pumpAndSettle();
         if (width < 600) {
-          for (final name in ['mine', 'dynamic', 'settings', 'home']) {
+          for (final name in ['mine', 'dynamic', 'featured', 'home']) {
             await bottom(name);
             for (final element in find.byType(Viewport).evaluate()) {
               final viewport = element.renderObject! as RenderViewport;

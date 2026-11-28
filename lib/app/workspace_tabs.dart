@@ -17,7 +17,12 @@ final class WorkspaceTab {
   bool get isCourse => location.path.startsWith('/course/');
   bool get isLive => location.path.startsWith('/live/');
   bool get isOffline => location.path.startsWith('/offline/');
-  bool get isPlayback => isVideo || isPgc || isCourse || isLive || isOffline;
+  bool get isStory =>
+      location.pathSegments.length == 2 &&
+      location.pathSegments.first == 'story';
+  bool get isFeatured => location.path == '/featured';
+  bool get isPlayback =>
+      isStory || isVideo || isPgc || isCourse || isLive || isOffline;
   bool get isProfile =>
       location.pathSegments.length == 2 &&
       location.pathSegments.first == 'user';
@@ -37,9 +42,15 @@ final class WorkspaceTab {
   bool get isDownloads => location.path == '/downloads';
   bool get isSettings => location.path == '/settings';
   bool get isRoot =>
-      isBrowse || isAccount || isMessages || isDownloads || isSettings;
+      isBrowse ||
+      isFeatured ||
+      isAccount ||
+      isMessages ||
+      isDownloads ||
+      isSettings;
 
   String get title {
+    if (isFeatured || isStory) return '精选';
     if (isBrowse) return pinned ? '首页' : '浏览';
     if (location.path == '/search') {
       final query = location.queryParameters['q'] ?? '';

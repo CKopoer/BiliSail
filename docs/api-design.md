@@ -354,3 +354,7 @@ Protobuf 只引入所需消息及传递依赖，记录源提交、生成器版�
 发送器在 300 毫秒窗口内合批，一次只发送一批，内存中最多等待 32 条事件。队列已满时优先保留新点击，失败的批次直接释放。关闭开关、切换来源或 App 推荐身份会清理等待队列并取消在途请求。账号切换沿用会话取消与 epoch 校验。
 
 网页字段与消息结构核对自[首页推荐脚本](https://s1.hdslb.com/bfs/static/shanks/laputa-home/assets/index-a5f8e5ab.js)和[官方 reporter-pb](https://s1.hdslb.com/bfs/seed/jinkela/short/reporter-pb/index.js)。移动端参考[官方下载中心](https://app.bilibili.com/)的 Android 9.21.0（9210200）中 Pegasus、Neuron RemotePoster 和 InfocProto。协议测试通过传输替身解码请求，覆盖批量、位置归因、失败单次发送与取消。线上入库与推荐排序效果未验证。
+
+## 精选视频流
+
+桌面精选使用 Web Cookie 和 WBI 签名，移动端 Story 使用 App 签名，可复用与当前账号匹配的 App 授权。两端分别使用 fresh_idx 和 display_id 计数，应用层在请求成功后推进批号。接口参数、种子字段、返回卡片结构和样本记录见[精选视频流调研与接入](ui-redesign/featured-video-feed-2026-11-28.md)。

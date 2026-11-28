@@ -38,6 +38,7 @@ void main() {
                   for (final path in [
                     '/',
                     '/me',
+                    '/featured',
                     '/history',
                     '/search',
                     '/settings',
@@ -91,7 +92,9 @@ void main() {
               ('/me?section=favorites&tab=home', 'mine'),
               ('/?channel=popular&section=每周必看&tab=home', 'home'),
               ('/?channel=videoDynamic&tab=home', 'dynamic'),
-              ('/settings?section=appearance&tab=home', 'settings'),
+              ('/featured?tab=home', 'featured'),
+              if (width >= 600)
+                ('/settings?section=appearance&tab=home', 'settings'),
             ]) {
               router.go(location);
               await tester.pumpAndSettle();

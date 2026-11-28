@@ -17,6 +17,7 @@ import 'mappers/dash_audio_parser.dart';
 import 'mappers/web_comment_target.dart';
 import 'transport.dart';
 import 'wbi.dart';
+import 'video_identifiers.dart';
 import 'app_profile.dart';
 import 'risk_control.dart';
 import 'web_device_context.dart';
@@ -325,6 +326,7 @@ final class BiliApiClient {
   }) async {
     const feedPaths = {
       '/x/v2/feed/index',
+      '/x/v2/feed/index/story',
       '/x/feed/dislike',
       '/x/feed/dislike/cancel',
     };
@@ -373,7 +375,7 @@ final class BiliApiClient {
       'buvid': buvid,
       'app-key': 'android64',
       'env': 'prod',
-      if (path == '/x/v2/feed/index')
+      if (path == '/x/v2/feed/index' || path == '/x/v2/feed/index/story')
         ...AndroidPhoneProfile.recommendationHeaders(
           appAccountMid,
           sessionId: _appSessionId,
@@ -2298,6 +2300,115 @@ final class BiliApiClient {
     return _recommendedPage(data, freshIndex + 1);
   }
 
+  Future<ApiPage<ApiVideoSummary>> getDesktopFeatured({
+    required int batch,
+    bool refresh = false,
+    ApiRequestContext? context,
+  }) async {
+    if (batch < 1) throw ArgumentError.value(batch, 'batch');
+    final data = await _wbiJson(
+      '/x/web-interface/index/top/feed/rcmd',
+      {
+        'plat': '1',
+        'ps': '10',
+        'feed_version': 'CLIENT_SELECTED',
+        'fresh_idx': '$batch',
+        'fresh_type': batch > 1
+            ? '4'
+            : refresh
+            ? '3'
+            : '0',
+        'web_location': 'bilibili-electron',
+      },
+      'desktop_featured',
+      context,
+    );
+    return _featuredPage(data, mobile: false);
+  }
+
+  Future<ApiPage<ApiVideoSummary>> getStoryFeatured({
+    required int batch,
+    required String buvid,
+    String? accessToken,
+    String? appAccountMid,
+    String? aid,
+    String? bvid,
+    String? cid,
+    String? trackId,
+    ApiRequestContext? context,
+  }) async {
+    if (batch < 1) throw ArgumentError.value(batch, 'batch');
+    final active = boundedReadContext(context);
+    final device = await appDeviceInfo(context: active);
+    final data = await requestAppJson(
+      '/x/v2/feed/index/story',
+      {
+        'display_id': '$batch',
+        'build': AndroidPhoneProfile.build,
+        'mobi_app': AndroidPhoneProfile.mobiApp,
+        'platform': 'android',
+        'network': device.network,
+        'statistics': AndroidPhoneProfile.statistics,
+        'aid': ?aid,
+        'bvid': ?bvid,
+        'cid': ?cid,
+        'trackid': ?trackId,
+      },
+      endpoint: 'story_featured',
+      buvid: buvid,
+      accessToken: accessToken,
+      appAccountMid: appAccountMid,
+      deviceInfo: device,
+      context: active,
+    );
+    return _featuredPage(data, mobile: true);
+  }
+
+  ApiPage<ApiVideoSummary> _featuredPage(
+    Map<String, Object?> data, {
+    required bool mobile,
+  }) {
+    final endpoint = mobile ? 'story_featured' : 'desktop_featured';
+    final raw = _list(data[mobile ? 'items' : 'item'], endpoint);
+    if (raw.length > 100) {
+      throw ApiFailure(ApiFailureCategory.protocol, endpoint);
+    }
+    final items = <ApiVideoSummary>[];
+    for (final entry in raw.whereType<Map<String, Object?>>()) {
+      final kind = mobile ? entry['card_goto'] ?? entry['goto'] : entry['goto'];
+      if (!(kind == 'av' || mobile && kind == 'vertical_av') ||
+          entry['ad_info'] != null ||
+          entry['is_ad'] == true ||
+          entry['is_ad'] == 1) {
+        continue;
+      }
+      final args =
+          _optionalMap(entry['player_args']) ?? const <String, Object?>{};
+      final aid = _userMid(
+        mobile ? args['aid'] ?? entry['param'] : entry['id'],
+      );
+      final id =
+          _string(entry['bvid']) ??
+          (aid == null ? null : VideoIdentifiers.bvidFromAid(aid));
+      final cid = _userMid(mobile ? args['cid'] : entry['cid']);
+      if (id == null ||
+          !RegExp(r'^BV[0-9a-zA-Z]{10}$').hasMatch(id) ||
+          (!mobile && cid == null) ||
+          (_string(entry['title']) ?? '').trim().isEmpty) {
+        continue;
+      }
+      items.add(
+        _videoSummary({
+          ...entry,
+          'bvid': id,
+          'cid': cid,
+          if (mobile) 'pic': entry['cover'],
+        }, endpoint),
+      );
+    }
+    return ApiPage(List.unmodifiable(items), hasMore: raw.isNotEmpty);
+  }
+
   ApiPage<ApiVideoSummary> _recommendedPage(
     Map<String, Object?> data,
     int nextIndex,
@@ -3767,6 +3878,16 @@ final class BiliApiClient {
       danmakuCount: _count(stat?['danmaku'] ?? data['video_review']),
       publishedAt: _publishedAt(data['pubdate']),
       recommendationReason: _recommendationReason(data['rcmd_reason']),
+      featuredTrackId: switch (data['track_id']) {
+        final String id
+            when (endpoint == 'desktop_featured' ||
+                    endpoint == 'story_featured') &&
+                id.isNotEmpty &&
+                id.length <= 2048 &&
+                !RegExp(r'[\x00-\x1f\x7f]').hasMatch(id) =>
+          id,
+        _ => null,
+      },
       recommendationFeedback: endpoint == 'recommended'
           ? _recommendationFeedback(data, owner)
           : null,

@@ -22,6 +22,24 @@ VideoSummary _video({
 );
 
 void main() {
+  test('featured source survives saving independently of home source', () {
+    for (final source in FeaturedSource.values) {
+      final settings = RecommendationSettings(source: RecommendationSource.web)
+          .copyWith(featuredSource: source);
+      final loaded = RecommendationSettings.fromJson(settings.toJson());
+      expect(loaded.featuredSource, source);
+      expect(loaded.source, RecommendationSource.web);
+    }
+    for (final json in <Map<String, Object?>>[
+      {},
+      {'featuredSource': 'obsolete'},
+    ]) {
+      expect(
+        RecommendationSettings.fromJson(json).featuredSource,
+        FeaturedSource.automatic,
+      );
+    }
+  });
   test('custom thresholds persist and enforce numeric limits', () {
     final custom = RecommendationSettings(
       minimumLikeRatio: 7,

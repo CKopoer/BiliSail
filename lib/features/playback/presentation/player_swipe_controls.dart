@@ -10,6 +10,7 @@ class PlayerSwipeControls extends StatefulWidget {
   const PlayerSwipeControls({
     super.key,
     required this.enabled,
+    this.yieldCenterDrag = false,
     required this.sourceGeneration,
     required this.volume,
     required this.setVolume,
@@ -20,6 +21,7 @@ class PlayerSwipeControls extends StatefulWidget {
     this.reverseFullScreenGesture = false,
   });
 
+  final bool yieldCenterDrag;
   final bool enabled;
   final int sourceGeneration;
   final double volume;
@@ -284,17 +286,15 @@ class _PlayerSwipeControlsState extends State<PlayerSwipeControls>
         excludeFromSemantics: true,
         gestures: {
           if (_enabled)
-            VerticalDragGestureRecognizer:
-                GestureRecognizerFactoryWithHandlers<
-                  VerticalDragGestureRecognizer
-                >(
-                  () =>
-                      VerticalDragGestureRecognizer(
-                          supportedDevices: {PointerDeviceKind.touch},
-                        )
-                        ..dragStartBehavior = DragStartBehavior.down
-                        ..onlyAcceptDragOnThreshold = true,
+            _PlayerVerticalDrag:
+                GestureRecognizerFactoryWithHandlers<_PlayerVerticalDrag>(
+                  () => _PlayerVerticalDrag()
+                    ..dragStartBehavior = DragStartBehavior.down
+                    ..onlyAcceptDragOnThreshold = true,
                   (recognizer) {
+                    recognizer.centerWidth = widget.yieldCenterDrag
+                        ? constraints.maxWidth
+                        : null;
                     recognizer.onStart = (details) =>
                         _start(details, constraints.biggest);
                     recognizer.onUpdate = _update;
@@ -345,4 +345,16 @@ class _PlayerSwipeControlsState extends State<PlayerSwipeControls>
       ),
     ),
   );
+}
+
+class _PlayerVerticalDrag extends VerticalDragGestureRecognizer {
+  _PlayerVerticalDrag() : super(supportedDevices: {PointerDeviceKind.touch});
+  double? centerWidth;
+  @override
+  bool isPointerAllowed(PointerEvent event) {
+    final width = centerWidth;
+    final x = event.localPosition.dx;
+    if (width != null && x >= width / 3 && x < width * 2 / 3) return false;
+    return super.isPointerAllowed(event);
+  }
 }

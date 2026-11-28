@@ -235,7 +235,7 @@ void main() {
           await show('/');
           final normalSize = tester.getSize(bottom);
           final normal = {
-            for (final section in ['dynamic', 'mine', 'settings'])
+            for (final section in ['featured', 'dynamic', 'mine'])
               section: metrics(section),
           };
           await show('/settings');
@@ -289,7 +289,7 @@ void main() {
         bar.destinations.whereType<NavigationDestination>().map(
           (item) => item.label,
         ),
-        ['首页', '动态', '我的', '设置'],
+        ['首页', '精选', '动态', '我的'],
       );
       expect(find.byKey(const ValueKey('channel-live')), findsOneWidget);
       // Reselecting the current destination is a no-op, even without a router.
@@ -309,7 +309,7 @@ void main() {
             bar.destinations.whereType<NavigationDestination>().map(
               (item) => item.label,
             ),
-            ['首页', '动态', '我的', '设置'],
+            ['首页', '精选', '动态', '我的'],
           );
           expect(find.byKey(const ValueKey('channel-live')), findsOneWidget);
         } else {
@@ -731,7 +731,7 @@ void main() {
           bar.destinations.whereType<NavigationDestination>().map(
             (item) => item.label,
           ),
-          ['首页', '动态', '我的', '设置'],
+          ['首页', '精选', '动态', '我的'],
         );
         expect(bar.selectedIndex, 0);
       }

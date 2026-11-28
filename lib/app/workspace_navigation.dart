@@ -3,6 +3,7 @@ import '../features/feed/domain/home_channel.dart';
 /// Product navigation groups are independent of the retained feed pages.
 enum WorkspaceSection {
   home('首页'),
+  featured('精选'),
   dynamic('动态'),
   live('直播'),
   mine('我的'),
@@ -15,6 +16,7 @@ enum WorkspaceSection {
 }
 
 WorkspaceSection sectionForLocation(Uri location, {required bool compact}) {
+  if (location.path == '/featured') return WorkspaceSection.featured;
   if (location.path == '/settings') return WorkspaceSection.settings;
   if (location.path == '/messages') return WorkspaceSection.messages;
   if (location.path == '/downloads') return WorkspaceSection.downloads;
@@ -45,6 +47,7 @@ List<HomeChannel> channelsForSection(
   WorkspaceSection.dynamic => [HomeChannel.dynamic, HomeChannel.videoDynamic],
   WorkspaceSection.live => [HomeChannel.live],
   WorkspaceSection.mine => [HomeChannel.watchLater, HomeChannel.favorites],
+  WorkspaceSection.featured ||
   WorkspaceSection.messages ||
   WorkspaceSection.downloads ||
   WorkspaceSection.settings => [],
@@ -73,3 +76,8 @@ bool shouldAnimateChannelSelection(
   );
   return section(from) == section(to);
 }
+
+String settingsFromLocation(Uri source) => Uri(
+  path: '/settings',
+  queryParameters: {'returnTo': source.toString()},
+).toString();

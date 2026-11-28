@@ -11,7 +11,7 @@ import '../../../domain/page_result.dart';
 import '../../../domain/request_cancellation.dart';
 import '../../../domain/responsive_layout_settings.dart';
 import '../../../domain/video.dart';
-import '../../../domain/recommendation_source.dart';
+import '../../../domain/recommendation_settings.dart';
 import '../../../domain/app_failure.dart';
 import 'app_recommendation_identity_store.dart';
 import '../../video/domain/video_actions_repository.dart';
@@ -26,6 +26,7 @@ class ApiFeedRepository
         RecommendationPublicationTimeRepository,
         AppRecommendationFeedRepository,
         DesktopRecommendationFeedRepository,
+        FeaturedFeedRepository,
         RecommendationReportingRepository,
         RecommendationFeedbackRepository {
   ApiFeedRepository(this.api, this.requests, {this.appIdentity});
@@ -185,6 +186,54 @@ class ApiFeedRepository
   }, cancellation: cancellation);
 
   @override
+  Future<PageResult<VideoSummary>> loadFeatured({
+    required FeaturedSource source,
+    required int batch,
+    required bool refresh,
+    FeaturedSeed? seed,
+    required RequestCancellation cancellation,
+  }) => requests.run((context) async {
+    if (source == FeaturedSource.desktop) {
+      return _mapPage(
+        await api.getDesktopFeatured(
+          batch: batch,
+          refresh: refresh,
+          context: context,
+        ),
+      );
+    }
+    final store = appIdentity;
+    if (source != FeaturedSource.mobile || store == null) {
+      throw const ApiFailure(ApiFailureCategory.unavailable, 'story_featured');
+    }
+    final identity = await store.requestIdentity();
+    try {
+      final page = await api.getStoryFeatured(
+        batch: batch,
+        buvid: identity.buvid,
+        accessToken: identity.accessToken,
+        appAccountMid: identity.accountMid,
+        context: context,
+        bvid: seed?.video.value,
+        aid: seed?.aid,
+        cid: seed?.cid,
+        trackId: seed?.trackId,
+      );
+      if (identity.revision != store.revision) {
+        throw const ApiFailure(ApiFailureCategory.cancelled, 'story_featured');
+      }
+      return _mapPage(page);
+    } on ApiFailure catch (failure) {
+      if (failure.category == ApiFailureCategory.authentication &&
+          identity.accessToken != null &&
+          identity.revision == store.revision) {
+        await store.invalidateAuthorization();
+      }
+      rethrow;
+    }
+  }, cancellation: cancellation);
+
+  @override
   Future<PageResult<VideoSummary>> loadAppRecommendations({
     required AppRecommendationRequest request,
     required RequestCancellation cancellation,
@@ -238,7 +287,31 @@ class ApiFeedRepository
           final video = item.video;
           final trackId = item.trackId;
           final isVideo = video.bvid.isNotEmpty;
-          final target = isVideo ? null : _appRecommendationTarget(item);
+          final uri = item.navigationUri;
+          final storyId =
+              uri?.scheme == 'bilibili' &&
+                  uri?.host == 'story' &&
+                  uri!.userInfo.isEmpty &&
+                  uri.pathSegments.length == 1
+              ? uri.pathSegments.single
+              : null;
+          final id = isVideo
+              ? video.bvid
+              : VideoIdentifiers.bvidFromAid(item.param);
+          final story =
+              id != null &&
+              ((storyId != null && (storyId == item.aid || storyId == id)) ||
+                  item.cardGoto == 'vertical_av');
+          final target = story
+              ? RecommendationTarget(
+                  kind: RecommendationTargetKind.video,
+                  id: id,
+                  story: true,
+                  storyAid: item.aid,
+                )
+              : isVideo
+              ? null
+              : _appRecommendationTarget(item);
           final targetVideo = isVideo
               ? video.bvid
               : target?.kind == RecommendationTargetKind.video
@@ -249,7 +322,9 @@ class ApiFeedRepository
               : null;
           return VideoSummary(
             id: VideoId(
-              isVideo ? video.bvid : 'app:${item.cardGoto}:${item.param}',
+              isVideo && item.cardGoto != 'vertical_av'
+                  ? video.bvid
+                  : 'app:${item.cardGoto}:${item.param}',
             ),
             recommendationCard: RecommendationCard(
               source: RecommendationSource.app,
@@ -603,6 +678,15 @@ class ApiFeedRepository
             danmakuCount: item.danmakuCount,
             publishedAt: item.publishedAt,
             recommendationReason: item.recommendationReason,
+            recommendationPlayback: switch (item.featuredTrackId) {
+              final trackId? => RecommendationPlaybackContext(
+                videoId: item.bvid,
+                trackId: trackId,
+                sessionEpoch: requests.sessionEpoch,
+                fromSpmid: null,
+              ),
+              null => null,
+            },
             recommendationCard: switch (item.recommendationFeedback) {
               final feedback? when source != null && epoch != null =>
                 RecommendationCard(

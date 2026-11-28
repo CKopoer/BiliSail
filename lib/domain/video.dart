@@ -83,7 +83,15 @@ enum RecommendationTargetKind {
 }
 
 final class RecommendationTarget {
-  const RecommendationTarget({required this.kind, this.id = '', this.url});
+  const RecommendationTarget({
+    required this.kind,
+    this.id = '',
+    this.url,
+    this.story = false,
+    this.storyAid,
+  });
+  final bool story;
+  final String? storyAid;
   final RecommendationTargetKind kind;
   final String id;
   final Uri? url;

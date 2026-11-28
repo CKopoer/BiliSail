@@ -88,11 +88,13 @@ final class WorkspacePageNavigation extends InheritedWidget {
   const WorkspacePageNavigation({
     super.key,
     required this.navigate,
+    this.location,
     this.updateTitle,
     required super.child,
   });
 
   final ValueChanged<Uri> navigate;
+  final Uri? location;
   final ValueChanged<String>? updateTitle;
 
   static WorkspacePageNavigation? maybeOf(BuildContext context) =>
@@ -100,7 +102,9 @@ final class WorkspacePageNavigation extends InheritedWidget {
 
   @override
   bool updateShouldNotify(WorkspacePageNavigation oldWidget) =>
-      navigate != oldWidget.navigate || updateTitle != oldWidget.updateTitle;
+      navigate != oldWidget.navigate ||
+      location != oldWidget.location ||
+      updateTitle != oldWidget.updateTitle;
 }
 
 /// Builds shell navigation inside a page's own provider scope.
@@ -1008,7 +1012,8 @@ final class _BiliAppShellState extends State<BiliAppShell>
                                               !tab.isPlayback &&
                                               !tab.isProfile &&
                                               !tab.hasOwnNavigation &&
-                                              !tab.isMessages)
+                                              !tab.isMessages &&
+                                              !tab.isFeatured)
                                             LayoutBuilder(
                                               builder: (context, bounds) =>
                                                   _navigationHeader(
@@ -1271,7 +1276,11 @@ final class _BiliAppShellState extends State<BiliAppShell>
           active: active,
           previewing: previewsTab && !active,
           child: WorkspacePlaybackSelection(
-            tabId: _desktopDual ? _workspace.playbackId : null,
+            tabId: _desktopDual
+                ? (_workspace.active.isFeatured
+                      ? _workspace.active.id
+                      : _workspace.playbackId)
+                : null,
             child:
                 widget.pageScopeBuilder?.call(context, tab, content) ?? content,
           ),
@@ -1321,6 +1330,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
                     child: WorkspacePageHeader(
                       builder: _searchHeader,
                       child: WorkspacePageNavigation(
+                        location: view.location,
                         navigate: (location) =>
                             _updatePageLocation(view, location),
                         updateTitle: (title) => _updatePageTitle(view, title),
@@ -1379,6 +1389,8 @@ final class _BiliAppShellState extends State<BiliAppShell>
       setState(() {});
     }
     switch (section) {
+      case WorkspaceSection.featured:
+        context.go('/featured');
       case WorkspaceSection.home:
         final channels = channelsForSection(section, compact: _compactChannels);
         final previous = _lastChannels[section];
@@ -1423,6 +1435,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
 
   IconData _sectionIcon(WorkspaceSection section, {bool selected = false}) =>
       switch (section) {
+        WorkspaceSection.featured => Icons.video_collection_outlined,
         WorkspaceSection.home =>
           selected ? Icons.home_rounded : Icons.home_outlined,
         WorkspaceSection.dynamic => Icons.rss_feed_rounded,
@@ -1720,6 +1733,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
                   ),
                   for (final item in [
                     WorkspaceSection.home,
+                    WorkspaceSection.featured,
                     WorkspaceSection.dynamic,
                     if (!_compactChannels) WorkspaceSection.live,
                     WorkspaceSection.mine,
@@ -1835,10 +1849,11 @@ final class _BiliAppShellState extends State<BiliAppShell>
   Widget _bottomNavigation(BuildContext context) {
     final sections = [
       WorkspaceSection.home,
+      WorkspaceSection.featured,
       WorkspaceSection.dynamic,
       if (!_compactChannels) WorkspaceSection.live,
       WorkspaceSection.mine,
-      WorkspaceSection.settings,
+      if (!_compactChannels) WorkspaceSection.settings,
     ];
     final tab = _frameTab(context);
     final selected = sectionForLocation(
@@ -1851,6 +1866,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
     // A highlighted group can include other pages, such as history under
     // Mine. Suppress re-selection only on the destination's own page.
     final atSelectedDestination = switch (selected) {
+      WorkspaceSection.featured => tab.isFeatured,
       WorkspaceSection.mine => tab.isAccount,
       WorkspaceSection.settings => tab.isSettings,
       _ => tab.isBrowse,
@@ -2157,6 +2173,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
         when sectionForLocation(tab.location, compact: false) ==
             WorkspaceSection.dynamic =>
       _sectionIcon(WorkspaceSection.dynamic),
+    '/featured' => _sectionIcon(WorkspaceSection.featured),
     '/me' => _sectionIcon(WorkspaceSection.mine),
     '/messages' => _sectionIcon(WorkspaceSection.messages),
     '/downloads' => _sectionIcon(WorkspaceSection.downloads),

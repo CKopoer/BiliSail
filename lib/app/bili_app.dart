@@ -54,7 +54,9 @@ import 'shortcut_coordinator.dart';
 import 'image_cache_binding.dart';
 import 'interface_scale.dart';
 import 'dependencies.dart';
+import 'shell.dart' show WorkspacePageNavigation;
 import 'router.dart';
+import 'workspace_navigation.dart';
 import 'theme.dart';
 import 'workspace_playback_window.dart';
 
@@ -346,7 +348,14 @@ class _BiliAppState extends ConsumerState<BiliApp> {
           ),
       accountBuilder: (context) => AccountButton(
         onOpenUser: (user) => context.go('/user/${user.value}'),
-        onNavigate: (path) => context.go(path),
+        onNavigate: (path) => context.go(
+          path == '/settings'
+              ? settingsFromLocation(
+                  WorkspacePageNavigation.maybeOf(context)?.location ??
+                      GoRouterState.of(context).uri,
+                )
+              : path,
+        ),
       ),
       actionsBuilder: (context, detail, part) => VideoActionsBar(
         onDownload: () => _downloadVideo(context, detail, part),
@@ -354,6 +363,46 @@ class _BiliAppState extends ConsumerState<BiliApp> {
       menuBuilder: (context, detail, part) => VideoActionsBar(
         onDownload: () => _downloadVideo(context, detail, part),
         menuOnly: true,
+        onOpenStory: detail.isInteractive
+            ? null
+            : () {
+                final session = ProviderScope.containerOf(
+                  context,
+                  listen: false,
+                ).read(playbackSessionProvider);
+                final current =
+                    session.detail?.summary.id == detail.summary.id &&
+                    session.part?.cid == part.cid;
+                final page = WorkspacePageNavigation.maybeOf(context);
+                final id = detail.summary.id.value;
+                final original = page?.location ?? Uri(path: '/video/$id');
+                final progress = current
+                    ? session.snapshots.value.position.inMilliseconds.toString()
+                    : null;
+                final origin = original.replace(
+                  queryParameters: {
+                    ...original.queryParameters,
+                    'cid': part.cid,
+                    'start_progress': ?progress,
+                  },
+                );
+                final story = Uri(
+                  path: '/story/$id',
+                  queryParameters: {
+                    'cid': part.cid,
+                    'aid': ?detail.aid,
+                    'start_progress': ?progress,
+                    'returnTo': origin.toString(),
+                    'recommendation':
+                        ?original.queryParameters['recommendation'],
+                  },
+                );
+                if (page != null) {
+                  page.navigate(story);
+                } else {
+                  context.go(story.toString());
+                }
+              },
         onReload: () {
           ref.invalidate(relatedVideosProvider(detail.summary.id));
           final pageContainer = ProviderScope.containerOf(

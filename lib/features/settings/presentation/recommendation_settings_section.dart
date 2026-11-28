@@ -143,6 +143,26 @@ final class _RecommendationSettingsSectionState
               ),
           ],
         ),
+        const SizedBox(height: 12),
+        const Text('精选视频流来源'),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final source in FeaturedSource.values)
+              ChoiceChip(
+                label: Text(switch (source) {
+                  FeaturedSource.automatic => '跟随平台',
+                  FeaturedSource.desktop => '桌面端精选接口',
+                  FeaturedSource.mobile => '移动端 Story 接口',
+                }),
+                selected: s.featuredSource == source,
+                onSelected: (_) => _save(
+                  (current) => current.copyWith(featuredSource: source),
+                ),
+              ),
+          ],
+        ),
         _toggle(
           '上报推荐卡片曝光和点击',
           '向哔哩哔哩发送首页推荐中实际看到和点击的卡片，用于推荐反馈。',

@@ -14,7 +14,8 @@ import 'password_sms_login_dialog.dart';
 import '../../../shared/ui/app_dialog.dart';
 
 class AccountDialog extends ConsumerStatefulWidget {
-  const AccountDialog({super.key, this.onOpenUser});
+  const AccountDialog({super.key, this.onOpenUser, this.onSettings});
+  final VoidCallback? onSettings;
   final ValueChanged<UserId>? onOpenUser;
   @override
   ConsumerState<AccountDialog> createState() => _AccountDialogState();
@@ -128,6 +129,15 @@ class _AccountDialogState extends ConsumerState<AccountDialog>
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                     ),
+                    if (widget.onSettings case final open?)
+                      IconButton(
+                        tooltip: '设置',
+                        icon: const Icon(Icons.settings_outlined),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          open();
+                        },
+                      ),
                     IconButton(
                       tooltip: '关闭',
                       onPressed: () => Navigator.pop(context),

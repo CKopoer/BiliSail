@@ -43,6 +43,7 @@ final class PlaybackManager extends ChangeNotifier {
   late final ListeningSleepTimer sleepTimer;
   final PlaybackSession Function(ListeningSleepTimer sleepTimer) _createSession;
   final _sessions = <String, PlaybackSession>{};
+  final _foregroundOnly = <String>{};
   final _releases = <Future<void>>{};
   Future<void> _commands = Future.value();
   bool _allowConcurrent = true;
@@ -51,11 +52,12 @@ final class PlaybackManager extends ChangeNotifier {
   String? _selectedTabId;
   int _revision = 0;
 
-  PlaybackSession acquire(String tabId) {
+  PlaybackSession acquire(String tabId, {bool foregroundOnly = false}) {
     if (_closed) throw StateError('PlaybackManager is closed');
     return _sessions.putIfAbsent(tabId, () {
       final session = _createSession(sleepTimer);
-      if (!_allowConcurrent) {
+      if (foregroundOnly) _foregroundOnly.add(tabId);
+      if (!_allowConcurrent || foregroundOnly) {
         // Block autoplay immediately, including sources still being resolved.
         unawaited(session.setPlaybackAllowed(false));
       }
@@ -85,12 +87,15 @@ final class PlaybackManager extends ChangeNotifier {
     return _applyPolicy();
   }
 
+  bool _canPlay(String owner) =>
+      (!_foregroundOnly.contains(owner) || owner == _activeTabId) &&
+      (_allowConcurrent || owner == _selectedTabId);
+
   Future<void> _applyPolicy() {
     final revision = ++_revision;
     final blocked = <Future<void>>[
       for (final entry in _sessions.entries)
-        if (!_allowConcurrent && entry.key != _selectedTabId)
-          entry.value.setPlaybackAllowed(false),
+        if (!_canPlay(entry.key)) entry.value.setPlaybackAllowed(false),
     ];
     final operation = _commands.then((_) async {
       // Complete outgoing pauses before permitting another native engine.
@@ -98,8 +103,7 @@ final class PlaybackManager extends ChangeNotifier {
       if (_closed || revision != _revision) return;
       await Future.wait([
         for (final entry in _sessions.entries)
-          if (_allowConcurrent || entry.key == _selectedTabId)
-            entry.value.setPlaybackAllowed(true),
+          if (_canPlay(entry.key)) entry.value.setPlaybackAllowed(true),
       ]);
     });
     _commands = operation.then((_) {}, onError: (Object _, StackTrace _) {});
@@ -109,6 +113,7 @@ final class PlaybackManager extends ChangeNotifier {
   void release(String tabId, PlaybackSession session) {
     if (!identical(_sessions[tabId], session)) return;
     _sessions.remove(tabId);
+    _foregroundOnly.remove(tabId);
     if (_sessions.isEmpty) sleepTimer.cancel();
     if (_selectedTabId == tabId) _selectedTabId = null;
     notifyListeners();

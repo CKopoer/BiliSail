@@ -38,6 +38,21 @@ void main() {
       expect((await repository.load()).recommendations.source, source);
       expect((await mobile.load()).recommendations.source, source);
     }
+    for (final featured in FeaturedSource.values) {
+      await repository.save(
+        AppSettings(
+          recommendations: RecommendationSettings(
+            source: RecommendationSource.web,
+            featuredSource: featured,
+          ),
+        ),
+      );
+      expect((await mobile.load()).recommendations.featuredSource, featured);
+      expect(
+        (await mobile.load()).recommendations.source,
+        RecommendationSource.web,
+      );
+    }
     for (final recommendations in <Object?>[
       null,
       {'source': 'unknown'},

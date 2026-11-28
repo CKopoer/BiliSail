@@ -2,11 +2,14 @@ import 'video.dart';
 import 'recommendation_source.dart';
 export 'recommendation_source.dart';
 
+enum FeaturedSource { automatic, desktop, mobile }
+
 enum RecommendationSurface { recommended, discovery, related }
 
 final class RecommendationSettings {
   RecommendationSettings({
     this.source = RecommendationSource.web,
+    this.featuredSource = FeaturedSource.automatic,
     this.reportInteractions = _defaultReportInteractions,
     this.keepPrevious = false,
     this.showPreviousMarker = true,
@@ -35,6 +38,7 @@ final class RecommendationSettings {
 
   const RecommendationSettings.defaults({
     this.source = RecommendationSource.web,
+    this.featuredSource = FeaturedSource.automatic,
   }) : reportInteractions = _defaultReportInteractions,
        keepPrevious = false,
        showPreviousMarker = true,
@@ -59,6 +63,7 @@ final class RecommendationSettings {
   final bool reportInteractions;
   final bool keepPrevious, showPreviousMarker, exemptFollowed, filterRelated;
   final RecommendationSource source;
+  final FeaturedSource featuredSource;
   final int minimumLikeRatio, minimumDurationSeconds, minimumPlayCount;
   final List<String> titleKeywords, categoryKeywords;
 
@@ -107,6 +112,11 @@ final class RecommendationSettings {
               .where((item) => item.name == value['source'])
               .firstOrNull ??
           defaultSource,
+      featuredSource:
+          FeaturedSource.values
+              .where((s) => s.name == value['featuredSource'])
+              .firstOrNull ??
+          FeaturedSource.automatic,
       reportInteractions: flag(
         'reportInteractions',
         _defaultReportInteractions,
@@ -125,6 +135,7 @@ final class RecommendationSettings {
 
   Map<String, Object?> toJson() => {
     'source': source.name,
+    'featuredSource': featuredSource.name,
     'reportInteractions': reportInteractions,
     'keepPrevious': keepPrevious,
     'showPreviousMarker': showPreviousMarker,
@@ -139,6 +150,7 @@ final class RecommendationSettings {
 
   RecommendationSettings copyWith({
     RecommendationSource? source,
+    FeaturedSource? featuredSource,
     bool? reportInteractions,
     bool? keepPrevious,
     bool? showPreviousMarker,
@@ -151,6 +163,7 @@ final class RecommendationSettings {
     bool? filterRelated,
   }) => RecommendationSettings(
     source: source ?? this.source,
+    featuredSource: featuredSource ?? this.featuredSource,
     reportInteractions: reportInteractions ?? this.reportInteractions,
     keepPrevious: keepPrevious ?? this.keepPrevious,
     showPreviousMarker: showPreviousMarker ?? this.showPreviousMarker,

@@ -39,10 +39,12 @@ class AccountScreen extends ConsumerStatefulWidget {
     required this.onLogin,
     required this.contentBuilder,
     this.onNavigate,
+    this.showSettings = false,
     this.initialTab,
     this.onTabChanged,
   });
 
+  final bool showSettings;
   final VoidCallback onLogin;
   final AccountContentBuilder contentBuilder;
   final ValueChanged<String>? onNavigate;
@@ -108,7 +110,18 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
         header: Material(
           key: const ValueKey('account-collapsing-profile'),
           color: theme.colorScheme.surface,
-          child: _profileBar(auth, overview),
+          child: Row(
+            children: [
+              Expanded(child: _profileBar(auth, overview)),
+              if (widget.showSettings)
+                IconButton(
+                  key: const ValueKey('account-open-settings'),
+                  tooltip: '设置',
+                  icon: const Icon(Icons.settings_outlined),
+                  onPressed: () => widget.onNavigate?.call('/settings'),
+                ),
+            ],
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
