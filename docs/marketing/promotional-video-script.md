@@ -39,7 +39,9 @@
 
 ## 定稿成片与封面
 
-定稿文件位于 `promo-video/out/2026-11-28-light/pixel-light/`。成片 `BiliSail-Pixel-Light-1080p.mp4` 直接复用浅色初版的视频流。独立配乐提供 `Pixel-Express-Light.mp3` 和无损版 `Pixel-Express-Light.flac`。
+定稿文件位于 `promo-video/out/2026-11-28-light/pixel-light/`。**高码率成片**为 `BiliSail-Pixel-Light-1080p-HQ.mp4`，全长 60 秒，1920 × 1080、30 fps，文件约 72.4 MB。早期成片保存在同目录的 `BiliSail-Pixel-Light-1080p.mp4`。独立配乐提供 `Pixel-Express-Light.mp3` 和无损版 `Pixel-Express-Light.flac`。
+
+高码率版从 Remotion 合成 `BiliSail-Today` 逐帧渲染 1800 张无损 PNG，再用 x264 的 `slow` 预设和 BT.709 色彩，两遍编码为 H.264。目标视频码率为 20 Mbps，按画面复杂度分配后，实测平均视频码率从 1.86 提高到 9.47 Mbps。AAC 配乐直接复制自定稿。抽查搜索筛选、直播聊天和 iOS 设置三个界面的同帧文字区域，解码后的亮度与无损原帧的误差均比旧版低。
 
 - **16:9**（1920 × 1080，`BiliSail-Cover-16x9.jpg`）左侧分两行排「换个方式」「刷 B 站」，右侧用 Android 竖屏首页与 Windows 瀑布播放页做对照，五个平台名写在标题下方。
 - **4:3**（1600 × 1200，`BiliSail-Cover-4x3.jpg`）上方横排标题和平台名，下方用手机首页叠在桌面番剧海报墙前。两张封面均采用深蓝灰和莓红文字，配暖白浅色背景。
