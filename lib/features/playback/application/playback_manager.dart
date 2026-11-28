@@ -43,12 +43,13 @@ final class PlaybackManager extends ChangeNotifier {
   late final ListeningSleepTimer sleepTimer;
   final PlaybackSession Function(ListeningSleepTimer sleepTimer) _createSession;
   final _sessions = <String, PlaybackSession>{};
-  final _foregroundOnly = <String>{};
+  final _foregroundOnly = <String, VoidCallback>{};
   final _releases = <Future<void>>{};
   Future<void> _commands = Future.value();
   bool _allowConcurrent = true;
   bool _closed = false;
   String? _activeTabId;
+  String? _fallbackTabId;
   String? _selectedTabId;
   int _revision = 0;
 
@@ -56,14 +57,27 @@ final class PlaybackManager extends ChangeNotifier {
     if (_closed) throw StateError('PlaybackManager is closed');
     return _sessions.putIfAbsent(tabId, () {
       final session = _createSession(sleepTimer);
-      if (foregroundOnly) _foregroundOnly.add(tabId);
+      if (foregroundOnly) {
+        void intentChanged() {
+          if (_closed || _activeTabId != tabId || _fallbackTabId == null) {
+            return;
+          }
+          if (_refreshSelection()) {
+            notifyListeners();
+            unawaited(_applyPolicy());
+          }
+        }
+
+        session.addListener(intentChanged);
+        _foregroundOnly[tabId] = intentChanged;
+      }
       if (!_allowConcurrent || foregroundOnly) {
         // Block autoplay immediately, including sources still being resolved.
         unawaited(session.setPlaybackAllowed(false));
       }
       scheduleMicrotask(() {
         if (_closed || !identical(_sessions[tabId], session)) return;
-        if (_activeTabId == tabId) _selectedTabId = tabId;
+        _refreshSelection();
         notifyListeners();
         _sessionChanges.add(null);
         unawaited(_applyPolicy());
@@ -75,20 +89,37 @@ final class PlaybackManager extends ChangeNotifier {
   Future<void> updateWorkspace({
     required bool allowConcurrent,
     required String activeTabId,
+    String? fallbackTabId,
   }) {
     if (_closed) return Future.value();
-    if (_allowConcurrent == allowConcurrent && _activeTabId == activeTabId) {
+    if (_allowConcurrent == allowConcurrent &&
+        _activeTabId == activeTabId &&
+        _fallbackTabId == fallbackTabId) {
       return _commands;
     }
     _allowConcurrent = allowConcurrent;
     _activeTabId = activeTabId;
-    if (_sessions.containsKey(activeTabId)) _selectedTabId = activeTabId;
+    _fallbackTabId = fallbackTabId;
+    _refreshSelection();
     notifyListeners();
     return _applyPolicy();
   }
 
+  bool _refreshSelection() {
+    final active = _sessions[_activeTabId];
+    final fallback = _fallbackTabId;
+    final selected = fallback != null && active?.hasPlaybackIntent != true
+        ? fallback
+        : active != null
+        ? _activeTabId
+        : _selectedTabId;
+    if (_selectedTabId == selected) return false;
+    _selectedTabId = selected;
+    return true;
+  }
+
   bool _canPlay(String owner) =>
-      (!_foregroundOnly.contains(owner) || owner == _activeTabId) &&
+      (!_foregroundOnly.containsKey(owner) || owner == _activeTabId) &&
       (_allowConcurrent || owner == _selectedTabId);
 
   Future<void> _applyPolicy() {
@@ -96,6 +127,7 @@ final class PlaybackManager extends ChangeNotifier {
     final blocked = <Future<void>>[
       for (final entry in _sessions.entries)
         if (!_canPlay(entry.key)) entry.value.setPlaybackAllowed(false),
+      if (!_allowConcurrent) ..._releases,
     ];
     final operation = _commands.then((_) async {
       // Complete outgoing pauses before permitting another native engine.
@@ -113,14 +145,18 @@ final class PlaybackManager extends ChangeNotifier {
   void release(String tabId, PlaybackSession session) {
     if (!identical(_sessions[tabId], session)) return;
     _sessions.remove(tabId);
-    _foregroundOnly.remove(tabId);
+    if (_foregroundOnly.remove(tabId) case final listener?) {
+      session.removeListener(listener);
+    }
     if (_sessions.isEmpty) sleepTimer.cancel();
     if (_selectedTabId == tabId) _selectedTabId = null;
-    notifyListeners();
-    _sessionChanges.add(null);
     final closing = session.close();
     _releases.add(closing);
     unawaited(closing.whenComplete(() => _releases.remove(closing)));
+    final selectedChanged = _refreshSelection();
+    notifyListeners();
+    _sessionChanges.add(null);
+    if (selectedChanged) unawaited(_applyPolicy());
   }
 
   /// Waits for unmounted pages' native engines, leaving retained sessions alone.
@@ -151,6 +187,10 @@ final class PlaybackManager extends ChangeNotifier {
       final systemMedia = _systemMedia;
       if (systemMedia != null) await systemMedia.close();
     } finally {
+      for (final entry in _foregroundOnly.entries) {
+        _sessions[entry.key]?.removeListener(entry.value);
+      }
+      _foregroundOnly.clear();
       _sessions.clear();
       try {
         await _commands;

@@ -655,6 +655,12 @@ class PlaybackSession extends ChangeNotifier {
   bool get sourceMatchesAccount =>
       _scope == accountScope() && _epoch == sessionEpoch();
 
+  bool get hasPlaybackIntent =>
+      _desiredPlaying &&
+      sourceMatchesAccount &&
+      error == null &&
+      (_resolving || media != null);
+
   /// Carry the user's play/pause choice across a video route's loading gap.
   /// A completed source is the one exception: advancing starts the next item.
   bool prepareNextVideo(
@@ -2569,6 +2575,7 @@ class PlaybackSession extends ChangeNotifier {
       final generation = _generation;
       _cancelCloudResume();
       _desiredPlaying = true;
+      _notify();
       try {
         await engine.seek(Duration.zero);
         if (_disposed || generation != _generation) return;
@@ -2588,8 +2595,8 @@ class PlaybackSession extends ChangeNotifier {
     }
     _desiredPlaying = !_desiredPlaying;
     if (!_desiredPlaying) _cancelRecovery();
+    _notify();
     if (_resolving) {
-      _notify();
       if (_openingLiveGeneration == _generation) await _command(_syncPlayback);
       return;
     }
@@ -2599,8 +2606,9 @@ class PlaybackSession extends ChangeNotifier {
 
   /// Idempotent system play commands must never toggle a playing source off.
   Future<void> play() async {
-    final reclaimFocus = audioFocus != null && !_desiredPlaying;
-    if (!_desiredPlaying) ++_audioIntentRevision;
+    final intentChanged = !_desiredPlaying;
+    final reclaimFocus = audioFocus != null && intentChanged;
+    if (intentChanged) ++_audioIntentRevision;
     _interruptedGeneration = null;
     _automaticRepeat = null;
     if (_disposed || _closing) return;
@@ -2616,8 +2624,8 @@ class PlaybackSession extends ChangeNotifier {
       return;
     }
     _desiredPlaying = true;
+    if (intentChanged) _notify();
     if (_resolving) {
-      _notify();
       if (_openingLiveGeneration == _generation) await _command(_syncPlayback);
       return;
     }

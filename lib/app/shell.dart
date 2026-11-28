@@ -68,20 +68,22 @@ typedef WorkspaceWindowBuilder = Widget Function(
   required ValueChanged<Object> onError,
 });
 
-/// A visible browser must not take playback ownership from its sibling window.
+/// The preferred player in a two-window workspace and its retained fallback.
 class WorkspacePlaybackSelection extends InheritedWidget {
   const WorkspacePlaybackSelection({
     super.key,
     required this.tabId,
+    this.fallbackTabId,
     required super.child,
   });
   final String? tabId;
-  static String? of(BuildContext context) => context
-      .dependOnInheritedWidgetOfExactType<WorkspacePlaybackSelection>()
-      ?.tabId;
+  final String? fallbackTabId;
+  static WorkspacePlaybackSelection? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<WorkspacePlaybackSelection>();
+  static String? of(BuildContext context) => maybeOf(context)?.tabId;
   @override
   bool updateShouldNotify(WorkspacePlaybackSelection oldWidget) =>
-      oldWidget.tabId != tabId;
+      oldWidget.tabId != tabId || oldWidget.fallbackTabId != fallbackTabId;
 }
 
 /// Navigation within an existing playback page preserves the selected tab.
@@ -221,6 +223,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
   SettingsCategory _lastSettingsCategory = SettingsCategory.appearance;
   bool _windowFailed = false;
   int _windowActivation = 0;
+  bool _detachedPlaybackSelected = false;
   bool _exitConfirmationOpen = false;
   bool _localSidebarCollapsed = false;
   bool get _sidebarCollapsed =>
@@ -269,6 +272,12 @@ final class _BiliAppShellState extends State<BiliAppShell>
   WorkspaceTab get _displayTab => _desktopDual
       ? _workspace.tabs.firstWhere((tab) => tab.id == _workspace.browseId)
       : _workspace.active;
+  String? get _preferredDesktopPlaybackTab {
+    if (!_desktopDual) return null;
+    return !_detachedPlaybackSelected && _displayTab.isFeatured
+        ? _displayTab.id
+        : _workspace.playbackId;
+  }
 
   PageBackController _backFor(String id) => _pageBack.putIfAbsent(
     id,
@@ -354,6 +363,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
     _workspace.setSingleMode(_singlePage);
     final uri = Uri.parse(widget.location);
     _workspace.acceptRoute(uri);
+    _detachedPlaybackSelected = _workspace.active.isPlayback;
     _rememberSection(_displayTab.location);
     _restoreSearch();
   }
@@ -375,7 +385,10 @@ final class _BiliAppShellState extends State<BiliAppShell>
     }
     _workspace.setDualMode(_dualTabs);
     _workspace.setSingleMode(_singlePage);
-    if (widget.navigationMode != oldWidget.navigationMode) _revealActiveTab();
+    if (widget.navigationMode != oldWidget.navigationMode) {
+      _detachedPlaybackSelected = _workspace.active.isPlayback;
+      _revealActiveTab();
+    }
     if (widget.location != oldWidget.location) {
       final uri = Uri.parse(widget.location);
       if (!_workspace.acceptRoute(uri)) {
@@ -390,7 +403,12 @@ final class _BiliAppShellState extends State<BiliAppShell>
       _rememberSection(_displayTab.location, compact: _compactChannels);
       _restoreSearch();
       _revealActiveTab();
-      if (_workspace.active.isPlayback) _windowActivation++;
+      if (_workspace.active.isPlayback) {
+        _detachedPlaybackSelected = true;
+        _windowActivation++;
+      } else if (_workspace.active.isFeatured) {
+        _detachedPlaybackSelected = false;
+      }
     }
   }
 
@@ -403,16 +421,21 @@ final class _BiliAppShellState extends State<BiliAppShell>
 
   @override
   void didChangeViewFocus(ViewFocusEvent event) {
-    if (!_desktopDual ||
-        event.state != ViewFocusState.focused ||
-        event.viewId != View.maybeOf(context)?.viewId ||
-        _workspace.activeId == _workspace.browseId) {
-      return;
+    if (!_desktopDual || event.state != ViewFocusState.focused) return;
+    if (event.viewId == View.maybeOf(context)?.viewId) {
+      // Restore the browser route so opening the same video raises its window.
+      if (_workspace.activeId != _workspace.browseId) {
+        _selectTab(_workspace.browseId);
+      } else if (_detachedPlaybackSelected) {
+        setState(() => _detachedPlaybackSelected = false);
+      }
+    } else if (_pageKeys[_workspace.playbackId]?.currentContext
+        case final playbackContext? when !_detachedPlaybackSelected) {
+      if (View.maybeOf(playbackContext)?.viewId == event.viewId) {
+        // OS activation changes playback priority without changing the route.
+        setState(() => _detachedPlaybackSelected = true);
+      }
     }
-    // The browser remains visible while playback owns another view. Restore
-    // its route on refocus so opening the same video is a new navigation and
-    // raises the existing playback window, including clicks through the OS.
-    _selectTab(_workspace.browseId);
   }
 
   void _prunePages() {
@@ -512,7 +535,10 @@ final class _BiliAppShellState extends State<BiliAppShell>
   }
 
   void _selectTab(String id) {
-    setState(() => _workspace.select(id));
+    setState(() {
+      _workspace.select(id);
+      _detachedPlaybackSelected = _workspace.active.isPlayback;
+    });
     _commitWorkspace();
   }
 
@@ -520,7 +546,10 @@ final class _BiliAppShellState extends State<BiliAppShell>
     final playback = _workspace.latestPlayback;
     if (playback == null) return;
     if (_desktopDual && _workspace.activeId == playback.id) {
-      setState(() => _windowActivation++);
+      setState(() {
+        _detachedPlaybackSelected = true;
+        _windowActivation++;
+      });
     } else {
       _selectTab(playback.id);
     }
@@ -668,7 +697,10 @@ final class _BiliAppShellState extends State<BiliAppShell>
   void _cycleTabs({bool backwards = false}) {
     if (_singlePage) return;
     if (_desktopDual) {
-      setState(() => _windowActivation++);
+      setState(() {
+        _detachedPlaybackSelected = _workspace.playbackId != null;
+        _windowActivation++;
+      });
       return;
     }
     setState(() => _workspace.cycle(backwards: backwards));
@@ -1263,6 +1295,7 @@ final class _BiliAppShellState extends State<BiliAppShell>
   Widget _page(BuildContext context, WorkspaceTab tab, {required bool active}) {
     final back = WorkspaceBackPresentation.maybeOf(context);
     final previewsTab = back?.destination?.id == tab.id;
+    final preferredPlayback = _preferredDesktopPlaybackTab;
     final content = Builder(
       builder: (context) => Stack(
         fit: StackFit.expand,
@@ -1282,10 +1315,10 @@ final class _BiliAppShellState extends State<BiliAppShell>
           active: active,
           previewing: previewsTab && !active,
           child: WorkspacePlaybackSelection(
-            tabId: _desktopDual
-                ? (_workspace.active.isFeatured
-                      ? _workspace.active.id
-                      : _workspace.playbackId)
+            tabId: preferredPlayback,
+            fallbackTabId:
+                _desktopDual && preferredPlayback != _workspace.playbackId
+                ? _workspace.playbackId
                 : null,
             child:
                 widget.pageScopeBuilder?.call(context, tab, content) ?? content,

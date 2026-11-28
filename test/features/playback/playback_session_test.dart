@@ -4266,6 +4266,39 @@ void main() {
     expect(feed.snapshots.value.phase, PlaybackPhase.paused);
   });
 
+  test(
+    'exclusive workspace waits for a closing player before resuming featured',
+    () async {
+      final manager = _manager();
+      addTearDown(manager.close);
+      final featured = manager.acquire('featured', foregroundOnly: true);
+      await manager.updateWorkspace(
+        allowConcurrent: false,
+        activeTabId: 'featured',
+      );
+      await featured.open(_detail('1'), _part('1'));
+      final detached = manager.acquire('window');
+      await manager.updateWorkspace(
+        allowConcurrent: false,
+        activeTabId: 'window',
+      );
+      await detached.open(_detail('2'), _part('2'));
+      final closing = Completer<void>();
+      (detached.engine as _FakeEngine).nextStop = closing;
+      manager.release('window', detached);
+
+      final restore = manager.updateWorkspace(
+        allowConcurrent: false,
+        activeTabId: 'featured',
+      );
+      await _flush();
+      expect(featured.snapshots.value.phase, PlaybackPhase.paused);
+      closing.complete();
+      await restore;
+      expect(featured.snapshots.value.phase, PlaybackPhase.playing);
+    },
+  );
+
   test('exclusive workspace policy suspends other sources and preserves manual pause and preferences', () async {
     final manager = _manager();
     addTearDown(manager.close);

@@ -26,7 +26,9 @@ import 'package:bilisail/features/video/presentation/watch_later_queue_panel.dar
 import 'package:bilisail/shared/ui/playback_info_tabs.dart';
 
 import 'dart:async';
+import 'dart:ui' show ViewFocusDirection, ViewFocusEvent, ViewFocusState;
 
+import 'package:bili_player/bili_player.dart' show PlaybackPhase;
 import 'package:bilisail/app/router.dart';
 import 'package:bilisail/app/shell.dart';
 import 'package:bilisail/app/platform_defaults.dart';
@@ -49,6 +51,7 @@ import 'package:bilisail/features/live/presentation/live_screen.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:bilisail/domain/page_result.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
+import 'package:bilisail/domain/recommendation_settings.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/domain/user.dart';
 import 'package:bilisail/features/profile/application/profile_controller.dart';
@@ -83,6 +86,263 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final featuredInitially in ['empty', 'idle', 'playing', 'paused']) {
+    _workspaceTestWidgets(
+      'desktop playback can take focus with featured $featuredInitially',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(1280, 900);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+
+        final windows = FakeDetachedWindowFactory(tester.view);
+        for (final name in ['bilisail/desktop_window', 'bilisail/text_input']) {
+          final channel = MethodChannel(name);
+          tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+            channel,
+            (_) async => null,
+          );
+          addTearDown(
+            () => tester.binding.defaultBinaryMessenger
+                .setMockMethodCallHandler(channel, null),
+          );
+        }
+        const featuredId = VideoId('BV1234567890');
+        const detachedId = VideoId('BV0987654321');
+        final feed = _FeaturedWindowFeed(
+          featuredInitially == 'empty'
+              ? []
+              : const [
+                  VideoSummary(
+                    id: featuredId,
+                    title: '精选',
+                    coverUrl: '',
+                    author: '测试 UP',
+                    duration: Duration(minutes: 2),
+                    previewCid: '1',
+                  ),
+                ],
+        );
+        final engines = <_WindowPlaybackEngine>[];
+        var simultaneousAudio = false;
+        final manager = PlaybackManager(
+          createSession: (timer) {
+            final engine = _WindowPlaybackEngine(() {
+              if (engines.where((e) => e.snapshot.desiredPlaying).length > 1) {
+                simultaneousAudio = true;
+              }
+            });
+            engines.add(engine);
+            return PlaybackSession(
+              engine: engine,
+              repository: _WindowPlaybackRepository(),
+              progress: _WindowPlaybackProgress(),
+              accountScope: () => 'guest',
+              sleepTimer: timer,
+            );
+          },
+        );
+        final settings = _SettingsRepository();
+        final players =
+            <
+              VideoId,
+              ({PlaybackSession session, VideoDetail detail, VideoPart part})
+            >{};
+        final router = createBiliRouter(
+          initialLocation: '/featured',
+          playbackWindowBuilder:
+              (
+                context, {
+                required child,
+                required playback,
+                required keepPlaybackMounted,
+                required activationToken,
+                required onClose,
+                required onBack,
+                required onHome,
+                required onError,
+              }) => DesktopPlaybackWindow(
+                keepPlaybackMounted: keepPlaybackMounted,
+                windowFactory: windows.call,
+                onError: (error) => fail('$error'),
+                onCloseRequested: onClose,
+                activationToken: activationToken,
+                waitForPlaybackRelease: manager.drainReleases,
+                playback: playback == null
+                    ? null
+                    : WorkspacePlaybackWindow(
+                        theme: Theme.of(context),
+                        shortcuts: settings.settings.shortcuts,
+                        onClose: onClose,
+                        onBack: onBack,
+                        onHome: onHome,
+                        onActivateBrowser: () {},
+                        child: playback,
+                      ),
+                child: child,
+              ),
+          playerBuilder: (context, detail, part) => Consumer(
+            builder: (context, ref, _) {
+              players[detail.summary.id] = (
+                session: ref.watch(playbackSessionProvider),
+                detail: detail,
+                part: part,
+              );
+              return const SizedBox.expand();
+            },
+          ),
+        );
+        addTearDown(router.dispose);
+        Future<void> settleWindowClose() async {
+          for (var frame = 0; frame < 3; frame++) {
+            await tester.pumpAndSettle();
+            await tester.runAsync(
+              () => Future<void>.delayed(const Duration(milliseconds: 20)),
+            );
+          }
+          await tester.pumpAndSettle();
+        }
+
+        try {
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [
+                settingsRepositoryProvider.overrideWithValue(settings),
+                playbackManagerProvider.overrideWithValue(manager),
+                videoRepositoryProvider.overrideWithValue(_VideoRepository()),
+                relatedVideosProvider.overrideWith((ref, id) async => []),
+                videoTagsProvider.overrideWith((ref, id) async => []),
+                feedRepositoryProvider.overrideWithValue(feed),
+                homeRepositoryProvider.overrideWithValue(_HomeRepository()),
+              ],
+              child: InputTestApp.router(routerConfig: router),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          Future<PlaybackSession> open(VideoId id) async {
+            final player = players[id]!;
+            await player.session.open(player.detail, player.part);
+            await tester.pumpAndSettle();
+            return player.session;
+          }
+
+          Future<void> focus(
+            int id, [
+            ViewFocusState state = ViewFocusState.focused,
+          ]) async {
+            tester.binding.handleViewFocusChanged(
+              ViewFocusEvent(
+                viewId: id,
+                state: state,
+                direction: ViewFocusDirection.undefined,
+              ),
+            );
+            await tester.pumpAndSettle();
+          }
+
+          void expectPlayer(PlaybackSession? playing, {String? stage}) {
+            for (final session in manager.sessions) {
+              expect(
+                session.snapshots.value.phase == PlaybackPhase.playing,
+                identical(session, playing),
+                reason:
+                    '$stage ${session.detail?.summary.id.value} '
+                    '${session.snapshots.value.phase} ${session.error}; '
+                    'selection=${manager.selectedSession?.detail?.summary.id.value}',
+              );
+            }
+            expect(simultaneousAudio, isFalse);
+          }
+
+          final featured = switch (featuredInitially) {
+            'empty' => null,
+            'idle' => players[featuredId]!.session,
+            _ => await open(featuredId),
+          };
+          final featuredWasPlaying = featuredInitially == 'playing';
+          if (featuredInitially == 'paused') await featured!.pause();
+          expectPlayer(featuredWasPlaying ? featured : null);
+
+          router.go('/video/${detachedId.value}');
+          await tester.pumpAndSettle();
+          final window = windows.lastWindow!;
+          final detached = await open(detachedId);
+          final generation = detached.sourceGeneration;
+          expectPlayer(detached);
+
+          await focus(tester.view.viewId);
+          expect(router.routeInformationProvider.value.uri.path, '/featured');
+          expectPlayer(featuredWasPlaying ? featured : detached);
+          if (featuredWasPlaying) {
+            router.go('/');
+            await tester.pumpAndSettle();
+            expectPlayer(detached);
+            router.go('/featured');
+            await tester.pumpAndSettle();
+            expectPlayer(featured);
+          }
+          await focus(window.viewId);
+          expectPlayer(detached);
+          expect(detached.sourceGeneration, generation);
+          await focus(window.viewId, ViewFocusState.unfocused);
+          expectPlayer(detached);
+
+          if (featured != null && featuredInitially != 'idle') {
+            await focus(tester.view.viewId);
+            if (featuredWasPlaying) {
+              await featured.pause();
+              await tester.pumpAndSettle();
+            }
+            await featured.togglePlaying();
+            await tester.pumpAndSettle();
+            expectPlayer(featured);
+            await featured.pause();
+            await tester.pumpAndSettle();
+            expectPlayer(detached);
+            await focus(window.viewId);
+            expectPlayer(detached);
+            await detached.pause();
+            await focus(tester.view.viewId);
+            await focus(window.viewId);
+            expectPlayer(null);
+            await detached.play();
+            await tester.pumpAndSettle();
+            expectPlayer(detached);
+          }
+
+          window.requestClose();
+          await settleWindowClose();
+          expect(
+            window.disposed,
+            isTrue,
+            reason:
+                '${engines.map((engine) => (engine.stops, engine.disposals, engine.snapshot.phase))}',
+          );
+          expect(router.routeInformationProvider.value.uri.path, '/featured');
+          expectPlayer(null);
+          router.go('/video/${detachedId.value}');
+          await tester.pumpAndSettle();
+          final reopened = await open(detachedId);
+          expect(reopened, isNot(same(detached)));
+          expectPlayer(reopened, stage: 'new window');
+          await focus(window.viewId);
+          expectPlayer(reopened, stage: 'stale focus');
+          expect(windows.creationCount, 2);
+          expect(tester.takeException(), isNull);
+        } finally {
+          await tester.pumpWidget(const SizedBox());
+          await settleWindowClose();
+          final closed = manager.close();
+          await settleWindowClose();
+          await tester.runAsync(
+            () => closed.timeout(const Duration(seconds: 2)),
+          );
+        }
+      },
+    );
+  }
+
   for (final mode in WorkspaceNavigationMode.values) {
     _workspaceTestWidgets('middle-clicking a search result in $mode', (
       tester,
@@ -3343,6 +3603,83 @@ final class _FeedRepository implements FeedRepository {
     required int page,
     required RequestCancellation cancellation,
   }) async => const PageResult(items: [], hasMore: false);
+}
+
+final class _FeaturedWindowFeed extends _FeedRepository
+    implements FeaturedFeedRepository {
+  _FeaturedWindowFeed(this.items);
+
+  final List<VideoSummary> items;
+
+  @override
+  Future<PageResult<VideoSummary>> loadFeatured({
+    required FeaturedSource source,
+    required int batch,
+    required bool refresh,
+    FeaturedSeed? seed,
+    required RequestCancellation cancellation,
+  }) async => PageResult(items: items, hasMore: false);
+}
+
+final class _WindowPlaybackEngine extends CardFakeEngine {
+  _WindowPlaybackEngine(this.onPlay);
+
+  final VoidCallback onPlay;
+
+  @override
+  Future<void> play() async {
+    publish(
+      snapshot.copyWith(phase: PlaybackPhase.playing, desiredPlaying: true),
+    );
+    onPlay();
+  }
+
+  @override
+  Future<void> pause() async => publish(
+    snapshot.copyWith(phase: PlaybackPhase.paused, desiredPlaying: false),
+  );
+}
+
+final class _WindowPlaybackRepository extends Fake
+    implements PlaybackRepository {
+  @override
+  Future<PlaybackMedia> resolve(
+    VideoId video,
+    String cid, {
+    required int quality,
+    VideoCodecPreference preferredCodec = VideoCodecPreference.h264,
+    required RequestCancellation cancellation,
+  }) async => cardPreviewMedia();
+
+  @override
+  Future<List<TimedComment>> comments(
+    String cid,
+    int segment, {
+    required RequestCancellation cancellation,
+  }) async => [];
+
+  @override
+  Future<List<SubtitleTrack>> subtitles(
+    VideoId video,
+    String cid, {
+    required RequestCancellation cancellation,
+  }) async => [];
+}
+
+final class _WindowPlaybackProgress extends Fake
+    implements PlaybackProgressStore {
+  @override
+  Future<Duration?> read(String scope, VideoId video, String cid) async => null;
+
+  @override
+  Future<void> write(
+    String scope,
+    VideoSummary video,
+    VideoPart part,
+    Duration position,
+    Duration duration, {
+    String? episodeId,
+  }) async {}
 }
 
 final class _AuthRepository implements AuthRepository {

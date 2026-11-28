@@ -264,10 +264,13 @@ final class _WorkspacePageScope extends ConsumerWidget {
         (selectedPlayback == null || selectedPlayback == tab.id)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!context.mounted || !WorkspaceActivity.isActive(context)) return;
+        final selection = WorkspacePlaybackSelection.maybeOf(context);
+        if (selection?.tabId != null && selection?.tabId != tab.id) return;
         unawaited(
           playback.updateWorkspace(
             allowConcurrent: allowConcurrentPlayback,
             activeTabId: tab.isFeatured ? 'featured-${tab.id}' : tab.id,
+            fallbackTabId: tab.isFeatured ? selection?.fallbackTabId : null,
           ),
         );
       });
