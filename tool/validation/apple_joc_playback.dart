@@ -1,12 +1,16 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:audio_session/audio_session.dart';
 import 'package:bili_player/bili_player.dart';
+import 'package:bilisail/core/platform/playback_audio_focus.dart';
 
 /// Exercises the same engine and mounted video surface as the playback page.
 Future<void> verifyAppleJoc(MediaKitEngine engine, Uri base) async {
   final directory = await Directory.systemTemp.createTemp('bilisail-joc-');
   final http = HttpClient()..connectionTimeout = const Duration(seconds: 5);
+  final focus = await PlaybackAudioFocus.mobile();
+  void focusListener(PlaybackAudioEvent event) {}
   MediaTrack local(String name) => MediaTrack(
     uri: File('${directory.path}/$name').uri,
     requestPolicy: MediaRequestPolicy(),
@@ -85,7 +89,26 @@ Future<void> verifyAppleJoc(MediaKitEngine engine, Uri base) async {
       ),
     ]) {
       stdout.writeln('APPLE_JOC opening=$label');
-      await engine.open(source, const OpenOptions(play: true, volume: 28));
+      await engine.open(source, OpenOptions(play: focus == null, volume: 28));
+      if (focus != null) {
+        final session = AVAudioSession();
+        final beforeFocus = await session.mode;
+        if (!await focus.request(focusListener)) {
+          throw StateError('iOS denied audio focus for $label');
+        }
+        final afterFocus = await session.mode;
+        stdout.writeln(
+          'APPLE_AUDIO_SESSION $label: $beforeFocus -> $afterFocus',
+        );
+        if (joc &&
+            (await session.category != AVAudioSessionCategory.playback ||
+                afterFocus != AVAudioSessionMode.moviePlayback)) {
+          throw StateError(
+            'Wrong iOS audio session for $label after focus: $afterFocus',
+          );
+        }
+        await engine.play();
+      }
       final before = await output(joc);
       if (before.atmosSource != joc) {
         throw StateError('Wrong source profile for $label');
@@ -137,12 +160,14 @@ Future<void> verifyAppleJoc(MediaKitEngine engine, Uri base) async {
         await output(true);
       }
       await engine.pause();
+      await focus?.release(focusListener);
       stdout.writeln(
         'APPLE_JOC_PASSED $label output=${after.audioOutput} '
         'format=${after.audioOutputFormat} rendered=${after.appleJocRenderedPackets}',
       );
     }
   } finally {
+    await focus?.release(focusListener);
     http.close(force: true);
     await directory.delete(recursive: true);
   }

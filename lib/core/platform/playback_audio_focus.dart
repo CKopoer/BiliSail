@@ -48,8 +48,17 @@ class PlaybackAudioFocus {
   }) {
     return PlaybackAudioFocus(
       abandonBeforeReclaim: android,
-      // The plugin configures its music/playback fallback on first activation.
-      setActive: (active) => session.setActive(active),
+      // VOD opens paused. Its iOS audio output has already configured the
+      // shared session when the first play command asks for focus.
+      setActive: (active) => session.setActive(
+        active,
+        fallbackConfiguration: android
+            ? const AudioSessionConfiguration.music()
+            : const AudioSessionConfiguration(
+                avAudioSessionCategory: AVAudioSessionCategory.playback,
+                avAudioSessionMode: AVAudioSessionMode.moviePlayback,
+              ),
+      ),
       events: Stream.multi((controller) {
         final interruptions = session.interruptionEventStream.listen((event) {
           controller.add(switch ((event.begin, event.type)) {

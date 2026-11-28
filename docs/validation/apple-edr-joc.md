@@ -56,6 +56,14 @@ macOS Release 和 iPhone 模拟器使用本次发布的归档，通过在线／�
 
 实体 AirPods 验收使用同一段带居中对白的 JOC 视频，保持设备静止，在连续播放中依次选「头部追踪 → 固定 → 关闭 → 头部追踪」并转头。固定模式下对白应随头保持居中，重新启用追踪后对白应随转头偏向屏幕方向。另在暂停时切换一次，确认恢复播放后采用新模式。两端的实际耳机听感仍待确认。[Apple 的 AirPods 模式说明](https://support.apple.com/guide/airpods/dev00eb7e0a3/web)
 
+#### iOS 选择固定后重新打开 Atmos 视频
+
+报告者的 iPhone 在控制中心选中「固定」后重新打开 Atmos 视频，仍能听到头部追踪，普通视频听感正常。前次回归验证了清队列后重新送包。本次回归按点播页面的顺序，以暂停状态打开源、申请音频焦点，然后开始播放。JOC 原生输出使用电影播放模式，`audio_session` 首次申请焦点时却以默认音乐配置重新设置同一个 `AVAudioSession`。iOS 焦点适配现在也使用 `playback / moviePlayback`。[焦点适配](../../lib/core/platform/playback_audio_focus.dart) · [播放器回归](../../tool/validation/apple_joc_playback.dart)
+
+同一段 Dolby 样片在 iPhone 模拟器上运行新旧对照。旧版打开在线 DASH 后，申请焦点使系统报告的模式从 `moviePlayback` 变为 `defaultMode`。修复版在线分轨、离线分轨、MKV 和 MP4 四种路径申请焦点前后均为 `moviePlayback`，并保持 `apple-joc` 输出。普通 DD+ 和立体声 AAC 均经 `audiounit` 播放。未签名的 iPhone arm64 安装包也已构建。[旧版复现](https://github.com/CKopoer/BiliSail/actions/runs/46142232784/job/140970626764) · [修复版回归](https://github.com/CKopoer/BiliSail/actions/runs/46142232784/job/140970626790) · [真机构建](https://github.com/CKopoer/BiliSail/actions/runs/46142232784/job/140970626476)
+
+报告者在旧版后台播放时也能复现。空间播放能力通知中的布尔值只表示空间音频是否启用，无法区分「固定」和「头部追踪」。修复后这两种模式的听感仍待实体 iPhone 与 AirPods 对照确认。[Apple 空间播放能力通知](https://developer.apple.com/documentation/avfaudio/avaudiosession/spatialplaybackcapabilitieschangednotification)
+
 ### macOS 的 48 kHz PCM 输出（2026-11-28）
 
 在报告者的 M5 MacBook Air 内置扬声器上，播放 48 kHz 立体声 AAC 时，CoreAudio 为平面浮点（`floatp`）设置输入声道布局返回 `-50`。应用已获得视频帧，但必需音轨一直没有就绪。同机、同一音轨改用交错浮点（`float`）后能正常初始化。重载时的 libmpv 错误码 `-14` 也表示音频输出初始化失败。[复现与单变量对照](https://github.com/CKopoer/BiliSail/issues/183)

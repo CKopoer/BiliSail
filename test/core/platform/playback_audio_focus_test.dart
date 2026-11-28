@@ -14,6 +14,16 @@ void main() {
         final received = <PlaybackAudioEvent>[];
         final listener = received.add;
         expect(await focus.request(listener), isTrue);
+        expect(
+          session.fallback.avAudioSessionCategory,
+          AVAudioSessionCategory.playback,
+        );
+        expect(
+          session.fallback.avAudioSessionMode,
+          android
+              ? AVAudioSessionMode.defaultMode
+              : AVAudioSessionMode.moviePlayback,
+        );
         for (final (begin, type) in [
           (true, AudioInterruptionType.unknown),
           (false, AudioInterruptionType.pause),
@@ -74,6 +84,7 @@ class _AudioSession extends Fake implements AudioSession {
   );
   final noisy = StreamController<void>.broadcast(sync: true);
   final activations = <bool>[];
+  late AudioSessionConfiguration fallback;
   @override
   Stream<AudioInterruptionEvent> get interruptionEventStream =>
       interruptions.stream;
@@ -89,6 +100,7 @@ class _AudioSession extends Fake implements AudioSession {
     AudioSessionConfiguration fallbackConfiguration =
         const AudioSessionConfiguration.music(),
   }) async {
+    fallback = fallbackConfiguration;
     activations.add(active);
     return true;
   }
