@@ -15,6 +15,7 @@ import 'package:bilisail/domain/app_failure.dart';
 import 'package:bilisail/domain/request_cancellation.dart';
 import 'package:bilisail/domain/video.dart';
 import 'package:bilisail/features/playback/application/playback_session.dart';
+import 'package:bilisail/features/playback/application/featured_prepared_engine.dart';
 import 'package:bilisail/features/playback/application/card_preview_playback.dart';
 import 'package:bilisail/features/playback/application/playback_listening_mode.dart';
 import 'package:bilisail/features/playback/application/playback_startup_diagnostics.dart';
@@ -40,6 +41,52 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../support/video_card_fake_engine.dart';
 
 void main() {
+  test('featured navigation adopts the already opened DASH engine, retaining one session and playback intent', () async {
+    final primary = _FakeEngine();
+    final spare = _FakeEngine();
+    final previews = _FakeRepository(autoResolve: true);
+    final foreground = _FakeRepository(autoResolve: true);
+    final session = PlaybackSession(
+      engine: primary,
+      repository: foreground,
+      progress: _FakeProgress(),
+      accountScope: () => 'guest',
+      featuredStandby: FeaturedPreparedEngine(createEngine: () => spare),
+      resolveFeatured: previews.resolve,
+    );
+    addTearDown(session.close);
+    final owner = Object();
+    final a = _detail('11'), b = _detail('22');
+    session.setFeaturedNeighbor(
+      owner,
+      (a.summary.id, '11'),
+      (b.summary.id, '22'),
+    );
+    expect(spare.sources, isEmpty);
+    await session.open(a, a.parts.single);
+    await _flush();
+    expect(spare.openOptions.single.play, isFalse);
+    expect(spare.openOptions.single.volume, 0);
+    expect(
+      (spare.sources.single as DashPairSource).audio?.uri.path,
+      '/22-audio.m4s',
+    );
+    expect(session.engine, same(primary));
+    // The old panel may detach a frame before delayed details mount the next.
+    await session.stop(clearCheckpoints: false);
+    expect(spare.disposed, isFalse);
+    // The newly selected page rebuilds before its foreground open starts.
+    session.setFeaturedNeighbor(owner, (b.summary.id, '22'), null);
+    await session.open(b, b.parts.single, desiredPlaying: false, volume: 37);
+    expect(session.engine, same(spare));
+    expect(session.snapshots.value.desiredPlaying, isFalse);
+    expect(spare.currentSnapshot.volume, 37);
+    expect(spare.sources, hasLength(1));
+    await _flush();
+    expect(primary.disposed, isTrue);
+    session.leaveFeatured(owner);
+  });
+
   TestWidgetsFlutterBinding.ensureInitialized();
   test(
     'Android audio changes during opening and playback preserve the source',

@@ -1,3 +1,9 @@
+import 'package:bili_player/bili_player.dart';
+import 'package:bilisail/features/playback/application/featured_prepared_engine.dart';
+import 'package:bilisail/features/playback/application/playback_manager.dart';
+import 'package:bilisail/features/playback/application/playback_session.dart';
+import 'package:bilisail/features/playback/presentation/playback_panel.dart';
+import 'package:bilisail/features/settings/domain/app_settings.dart';
 import 'package:bilisail/core/presentation/workspace_activity.dart';
 import 'package:bilisail/domain/page_result.dart';
 import 'package:bilisail/domain/recommendation_settings.dart';
@@ -14,6 +20,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../support/input_test_app.dart';
+import '../../support/system_media_playback_fixture.dart';
+import '../../support/video_card_fake_engine.dart';
+import '../../support/window_service_fake.dart';
 
 class _Videos implements VideoRepository, FeaturedFeedRepository {
   final items = List.generate(
@@ -58,7 +67,119 @@ class _Videos implements VideoRepository, FeaturedFeedRepository {
   }
 }
 
+class _PagingEngine extends CardFakeEngine {
+  @override
+  Future<void> setVolume(double volume) async =>
+      publish(snapshot.copyWith(volume: volume));
+  @override
+  Future<void> play() async => publish(
+    snapshot.copyWith(phase: PlaybackPhase.playing, desiredPlaying: true),
+  );
+  @override
+  Future<void> pause() async => publish(
+    snapshot.copyWith(phase: PlaybackPhase.paused, desiredPlaying: false),
+  );
+}
+
 void main() {
+  testWidgets(
+    'swiping the actual player adopts the silent neighbor without a second DASH open',
+    (tester) async {
+      final videos = _Videos();
+      final primary = _PagingEngine();
+      final spares = <_PagingEngine>[];
+      final repo = SystemMediaFixtureRepository();
+      final session = PlaybackSession(
+        engine: primary,
+        repository: repo,
+        progress: SystemMediaFixtureProgress(),
+        accountScope: () => 'guest',
+        featuredStandby: FeaturedPreparedEngine(
+          createEngine: () {
+            final engine = _PagingEngine();
+            spares.add(engine);
+            return engine;
+          },
+        ),
+        resolveFeatured: repo.resolve,
+      );
+      final manager = PlaybackManager(createSession: (_) => session);
+      final window = FakePlaybackWindowService(
+        viewId: tester.view.viewId,
+        setFullScreen: (_) async {},
+        activate: () async {},
+      );
+      final settings = const AppSettings.defaults().copyWith(
+        autoPlay: false,
+        danmakuEnabled: false,
+      );
+      Future<void> frames() async {
+        for (var i = 0; i < 7; i++) {
+          await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+          await tester.pump(const Duration(milliseconds: 16));
+        }
+      }
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            videoRepositoryProvider.overrideWithValue(videos),
+            featuredPlayInfoPreparationProvider.overrideWithValue(
+              (_, _, {required neighbor}) => () {},
+            ),
+            playbackManagerProvider.overrideWithValue(manager),
+            playbackSessionProvider.overrideWithValue(session),
+          ],
+          child: InputTestApp(
+            home: Scaffold(
+              body: FeaturedVideoScreen(
+                createController: () => FeaturedFeedController(
+                  videos,
+                  FeaturedSource.desktop,
+                  RecommendationFilter(const RecommendationSettings.defaults()),
+                ),
+                splitWidth: 1000,
+                onLogin: () {},
+                onOpenUser: (_) {},
+                playerBuilder: (_, detail, part) => PlaybackPanel(
+                  detail: detail,
+                  part: part,
+                  settings: settings,
+                  window: window,
+                  onToggleComments: () {},
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await frames();
+      expect(primary.opens, 1);
+      expect(spares.single.currentSnapshot.volume, 0);
+      expect(spares.single.currentSnapshot.desiredPlaying, isFalse);
+      final prepared = spares.single;
+      await tester.fling(find.byType(PageView), const Offset(0, -350), 900);
+      await tester.pumpAndSettle();
+      await frames();
+      expect(session.detail?.summary.id, videos.items[1].id);
+      expect(session.engine, same(prepared));
+      expect(prepared.opens, 1);
+      expect(primary.disposals, 1);
+      await tester.fling(find.byType(PageView), const Offset(0, 350), 900);
+      await tester.pumpAndSettle();
+      await frames();
+      expect(session.detail?.summary.id, videos.items.first.id);
+      expect(session.engine, isNot(same(prepared)));
+      expect((session.engine as _PagingEngine).opens, 1);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await frames();
+      final closing = session.close();
+      await frames();
+      await closing;
+      await manager.close();
+    },
+  );
+
   testWidgets(
     'next card resolves before a swipe, only the settled card mounts a player and leaving drops leases',
     (tester) async {

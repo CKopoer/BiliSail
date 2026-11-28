@@ -25,6 +25,8 @@ import '../../../shared/ui/playback_split_layout.dart';
 import '../../../shared/ui/app_network_image.dart';
 import '../../../shared/ui/state_view.dart';
 import '../../feed/application/featured_feed_controller.dart';
+import '../../playback/application/playback_manager.dart';
+import '../../playback/application/playback_session.dart';
 import '../application/video_controller.dart';
 import '../application/featured_video_preparation.dart';
 import 'featured_video_overlay.dart';
@@ -58,7 +60,60 @@ class FeaturedVideoScreen extends ConsumerStatefulWidget {
       _FeaturedVideoScreenState();
 }
 
-class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen> {
+class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
+    with WidgetsBindingObserver {
+  PlaybackSession? _preparingSession;
+  int _direction = 1;
+  bool _dragAimed = false;
+  bool _appVisible = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _appVisible = _mayPrepare(WidgetsBinding.instance.lifecycleState);
+  }
+
+  static bool _mayPrepare(AppLifecycleState? state) =>
+      state == null || state == AppLifecycleState.resumed;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final visible = _mayPrepare(state);
+    if (visible == _appVisible) return;
+    if (!visible) _preparingSession?.leaveFeatured(this);
+    setState(() => _appVisible = visible);
+  }
+
+  void _aim(int direction, {bool renew = false}) {
+    if (direction == 0 || (!renew && direction == _direction)) return;
+    _direction = direction;
+    // Scroll updates arrive after layout. Direction only matters once per
+    // reversal, before the page settles.
+    final selected = feed.at(feed.selected);
+    if (_appVisible && active && selected != null) _nominate(selected);
+  }
+
+  void _nominate(VideoSummary selected) {
+    if (_preparingSession == null) return;
+    final candidate =
+        feed.at(feed.selected + _direction) ??
+        feed.at(feed.selected - _direction);
+    final cid = candidate == null
+        ? null
+        : candidate.previewCid ??
+              ref
+                  .read(videoDetailProvider(candidate.id))
+                  .value
+                  ?.parts
+                  .singleOrNull
+                  ?.cid;
+    _preparingSession?.setFeaturedNeighbor(this, (
+      selected.id,
+      selected.previewCid,
+    ), candidate == null || cid == null ? null : (candidate.id, cid));
+  }
+
   late final feed = widget.createController()..addListener(_changed);
   final pages = PageController(keepPage: false);
   final controlsInset = ValueNotifier(0.0);
@@ -79,6 +134,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen> {
     active =
         WorkspaceActivity.isActive(context) &&
         WorkspaceMediaPermission.isAllowed(context);
+    if (!active) _preparingSession?.leaveFeatured(this);
     final revision = feed.seed == null
         ? FeaturedSelectionScope.revisionOf(context)
         : null;
@@ -98,6 +154,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen> {
     if (refreshRevision != feed.refreshRevision) {
       refreshRevision = feed.refreshRevision;
       seedPositionPending = false;
+      _direction = 1;
       panel = null;
       resettingPage = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -111,6 +168,8 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _preparingSession?.leaveFeatured(this);
     wheelIdle?.cancel();
     pages.dispose();
     controlsInset.dispose();
@@ -120,6 +179,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen> {
 
   Future<void> _step(int direction, {bool loop = false}) async {
     if (!_canStep) return;
+    _aim(direction, renew: true);
     final before = feed.selected;
     final revision = feed.refreshRevision;
     var target = before + direction;
@@ -166,6 +226,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen> {
     }
     final detail = videoDetailProvider(selected.id);
     if (ref.exists(detail) && ref.read(detail).hasError) ref.invalidate(detail);
+    _direction = (index - feed.selected).sign;
     seedPositionPending = false;
     feed.select(index);
   }
@@ -226,13 +287,24 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen> {
     final detail = current == null
         ? null
         : ref.watch(videoDetailProvider(current.id));
-    if (active) {
+    if (active && _appVisible) {
       watchFeaturedVideoPreparation(
         ref,
         current: current,
         previous: feed.at(feed.selected - 1),
         next: feed.at(feed.selected + 1),
       );
+      if (current != null &&
+          detail?.value != null &&
+          ref.watch(featuredPlayInfoPreparationProvider) != null &&
+          ref.watch(playbackManagerProvider) != null) {
+        final session = ref.read(playbackSessionProvider);
+        if (!identical(_preparingSession, session)) {
+          _preparingSession?.leaveFeatured(this);
+          _preparingSession = session;
+        }
+        _nominate(current);
+      }
     }
     return CommandTargetScope<Object>(
       scope: CommandScope.page,
@@ -278,8 +350,28 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen> {
                           right: wide && show
                               ? PlaybackSplitLayout.sidebarWidth
                               : 0,
-                          child: NotificationListener<ScrollEndNotification>(
-                            onNotification: _scrollEnded,
+                          child: NotificationListener<ScrollNotification>(
+                            onNotification: (event) {
+                              if (event is ScrollStartNotification &&
+                                  event.depth == 0) {
+                                _dragAimed = false;
+                              }
+                              if (event is ScrollEndNotification) {
+                                return _scrollEnded(event);
+                              }
+                              if (event is ScrollUpdateNotification &&
+                                  event.depth == 0 &&
+                                  event.dragDetails != null) {
+                                final offset =
+                                    (pages.page ?? feed.selected.toDouble()) -
+                                    feed.selected;
+                                if (offset.abs() > .04) {
+                                  _aim(offset.sign.toInt(), renew: !_dragAimed);
+                                  _dragAimed = true;
+                                }
+                              }
+                              return false;
+                            },
                             child: PageView.builder(
                               controller: pages,
                               scrollDirection: Axis.vertical,

@@ -6,11 +6,13 @@ class PlayerLoadingIndicator extends StatefulWidget {
   const PlayerLoadingIndicator({
     super.key,
     required this.preparing,
+    this.deferPreparation = false,
     required this.recovering,
     required this.buffering,
   });
 
   final bool preparing, recovering, buffering;
+  final bool deferPreparation;
 
   @override
   State<PlayerLoadingIndicator> createState() => _PlayerLoadingIndicatorState();
@@ -18,32 +20,33 @@ class PlayerLoadingIndicator extends StatefulWidget {
 
 class _PlayerLoadingIndicatorState extends State<PlayerLoadingIndicator> {
   Timer? _timer;
-  bool _showBuffering = false;
+  bool _showWait = false;
   bool get _waiting =>
-      widget.buffering && !widget.preparing && !widget.recovering;
+      !widget.recovering &&
+      (widget.preparing ? widget.deferPreparation : widget.buffering);
 
   @override
   void initState() {
     super.initState();
-    _updateBuffering();
+    _updateWaiting();
   }
 
   @override
   void didUpdateWidget(PlayerLoadingIndicator oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _updateBuffering();
+    _updateWaiting();
   }
 
-  void _updateBuffering() {
+  void _updateWaiting() {
     if (!_waiting) {
       _timer?.cancel();
       _timer = null;
-      _showBuffering = false;
-    } else if (_timer == null && !_showBuffering) {
+      _showWait = false;
+    } else if (_timer == null && !_showWait) {
       // Native cache-pause can pulse during an otherwise immediate seek.
       _timer = Timer(const Duration(milliseconds: 300), () {
         _timer = null;
-        if (mounted && _waiting) setState(() => _showBuffering = true);
+        if (mounted && _waiting) setState(() => _showWait = true);
       });
     }
   }
@@ -56,7 +59,9 @@ class _PlayerLoadingIndicatorState extends State<PlayerLoadingIndicator> {
 
   @override
   Widget build(BuildContext context) {
-    if (!widget.preparing && !widget.recovering && !_showBuffering) {
+    if (!(widget.preparing && !widget.deferPreparation) &&
+        !widget.recovering &&
+        !_showWait) {
       return const SizedBox.shrink();
     }
     return IgnorePointer(

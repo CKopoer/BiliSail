@@ -1,5 +1,7 @@
 # 播放、直播与弹幕设计
 
+精选页由当前播放会话独占播放控制、进度和弹幕。组合根另提供进程共享的一台静音备用引擎，合适的相邻 DASH 可在滑动前暂停打开。交接时先停旧源，确认轨道和输出参数与前台选择一致后再接管该引擎。窗口或账号退出会取消准备。见[精选切片与预加载](ui-redesign/featured-video-feed-2026-11-28.md#滑动播放权与预加载)。
+
 当前组合根直接为各播放标签和预览创建 MediaKitEngine。源选择、分轨配置、首帧与渲染生命周期见 [Predidit 播放链路](validation/predidit-playback-2026-11-23.md)。
 
 Windows 和 Android 按当前显示设备选择 HDR 视频面，由播放器处理杜比视界 RPU，详见 [Windows 与 Android 原生 HDR 输出](validation/windows-android-native-hdr.md)。macOS 和 iOS 使用原生 Metal 图层，显示面协商和 JOC 压缩音频输出见 [Apple EDR 与 JOC](validation/apple-edr-joc.md)。

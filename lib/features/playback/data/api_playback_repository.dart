@@ -234,6 +234,30 @@ class ApiPlaybackRepository
     voice: voice,
   );
 
+  Future<PlaybackMedia> resolveForFeaturedPreparation(
+    VideoId video,
+    String cid, {
+    required int quality,
+    required VideoCodecPreference preferredCodec,
+    required RequestCancellation cancellation,
+  }) async {
+    if (cancellation.isCancelled) {
+      throw const AppFailure(AppFailureKind.cancelled, '预加载已取消');
+    }
+    // A long viewing pause can outlive the UI's original lease. Hold the
+    // renewed signed URLs until this native candidate is discarded or adopted.
+    cancellation.onCancel(featuredPlayInfo.prepare(video, cid));
+    return _resolve(
+      video,
+      cid,
+      quality: quality,
+      preferredCodec: preferredCodec,
+      cancellation: cancellation,
+      voice: const PlaybackVoice.original(),
+      speculative: true,
+    );
+  }
+
   Future<PlaybackMedia> _resolve(
     VideoId video,
     String cid, {
@@ -241,13 +265,22 @@ class ApiPlaybackRepository
     required int quality,
     required VideoCodecPreference preferredCodec,
     required RequestCancellation cancellation,
+    bool speculative = false,
   }) => requests.run((context) async {
     // Discover the full entitled DASH ladder before applying the preference.
     // Some responses omit a lower representation until it is requested alone.
     final pending = voice.isOriginal
-        ? featuredPlayInfo.take(video, cid, context.cancellation)
+        ? featuredPlayInfo.take(
+            video,
+            cid,
+            context.cancellation,
+            speculative: speculative,
+          )
         : null;
     final prepared = pending == null ? null : await pending;
+    if (speculative && prepared == null) {
+      throw const AppFailure(AppFailureKind.cancelled, '相邻媒体地址已失效');
+    }
     var info =
         prepared ??
         await api.getPlayInfo(

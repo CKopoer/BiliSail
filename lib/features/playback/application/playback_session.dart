@@ -24,6 +24,7 @@ import '../domain/comment_window.dart';
 import '../domain/sponsor_repository.dart';
 import '../domain/playback_history_repository.dart';
 import 'card_preview_playback.dart';
+import 'featured_prepared_engine.dart';
 import 'playback_history_reporter.dart';
 import 'playback_rate_memory.dart';
 import 'playback_volume_memory.dart';
@@ -31,6 +32,8 @@ import 'playback_listening_mode.dart';
 import 'playback_startup_diagnostics.dart';
 import 'playback_source_selection.dart';
 import '../../settings/domain/app_settings.dart';
+
+part 'featured_session_preparation.dart';
 
 final playbackSessionProvider = Provider<PlaybackSession>(
   (ref) => throw UnimplementedError('PlaybackSession'),
@@ -41,7 +44,9 @@ final playbackSessionProvider = Provider<PlaybackSession>(
 /// are separate so a position sample never rebuilds a whole route.
 class PlaybackSession extends ChangeNotifier {
   PlaybackSession({
-    required this.engine,
+    required PlayerEngine engine,
+    this.featuredStandby,
+    this.resolveFeatured,
     required this.repository,
     required this.progress,
     required this.accountScope,
@@ -64,7 +69,8 @@ class PlaybackSession extends ChangeNotifier {
     PlaybackVolumeMemory? volumeMemory,
     PlaybackListeningMode? listeningMode,
     PlaybackStartupDiagnostics? startupDiagnostics,
-  }) : sessionEpoch = sessionEpoch ?? _zeroEpoch,
+  }) : _engine = engine,
+       sessionEpoch = sessionEpoch ?? _zeroEpoch,
        startupDiagnostics = startupDiagnostics ?? PlaybackStartupDiagnostics(),
        _rateMemory = rateMemory ?? PlaybackRateMemory(),
        _volumeMemory = volumeMemory ?? PlaybackVolumeMemory(),
@@ -103,10 +109,19 @@ class PlaybackSession extends ChangeNotifier {
     danmaku = DanmakuController(
       monotonicNow: danmakuNow ?? () => _clock.elapsed,
     );
-    _subscriptions.add(engine.snapshots.listen(_onSnapshot));
+    _listenToEngine(engine);
+  }
+
+  void _listenToEngine(PlayerEngine source) {
     _subscriptions.add(
-      engine.failures.listen((failure) {
-        if (failure.generation != engine.currentSnapshot.generation ||
+      source.snapshots.listen((snapshot) {
+        if (identical(engine, source)) _onSnapshot(snapshot);
+      }),
+    );
+    _subscriptions.add(
+      source.failures.listen((failure) {
+        if (!identical(engine, source) ||
+            failure.generation != engine.currentSnapshot.generation ||
             _resolving ||
             _closing) {
           return;
@@ -210,7 +225,14 @@ class PlaybackSession extends ChangeNotifier {
             snapshots.value.position < segment.end,
       )
       .firstOrNull;
-  final PlayerEngine engine;
+  PlayerEngine _engine;
+  PlayerEngine get engine => _engine;
+  final FeaturedPreparedEngine? featuredStandby;
+  final FeaturedMediaResolver? resolveFeatured;
+  Object? _featuredOwner;
+  (VideoId, String?)? _featuredCurrent;
+  (VideoId, String)? _featuredNeighbor;
+  Future<void>? _retiringEngine;
   final CardPreviewPlayback? cardPreviews;
   Timer? _recoveryTimer;
   RequestCancellation? _roomStatusRequest;
@@ -1350,31 +1372,46 @@ class PlaybackSession extends ChangeNotifier {
         if (isLive) _openingLiveGeneration = generation;
         openedAudioOutput = _settings.androidAudioOutput;
         openedCacheLimits = _settings.playbackCacheLimits(live: isLive);
-        await engine.open(
-          source,
-          OpenOptions(
-            startPosition: resume,
-            play:
-                playLive &&
-                _playbackAllowed &&
-                _desiredPlaying &&
-                !sleepTimer.elapsed,
-            rate: isLive ? 1 : oldRate,
-            volume: _tabMuted ? 0 : oldVolume,
-            audioGainDb: _audioGainFor(resolved),
-            videoDecoding: videoDecoding,
-            androidVideoOutput: switch (_settings.androidVideoOutput) {
-              AndroidVideoOutputPreference.renderedTexture =>
-                AndroidVideoOutputMode.renderedTexture,
-              AndroidVideoOutputPreference.directTexture =>
-                AndroidVideoOutputMode.directTexture,
-            },
-            openTimeout: openBudget,
-            androidAudioOutput: openedAudioOutput,
-            cacheLimits: openedCacheLimits,
-            retainPresentation: retryMedia != null,
-          ),
+        final options = OpenOptions(
+          startPosition: resume,
+          play:
+              playLive &&
+              _playbackAllowed &&
+              _desiredPlaying &&
+              !sleepTimer.elapsed,
+          rate: isLive ? 1 : oldRate,
+          volume: _tabMuted ? 0 : oldVolume,
+          audioGainDb: _audioGainFor(resolved),
+          videoDecoding: videoDecoding,
+          androidVideoOutput: switch (_settings.androidVideoOutput) {
+            AndroidVideoOutputPreference.renderedTexture =>
+              AndroidVideoOutputMode.renderedTexture,
+            AndroidVideoOutputPreference.directTexture =>
+              AndroidVideoOutputMode.directTexture,
+          },
+          openTimeout: openBudget,
+          androidAudioOutput: openedAudioOutput,
+          cacheLimits: openedCacheLimits,
+          retainPresentation: retryMedia != null,
         );
+        if (_featuredOwner != null &&
+            video != null &&
+            selected != null &&
+            target == null &&
+            !requestedAudioOnly &&
+            requestedVoice.isOriginal &&
+            retryMedia == null &&
+            await _useFeaturedEngine(
+              video.summary.id,
+              selected.cid,
+              source,
+              options,
+              cancellation,
+              isCurrent,
+            )) {
+          return;
+        }
+        if (isCurrent()) await engine.open(source, options);
       }
 
       nativeOpenStarted = startupNow?.call() ?? _clock.elapsed;
@@ -1439,6 +1476,7 @@ class PlaybackSession extends ChangeNotifier {
       _reportProgress();
       _notify();
       mediaReady.complete(true);
+      _prepareFeaturedNeighbor();
       _ensureComments(engine.currentSnapshot.position);
       if (!isLive && video != null && selected != null) {
         unawaited(
@@ -2658,6 +2696,11 @@ class PlaybackSession extends ChangeNotifier {
       return _playbackCommands ?? Future.value();
     }
     _playbackAllowed = allowed;
+    if (allowed) {
+      _prepareFeaturedNeighbor();
+    } else {
+      unawaited(featuredStandby?.clear(owner: this));
+    }
     if (!allowed) {
       _interruptedGeneration = null;
       _cancelRecovery();
@@ -3222,6 +3265,11 @@ class PlaybackSession extends ChangeNotifier {
   }
 
   Future<void> stop({bool clearCheckpoints = true}) async {
+    // Swiping can unmount the previous panel before the selected card's
+    // delayed details arrive. Retain its prepared engine through that gap.
+    if (clearCheckpoints || _featuredOwner == null) {
+      unawaited(featuredStandby?.clear(owner: this));
+    }
     if (_ownsSleepTimer) sleepTimer.cancel();
     _cancelRecovery();
     _audioOnly = false;
@@ -3308,6 +3356,10 @@ class PlaybackSession extends ChangeNotifier {
     final playbackCommands = _playbackCommands;
     if (playbackCommands != null) await attempt(() => playbackCommands);
     await attempt(engine.dispose);
+    if (featuredStandby case final standby?) {
+      await attempt(() => standby.clear(owner: this));
+    }
+    if (_retiringEngine case final retiring?) await attempt(() => retiring);
     await attempt(() async => snapshots.dispose());
     await attempt(() async => highEnergy.dispose());
     if (_ownsSleepTimer) await attempt(() async => sleepTimer.dispose());

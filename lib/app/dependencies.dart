@@ -110,6 +110,7 @@ import '../features/library/application/library_controller.dart';
 import '../features/library/data/sqlite_library_repository.dart';
 import '../features/library/data/api_library_repository.dart';
 import '../features/playback/application/playback_session.dart';
+import '../features/playback/application/featured_prepared_engine.dart';
 import '../features/playback/application/playback_manager.dart';
 import '../features/playback/application/playback_rate_memory.dart';
 import '../features/playback/application/playback_volume_memory.dart';
@@ -350,6 +351,9 @@ class AppDependencies {
     );
     MediaKitEngine createPlayerEngine() =>
         MediaKitEngine(onDiagnostic: playbackLog?.record);
+    final featuredStandby = FeaturedPreparedEngine(
+      createEngine: createPlayerEngine,
+    );
     final cardPreviews = VideoCardPreviewPlayback(
       createEngine: createPlayerEngine,
     );
@@ -406,7 +410,8 @@ class AppDependencies {
           networkContent: networkContent,
         );
         final engine = createPlayerEngine();
-        return PlaybackSession(
+        late final PlaybackSession playbackSession;
+        return playbackSession = PlaybackSession(
           audioFocus: audioFocus,
           cardPreviews: Platform.isWindows ? cardPreviews : null,
           sleepTimer: sleepTimer,
@@ -417,6 +422,8 @@ class AppDependencies {
             SponsorBlockClient(sponsorTransport),
           ),
           engine: engine,
+          featuredStandby: featuredStandby,
+          resolveFeatured: playbackRepository.resolveForFeaturedPreparation,
           repository: repository,
           historyRepository: ApiPlaybackHistoryRepository(
             PlaybackHistoryClient(api),
@@ -427,8 +434,15 @@ class AppDependencies {
           metadataRepository: repository,
           contentRepository: repository.content,
           isRoomLive: networkContent.isRoomLive,
-          onLiveRecovery: (generation, outcome) => playbackLog
-              ?.recordLiveRecovery(engine.diagnosticId, generation, outcome),
+          onLiveRecovery: (generation, outcome) {
+            if (playbackSession.engine case final MediaKitEngine active) {
+              playbackLog?.recordLiveRecovery(
+                active.diagnosticId,
+                generation,
+                outcome,
+              );
+            }
+          },
           defaultLiveQuality: defaultNetworkLiveQuality,
           accountScope: () => session.accountScope,
           progress: LocalProgressStore(

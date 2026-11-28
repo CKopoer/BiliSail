@@ -71,13 +71,16 @@ final class FeaturedPlayInfoCache {
   Future<ApiPlayInfo?>? take(
     VideoId video,
     String cid,
-    ApiCancellation? cancellation,
-  ) {
+    ApiCancellation? cancellation, {
+    bool speculative = false,
+  }) {
     final entry = _entries[(video, cid)];
-    if (entry == null || entry.claimed) return null;
-    entry.claimed = true;
+    if (entry == null || (!speculative && entry.claimed)) return null;
+    // A silent native warm-up reads the same DASH response without consuming
+    // the foreground's claim or cancelling another reader when superseded.
+    if (!speculative) entry.claimed = true;
     entry.leases++;
-    return _consume(entry, cancellation);
+    return _consume(entry, speculative ? null : cancellation);
   }
 
   Future<ApiPlayInfo?> _consume(

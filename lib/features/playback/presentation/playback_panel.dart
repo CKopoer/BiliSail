@@ -2376,6 +2376,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                             ),
                             if (session.error == null)
                               PlayerLoadingIndicator(
+                                deferPreparation: featured != null,
                                 key: ValueKey((
                                   session.sourceGeneration,
                                   snapshot.generation,

@@ -19,6 +19,13 @@ void main() {
     final repository = ApiPlaybackRepository(api, requests);
     const id = VideoId('BV1xx411c7mD');
     final release = repository.featuredPlayInfo.prepare(id, '2');
+    final warm = await repository.resolveForFeaturedPreparation(
+      id,
+      '2',
+      quality: 80,
+      preferredCodec: VideoCodecPreference.h264,
+      cancellation: RequestCancellation(),
+    );
     final media = await repository.resolve(
       id,
       '2',
@@ -27,6 +34,8 @@ void main() {
     );
     release();
     expect(transport.playReads, 1);
+    expect(warm.video.urls, media.video.urls);
+    expect(warm.audio?.urls, media.audio?.urls);
     expect(media.video.urls.single.path, '/video/en');
     expect(media.audio?.urls.single.path, '/audio/en');
     await repository.resolve(
