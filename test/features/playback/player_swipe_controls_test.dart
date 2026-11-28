@@ -7,6 +7,47 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('featured swipes page from all three picture regions', (
+    tester,
+  ) async {
+    final brightness = _Brightness();
+    final volumes = <double>[];
+    var selected = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PageView.builder(
+          scrollDirection: Axis.vertical,
+          itemCount: 2,
+          onPageChanged: (page) => selected = page,
+          itemBuilder: (_, index) => PlayerSwipeControls(
+            enabled: true,
+            yieldVerticalDrag: true,
+            sourceGeneration: index,
+            volume: 50,
+            brightness: brightness,
+            setVolume: (value) async => volumes.add(value),
+            onFullScreen: () => fail('Paging toggled fullscreen'),
+            child: const ColoredBox(color: Colors.black),
+          ),
+        ),
+      ),
+    );
+    final picture = tester.getRect(find.byType(PageView));
+    for (final fraction in [.2, .5, .8]) {
+      for (final direction in [-1, 1]) {
+        await tester.flingFrom(
+          Offset(picture.left + picture.width * fraction, picture.center.dy),
+          Offset(0, picture.height * .45 * direction),
+          900,
+        );
+        await tester.pumpAndSettle();
+        expect(selected, direction == -1 ? 1 : 0);
+        expect(brightness.values, isEmpty);
+        expect(volumes, isEmpty);
+      }
+    }
+  });
+
   testWidgets(
     'center fullscreen gesture clears side feedback without changing volume',
     (tester) async {

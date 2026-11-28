@@ -2087,7 +2087,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                       enabled:
                                           settings.fullscreenSwipeControls &&
                                           widget.active,
-                                      yieldCenterDrag: featured != null,
+                                      yieldVerticalDrag: featured != null,
                                       sourceGeneration: sourceGeneration,
                                       volume: snapshot.volume,
                                       setVolume: session.setVolume,
