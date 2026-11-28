@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/playback/application/playback_session.dart';
+import 'collapsed_playback_header.dart';
 
 /// Rebuilds layout only when listening mode changes, never on media position.
 /// The child player may initialize the page's lazy session on its first build.
@@ -26,31 +27,64 @@ class PlaybackLayoutBuilder extends ConsumerStatefulWidget {
       math.min(availableHeight, math.max(180, availableHeight * .5));
 }
 
-/// Selects decoded display dimensions without rebuilding on position updates.
-class PlaybackVideoDimensions extends ConsumerStatefulWidget {
-  const PlaybackVideoDimensions({super.key, required this.builder});
+/// Selects the layout inputs without rebuilding on media clock ticks.
+class PlaybackLayoutSnapshot extends ConsumerStatefulWidget {
+  const PlaybackLayoutSnapshot({
+    super.key,
+    this.allowCollapse = false,
+    required this.builder,
+  });
 
-  final Widget Function(BuildContext context, VideoDimensions? dimensions)
+  final bool allowCollapse;
+  final Widget Function(
+    BuildContext,
+    VideoDimensions?,
+    CollapsedPlaybackAction?,
+  )
   builder;
 
   @override
-  ConsumerState<PlaybackVideoDimensions> createState() =>
-      _PlaybackVideoDimensionsState();
+  ConsumerState<PlaybackLayoutSnapshot> createState() =>
+      _PlaybackLayoutSnapshotState();
 }
 
-class _PlaybackVideoDimensionsState
-    extends ConsumerState<PlaybackVideoDimensions> {
+class _PlaybackLayoutSnapshotState
+    extends ConsumerState<PlaybackLayoutSnapshot> {
   PlaybackSession? _session;
-  VideoDimensions? _dimensions;
+  (VideoDimensions?, CollapsedPlaybackAction?) _layout = (null, null);
+  int? _playedGeneration;
+
+  (VideoDimensions?, CollapsedPlaybackAction?) _select() {
+    final session = _session;
+    if (session == null) return (null, null);
+    final snapshot = session.snapshots.value;
+    if (snapshot.phase == PlaybackPhase.playing) {
+      _playedGeneration = snapshot.generation;
+    }
+    if (!widget.allowCollapse || session.isResolving || session.error != null) {
+      return (snapshot.videoDimensions, null);
+    }
+    final started =
+        _playedGeneration == snapshot.generation ||
+        snapshot.position > Duration.zero;
+    final action = switch (snapshot.phase) {
+      PlaybackPhase.ended => CollapsedPlaybackAction.replay,
+      PlaybackPhase.ready || PlaybackPhase.paused
+          when !snapshot.desiredPlaying =>
+        started ? CollapsedPlaybackAction.resume : CollapsedPlaybackAction.play,
+      _ => null,
+    };
+    return (snapshot.videoDimensions, action);
+  }
 
   void _onSnapshot() {
-    final dimensions = _session?.snapshots.value.videoDimensions;
-    if (dimensions == _dimensions) return;
-    setState(() => _dimensions = dimensions);
+    final layout = _select();
+    if (layout != _layout) setState(() => _layout = layout);
   }
 
   @override
   void dispose() {
+    _session?.removeListener(_onSnapshot);
     _session?.snapshots.removeListener(_onSnapshot);
     super.dispose();
   }
@@ -61,17 +95,20 @@ class _PlaybackVideoDimensionsState
         ? ref.watch(playbackSessionProvider)
         : null;
     if (!identical(session, _session)) {
+      _session?.removeListener(_onSnapshot);
       _session?.snapshots.removeListener(_onSnapshot);
       _session = session;
-      _dimensions = session?.snapshots.value.videoDimensions;
+      _playedGeneration = null;
       session?.snapshots.addListener(_onSnapshot);
+      session?.addListener(_onSnapshot);
     }
+    _layout = _select();
     if (session == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && ref.exists(playbackSessionProvider)) setState(() {});
       });
     }
-    return widget.builder(context, _dimensions);
+    return widget.builder(context, _layout.$1, _layout.$2);
   }
 }
 

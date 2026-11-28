@@ -417,45 +417,54 @@ final class _PgcScreenState extends ConsumerState<PgcScreen> {
           );
           return PlaybackLayoutBuilder(
             builder: (context, constraints, listening) =>
-                PlaybackVideoDimensions(
-                  builder: (context, dimensions) => PlaybackPageLayout(
-                    splitPage: widget.course
-                        ? PlaybackSplitPage.course
-                        : PlaybackSplitPage.pgc,
-                    wide: wide,
-                    showInfo: showInfo,
-                    listening: listening,
-                    dimensions: dimensions,
-                    collapsedHeight: listening && constraints.maxHeight.isFinite
-                        ? PlaybackLayoutBuilder.listeningHeight(
-                            constraints.maxHeight,
-                          )
-                        : math.min(
-                            constraints.maxWidth * 9 / 16,
-                            constraints.maxHeight.isFinite
-                                ? constraints.maxHeight * 0.55
-                                : constraints.maxWidth * 9 / 16,
-                          ),
-                    contentKey: season.id,
-                    summaryIdentity: (season, selected),
-                    summaryBuilder: (context, {required measuring}) => Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 16,
+                PlaybackLayoutSnapshot(
+                  allowCollapse:
+                      !wide &&
+                      !listening &&
+                      !widget.course &&
+                      selected?.playable == true,
+                  builder: (context, dimensions, collapsedAction) =>
+                      PlaybackPageLayout(
+                        collapsedAction: collapsedAction,
+                        splitPage: widget.course
+                            ? PlaybackSplitPage.course
+                            : PlaybackSplitPage.pgc,
+                        wide: wide,
+                        showInfo: showInfo,
+                        listening: listening,
+                        dimensions: dimensions,
+                        collapsedHeight:
+                            listening && constraints.maxHeight.isFinite
+                            ? PlaybackLayoutBuilder.listeningHeight(
+                                constraints.maxHeight,
+                              )
+                            : math.min(
+                                constraints.maxWidth * 9 / 16,
+                                constraints.maxHeight.isFinite
+                                    ? constraints.maxHeight * 0.55
+                                    : constraints.maxWidth * 9 / 16,
+                              ),
+                        contentKey: season.id,
+                        summaryIdentity: (season, selected),
+                        summaryBuilder: (context, {required measuring}) =>
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 16,
+                              ),
+                              child: _summary(
+                                context,
+                                season,
+                                selected,
+                                below: true,
+                                measuring: measuring,
+                              ),
+                            ),
+                        player: player,
+                        info: info,
+                        toggleInfo: _toggleInfo,
+                        toggleTooltip: showInfo ? '收起$_kind信息' : '展开$_kind信息',
                       ),
-                      child: _summary(
-                        context,
-                        season,
-                        selected,
-                        below: true,
-                        measuring: measuring,
-                      ),
-                    ),
-                    player: player,
-                    info: info,
-                    toggleInfo: _toggleInfo,
-                    toggleTooltip: showInfo ? '收起$_kind信息' : '展开$_kind信息',
-                  ),
                 ),
           );
         },

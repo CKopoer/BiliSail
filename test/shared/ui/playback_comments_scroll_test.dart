@@ -57,7 +57,74 @@ final _season = PgcSeason(
 );
 
 void main() {
+  testWidgets('short paused video leaves room to drag the comments', (
+    tester,
+  ) async {
+    final container = await _mount(
+      tester,
+      pgc: false,
+      size: const Size(844, 390),
+    );
+    final session = container.read(playbackSessionProvider);
+    session.snapshots.value = session.snapshots.value.copyWith(
+      phase: PlaybackPhase.paused,
+    );
+    await tester.pumpAndSettle();
+    final list = _list();
+    expect(list.hitTestable(), findsOneWidget);
+    await tester.drag(list, const Offset(0, -350));
+    await tester.pumpAndSettle();
+    expect(tester.getBottomLeft(find.byKey(_player)).dy, kToolbarHeight);
+    expect(tester.takeException(), isNull);
+  });
   for (final pgc in [false, true]) {
+    testWidgets(
+      '${pgc ? 'PGC' : 'video'} paused header gives space to comments and restores their reading position',
+      (tester) async {
+        final container = await _mount(tester, pgc: pgc);
+        final session = container.read(playbackSessionProvider);
+        final player = tester.element(find.byKey(_player));
+        double visibleHeight() => tester.getBottomLeft(find.byKey(_player)).dy;
+        final list = tester.widget<ListView>(_list()).controller!;
+        void publish(PlaybackPhase phase) {
+          session.snapshots.value = session.snapshots.value.copyWith(
+            phase: phase,
+            desiredPlaying: phase == PlaybackPhase.playing,
+          );
+        }
+
+        publish(PlaybackPhase.paused);
+        await tester.pumpAndSettle();
+        expect(visibleHeight(), 520);
+        await tester.drag(_list(), const Offset(0, -640));
+        await tester.pumpAndSettle();
+        expect(visibleHeight(), kToolbarHeight);
+        final saved = list.offset;
+        expect(saved, greaterThan(0));
+
+        publish(PlaybackPhase.playing);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 70));
+        expect(visibleHeight(), inExclusiveRange(kToolbarHeight, 390 * 9 / 16));
+        await tester.pumpAndSettle();
+        expect(visibleHeight(), 390 * 9 / 16);
+        expect(list.offset, closeTo(saved, .01));
+        publish(PlaybackPhase.paused);
+        await tester.pumpAndSettle();
+        expect(visibleHeight(), 390 * 9 / 16);
+        final drag = await tester.startGesture(tester.getCenter(_list()));
+        await drag.moveBy(const Offset(0, -24));
+        await tester.pump();
+        await drag.moveBy(const Offset(0, -60));
+        await tester.pump();
+        expect(visibleHeight(), lessThan(390 * 9 / 16));
+        expect(list.offset, closeTo(saved, .01));
+        await drag.up();
+        await tester.pumpAndSettle();
+        expect(tester.element(find.byKey(_player)), same(player));
+        expect(tester.takeException(), isNull);
+      },
+    );
     for (final size in [const Size(390, 800), const Size(844, 390)]) {
       testWidgets(
         '${pgc ? 'PGC' : 'video'} composer stays above a changing mobile keyboard at $size',

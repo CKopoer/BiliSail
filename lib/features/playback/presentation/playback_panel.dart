@@ -20,6 +20,7 @@ import '../../../core/presentation/mobile_playback_status_bar.dart';
 import '../../../shared/ui/playback_page_commands.dart';
 import '../../../shared/ui/playback_sidebar_toggle.dart';
 import '../../../shared/ui/playback_navigation.dart';
+import '../../../shared/ui/collapsed_playback_header.dart';
 import '../../../shared/ui/content_link_scope.dart';
 import '../../../domain/content_link.dart';
 import '../../../shared/ui/width_layout_builder.dart';
@@ -1769,7 +1770,18 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
         child: _buildPlayer(context),
       ),
     );
-    if (widget.danmakuComposerBuilder == null) return view;
+    final inlineView =
+        widget.fullScreen ||
+            context.getInheritedWidgetOfExactType<CollapsedPlaybackHeader>() ==
+                null
+        ? view
+        : CollapsedPlaybackOverlay(
+            onPlay: () => unawaited(widget.session.play()),
+            onMore: _openMoreDialog,
+            onNavigate: widget.onNavigate,
+            child: view,
+          );
+    if (widget.danmakuComposerBuilder == null) return inlineView;
     return CommandTargetScope<Object>(
       scope: CommandScope.playback,
       commands: {
@@ -1779,7 +1791,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
           return CommandOutcome.completed;
         },
       },
-      child: view,
+      child: inlineView,
     );
   }
 

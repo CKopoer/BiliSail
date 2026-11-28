@@ -271,8 +271,8 @@ final class _OfflineScreenState extends ConsumerState<OfflineScreen> {
             _showInfo = true;
             _descriptionExpanded = !_descriptionExpanded;
           }),
-          child: PlaybackVideoDimensions(
-            builder: (context, dimensions) => PlaybackPageLayout(
+          child: PlaybackLayoutSnapshot(
+            builder: (context, dimensions, _) => PlaybackPageLayout(
               splitPage: group.kind == OfflineGroupKind.season
                   ? PlaybackSplitPage.pgc
                   : PlaybackSplitPage.video,

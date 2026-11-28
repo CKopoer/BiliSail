@@ -1,5 +1,6 @@
 import 'package:bilisail/features/playback/application/playback_session.dart';
 import 'package:bilisail/shared/ui/playback_layout_builder.dart';
+import 'package:bilisail/shared/ui/collapsed_playback_header.dart';
 import 'package:bili_player/bili_player.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +9,67 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../support/playback_layout_session_fake.dart';
 
 void main() {
+  testWidgets('only stopped on-demand media offers a collapsed play action', (
+    tester,
+  ) async {
+    final session = PlaybackLayoutSessionFake();
+    addTearDown(session.dispose);
+    CollapsedPlaybackAction? action;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [playbackSessionProvider.overrideWithValue(session)],
+        child: PlaybackLayoutSnapshot(
+          allowCollapse: true,
+          builder: (_, _, value) {
+            action = value;
+            return Consumer(
+              builder: (_, ref, _) {
+                ref.read(playbackSessionProvider);
+                return const SizedBox.shrink();
+              },
+            );
+          },
+        ),
+      ),
+    );
+    Future<void> publish(
+      PlaybackPhase phase, {
+      bool playing = false,
+      int generation = 1,
+    }) async {
+      session.snapshots.value = PlaybackSnapshot(
+        phase: phase,
+        desiredPlaying: playing,
+        generation: generation,
+      );
+      await tester.pump();
+    }
+
+    expect(action, isNull);
+    await publish(PlaybackPhase.paused);
+    expect(action, CollapsedPlaybackAction.play);
+    await publish(PlaybackPhase.buffering, playing: true);
+    expect(action, isNull);
+    await publish(PlaybackPhase.playing, playing: true);
+    expect(action, isNull);
+    await publish(PlaybackPhase.paused);
+    expect(action, CollapsedPlaybackAction.resume);
+    session.isResolving = true;
+    session.publishMetadata();
+    await tester.pump();
+    expect(action, isNull);
+    session.isResolving = false;
+    session.error = '加载失败';
+    session.publishMetadata();
+    await tester.pump();
+    expect(action, isNull);
+    session.error = null;
+    await publish(PlaybackPhase.ended);
+    expect(action, CollapsedPlaybackAction.replay);
+    await publish(PlaybackPhase.ready, generation: 2);
+    expect(action, CollapsedPlaybackAction.play);
+  });
+
   testWidgets('decoded dimensions are discovered lazily and ignore position', (
     tester,
   ) async {
@@ -18,8 +80,8 @@ void main() {
       ProviderScope(
         overrides: [playbackSessionProvider.overrideWithValue(session)],
         child: MaterialApp(
-          home: PlaybackVideoDimensions(
-            builder: (context, dimensions) {
+          home: PlaybackLayoutSnapshot(
+            builder: (context, dimensions, _) {
               builds++;
               return Consumer(
                 builder: (context, ref, _) {

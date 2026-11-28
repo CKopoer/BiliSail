@@ -7,6 +7,10 @@ class PlaybackLayoutSessionFake extends ChangeNotifier
     implements PlaybackSession {
   @override
   bool audioOnly = false;
+  @override
+  bool isResolving = false;
+  @override
+  String? error;
 
   final _snapshots = _LayoutSnapshots();
 

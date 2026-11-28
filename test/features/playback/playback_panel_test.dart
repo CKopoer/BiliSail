@@ -73,6 +73,135 @@ import 'package:flutter_test/flutter_test.dart';
 final _composerScopeProvider = Provider<String>((ref) => 'root');
 
 void main() {
+  for (final mobileNavigation in [true, false]) {
+    testWidgets(
+      'narrow video collapses and resumes the same player, navigation=$mobileNavigation',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(390, 800);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final engine = _FakeEngine();
+        final session = _session(engine);
+        final settings = AppSettings(autoPlay: false);
+        final window = _FakeWindowService(desktop: !mobileNavigation);
+        addTearDown(session.close);
+        var backs = 0, homes = 0;
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              playbackSessionProvider.overrideWithValue(session),
+              settingsRepositoryProvider.overrideWithValue(
+                _Settings()..value = settings,
+              ),
+              videoDetailProvider(_detail.summary.id)
+                  .overrideWith((_) => _detail),
+              relatedVideosProvider(_detail.summary.id)
+                  .overrideWith((_) => const []),
+              videoTagsProvider(_detail.summary.id)
+                  .overrideWith((_) => const []),
+            ],
+            child: InputTestApp(
+              home: Scaffold(
+                body: PlaybackNavigation(
+                  showInPlayer: mobileNavigation,
+                  onBack: () => backs++,
+                  onHome: () => homes++,
+                  child: VideoScreen(
+                    id: _detail.summary.id,
+                    playerBuilder: (_, detail, part) => PlaybackPanel(
+                      detail: detail,
+                      part: part,
+                      settings: settings,
+                      onToggleComments: () {},
+                      window: window,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final surface = find.byType(VideoSurface);
+        double height() => tester.getBottomLeft(surface).dy;
+        final expanded = height();
+        final gesture = await tester.startGesture(const Offset(150, 600));
+        await gesture.moveBy(const Offset(0, -24));
+        await tester.pump();
+        await gesture.moveBy(const Offset(0, -85));
+        await tester.pump();
+        expect(height(), inExclusiveRange(kToolbarHeight, expanded));
+        await gesture.moveBy(const Offset(0, -170));
+        await gesture.up();
+        await tester.pumpAndSettle();
+        expect(height(), kToolbarHeight);
+        final header = find.byType(NavigationToolbar);
+        Finder inHeader(String tooltip) => find
+            .descendant(of: header, matching: findMaterialTooltip(tooltip))
+            .hitTestable();
+        if (mobileNavigation) {
+          await tester.tap(inHeader('返回'));
+          await tester.tap(inHeader('回到主页'));
+          expect((backs, homes), (1, 1));
+        } else {
+          expect(inHeader('返回'), findsNothing);
+          expect(inHeader('回到主页'), findsNothing);
+        }
+        await tester.tap(inHeader('更多播放选项'));
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('player-more-dialog')),
+          findsOneWidget,
+        );
+        await tester.tap(findMaterialTooltip('关闭更多播放选项'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('立即播放'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 80));
+        expect(height(), inExclusiveRange(kToolbarHeight, expanded));
+        await tester.pumpAndSettle();
+        expect(height(), expanded);
+        expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+        Future<void> scrollUp() async {
+          await tester.dragFrom(const Offset(150, 620), const Offset(0, -380));
+          await tester.pumpAndSettle();
+        }
+
+        await scrollUp();
+        expect(height(), expanded);
+        final position = const Duration(seconds: 12);
+        await session.seek(position);
+        await session.pause();
+        await tester.pumpAndSettle();
+        await scrollUp();
+        expect(find.text('继续播放').hitTestable(), findsOneWidget);
+        await tester.dragFrom(const Offset(150, 300), const Offset(0, 600));
+        await tester.pumpAndSettle();
+        expect(height(), expanded);
+        await scrollUp();
+        await tester.tap(find.text('继续播放'));
+        await tester.pumpAndSettle();
+        expect(engine.currentSnapshot.position, position);
+        engine._emit(
+          engine.currentSnapshot.copyWith(
+            phase: PlaybackPhase.ended,
+            desiredPlaying: false,
+          ),
+        );
+        await tester.pumpAndSettle();
+        await scrollUp();
+        await tester.tap(find.text('重新播放'));
+        await tester.pumpAndSettle();
+        expect(engine.currentSnapshot.position, Duration.zero);
+        expect(engine.currentSnapshot.phase, PlaybackPhase.playing);
+        expect(engine.opens, 1);
+        expect(engine.maxSurfaces, 1);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
   for (final desktop in [false, true]) {
     testWidgets(
       'PGC exposes sponsor configuration in more menu: desktop=$desktop',

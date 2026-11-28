@@ -302,8 +302,8 @@ class _LiveScreenState extends ConsumerState<LiveScreen>
             constraints.maxWidth >=
             ResponsiveLayoutScope.of(context).playbackSideBySideWidth;
         _wide = wide;
-        return PlaybackVideoDimensions(
-          builder: (context, dimensions) => PlaybackSplitLayout(
+        return PlaybackLayoutSnapshot(
+          builder: (context, dimensions, _) => PlaybackSplitLayout(
             page: PlaybackSplitPage.live,
             enabled: wide && !listening,
             showInfo: _infoVisible,

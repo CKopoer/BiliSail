@@ -607,13 +607,15 @@ final class _VideoScreenState extends ConsumerState<VideoScreen> {
                     );
                     return PlaybackLayoutBuilder(
                       builder: (context, constraints, listening) =>
-                          PlaybackVideoDimensions(
-                            builder: (context, dimensions) =>
+                          PlaybackLayoutSnapshot(
+                            allowCollapse: !wide && !listening,
+                            builder: (context, dimensions, collapsedAction) =>
                                 ValueListenableBuilder<bool?>(
                                   valueListenable: _infoVisibilityOverride,
                                   builder: (context, override, _) {
                                     final visible = override ?? defaultShowInfo;
                                     return PlaybackPageLayout(
+                                      collapsedAction: collapsedAction,
                                       splitPage: PlaybackSplitPage.video,
                                       minimumInfoHeight: 480,
                                       summaryIdentity: (

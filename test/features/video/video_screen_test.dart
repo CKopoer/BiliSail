@@ -3072,6 +3072,10 @@ final class _ProfilePagingSession extends Fake
     implements PlaybackSession {
   _ProfilePagingSession(this.detail);
   @override
+  bool get isResolving => false;
+  @override
+  String? get error => null;
+  @override
   bool get audioOnly => false;
   @override
   final VideoDetail detail;
