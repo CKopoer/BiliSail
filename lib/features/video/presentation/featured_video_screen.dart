@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:bili_player/bili_player.dart'
     show VideoCompositionScope, VideoSurface;
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -126,9 +127,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
     },
   );
   final _visitedParts = <(VideoId, String?)>{};
-  final controlsInset = ValueNotifier(0.0);
   bool _showVideoOverlays = true;
-  double? pendingControlsInset;
   _Info? panel;
   Timer? wheelIdle;
   double wheelDelta = 0;
@@ -186,7 +185,6 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
     _preparingSession?.leaveFeatured(this);
     wheelIdle?.cancel();
     pages.dispose();
-    controlsInset.dispose();
     feed.dispose();
     super.dispose();
   }
@@ -500,28 +498,27 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
         picture: (inline) => _slotPicture(item.id, pictureCid, inline),
         foreground: !selected
             ? null
-            : (inline) => Stack(
-                fit: StackFit.expand,
-                children: [
-                  _player(
-                    item,
-                    detail,
-                    part,
-                    inline,
-                    seed: seed,
-                    failed: result?.hasError == true,
-                  ),
-                  if (active && _showVideoOverlays && detail != null)
-                    FeaturedVideoOverlay(
-                      key: ValueKey(detail.summary.id),
-                      detail: detail,
-                      controlsInset: controlsInset,
-                      onLogin: widget.onLogin,
-                      onOpenUser: widget.onOpenUser,
-                      onShowDescription: () => _toggle(_Info.description),
-                      onShowComments: () => _toggle(_Info.comments),
-                    ),
-                ],
+            : (inline) => _FeaturedPlayerLayers(
+                key: ValueKey(part?.cid),
+                player: (reportInset) => _player(
+                  item,
+                  detail,
+                  part,
+                  inline,
+                  onControlsInsetChanged: reportInset,
+                  seed: seed,
+                  failed: result?.hasError == true,
+                ),
+                overlay: active && _showVideoOverlays && detail != null
+                    ? (controlsInset) => FeaturedVideoOverlay(
+                        detail: detail,
+                        controlsInset: controlsInset,
+                        onLogin: widget.onLogin,
+                        onOpenUser: widget.onOpenUser,
+                        onShowDescription: () => _toggle(_Info.description),
+                        onShowComments: () => _toggle(_Info.comments),
+                      )
+                    : null,
               ),
       ),
     );
@@ -568,6 +565,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
     VideoDetail? detail,
     VideoPart? part,
     FeaturedInlinePicture inline, {
+    required ValueChanged<double> onControlsInsetChanged,
     required bool seed,
     required bool failed,
   }) {
@@ -588,7 +586,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
             : const ContentLink(),
         child: FeaturedPagingScope(
           inlinePicture: _preparingSession == null ? null : inline,
-          onControlsInsetChanged: _updateControlsInset,
+          onControlsInsetChanged: onControlsInsetChanged,
           showVideoOverlays: _showVideoOverlays,
           onToggleVideoOverlays: _toggleVideoOverlays,
           child: PlaybackPageCommands(
@@ -622,21 +620,6 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
   void _toggleVideoOverlays() =>
       setState(() => _showVideoOverlays = !_showVideoOverlays);
 
-  void _updateControlsInset(double height) {
-    if (pendingControlsInset != null) {
-      pendingControlsInset = height;
-      return;
-    }
-    if (controlsInset.value == height) return;
-    // The player measures during layout. Reposition the sibling next frame.
-    pendingControlsInset = height;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final inset = pendingControlsInset;
-      pendingControlsInset = null;
-      if (mounted && inset != null) controlsInset.value = inset;
-    });
-  }
-
   Widget _infoPanel(VideoDetail detail) => Material(
     color: Theme.of(context).colorScheme.surface,
     elevation: 8,
@@ -669,6 +652,49 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
         ),
       ],
     ),
+  );
+}
+
+/// The active card owns the inset so a swipe cannot reuse the previous bar.
+final class _FeaturedPlayerLayers extends StatefulWidget {
+  const _FeaturedPlayerLayers({super.key, required this.player, this.overlay});
+
+  final Widget Function(ValueChanged<double>) player;
+  final Widget Function(ValueListenable<double>)? overlay;
+
+  @override
+  State<_FeaturedPlayerLayers> createState() => _FeaturedPlayerLayersState();
+}
+
+final class _FeaturedPlayerLayersState extends State<_FeaturedPlayerLayers> {
+  final _inset = ValueNotifier(0.0);
+  double? _pending;
+
+  void _updateInset(double height) {
+    if (_pending != null) {
+      _pending = height;
+      return;
+    }
+    if (_inset.value == height) return;
+    // The player measures during layout. Reposition the sibling next frame.
+    _pending = height;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final height = _pending;
+      _pending = null;
+      if (mounted && height != null) _inset.value = height;
+    });
+  }
+
+  @override
+  void dispose() {
+    _inset.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    fit: StackFit.expand,
+    children: [widget.player(_updateInset), ?widget.overlay?.call(_inset)],
   );
 }
 

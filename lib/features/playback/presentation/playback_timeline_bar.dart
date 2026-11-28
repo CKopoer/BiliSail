@@ -28,10 +28,6 @@ class PlaybackTimelineBar extends StatefulWidget {
 
   static double _highEnergyHeight(double width) => width < 600 ? 16 : 24;
 
-  /// Maximum height at this width, independent of the available metadata.
-  static double maximumHeightFor(double width) =>
-      _trackHeight + math.max(_chapterHeight, _highEnergyHeight(width));
-
   /// Calculates the logical height reserved by the playback control bar.
   ///
   /// Tight width and height constraints contain position-driven layout work.

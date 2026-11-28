@@ -1765,10 +1765,8 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
     required String hoverRegion,
     required Widget child,
     bool retainDynamicPress = false,
-    bool maintainLayout = false,
   }) => _FadingPlayerControls(
     visible: visible,
-    maintainLayout: maintainLayout,
     onHoverChanged: (hovered) {
       if (hovered) {
         _hoveredControlRegions.add(hoverRegion);
@@ -1936,7 +1934,6 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
         : FeaturedPagingScope.maybeOf(context);
     final controlsInset = featured?.onControlsInsetChanged;
     final usesSlotPicture = featured?.inlinePicture != null;
-    final maintainControlBarLayout = controlsInset != null;
     final overlayToggle = switch (featured) {
       FeaturedPagingScope(
         :final showVideoOverlays,
@@ -2052,8 +2049,6 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                   }
                   final controls =
                       widget.controlsVisible.value || session.error != null;
-                  final trackControlTime =
-                      controls || !maintainControlBarLayout;
                   return WidthLayoutBuilder(
                     builder: (context, width) {
                       final layout = _controlsLayout(
@@ -2063,20 +2058,6 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                         hasOverlayToggle: overlayToggle != null,
                       );
                       final smallWindow = layout.compact && !widget.fullScreen;
-                      void reportControlsInset(double height) {
-                        // Keep the surrounding overlays clear of optional timeline
-                        // decorations as they load, without moving the slider.
-                        final timelineAllowance = session.isLive
-                            ? 0.0
-                            : PlaybackTimelineBar.maximumHeightFor(width) -
-                                  PlaybackTimelineBar.heightFor(
-                                    width: width,
-                                    duration: snapshot.duration,
-                                    chapters: session.chapters,
-                                    trend: session.highEnergy.value,
-                                  );
-                        controlsInset?.call(height + timelineAllowance);
-                      }
 
                       return ColoredBox(
                         key: _playerBoundsKey,
@@ -2564,9 +2545,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                             Positioned.fill(
                               child: _BottomPlayerLayers(
                                 controlsVisible: controls && widget.active,
-                                onControlsInsetChanged: controlsInset == null
-                                    ? null
-                                    : reportControlsInset,
+                                onControlsInsetChanged: controlsInset,
                                 subtitleBottomPadding:
                                     settings.subtitleBottomPadding,
                                 sponsorBlockBottomPadding:
@@ -2692,8 +2671,6 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                         visible: controls,
                                         hoverRegion: 'bar',
                                         retainDynamicPress: true,
-                                        maintainLayout:
-                                            maintainControlBarLayout,
                                         child: Theme(
                                           data: _playerControlsTheme(context),
                                           child: Container(
@@ -2754,17 +2731,12 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                                       child: PlaybackSnapshotBuilder(
                                                         snapshots:
                                                             session.snapshots,
-                                                        select: (snapshot) =>
-                                                            trackControlTime
-                                                            ? (
-                                                                snapshot
-                                                                    ._displayedProgressPosition,
-                                                                snapshot
-                                                                    .duration,
-                                                                snapshot
-                                                                    .buffered,
-                                                              )
-                                                            : null,
+                                                        select: (snapshot) => (
+                                                          snapshot
+                                                              ._displayedProgressPosition,
+                                                          snapshot.duration,
+                                                          snapshot.buffered,
+                                                        ),
                                                         builder: (context, snapshot) => ValueListenableBuilder<Duration?>(
                                                           valueListenable:
                                                               _swipeSeekPreview,
@@ -2837,7 +2809,6 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                                     layout: layout,
                                                     overlayToggle:
                                                         overlayToggle,
-                                                    trackTime: trackControlTime,
                                                     composerKey: _composerKey,
                                                     composeExpanded:
                                                         _composeExpanded,
@@ -3010,13 +2981,11 @@ class _BottomPlayerLayout extends MultiChildLayoutDelegate {
 class _FadingPlayerControls extends StatefulWidget {
   const _FadingPlayerControls({
     required this.visible,
-    required this.maintainLayout,
     required this.onHoverChanged,
     required this.child,
   });
 
   final bool visible;
-  final bool maintainLayout;
   final ValueChanged<bool> onHoverChanged;
   final Widget child;
 
@@ -3086,8 +3055,7 @@ class _FadingPlayerControlsState extends State<_FadingPlayerControls>
         excluding: !widget.visible,
         child: FadeTransition(
           opacity: _curve,
-          // Featured overlays anchor to the real bar even at zero opacity.
-          child: _renderChild || widget.maintainLayout
+          child: _renderChild
               ? MouseRegion(
                   onEnter: (_) => _setHovered(true),
                   onExit: (_) => _setHovered(false),
@@ -3103,7 +3071,6 @@ class _FadingPlayerControlsState extends State<_FadingPlayerControls>
 class _ControlBar extends StatelessWidget {
   const _ControlBar({
     required this.layout,
-    required this.trackTime,
     required this.composerKey,
     required this.composeExpanded,
     required this.onToggleComposer,
@@ -3135,7 +3102,6 @@ class _ControlBar extends StatelessWidget {
   final ValueChanged<bool> onMenuChanged;
   final WidgetBuilder? danmakuComposerBuilder;
   final _ControlsLayout layout;
-  final bool trackTime;
   final GlobalKey composerKey;
   final bool composeExpanded;
   final VoidCallback onToggleComposer;
@@ -3154,12 +3120,10 @@ class _ControlBar extends StatelessWidget {
       height: layout.timeHeight,
       child: PlaybackSnapshotBuilder(
         snapshots: session.snapshots,
-        select: (snapshot) => trackTime
-            ? (
-                snapshot._displayedProgressPosition.inSeconds,
-                snapshot.duration.inSeconds,
-              )
-            : null,
+        select: (snapshot) => (
+          snapshot._displayedProgressPosition.inSeconds,
+          snapshot.duration.inSeconds,
+        ),
         builder: (context, snapshot) => RepaintBoundary(
           child: Text(
             session.isLive

@@ -34,26 +34,29 @@ class FeaturedVideoOverlay extends StatelessWidget {
     builder: (context, inset, _) => LayoutBuilder(
       builder: (context, bounds) {
         const margin = 12.0;
-        const controlsGap = 20.0;
-        final bottom = inset + controlsGap;
+        // Leave the collapsed two-pixel progress track visible at the edge.
+        final bottom = inset + 4;
         final actionHeight = FeaturedVideoActions.actionHeight(context);
         final horizontal =
             bounds.maxHeight - bottom <
                 FeaturedVideoActions.verticalHeight(context) &&
             bounds.maxWidth >=
                 FeaturedVideoActions.horizontalWidth + 2 * margin;
+        final actionsWidth = horizontal
+            ? FeaturedVideoActions.horizontalWidth
+            : FeaturedVideoActions.width;
+        final stackAboveActions =
+            horizontal && bounds.maxWidth - actionsWidth - 3 * margin < 190;
         return Stack(
           children: [
             Positioned(
               left: margin,
-              right: horizontal
-                  ? margin
-                  : FeaturedVideoActions.width + 2 * margin,
-              bottom: horizontal ? bottom + actionHeight + 8 : bottom,
+              right: stackAboveActions ? margin : actionsWidth + 2 * margin,
+              bottom: stackAboveActions ? bottom + actionHeight + 4 : bottom,
               child: Align(
                 alignment: Alignment.bottomLeft,
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 560),
+                  constraints: const BoxConstraints(maxWidth: 480),
                   child: _FeaturedVideoIdentity(
                     detail: detail,
                     onLogin: onLogin,
@@ -111,11 +114,12 @@ class _FeaturedVideoIdentity extends ConsumerWidget {
     ];
     final openUser = canOpenAuthor ? () => onOpenUser(id) : null;
     final middleClick = WorkspaceLinkScope.middleClick(context, openUser);
+    final theme = Theme.of(context);
     return Material(
       color: Colors.black54,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(10),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(8, 6, 8, 2),
+        padding: const EdgeInsets.fromLTRB(6, 4, 6, 2),
         child: LayoutBuilder(
           builder: (context, bounds) {
             final iconOnly =
@@ -132,13 +136,16 @@ class _FeaturedVideoIdentity extends ConsumerWidget {
                       onTap: openUser,
                       onTertiaryTapUp: middleClick,
                       customBorder: const CircleBorder(),
-                      child: NetworkAvatar(
-                        url: summary.authorAvatarUrl,
-                        name: summary.author,
-                        radius: 19,
+                      child: Padding(
+                        padding: const EdgeInsets.all(3),
+                        child: NetworkAvatar(
+                          url: summary.authorAvatarUrl,
+                          name: summary.author,
+                          radius: 16,
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 4),
                     Flexible(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -157,7 +164,7 @@ class _FeaturedVideoIdentity extends ConsumerWidget {
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       color: Colors.white,
-                                      fontSize: 14,
+                                      fontSize: 13,
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
@@ -165,13 +172,22 @@ class _FeaturedVideoIdentity extends ConsumerWidget {
                               ),
                               if (canOpenAuthor)
                                 Padding(
-                                  padding: const EdgeInsets.only(left: 6),
-                                  child: UserFollowButton(
-                                    id: id,
-                                    onLogin: onLogin,
-                                    compact: true,
-                                    showMessage: false,
-                                    iconOnly: iconOnly,
+                                  padding: const EdgeInsets.only(left: 4),
+                                  child: Theme(
+                                    data: theme.copyWith(
+                                      visualDensity: VisualDensity.compact,
+                                      textTheme: theme.textTheme.copyWith(
+                                        labelLarge: theme.textTheme.labelLarge
+                                            ?.copyWith(fontSize: 12),
+                                      ),
+                                    ),
+                                    child: UserFollowButton(
+                                      id: id,
+                                      onLogin: onLogin,
+                                      compact: true,
+                                      showMessage: false,
+                                      iconOnly: iconOnly,
+                                    ),
                                   ),
                                 ),
                             ],
@@ -183,7 +199,7 @@ class _FeaturedVideoIdentity extends ConsumerWidget {
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 color: Colors.white70,
-                                fontSize: 12,
+                                fontSize: 11,
                               ),
                             ),
                         ],
@@ -195,8 +211,8 @@ class _FeaturedVideoIdentity extends ConsumerWidget {
                   onPressed: onShowDescription,
                   style: TextButton.styleFrom(
                     foregroundColor: Colors.white,
-                    minimumSize: const Size(0, 40),
-                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    minimumSize: const Size(0, 36),
+                    padding: const EdgeInsets.symmetric(vertical: 2),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   child: Row(
@@ -208,16 +224,16 @@ class _FeaturedVideoIdentity extends ConsumerWidget {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontSize: 16,
+                            fontSize: 14,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 2),
                       const Icon(
                         Icons.keyboard_arrow_down_rounded,
                         semanticLabel: '展开视频信息',
-                        size: 20,
+                        size: 16,
                       ),
                     ],
                   ),

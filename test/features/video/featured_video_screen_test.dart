@@ -92,6 +92,9 @@ void main() {
                   ),
                   playerBuilder: (context, detail, part) {
                     final featured = FeaturedPagingScope.maybeOf(context)!;
+                    if (part.cid == '0') {
+                      featured.onControlsInsetChanged?.call(80);
+                    }
                     return ColoredBox(
                       key: ValueKey('playing-${part.cid}'),
                       color: Colors.black,
@@ -120,6 +123,11 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(videos.details, [videos.items[0].id]);
+      final overlay = find.byType(FeaturedVideoOverlay);
+      expect(
+        tester.widget<FeaturedVideoOverlay>(overlay).controlsInset.value,
+        80,
+      );
       final pager = find.byType(PageView);
       final drag = await tester.startGesture(tester.getCenter(pager));
       await drag.moveBy(const Offset(0, -120));
@@ -130,6 +138,10 @@ void main() {
       await drag.up();
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('playing-1')), findsOneWidget);
+      expect(
+        tester.widget<FeaturedVideoOverlay>(overlay).controlsInset.value,
+        0,
+      );
       final reverse = await tester.startGesture(tester.getCenter(pager));
       await reverse.moveBy(const Offset(0, 120));
       await tester.pump();
@@ -153,7 +165,6 @@ void main() {
       expect(find.byKey(const ValueKey('playing-1')), findsOneWidget);
       expect(videos.details, hasLength(2));
 
-      final overlay = find.byType(FeaturedVideoOverlay);
       final toggle = find.byKey(const ValueKey('toggle-test-overlays'));
       expect(overlay, findsOneWidget);
       await tester.tap(toggle);

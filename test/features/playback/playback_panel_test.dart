@@ -5258,7 +5258,7 @@ void main() {
     (800.0, PointerDeviceKind.mouse),
     (360.0, PointerDeviceKind.touch),
   ]) {
-    testWidgets('featured $kind uses click controls with stable overlays', (
+    testWidgets('featured $kind docks overlays against the visible controls', (
       tester,
     ) async {
       final engine = _FakeEngine();
@@ -5282,21 +5282,31 @@ void main() {
       final controls = find.byKey(const ValueKey('player-controls'));
       final title = find.text(_detail.summary.title);
       final comments = findMaterialTooltip('评论');
+      final identity = find
+          .ancestor(
+            of: title,
+            matching: find.byWidgetPredicate(
+              (widget) => widget is Material && widget.color == Colors.black54,
+            ),
+          )
+          .first;
+      final actions = find.byType(FeaturedVideoActions);
       final surface = _surfacePoint(tester);
-      final initialPosition = (tester.getRect(title), tester.getRect(comments));
+      (Rect, Rect) positions() =>
+          (tester.getRect(title), tester.getRect(comments));
+      final hiddenPosition = positions();
       final initialPlayback = engine.currentSnapshot.desiredPlaying;
-      final plainControlsHeight = tester.getSize(controls).height;
-      final initialInset = inset.value;
       final heatHeight = width < 600 ? 16.0 : 24.0;
-      expect(initialInset, plainControlsHeight + (width < 600 ? 20 : 24));
-      expect(
-        initialPosition.$1.bottom,
-        lessThan(tester.getTopLeft(controls).dy),
-      );
-      expect(
-        initialPosition.$2.bottom,
-        lessThan(tester.getTopLeft(controls).dy),
-      );
+      final playerEdge = tester
+          .getBottomLeft(find.byType(FeaturedVideoOverlay))
+          .dy;
+      void expectDockedAt(double edge) {
+        expect(tester.getRect(identity).bottom, edge - 4);
+        expect(tester.getRect(actions).bottom, edge - 4);
+      }
+
+      expect(inset.value, 0);
+      expectDockedAt(playerEdge);
 
       Future<void> tapSurface() async {
         await tester.tapAt(_surfacePoint(tester), kind: kind);
@@ -5307,11 +5317,12 @@ void main() {
       await mouse.addPointer(location: const Offset(-10, -10));
 
       Future<void> checkHover({required bool visible}) async {
+        final before = positions();
         for (final point in [
           surface,
-          initialPosition.$1.center,
+          before.$1.center,
           surface,
-          initialPosition.$2.center,
+          before.$2.center,
           surface,
         ]) {
           await mouse.moveTo(point);
@@ -5320,15 +5331,16 @@ void main() {
             controls.hitTestable(),
             visible ? findsOneWidget : findsNothing,
           );
-          expect((
-            tester.getRect(title),
-            tester.getRect(comments),
-          ), initialPosition);
+          expect(positions(), before);
         }
       }
 
       await checkHover(visible: false);
       await tapSurface();
+      final plainControlsHeight = tester.getSize(controls).height;
+      final visiblePosition = positions();
+      expect(inset.value, plainControlsHeight);
+      expectDockedAt(tester.getRect(controls).top);
       await checkHover(visible: true);
 
       final highEnergy = find.byKey(const ValueKey('playback-high-energy'));
@@ -5344,28 +5356,17 @@ void main() {
       expect(highEnergy, findsOneWidget);
       expect(tester.getSize(controls).height, plainControlsHeight + heatHeight);
       expect(tester.getRect(slider), sliderRect);
-      expect(inset.value, initialInset);
-      expect(
-        tester.getTopLeft(controls).dy -
-            tester.getBottomLeft(find.byType(FeaturedVideoActions)).dy,
-        width < 600 ? 24 : 20,
-      );
-      expect((
-        tester.getRect(title),
-        tester.getRect(comments),
-      ), initialPosition);
+      expect(inset.value, plainControlsHeight + heatHeight);
+      expectDockedAt(tester.getRect(controls).top);
 
       await tapSurface();
       await checkHover(visible: false);
+      expectDockedAt(playerEdge);
       session.highEnergy.value = null;
       await _pumpFrames(tester);
       expect(highEnergy, findsNothing);
-      expect(tester.getSize(controls).height, plainControlsHeight);
-      expect(inset.value, initialInset);
-      expect((
-        tester.getRect(title),
-        tester.getRect(comments),
-      ), initialPosition);
+      expect(inset.value, 0);
+      expect(positions(), hiddenPosition);
       expect(engine.currentSnapshot.desiredPlaying, initialPlayback);
 
       final hide = findMaterialTooltip('隐藏视频信息和互动按钮');
@@ -5389,18 +5390,15 @@ void main() {
       );
 
       // The old title and rail locations belong to the picture while hidden.
-      await tester.tapAt(initialPosition.$1.center, kind: kind);
+      await tester.tapAt(visiblePosition.$1.center, kind: kind);
       await _pumpSurfaceTap(tester);
       expect(controls.hitTestable(), findsNothing);
-      await tester.tapAt(initialPosition.$2.center, kind: kind);
+      await tester.tapAt(visiblePosition.$2.center, kind: kind);
       await _pumpSurfaceTap(tester);
       expect(show.hitTestable(), findsOneWidget);
       await tester.tap(show, kind: kind);
       await _pumpFrames(tester);
-      expect((
-        tester.getRect(title),
-        tester.getRect(comments),
-      ), initialPosition);
+      expect(positions(), visiblePosition);
       expect(engine.currentSnapshot.desiredPlaying, initialPlayback);
 
       if (kind == PointerDeviceKind.mouse) {

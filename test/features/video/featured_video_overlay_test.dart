@@ -8,7 +8,10 @@ import 'package:bilisail/features/video/application/video_actions_controller.dar
 import 'package:bilisail/features/video/application/video_author_controller.dart';
 import 'package:bilisail/features/video/domain/video_author_repository.dart';
 import 'package:bilisail/features/video/presentation/featured_video_overlay.dart';
+import 'package:bilisail/features/video/presentation/video_actions_bar.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
+import 'package:bilisail/shared/ui/network_avatar.dart';
+import 'package:bilisail/shared/ui/user_follow_button.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -79,6 +82,17 @@ void main() {
     );
     expect(authors.requests.map((request) => request.$1), ['81']);
     expect(find.text('2.1万粉丝 · 69.1万获赞'), findsOneWidget);
+    final avatar = find.byType(NetworkAvatar);
+    expect(tester.getSize(avatar), const Size.square(32));
+    final avatarTarget = find
+        .ancestor(of: avatar, matching: find.byType(InkWell))
+        .first;
+    expect(tester.getSize(avatarTarget), const Size.square(38));
+    expect(tester.getSize(find.byType(UserFollowButton)).width, lessThan(80));
+    expect(
+      tester.widget<Text>(find.text(_detail.summary.title)).style?.fontSize,
+      14,
+    );
     for (final count in ['1.4万', '215', '326', '47']) {
       expect(find.text(count), findsOneWidget);
     }
@@ -134,9 +148,35 @@ void main() {
 
     controlsInset.value = 190;
     await tester.pump();
-    expect(tester.getCenter(likes).dy, tester.getCenter(coins).dy);
+    expect(
+      tester.getCenter(likes).dy,
+      moreOrLessEquals(tester.getCenter(coins).dy),
+    );
     expect(tester.getBottomRight(coins).dy, lessThan(210));
-    expect(find.text('当前稿件的标题').hitTestable(), findsOneWidget);
+    final title = find.text(_detail.summary.title);
+    final card = find
+        .ancestor(
+          of: title,
+          matching: find.byWidgetPredicate(
+            (widget) => widget is Material && widget.color == Colors.black54,
+          ),
+        )
+        .first;
+    final actions = find.byType(FeaturedVideoActions);
+    expect(tester.getRect(card).bottom, lessThan(tester.getRect(actions).top));
+    expect(title.hitTestable(), findsOneWidget);
+    tester.view.physicalSize = const Size(700, 360);
+    await tester.pump();
+    expect(
+      tester.getCenter(likes).dy,
+      moreOrLessEquals(tester.getCenter(coins).dy),
+    );
+    expect(
+      tester.getRect(card).bottom,
+      moreOrLessEquals(tester.getRect(actions).bottom),
+    );
+    expect(tester.getRect(card).right, lessThan(tester.getRect(actions).left));
+    expect(title.hitTestable(), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
