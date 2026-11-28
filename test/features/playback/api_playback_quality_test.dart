@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -79,6 +80,56 @@ void main() {
   });
 
   test(
+    'featured handoff shares the in-flight request for a missing quality',
+    () async {
+      final started = Completer<void>();
+      final release = Completer<void>();
+      final transport = _Transport(
+        missingLower: true,
+        onSupplement: () {
+          if (!started.isCompleted) started.complete();
+          return release.future;
+        },
+      );
+      final repository = _repository(transport);
+      const id = VideoId('BV1VNxr63EZp');
+      const cid = '43202641987';
+      final standby = RequestCancellation();
+      addTearDown(standby.cancel);
+      final prepared = repository.resolveForFeaturedPreparation(
+        id,
+        cid,
+        quality: 80,
+        preferredCodec: VideoCodecPreference.h264,
+        cancellation: standby,
+      );
+      await started.future;
+      final selected = repository.resolve(
+        id,
+        cid,
+        quality: 80,
+        cancellation: RequestCancellation(),
+      );
+      release.complete();
+      final warm = await prepared;
+      final active = await selected;
+      expect(transport.qualities, [129, 80]);
+      expect(active.quality, 80);
+      expect(active.video.urls, warm.video.urls);
+      expect(active.audio?.urls, warm.audio?.urls);
+
+      // A retry on the selected card must still request fresh signed URLs.
+      await repository.resolve(
+        id,
+        cid,
+        quality: 80,
+        cancellation: RequestCancellation(),
+      );
+      expect(transport.qualities, [129, 80, 129, 80]);
+    },
+  );
+
+  test(
     'optional supplement failure retains complete discovery media',
     () async {
       final transport = _Transport(missingLower: true, supplementFailure: -352);
@@ -157,6 +208,7 @@ final class _Transport implements ApiTransport {
     this.cancelSupplement = false,
     this.wrongVoice = false,
     this.silent = false,
+    this.onSupplement,
   });
   final bool missingLower;
   final bool entitled;
@@ -164,6 +216,7 @@ final class _Transport implements ApiTransport {
   final bool cancelSupplement;
   final bool wrongVoice;
   final bool silent;
+  final Future<void> Function()? onSupplement;
   final qualities = <int>[];
 
   @override
@@ -194,6 +247,7 @@ final class _Transport implements ApiTransport {
       case '/x/player/wbi/playurl':
         final qn = int.parse(uri.queryParameters['qn']!);
         qualities.add(qn);
+        if (qn != 129 && onSupplement != null) await onSupplement!();
         if (qn != 129 && cancelSupplement) cancellation?.cancel();
         if (qn != 129 && supplementFailure != null) {
           return ApiHttpResponse(

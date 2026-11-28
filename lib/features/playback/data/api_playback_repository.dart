@@ -275,6 +275,20 @@ class ApiPlaybackRepository
             cid,
             context.cancellation,
             speculative: speculative,
+            supplement: (
+              quality: quality,
+              load: (info, token) => requests.run(
+                (context) => _supplementQuality(
+                  info,
+                  video,
+                  cid,
+                  quality,
+                  voice,
+                  context,
+                ),
+                cancellation: token,
+              ),
+            ),
           )
         : null;
     final prepared = pending == null ? null : await pending;
@@ -291,48 +305,15 @@ class ApiPlaybackRepository
           productionType: voice.productionType,
           context: context,
         );
-    if (info.dashVideo.any((track) => track.id > quality) &&
-        info.acceptQuality.contains(quality) &&
-        !info.dashVideo.any((track) => track.id == quality)) {
-      try {
-        final supplement = await api.getPlayInfo(
-          video.value,
-          cid,
-          qn: quality,
-          language: voice.languageCode,
-          productionType: voice.productionType,
-          context: context,
-        );
-        if (supplement.currentLanguage == info.currentLanguage &&
-            supplement.productionType == info.productionType) {
-          final identities = {
-            for (final track in info.dashVideo) (track.id, track.codecs),
-          };
-          info = ApiPlayInfo(
-            duration: info.duration,
-            dashVideo: List.unmodifiable([
-              ...info.dashVideo,
-              for (final track in supplement.dashVideo)
-                if (identities.add((track.id, track.codecs))) track,
-            ]),
-            dashAudio: info.dashAudio,
-            isIntentionallySilent: info.isIntentionallySilent,
-            acceptQuality: info.acceptQuality,
-            loudness: info.loudness,
-            voices: info.voices,
-            currentLanguage: info.currentLanguage,
-            productionType: info.productionType,
-            isPreview: info.isPreview,
-          );
-        }
-      } on ApiFailure catch (failure) {
-        // The discovery response already contains complete playable media.
-        // An optional lower-quality read must not discard that valid source.
-        if (failure.category == ApiFailureCategory.cancelled ||
-            failure.category == ApiFailureCategory.authentication) {
-          rethrow;
-        }
-      }
+    if (prepared == null && needsPlayInfoSupplement(info, quality)) {
+      info = await _supplementQuality(
+        info,
+        video,
+        cid,
+        quality,
+        voice,
+        context,
+      );
     }
     if (!voice.isOriginal &&
         (info.currentLanguage != voice.languageCode ||
@@ -378,6 +359,56 @@ class ApiPlaybackRepository
       headers: headers,
     );
   }, cancellation: cancellation);
+
+  Future<ApiPlayInfo> _supplementQuality(
+    ApiPlayInfo info,
+    VideoId video,
+    String cid,
+    int quality,
+    PlaybackVoice voice,
+    ApiRequestContext context,
+  ) async {
+    try {
+      final supplement = await api.getPlayInfo(
+        video.value,
+        cid,
+        qn: quality,
+        language: voice.languageCode,
+        productionType: voice.productionType,
+        context: context,
+      );
+      if (supplement.currentLanguage == info.currentLanguage &&
+          supplement.productionType == info.productionType) {
+        final identities = {
+          for (final track in info.dashVideo) (track.id, track.codecs),
+        };
+        return ApiPlayInfo(
+          duration: info.duration,
+          dashVideo: List.unmodifiable([
+            ...info.dashVideo,
+            for (final track in supplement.dashVideo)
+              if (identities.add((track.id, track.codecs))) track,
+          ]),
+          dashAudio: info.dashAudio,
+          isIntentionallySilent: info.isIntentionallySilent,
+          acceptQuality: info.acceptQuality,
+          loudness: info.loudness,
+          voices: info.voices,
+          currentLanguage: info.currentLanguage,
+          productionType: info.productionType,
+          isPreview: info.isPreview,
+        );
+      }
+    } on ApiFailure catch (failure) {
+      // The discovery response already contains complete playable media.
+      // An optional lower-quality read must not discard that valid source.
+      if (failure.category == ApiFailureCategory.cancelled ||
+          failure.category == ApiFailureCategory.authentication) {
+        rethrow;
+      }
+    }
+    return info;
+  }
 
   @override
   Future<List<TimedComment>> comments(

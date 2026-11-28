@@ -5,6 +5,11 @@ import '../../../domain/request_cancellation.dart';
 import '../../../domain/app_failure.dart';
 import '../../../domain/video.dart';
 
+typedef FeaturedQualityRequest = ({
+  int quality,
+  Future<ApiPlayInfo> Function(ApiPlayInfo, RequestCancellation) load,
+});
+
 /// Holds only speculative original-language playurl responses. Track selection
 /// and the normal playurl fallback still run with the foreground preferences.
 final class FeaturedPlayInfoCache {
@@ -73,6 +78,7 @@ final class FeaturedPlayInfoCache {
     String cid,
     ApiCancellation? cancellation, {
     bool speculative = false,
+    FeaturedQualityRequest? supplement,
   }) {
     final entry = _entries[(video, cid)];
     if (entry == null || (!speculative && entry.claimed)) return null;
@@ -80,18 +86,43 @@ final class FeaturedPlayInfoCache {
     // the foreground's claim or cancelling another reader when superseded.
     if (!speculative) entry.claimed = true;
     entry.leases++;
-    return _consume(entry, speculative ? null : cancellation);
+    return _consume(entry, speculative ? null : cancellation, supplement);
   }
 
   Future<ApiPlayInfo?> _consume(
     _PreparedInfo entry,
     ApiCancellation? cancellation,
+    FeaturedQualityRequest? supplement,
   ) async {
     final detach = cancellation?.onCancel(entry.token.cancel);
     try {
       if (_stale(entry)) return null;
-      final info = await entry.info;
-      if (info == null || entry.token.isCancelled || _stale(entry)) return null;
+      final discovery = await entry.info;
+      if (discovery == null || entry.token.isCancelled || _stale(entry))
+        return null;
+      ApiPlayInfo info = discovery;
+      if (supplement != null &&
+          needsPlayInfoSupplement(info, supplement.quality)) {
+        // Keep one quality per discovery response. A concurrent foreground
+        // claim receives the signed URLs that the standby decoder opened.
+        var pending = entry.supplement;
+        if (pending == null || pending.quality != supplement.quality) {
+          pending = entry.supplement = (
+            quality: supplement.quality,
+            result: supplement.load(info, entry.token),
+          );
+        }
+        try {
+          info = await pending.result;
+        } finally {
+          // A failed or incomplete optional read can be retried on selection.
+          if (entry.supplement == pending &&
+              needsPlayInfoSupplement(info, pending.quality)) {
+            entry.supplement = null;
+          }
+        }
+        if (entry.token.isCancelled || _stale(entry)) return null;
+      }
       final minimumDeadline =
           _now().add(const Duration(seconds: 15)).millisecondsSinceEpoch ~/
           1000;
@@ -118,6 +149,12 @@ final class _PreparedInfo {
   final DateTime started;
   final token = RequestCancellation();
   late final Future<ApiPlayInfo?> info;
+  ({int quality, Future<ApiPlayInfo> result})? supplement;
   int leases = 0;
   bool claimed = false;
 }
+
+bool needsPlayInfoSupplement(ApiPlayInfo info, int quality) =>
+    info.dashVideo.any((track) => track.id > quality) &&
+    info.acceptQuality.contains(quality) &&
+    !info.dashVideo.any((track) => track.id == quality);
