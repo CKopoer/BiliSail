@@ -1833,8 +1833,9 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   _ControlsLayout _controlsLayout(
     BuildContext context,
     PlaybackSnapshot snapshot,
-    double width,
-  ) {
+    double width, {
+    required bool hasOverlayToggle,
+  }) {
     final session = widget.session;
     final media = session.media;
     final inputs = (
@@ -1851,6 +1852,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
           : null,
       hasComposer: widget.danmakuComposerBuilder != null,
       hasInfoToggle: PlaybackInfoScope.maybeOf(context) != null,
+      hasOverlayToggle: hasOverlayToggle,
       hasSubtitles: session.subtitleTracks.isNotEmpty,
       hasVoices: session.voiceTracks.isNotEmpty,
       hasNextButton:
@@ -1903,6 +1905,28 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
         : FeaturedPagingScope.maybeOf(context);
     final controlsInset = featured?.onControlsInsetChanged;
     final maintainControlBarLayout = controlsInset != null;
+    final overlayToggle = switch (featured) {
+      FeaturedPagingScope(
+        :final showVideoOverlays,
+        onToggleVideoOverlays: final toggle?,
+      ) =>
+        MergeSemantics(
+          child: Semantics(
+            toggled: showVideoOverlays,
+            child: IconButton(
+              tooltip: showVideoOverlays ? '隐藏视频信息和互动按钮' : '显示视频信息和互动按钮',
+              onPressed: toggle,
+              icon: Icon(
+                showVideoOverlays
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+                size: 20,
+              ),
+            ),
+          ),
+        ),
+      _ => null,
+    };
     return InputProtection(
       playerSurface: true,
       activationFocus: _focusNode,
@@ -1959,6 +1983,8 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                       onFullScreen: _toggleFullScreen,
                       commands: widget.pageCommands.value,
                       completedOverlay: completedOverlay,
+                      overlayToggle: overlayToggle,
+                      onControlsInsetChanged: controlsInset,
                       navigation: ValueListenableBuilder<PlaybackNavigation?>(
                         valueListenable: widget.navigation,
                         builder: (context, actions, _) => Row(
@@ -2002,6 +2028,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                         context,
                         snapshot,
                         width - 20,
+                        hasOverlayToggle: overlayToggle != null,
                       );
                       final smallWindow = layout.compact && !widget.fullScreen;
                       return ColoredBox(
@@ -2757,6 +2784,8 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                                       ),
                                                   child: _ControlBar(
                                                     layout: layout,
+                                                    overlayToggle:
+                                                        overlayToggle,
                                                     trackTime: trackControlTime,
                                                     composerKey: _composerKey,
                                                     composeExpanded:
@@ -3039,12 +3068,14 @@ class _ControlBar extends StatelessWidget {
     required this.onMenuChanged,
     this.danmakuComposerBuilder,
     this.pageCommands,
+    this.overlayToggle,
   });
 
   final PlaybackSession session;
   final AppSettings settings;
   final PlaybackSnapshot snapshot;
   final PlaybackPageCommands? pageCommands;
+  final Widget? overlayToggle;
   final VoidCallback onToggleComments;
   final VoidCallback onFullScreen;
   final bool fullScreen;
@@ -3268,6 +3299,11 @@ class _ControlBar extends StatelessWidget {
         ),
       slot(volumeButton),
     ];
+    final trailing = [
+      if (layout.inputs.hasInfoToggle) slot(const PlaybackSidebarToggle()),
+      if (overlayToggle case final toggle?) slot(toggle),
+      slot(fullscreenButton),
+    ];
     if (layout.compact && !fullScreen) {
       final showNext = layout.inputs.hasNextButton;
       // Keep sending and toggling danmaku visible beside the complete time
@@ -3278,9 +3314,8 @@ class _ControlBar extends StatelessWidget {
         (layout.inputs.width -
                 _ControlsLayout.buttonWidth *
                     (transport.length +
-                        1 +
+                        trailing.length +
                         (showNext ? 1 : 0) +
-                        (layout.inputs.hasInfoToggle ? 1 : 0) +
                         visibleToolCount))
             .clamp(0.0, double.infinity),
       );
@@ -3328,9 +3363,7 @@ class _ControlBar extends StatelessWidget {
                   ),
                 ),
               ),
-              if (layout.inputs.hasInfoToggle)
-                slot(const PlaybackSidebarToggle()),
-              slot(fullscreenButton),
+              ...trailing,
             ],
           ),
         ],
@@ -3342,8 +3375,8 @@ class _ControlBar extends StatelessWidget {
     // On the narrowest layouts, give the time its own line instead of clipping
     // it or shrinking the buttons' hit targets.
     final compactButtonCount =
-        3 +
-        (layout.inputs.hasInfoToggle ? 1 : 0) +
+        2 +
+        trailing.length +
         (composer != null ? 1 : 0) +
         (showPlayInBar ? 1 : 0) +
         (showNext ? 1 : 0) +
@@ -3378,9 +3411,7 @@ class _ControlBar extends StatelessWidget {
                   ),
                 ),
               slot(_moreOptions(context)),
-              if (layout.inputs.hasInfoToggle)
-                slot(const PlaybackSidebarToggle()),
-              slot(fullscreenButton),
+              ...trailing,
             ]
           : [
               ...transport,
@@ -3406,9 +3437,7 @@ class _ControlBar extends StatelessWidget {
               else
                 const Spacer(),
               ...secondary,
-              if (layout.inputs.hasInfoToggle)
-                slot(const PlaybackSidebarToggle()),
-              slot(fullscreenButton),
+              ...trailing,
             ],
     );
     return Column(
@@ -3695,6 +3724,7 @@ typedef _ControlsLayoutInputs = ({
   String? qualityLabel,
   bool hasComposer,
   bool hasInfoToggle,
+  bool hasOverlayToggle,
   bool hasSubtitles,
   bool hasVoices,
   bool hasNextButton,
@@ -3739,6 +3769,7 @@ class _ControlsLayout {
         buttonWidth *
                 (4 +
                     (inputs.hasInfoToggle ? 1 : 0) +
+                    (inputs.hasOverlayToggle ? 1 : 0) +
                     (inputs.isLive ? 1 : 0) +
                     (inputs.hasNextButton ? 1 : 0) +
                     (inputs.hasSubtitles ? 1 : 0) +

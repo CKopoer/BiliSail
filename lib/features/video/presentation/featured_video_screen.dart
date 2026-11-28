@@ -117,6 +117,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
   late final feed = widget.createController()..addListener(_changed);
   final pages = PageController(keepPage: false);
   final controlsInset = ValueNotifier(0.0);
+  bool _showVideoOverlays = true;
   double? pendingControlsInset;
   _Info? panel;
   Timer? wheelIdle;
@@ -464,7 +465,7 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
                 fit: StackFit.expand,
                 children: [
                   _player(item, detail, failed: result?.hasError == true),
-                  if (active && detail != null)
+                  if (active && _showVideoOverlays && detail != null)
                     FeaturedVideoOverlay(
                       key: ValueKey(detail.summary.id),
                       detail: detail,
@@ -518,6 +519,8 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
             : const ContentLink(),
         child: FeaturedPagingScope(
           onControlsInsetChanged: _updateControlsInset,
+          showVideoOverlays: _showVideoOverlays,
+          onToggleVideoOverlays: _toggleVideoOverlays,
           child: PlaybackPageCommands(
             previousPart: () => _step(-1),
             nextPart: () => _step(1),
@@ -532,6 +535,9 @@ class _FeaturedVideoScreenState extends ConsumerState<FeaturedVideoScreen>
       ),
     );
   }
+
+  void _toggleVideoOverlays() =>
+      setState(() => _showVideoOverlays = !_showVideoOverlays);
 
   void _updateControlsInset(double height) {
     if (pendingControlsInset != null) {

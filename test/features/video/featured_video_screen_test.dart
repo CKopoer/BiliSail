@@ -7,7 +7,9 @@ import 'package:bilisail/features/feed/application/featured_feed_controller.dart
 import 'package:bilisail/features/feed/domain/feed_repository.dart';
 import 'package:bilisail/features/video/application/video_controller.dart';
 import 'package:bilisail/features/video/domain/video_repository.dart';
+import 'package:bilisail/features/video/presentation/featured_video_overlay.dart';
 import 'package:bilisail/features/video/presentation/featured_video_screen.dart';
+import 'package:bilisail/shared/ui/featured_paging_scope.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -85,10 +87,25 @@ void main() {
                       const RecommendationSettings.defaults(),
                     ),
                   ),
-                  playerBuilder: (context, detail, part) => ColoredBox(
-                    key: ValueKey('playing-${part.cid}'),
-                    color: Colors.black,
-                  ),
+                  playerBuilder: (context, detail, part) {
+                    final featured = FeaturedPagingScope.maybeOf(context)!;
+                    return ColoredBox(
+                      key: ValueKey('playing-${part.cid}'),
+                      color: Colors.black,
+                      child: Align(
+                        alignment: Alignment.topRight,
+                        child: IconButton(
+                          key: const ValueKey('toggle-test-overlays'),
+                          onPressed: featured.onToggleVideoOverlays,
+                          icon: Icon(
+                            featured.showVideoOverlays
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                   onLogin: () {},
                   onOpenUser: (_) {},
                   splitWidth: 1000,
@@ -125,6 +142,21 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('playing-1')), findsOneWidget);
       expect(videos.details, hasLength(2));
+
+      final overlay = find.byType(FeaturedVideoOverlay);
+      final toggle = find.byKey(const ValueKey('toggle-test-overlays'));
+      expect(overlay, findsOneWidget);
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(overlay, findsNothing);
+      await tester.drag(pager, const Offset(0, -530));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('playing-2')), findsOneWidget);
+      expect(overlay, findsNothing);
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(overlay, findsOneWidget);
+      expect(find.text('片段 2'), findsOneWidget);
     },
   );
 }

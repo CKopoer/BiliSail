@@ -13,6 +13,11 @@ import 'listening_sleep_timer_button.dart';
 import 'playback_snapshot_builder.dart';
 import 'player_control_labels.dart';
 
+const _verticalPadding = 4.0;
+const _audioErrorHeight = 32.0;
+const _audioTimelineHeight = 40.0;
+const _audioToolbarHeight = 48.0;
+
 /// A listening surface with localized timeline and subtitle updates.
 class AudioPlaybackView extends StatelessWidget {
   const AudioPlaybackView({
@@ -24,6 +29,8 @@ class AudioPlaybackView extends StatelessWidget {
     required this.navigation,
     this.commands,
     this.completedOverlay,
+    this.overlayToggle,
+    this.onControlsInsetChanged,
   });
 
   final PlaybackSession session;
@@ -33,12 +40,20 @@ class AudioPlaybackView extends StatelessWidget {
   final Widget navigation;
   final PlaybackPageCommands? commands;
   final Widget? completedOverlay;
+  final Widget? overlayToggle;
+  final ValueChanged<double>? onControlsInsetChanged;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final ready =
         !session.isResolving && session.media != null && session.error == null;
+    onControlsInsetChanged?.call(
+      _verticalPadding +
+          _audioTimelineHeight +
+          _audioToolbarHeight +
+          (session.error == null ? 0 : _audioErrorHeight),
+    );
     return Material(
       key: const ValueKey('audio-playback-view'),
       color: scheme.surfaceContainer,
@@ -49,7 +64,10 @@ class AudioPlaybackView extends StatelessWidget {
         right: fullScreen,
         child: LayoutBuilder(
           builder: (context, bounds) => Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: _verticalPadding,
+            ),
             child: Column(
               children: [
                 SizedBox(
@@ -104,7 +122,7 @@ class AudioPlaybackView extends StatelessWidget {
                 ),
                 if (session.error case final error?)
                   SizedBox(
-                    height: 32,
+                    height: _audioErrorHeight,
                     child: Row(
                       children: [
                         Expanded(
@@ -134,7 +152,7 @@ class AudioPlaybackView extends StatelessWidget {
                   ),
                 ),
                 SizedBox(
-                  height: 48,
+                  height: _audioToolbarHeight,
                   child: _AudioToolbar(
                     transport: [
                       IconButton(
@@ -287,6 +305,7 @@ class AudioPlaybackView extends StatelessWidget {
                     trailing: [
                       if (PlaybackInfoScope.maybeOf(context) != null)
                         const PlaybackSidebarToggle(),
+                      ?overlayToggle,
                       IconButton(
                         tooltip: fullScreen ? '退出全屏' : '全屏',
                         onPressed: onFullScreen,
@@ -561,7 +580,7 @@ class _AudioTimelineState extends State<_AudioTimeline> {
             .clamp(0.0, math.max(1.0, total))
             .toDouble();
     return SizedBox(
-      height: 40,
+      height: _audioTimelineHeight,
       child: Row(
         children: [
           Text(

@@ -5330,17 +5330,73 @@ void main() {
       await checkHover(visible: false);
       expect(engine.currentSnapshot.desiredPlaying, initialPlayback);
 
+      final hide = findMaterialTooltip('隐藏视频信息和互动按钮');
+      final show = findMaterialTooltip('显示视频信息和互动按钮');
+      final fullscreen = findMaterialTooltip('全屏（F）');
+      expect(hide.hitTestable(), findsNothing);
+      await tapSurface();
+      expect(hide.hitTestable(), findsOneWidget);
+      expect(tester.getRect(hide).right, tester.getRect(fullscreen).left);
+      expect(
+        tester.getSemantics(hide).flagsCollection.isToggled,
+        Tristate.isTrue,
+      );
+      await tester.tap(hide, kind: kind);
+      await _pumpFrames(tester);
+      expect(title, findsNothing);
+      expect(comments, findsNothing);
+      expect(
+        tester.getSemantics(show).flagsCollection.isToggled,
+        Tristate.isFalse,
+      );
+
+      // The old title and rail locations belong to the picture while hidden.
+      await tester.tapAt(initialPosition.$1.center, kind: kind);
+      await _pumpSurfaceTap(tester);
+      expect(controls.hitTestable(), findsNothing);
+      await tester.tapAt(initialPosition.$2.center, kind: kind);
+      await _pumpSurfaceTap(tester);
+      expect(show.hitTestable(), findsOneWidget);
+      await tester.tap(show, kind: kind);
+      await _pumpFrames(tester);
+      expect((
+        tester.getRect(title),
+        tester.getRect(comments),
+      ), initialPosition);
+      expect(engine.currentSnapshot.desiredPlaying, initialPlayback);
+
       if (kind == PointerDeviceKind.mouse) {
-        await tapSurface();
-        await tester.tap(findMaterialTooltip('全屏（F）'));
+        await tester.tap(fullscreen);
         await _pumpFrames(tester);
         expect(window.fullScreen, isTrue);
+        expect(hide.hitTestable(), findsNothing);
+        expect(show.hitTestable(), findsNothing);
         await tapSurface();
         expect(controls.hitTestable(), findsNothing);
         await mouse.moveTo(_surfacePoint(tester));
         await _pumpFrames(tester);
         expect(controls.hitTestable(), findsNothing);
         expect(engine.currentSnapshot.desiredPlaying, initialPlayback);
+      } else {
+        await tester.tap(hide, kind: kind);
+        await _pumpFrames(tester);
+        await session.setAudioOnly(true);
+        await _pumpFrames(tester);
+        expect(
+          find.byKey(const ValueKey('audio-playback-view')),
+          findsOneWidget,
+        );
+        expect(show.hitTestable(), findsOneWidget);
+        await tester.tap(show, kind: kind);
+        await _pumpFrames(tester);
+        expect(find.byType(FeaturedVideoOverlay), findsOneWidget);
+        expect(comments, findsOneWidget);
+        expect(
+          tester.getBottomLeft(comments).dy,
+          lessThan(
+            tester.getTopLeft(find.byKey(const ValueKey('audio-timeline'))).dy,
+          ),
+        );
       }
 
       await mouse.removePointer();
@@ -11782,27 +11838,34 @@ Widget _app(
 
 Widget _wrapFeaturedPlayer(ValueNotifier<double>? inset, Widget player) {
   if (inset == null) return player;
-  return Stack(
-    fit: StackFit.expand,
-    children: [
-      FeaturedPagingScope(
-        onControlsInsetChanged: (value) {
-          if (inset.value == value) return;
-          WidgetsBinding.instance.addPostFrameCallback(
-            (_) => inset.value = value,
-          );
-        },
-        child: player,
-      ),
-      FeaturedVideoOverlay(
-        detail: _detail,
-        controlsInset: inset,
-        onLogin: () {},
-        onOpenUser: (_) {},
-        onShowDescription: () {},
-        onShowComments: () {},
-      ),
-    ],
+  var showOverlays = true;
+  return StatefulBuilder(
+    builder: (context, setState) => Stack(
+      fit: StackFit.expand,
+      children: [
+        FeaturedPagingScope(
+          showVideoOverlays: showOverlays,
+          onToggleVideoOverlays: () =>
+              setState(() => showOverlays = !showOverlays),
+          onControlsInsetChanged: (value) {
+            if (inset.value == value) return;
+            WidgetsBinding.instance.addPostFrameCallback(
+              (_) => inset.value = value,
+            );
+          },
+          child: player,
+        ),
+        if (showOverlays)
+          FeaturedVideoOverlay(
+            detail: _detail,
+            controlsInset: inset,
+            onLogin: () {},
+            onOpenUser: (_) {},
+            onShowDescription: () {},
+            onShowComments: () {},
+          ),
+      ],
+    ),
   );
 }
 
