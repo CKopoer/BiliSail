@@ -29,7 +29,9 @@ import 'package:bilisail/app/router.dart';
 import 'package:bilisail/app/theme.dart';
 import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:bilisail/shared/ui/danmaku_composer_draft.dart';
+import 'package:bilisail/shared/ui/featured_paging_scope.dart';
 import 'package:bilisail/features/auth/application/auth_controller.dart';
+import 'package:bilisail/features/video/presentation/featured_video_overlay.dart';
 import 'package:bilisail/features/video/application/video_actions_controller.dart';
 import 'package:bilisail/features/video/presentation/video_danmaku_composer.dart';
 import 'package:bilisail/features/video/presentation/video_actions_bar.dart';
@@ -5250,6 +5252,102 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await _pumpFrames(tester);
   });
+
+  for (final (width, kind) in [
+    (800.0, PointerDeviceKind.mouse),
+    (360.0, PointerDeviceKind.touch),
+  ]) {
+    testWidgets('featured $kind uses click controls with stable overlays', (
+      tester,
+    ) async {
+      final engine = _FakeEngine();
+      final session = _session(engine);
+      final window = _FakeWindowService();
+      final inset = ValueNotifier(0.0);
+      addTearDown(session.close);
+      addTearDown(inset.dispose);
+      await tester.pumpWidget(
+        _app(
+          session,
+          window,
+          AppSettings(playerControlsMode: PlayerControlsMode.dynamic),
+          width: width,
+          playerHeight: 440,
+          featuredInset: inset,
+        ),
+      );
+      await _pumpFrames(tester);
+
+      final controls = find.byKey(const ValueKey('player-controls'));
+      final title = find.text(_detail.summary.title);
+      final comments = findMaterialTooltip('评论');
+      final surface = _surfacePoint(tester);
+      final initialPosition = (tester.getRect(title), tester.getRect(comments));
+      final initialPlayback = engine.currentSnapshot.desiredPlaying;
+      expect(inset.value, tester.getSize(controls).height);
+      expect(
+        initialPosition.$1.bottom,
+        lessThan(tester.getTopLeft(controls).dy),
+      );
+      expect(
+        initialPosition.$2.bottom,
+        lessThan(tester.getTopLeft(controls).dy),
+      );
+
+      Future<void> tapSurface() async {
+        await tester.tapAt(_surfacePoint(tester), kind: kind);
+        await _pumpSurfaceTap(tester);
+      }
+
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: const Offset(-10, -10));
+
+      Future<void> checkHover({required bool visible}) async {
+        for (final point in [
+          surface,
+          initialPosition.$1.center,
+          surface,
+          initialPosition.$2.center,
+          surface,
+        ]) {
+          await mouse.moveTo(point);
+          await tester.pump(const Duration(milliseconds: 250));
+          expect(
+            controls.hitTestable(),
+            visible ? findsOneWidget : findsNothing,
+          );
+          expect((
+            tester.getRect(title),
+            tester.getRect(comments),
+          ), initialPosition);
+        }
+      }
+
+      await checkHover(visible: false);
+      await tapSurface();
+      await checkHover(visible: true);
+      await tapSurface();
+      await checkHover(visible: false);
+      expect(engine.currentSnapshot.desiredPlaying, initialPlayback);
+
+      if (kind == PointerDeviceKind.mouse) {
+        await tapSurface();
+        await tester.tap(findMaterialTooltip('全屏（F）'));
+        await _pumpFrames(tester);
+        expect(window.fullScreen, isTrue);
+        await tapSurface();
+        expect(controls.hitTestable(), findsNothing);
+        await mouse.moveTo(_surfacePoint(tester));
+        await _pumpFrames(tester);
+        expect(controls.hitTestable(), findsNothing);
+        expect(engine.currentSnapshot.desiredPlaying, initialPlayback);
+      }
+
+      await mouse.removePointer();
+      await tester.pumpWidget(const SizedBox());
+      await _pumpFrames(tester);
+    });
+  }
 
   for (final live in [false, true]) {
     for (final dimensions in [
@@ -11605,6 +11703,7 @@ Widget _app(
   bool showNavigationInPlayer = false,
   SettingsRepository? settingsRepository,
   VoidCallback? onToggleComments,
+  ValueNotifier<double>? featuredInset,
   ContentLink link = const ContentLink(),
 }) => ProviderScope(
   overrides: [
@@ -11652,15 +11751,18 @@ Widget _app(
                   height: playerHeight,
                   child: AspectRatio(
                     aspectRatio: 16 / 9,
-                    child: PlaybackPanel(
-                      detail: target == null ? _detail : null,
-                      part: target == null ? _part : null,
-                      target: target,
-                      settings: settings,
-                      onToggleComments: onToggleComments ?? () {},
-                      window: window,
-                      danmakuComposerBuilder: composer,
-                      danmakuOverlayBuilder: overlay,
+                    child: _wrapFeaturedPlayer(
+                      featuredInset,
+                      PlaybackPanel(
+                        detail: target == null ? _detail : null,
+                        part: target == null ? _part : null,
+                        target: target,
+                        settings: settings,
+                        onToggleComments: onToggleComments ?? () {},
+                        window: window,
+                        danmakuComposerBuilder: composer,
+                        danmakuOverlayBuilder: overlay,
+                      ),
                     ),
                   ),
                 ),
@@ -11677,6 +11779,32 @@ Widget _app(
     ),
   ),
 );
+
+Widget _wrapFeaturedPlayer(ValueNotifier<double>? inset, Widget player) {
+  if (inset == null) return player;
+  return Stack(
+    fit: StackFit.expand,
+    children: [
+      FeaturedPagingScope(
+        onControlsInsetChanged: (value) {
+          if (inset.value == value) return;
+          WidgetsBinding.instance.addPostFrameCallback(
+            (_) => inset.value = value,
+          );
+        },
+        child: player,
+      ),
+      FeaturedVideoOverlay(
+        detail: _detail,
+        controlsInset: inset,
+        onLogin: () {},
+        onOpenUser: (_) {},
+        onShowDescription: () {},
+        onShowComments: () {},
+      ),
+    ],
+  );
+}
 
 Widget _pageScope(
   Widget child,

@@ -100,7 +100,11 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   final _danmakuDraft = TextEditingController();
   int? _handledCompletionGeneration;
   // Inline and fullscreen views are recreated, but share the page's intent.
-  late final ValueNotifier<bool> _controlsVisible;
+  late final _controlsVisible = ValueNotifier(
+    (_controlsModeOverride ?? widget.settings.playerControlsMode) !=
+        PlayerControlsMode.click,
+  );
+  PlayerControlsMode? _controlsModeOverride;
   final _fullScreenExitCover = ValueNotifier(false);
   final _picture = PlayerPictureController();
   late int _pictureGeneration;
@@ -146,9 +150,6 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   @override
   void initState() {
     super.initState();
-    _controlsVisible = ValueNotifier(
-      widget.settings.playerControlsMode != PlayerControlsMode.click,
-    );
     _settings = ValueNotifier(widget.settings);
     _session = ref.read(playbackSessionProvider)..attach(this);
     _pictureGeneration = _session.sourceGeneration;
@@ -181,6 +182,9 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _controlsModeOverride = FeaturedPagingScope.maybeOf(context) == null
+        ? null
+        : PlayerControlsMode.click;
     final recommendation = RecommendationPlaybackScope.of(context);
     final recommendationChanged = recommendation != _recommendation;
     _recommendation = recommendation;
@@ -908,6 +912,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
                       session: _session,
                       settings: _settings,
                       controlsVisible: _controlsVisible,
+                      controlsModeOverride: _controlsModeOverride,
                       picture: _picture,
                       shortcuts: _shortcuts,
                       onToggleComments: () => widget.onToggleComments(),
@@ -1189,6 +1194,7 @@ class _PlaybackPanelState extends ConsumerState<PlaybackPanel>
               session: _session,
               settings: _settings,
               controlsVisible: _controlsVisible,
+              controlsModeOverride: _controlsModeOverride,
               picture: _picture,
               shortcuts: _shortcuts,
               onToggleComments: widget.onToggleComments,
@@ -1245,6 +1251,7 @@ class _PlayerView extends StatefulWidget {
     required this.session,
     required this.settings,
     required this.controlsVisible,
+    required this.controlsModeOverride,
     required this.picture,
     required this.shortcuts,
     required this.onToggleComments,
@@ -1260,6 +1267,7 @@ class _PlayerView extends StatefulWidget {
   final PlaybackSession session;
   final ValueListenable<AppSettings> settings;
   final ValueNotifier<bool> controlsVisible;
+  final PlayerControlsMode? controlsModeOverride;
   final PlayerPictureController picture;
   final PlaybackShortcutController shortcuts;
   final VoidCallback onToggleComments;
@@ -1301,6 +1309,8 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   late bool _hasError;
   late PlayerControlsMode _controlsMode;
 
+  PlayerControlsMode get _configuredControlsMode =>
+      widget.controlsModeOverride ?? widget.settings.value.playerControlsMode;
   bool get _dynamicControls => _controlsMode == PlayerControlsMode.dynamic;
   bool get _appActive =>
       _appLifecycleState == null ||
@@ -1314,7 +1324,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     _appLifecycleState = WidgetsBinding.instance.lifecycleState;
-    _controlsMode = widget.settings.value.playerControlsMode;
+    _controlsMode = _configuredControlsMode;
     _sourceGeneration = widget.session.sourceGeneration;
     _hasError = widget.session.error != null;
     widget.settings.addListener(_onSettingsChanged);
@@ -1372,22 +1382,28 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
         widget.picture.value.scale < 1) {
       widget.picture.reset();
     }
-    final mode = widget.settings.value.playerControlsMode;
-    if (_controlsMode != mode) {
-      _controlsMode = mode;
-      _pressedPointers.clear();
-      if (_dynamicControls && _mouseInside) {
-        _showDynamicControls();
-      } else {
-        _scheduleControlsHide();
-      }
-    }
+    _syncControlsMode();
     if (mounted) setState(() {});
+  }
+
+  void _syncControlsMode() {
+    final mode = _configuredControlsMode;
+    if (_controlsMode == mode) return;
+    _controlsMode = mode;
+    _pressedPointers.clear();
+    if (_dynamicControls && _mouseInside) {
+      _showDynamicControls();
+    } else {
+      _scheduleControlsHide();
+    }
   }
 
   @override
   void didUpdateWidget(covariant _PlayerView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.controlsModeOverride != widget.controlsModeOverride) {
+      _syncControlsMode();
+    }
     if (oldWidget.active != widget.active) {
       if (!widget.active) {
         _dismissComposerDialog();
@@ -1713,8 +1729,10 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
     required String hoverRegion,
     required Widget child,
     bool retainDynamicPress = false,
+    bool maintainLayout = false,
   }) => _FadingPlayerControls(
     visible: visible,
+    maintainLayout: maintainLayout,
     onHoverChanged: (hovered) {
       if (hovered) {
         _hoveredControlRegions.add(hoverRegion);
@@ -1868,6 +1886,11 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
 
   Widget _buildPlayer(BuildContext context) {
     final session = widget.session;
+    final featured = widget.fullScreen
+        ? null
+        : FeaturedPagingScope.maybeOf(context);
+    final controlsInset = featured?.onControlsInsetChanged;
+    final maintainControlBarLayout = controlsInset != null;
     return InputProtection(
       playerSurface: true,
       activationFocus: _focusNode,
@@ -1959,6 +1982,8 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                   }
                   final controls =
                       widget.controlsVisible.value || session.error != null;
+                  final trackControlTime =
+                      controls || !maintainControlBarLayout;
                   return WidthLayoutBuilder(
                     builder: (context, width) {
                       final layout = _controlsLayout(
@@ -2050,12 +2075,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                       enabled:
                                           settings.fullscreenSwipeControls &&
                                           widget.active,
-                                      yieldCenterDrag:
-                                          !widget.fullScreen &&
-                                          FeaturedPagingScope.maybeOf(
-                                                context,
-                                              ) !=
-                                              null,
+                                      yieldCenterDrag: featured != null,
                                       sourceGeneration: sourceGeneration,
                                       volume: snapshot.volume,
                                       setVolume: session.setVolume,
@@ -2455,10 +2475,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                             Positioned.fill(
                               child: _BottomPlayerLayers(
                                 controlsVisible: controls && widget.active,
-                                onControlsInsetChanged: widget.fullScreen
-                                    ? null
-                                    : FeaturedPagingScope.maybeOf(context)
-                                          ?.onControlsInsetChanged,
+                                onControlsInsetChanged: controlsInset,
                                 subtitleBottomPadding:
                                     settings.subtitleBottomPadding,
                                 sponsorBlockBottomPadding:
@@ -2584,6 +2601,8 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                         visible: controls,
                                         hoverRegion: 'bar',
                                         retainDynamicPress: true,
+                                        maintainLayout:
+                                            maintainControlBarLayout,
                                         child: Theme(
                                           data: _playerControlsTheme(context),
                                           child: Container(
@@ -2644,12 +2663,17 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                                       child: PlaybackSnapshotBuilder(
                                                         snapshots:
                                                             session.snapshots,
-                                                        select: (snapshot) => (
-                                                          snapshot
-                                                              ._displayedProgressPosition,
-                                                          snapshot.duration,
-                                                          snapshot.buffered,
-                                                        ),
+                                                        select: (snapshot) =>
+                                                            trackControlTime
+                                                            ? (
+                                                                snapshot
+                                                                    ._displayedProgressPosition,
+                                                                snapshot
+                                                                    .duration,
+                                                                snapshot
+                                                                    .buffered,
+                                                              )
+                                                            : null,
                                                         builder: (context, snapshot) => ValueListenableBuilder<Duration?>(
                                                           valueListenable:
                                                               _swipeSeekPreview,
@@ -2720,6 +2744,7 @@ class _PlayerViewState extends State<_PlayerView> with WidgetsBindingObserver {
                                                       ),
                                                   child: _ControlBar(
                                                     layout: layout,
+                                                    trackTime: trackControlTime,
                                                     composerKey: _composerKey,
                                                     composeExpanded:
                                                         _composeExpanded,
@@ -2892,11 +2917,13 @@ class _BottomPlayerLayout extends MultiChildLayoutDelegate {
 class _FadingPlayerControls extends StatefulWidget {
   const _FadingPlayerControls({
     required this.visible,
+    required this.maintainLayout,
     required this.onHoverChanged,
     required this.child,
   });
 
   final bool visible;
+  final bool maintainLayout;
   final ValueChanged<bool> onHoverChanged;
   final Widget child;
 
@@ -2966,7 +2993,8 @@ class _FadingPlayerControlsState extends State<_FadingPlayerControls>
         excluding: !widget.visible,
         child: FadeTransition(
           opacity: _curve,
-          child: _renderChild
+          // Featured overlays anchor to the real bar even at zero opacity.
+          child: _renderChild || widget.maintainLayout
               ? MouseRegion(
                   onEnter: (_) => _setHovered(true),
                   onExit: (_) => _setHovered(false),
@@ -2982,6 +3010,7 @@ class _FadingPlayerControlsState extends State<_FadingPlayerControls>
 class _ControlBar extends StatelessWidget {
   const _ControlBar({
     required this.layout,
+    required this.trackTime,
     required this.composerKey,
     required this.composeExpanded,
     required this.onToggleComposer,
@@ -3011,6 +3040,7 @@ class _ControlBar extends StatelessWidget {
   final ValueChanged<bool> onMenuChanged;
   final WidgetBuilder? danmakuComposerBuilder;
   final _ControlsLayout layout;
+  final bool trackTime;
   final GlobalKey composerKey;
   final bool composeExpanded;
   final VoidCallback onToggleComposer;
@@ -3029,10 +3059,12 @@ class _ControlBar extends StatelessWidget {
       height: layout.timeHeight,
       child: PlaybackSnapshotBuilder(
         snapshots: session.snapshots,
-        select: (snapshot) => (
-          snapshot._displayedProgressPosition.inSeconds,
-          snapshot.duration.inSeconds,
-        ),
+        select: (snapshot) => trackTime
+            ? (
+                snapshot._displayedProgressPosition.inSeconds,
+                snapshot.duration.inSeconds,
+              )
+            : null,
         builder: (context, snapshot) => RepaintBoundary(
           child: Text(
             session.isLive

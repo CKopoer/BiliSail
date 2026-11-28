@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
 
-/// The inline surface yields vertical paging to its enclosing featured viewer.
+/// Identifies playback owned by a featured viewer.
 class FeaturedPagingScope extends InheritedWidget {
   const FeaturedPagingScope({
     super.key,
@@ -8,7 +8,7 @@ class FeaturedPagingScope extends InheritedWidget {
     this.onControlsInsetChanged,
   });
 
-  /// Reports the height of the visible inline controls during player layout.
+  /// Reports the inline controls' layout height, including while hidden.
   final ValueChanged<double>? onControlsInsetChanged;
 
   static FeaturedPagingScope? maybeOf(BuildContext context) =>
