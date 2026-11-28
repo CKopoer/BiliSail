@@ -311,6 +311,7 @@ final class ApiVideoDetail {
     this.likeCount,
     this.coinCount,
     this.favoriteCount,
+    this.shareCount,
     this.collection,
     this.replyCount,
     this.staff = const [],
@@ -333,6 +334,7 @@ final class ApiVideoDetail {
   final int? likeCount;
   final int? coinCount;
   final int? favoriteCount;
+  final int? shareCount;
   final ApiVideoCollection? collection;
   final int? replyCount;
   final List<ApiVideoStaffMember> staff;

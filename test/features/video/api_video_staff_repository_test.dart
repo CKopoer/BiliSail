@@ -10,33 +10,31 @@ import 'package:bilisail/features/video/data/api_video_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test(
-    'repository carries all staff credits into the domain without guessing IDs',
-    () async {
-      final requests = ApiRequests();
-      final api = BiliApiClient(
-        transport: _Transport(),
-        sessionProvider: requests,
-      );
-      addTearDown(api.close);
-      final detail = await ApiVideoRepository(api, requests).loadDetail(
-        const VideoId('BV1234567890'),
-        cancellation: RequestCancellation(),
-      );
-      expect(detail.authorMid, '42');
-      expect(detail.staff, hasLength(2));
-      final member = detail.staff.first;
-      expect(member.id, const UserId('9007199254740993'));
-      expect(member.name, '合作成员');
-      expect(member.title, '赞助商');
-      expect(member.avatarUrl?.scheme, 'https');
-      expect(member.highlightedRole, true);
-      expect(member.nicknameColor, '#FB7299');
-      expect(detail.staff.last.id, isNull);
-      expect(detail.staff.last.name, '合作成员');
-      expect(() => detail.staff.clear(), throwsUnsupportedError);
-    },
-  );
+  test('repository carries video share totals and all staff credits into the domain', () async {
+    final requests = ApiRequests();
+    final api = BiliApiClient(
+      transport: _Transport(),
+      sessionProvider: requests,
+    );
+    addTearDown(api.close);
+    final detail = await ApiVideoRepository(api, requests).loadDetail(
+      const VideoId('BV1234567890'),
+      cancellation: RequestCancellation(),
+    );
+    expect(detail.authorMid, '42');
+    expect(detail.shareCount, 128);
+    expect(detail.staff, hasLength(2));
+    final member = detail.staff.first;
+    expect(member.id, const UserId('9007199254740993'));
+    expect(member.name, '合作成员');
+    expect(member.title, '赞助商');
+    expect(member.avatarUrl?.scheme, 'https');
+    expect(member.highlightedRole, true);
+    expect(member.nicknameColor, '#FB7299');
+    expect(detail.staff.last.id, isNull);
+    expect(detail.staff.last.name, '合作成员');
+    expect(() => detail.staff.clear(), throwsUnsupportedError);
+  });
 }
 
 final class _Transport implements ApiTransport {
@@ -56,6 +54,7 @@ final class _Transport implements ApiTransport {
             'aid': 1,
             'bvid': 'BV1234567890',
             'title': '合作视频',
+            'stat': {'share': 128},
             'owner': {'mid': 42, 'name': 'UP'},
             'pages': [
               {'cid': 1, 'page': 1, 'part': 'P1'},

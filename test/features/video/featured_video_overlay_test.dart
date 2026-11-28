@@ -13,6 +13,7 @@ import 'package:bilisail/shared/ui/app_notice.dart';
 import 'package:bilisail/shared/ui/network_avatar.dart';
 import 'package:bilisail/shared/ui/featured_paging_scope.dart';
 import 'package:bilisail/shared/ui/user_follow_button.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -37,6 +38,7 @@ const _detail = VideoDetail(
   likeCount: 14000,
   coinCount: 215,
   favoriteCount: 326,
+  shareCount: 68,
   replyCount: 47,
 );
 
@@ -94,7 +96,7 @@ void main() {
       tester.widget<Text>(find.text(_detail.summary.title)).style?.fontSize,
       14,
     );
-    for (final count in ['1.4万', '215', '326', '47']) {
+    for (final count in ['1.4万', '215', '326', '47', '68']) {
       expect(find.text(count), findsOneWidget);
     }
     expect(
@@ -123,12 +125,59 @@ void main() {
     expect(findMaterialTooltip('已投 1 枚'), findsOneWidget);
   });
 
+  testWidgets('guest shares the currently visible video after paging', (
+    tester,
+  ) async {
+    final detail = ValueNotifier(_detail);
+    final geometry = FeaturedControlsGeometry();
+    final actions = FakeActions();
+    addTearDown(detail.dispose);
+    addTearDown(geometry.dispose);
+    final copied = <String>[];
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        copied.add((call.arguments as Map)['text'] as String);
+      }
+      return null;
+    });
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+    await _pump(
+      tester,
+      detail: detail,
+      controlsGeometry: geometry,
+      authors: _Authors(),
+      actions: actions,
+    );
+    for (final video in [_detail, _other]) {
+      detail.value = video;
+      await tester.pumpAndSettle();
+      final share = findMaterialTooltip('分享');
+      final caption = video.shareCount?.toString() ?? '—';
+      expect(
+        find.descendant(of: share, matching: find.text(caption)),
+        findsOneWidget,
+      );
+      await tester.tap(share);
+      await tester.pump();
+      expect(
+        copied.last,
+        'https://www.bilibili.com/video/${video.summary.id.value}',
+      );
+      expect(find.text('视频链接已复制'), findsOneWidget);
+    }
+    expect(copied, hasLength(2));
+    expect(actions.calls, isEmpty);
+  });
+
   testWidgets('keeps the overlay above measured controls in a short viewport', (
     tester,
   ) async {
     final authors = _Authors();
     final detail = ValueNotifier(_detail);
-    final controlsGeometry = FeaturedControlsGeometry()..showAudioToolbar(80);
+    final controlsGeometry = FeaturedControlsGeometry()..showAudioToolbar(60);
     addTearDown(detail.dispose);
     addTearDown(controlsGeometry.dispose);
     tester.view.devicePixelRatio = 1;
@@ -166,6 +215,8 @@ void main() {
     final actions = find.byType(FeaturedVideoActions);
     expect(tester.getRect(card).bottom, lessThan(tester.getRect(actions).top));
     expect(title.hitTestable(), findsOneWidget);
+    expect(findMaterialTooltip('分享').hitTestable(), findsOneWidget);
+    expect(findMaterialTooltip('更多').hitTestable(), findsOneWidget);
     tester.view.physicalSize = const Size(700, 360);
     await tester.pump();
     expect(

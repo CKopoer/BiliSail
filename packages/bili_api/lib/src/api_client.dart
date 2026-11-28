@@ -2563,6 +2563,7 @@ final class BiliApiClient {
     if (pages.isEmpty) {
       throw const ApiFailure(ApiFailureCategory.protocol, 'video_detail');
     }
+    final stats = _optionalMap(data['stat']);
     return ApiVideoDetail(
       access: parseVideoAccess(data),
       isInteractive: _int(_optionalMap(data['rights'])?['is_stein_gate']) == 1,
@@ -2576,15 +2577,16 @@ final class BiliApiClient {
       ownerMid: _optionalMap(data['owner'])?['mid'] == null
           ? null
           : _id(_optionalMap(data['owner'])?['mid'], 'video_detail'),
-      likeCount: _count(_optionalMap(data['stat'])?['like']),
-      coinCount: _count(_optionalMap(data['stat'])?['coin']),
-      favoriteCount: _count(_optionalMap(data['stat'])?['favorite']),
-      replyCount: _count(_optionalMap(data['stat'])?['reply']),
+      likeCount: _count(stats?['like']),
+      coinCount: _count(stats?['coin']),
+      favoriteCount: _count(stats?['favorite']),
+      shareCount: _count(stats?['share']),
+      replyCount: _count(stats?['reply']),
       collection: _collection(data['ugc_season']),
       staff: _videoStaff(data['staff']),
       pages: List.unmodifiable(pages),
-      playCount: _count(_optionalMap(data['stat'])?['view']),
-      danmakuCount: _count(_optionalMap(data['stat'])?['danmaku']),
+      playCount: _count(stats?['view']),
+      danmakuCount: _count(stats?['danmaku']),
       publishedAt: _publishedAt(data['pubdate']),
     );
   }

@@ -44,11 +44,12 @@ class FeaturedVideoOverlay extends StatelessWidget {
         final raisedBottom = (height + 4).clamp(margin, double.infinity);
         final horizontal =
             bounds.maxHeight - raisedBottom <
-                FeaturedVideoActions.verticalHeight(context) &&
-            bounds.maxWidth >=
-                FeaturedVideoActions.horizontalWidth + 2 * margin;
+            FeaturedVideoActions.verticalHeight(context);
         final actionsWidth = horizontal
-            ? FeaturedVideoActions.horizontalWidth
+            ? (bounds.maxWidth - 2 * margin).clamp(
+                0.0,
+                FeaturedVideoActions.horizontalWidth,
+              )
             : FeaturedVideoActions.width;
         final stackAboveActions =
             horizontal && bounds.maxWidth - actionsWidth - 3 * margin < 190;
@@ -61,6 +62,7 @@ class FeaturedVideoOverlay extends StatelessWidget {
                         2 * margin -
                         (stackAboveActions ? 0 : actionsWidth + margin))
                     .clamp(0, 480),
+            actionsWidth: actionsWidth,
             stackAboveActions: stackAboveActions,
           ),
           children: [
@@ -86,17 +88,18 @@ class _FeaturedOverlayPlacement extends FlowDelegate {
     required this.opacity,
     required this.lift,
     required this.cardWidth,
+    required this.actionsWidth,
     required this.stackAboveActions,
   }) : super(repaint: opacity);
 
   static const margin = 12.0;
   final ValueListenable<double> opacity;
-  final double lift, cardWidth;
+  final double lift, cardWidth, actionsWidth;
   final bool stackAboveActions;
 
   @override
   BoxConstraints getConstraintsForChild(int i, BoxConstraints constraints) =>
-      BoxConstraints(maxWidth: i == 0 ? cardWidth : constraints.maxWidth);
+      BoxConstraints(maxWidth: i == 0 ? cardWidth : actionsWidth);
 
   @override
   void paintChildren(FlowPaintingContext context) {
@@ -123,7 +126,8 @@ class _FeaturedOverlayPlacement extends FlowDelegate {
 
   @override
   bool shouldRelayout(_FeaturedOverlayPlacement oldDelegate) =>
-      cardWidth != oldDelegate.cardWidth;
+      cardWidth != oldDelegate.cardWidth ||
+      actionsWidth != oldDelegate.actionsWidth;
 
   @override
   bool shouldRepaint(_FeaturedOverlayPlacement oldDelegate) =>

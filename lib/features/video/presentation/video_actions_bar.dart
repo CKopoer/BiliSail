@@ -487,11 +487,13 @@ class FeaturedVideoActions extends StatelessWidget {
   final bool horizontal;
 
   static const width = 56.0;
-  static const horizontalWidth = width * 5;
+  static const _horizontalButtonWidth = 48.0;
+  static const _countedActions = 5;
+  static const horizontalWidth = _horizontalButtonWidth * (_countedActions + 1);
   static const _menuHeight = 44.0;
 
   static double verticalHeight(BuildContext context) =>
-      actionHeight(context) * 4 + _menuHeight;
+      actionHeight(context) * _countedActions + _menuHeight;
 
   static double actionHeight(BuildContext context) =>
       (34 + MediaQuery.textScalerOf(context).scale(11)).clamp(
@@ -508,6 +510,7 @@ class FeaturedVideoActions extends StatelessWidget {
     final detail = view.detail;
     final owner = view.owner;
     final height = actionHeight(context);
+    final buttonWidth = horizontal ? _horizontalButtonWidth : width;
 
     VoidCallback? onAction(
       ShortcutAction action,
@@ -524,7 +527,7 @@ class FeaturedVideoActions extends StatelessWidget {
       required VoidCallback? onPressed,
       bool selected = false,
     }) => SizedBox(
-      width: width,
+      width: buttonWidth,
       height: height,
       child: Semantics(
         label: label,
@@ -566,66 +569,78 @@ class FeaturedVideoActions extends StatelessWidget {
       ),
     );
 
+    final buttons = Flex(
+      direction: horizontal ? Axis.horizontal : Axis.vertical,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        action(
+          icon: Icon(
+            interaction.liked
+                ? Icons.thumb_up_alt
+                : Icons.thumb_up_alt_outlined,
+          ),
+          label: interaction.liked ? '已点赞' : '点赞',
+          count: detail.likeCount ?? detail.summary.likeCount,
+          onPressed: onAction(
+            ShortcutAction.likeVideo,
+            'like',
+            needsState: true,
+          ),
+          selected: interaction.liked,
+        ),
+        action(
+          icon: BiliCoinIcon(filled: interaction.coins > 0),
+          label: interaction.coins > 0 ? '已投 ${interaction.coins} 枚' : '投币',
+          count: detail.coinCount,
+          onPressed: onAction(
+            ShortcutAction.coinVideo,
+            'coin',
+            needsState: true,
+          ),
+          selected: interaction.coins > 0,
+        ),
+        action(
+          icon: Icon(
+            interaction.favorited
+                ? BiliIcons.favoriteFilled
+                : BiliIcons.favorite,
+          ),
+          label: interaction.favorited ? '已收藏' : '收藏',
+          count: detail.favoriteCount,
+          onPressed: onAction(ShortcutAction.favoriteVideo, 'favorite'),
+          selected: interaction.favorited,
+        ),
+        action(
+          icon: const Icon(Icons.chat_bubble_outline),
+          label: '评论',
+          count: detail.replyCount,
+          onPressed: onShowComments,
+        ),
+        action(
+          icon: const Icon(BiliIcons.share),
+          label: '分享',
+          count: detail.shareCount,
+          onPressed: () => owner._invoke(ShortcutAction.shareVideo),
+        ),
+        SizedBox(
+          width: buttonWidth,
+          height: horizontal ? height : _menuHeight,
+          child: const VideoActionsBar(
+            menuOnly: true,
+            menuIconColor: Colors.white,
+          ),
+        ),
+      ],
+    );
     return Material(
       color: Colors.black54,
       borderRadius: BorderRadius.circular(18),
-      child: Flex(
-        direction: horizontal ? Axis.horizontal : Axis.vertical,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          action(
-            icon: Icon(
-              interaction.liked
-                  ? Icons.thumb_up_alt
-                  : Icons.thumb_up_alt_outlined,
-            ),
-            label: interaction.liked ? '已点赞' : '点赞',
-            count: detail.likeCount ?? detail.summary.likeCount,
-            onPressed: onAction(
-              ShortcutAction.likeVideo,
-              'like',
-              needsState: true,
-            ),
-            selected: interaction.liked,
-          ),
-          action(
-            icon: BiliCoinIcon(filled: interaction.coins > 0),
-            label: interaction.coins > 0 ? '已投 ${interaction.coins} 枚' : '投币',
-            count: detail.coinCount,
-            onPressed: onAction(
-              ShortcutAction.coinVideo,
-              'coin',
-              needsState: true,
-            ),
-            selected: interaction.coins > 0,
-          ),
-          action(
-            icon: Icon(
-              interaction.favorited
-                  ? BiliIcons.favoriteFilled
-                  : BiliIcons.favorite,
-            ),
-            label: interaction.favorited ? '已收藏' : '收藏',
-            count: detail.favoriteCount,
-            onPressed: onAction(ShortcutAction.favoriteVideo, 'favorite'),
-            selected: interaction.favorited,
-          ),
-          action(
-            icon: const Icon(Icons.chat_bubble_outline),
-            label: '评论',
-            count: detail.replyCount,
-            onPressed: onShowComments,
-          ),
-          SizedBox(
-            width: width,
-            height: horizontal ? height : _menuHeight,
-            child: const VideoActionsBar(
-              menuOnly: true,
-              menuIconColor: Colors.white,
-            ),
-          ),
-        ],
-      ),
+      child: horizontal
+          ? SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: buttons,
+            )
+          : buttons,
     );
   }
 }

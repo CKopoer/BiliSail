@@ -200,6 +200,7 @@ final class VideoDetail {
     this.likeCount,
     this.coinCount,
     this.favoriteCount,
+    this.shareCount,
     this.replyCount,
     this.collection,
     this.staff = const [],
@@ -215,6 +216,7 @@ final class VideoDetail {
   final int? likeCount;
   final int? coinCount;
   final int? favoriteCount;
+  final int? shareCount;
   final int? replyCount;
   final VideoCollection? collection;
   final List<VideoStaffMember> staff;

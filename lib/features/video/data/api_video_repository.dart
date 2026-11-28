@@ -104,6 +104,7 @@ class ApiVideoRepository
       likeCount: detail.likeCount,
       coinCount: detail.coinCount,
       favoriteCount: detail.favoriteCount,
+      shareCount: detail.shareCount,
       summary: VideoSummary(
         id: VideoId(detail.bvid),
         access: mapVideoAccess(detail.access),
